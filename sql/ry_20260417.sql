@@ -159,10 +159,11 @@ create table sys_menu (
 -- 初始化-菜单信息表数据
 -- ----------------------------
 -- 一级菜单
-insert into sys_menu values('1', '系统管理', '0', '1', 'system',           null, '', '', 1, 0, 'M', '0', '0', '', 'system',   'admin', sysdate(), '', null, '系统管理目录');
-insert into sys_menu values('2', '系统监控', '0', '2', 'monitor',          null, '', '', 1, 0, 'M', '0', '0', '', 'monitor',  'admin', sysdate(), '', null, '系统监控目录');
-insert into sys_menu values('3', '系统工具', '0', '3', 'tool',             null, '', '', 1, 0, 'M', '0', '0', '', 'tool',     'admin', sysdate(), '', null, '系统工具目录');
-insert into sys_menu values('4', '若依官网', '0', '4', 'http://ruoyi.vip', null, '', '', 0, 0, 'M', '0', '0', '', 'guide',    'admin', sysdate(), '', null, '若依官网地址');
+insert into sys_menu values('1', '系统管理', '0', '2', 'system',           null, '', '', 1, 0, 'M', '0', '0', '', 'system',   'admin', sysdate(), '', null, '系统管理目录');
+insert into sys_menu values('2', '系统监控', '0', '3', 'monitor',          null, '', '', 1, 0, 'M', '0', '0', '', 'monitor',  'admin', sysdate(), '', null, '系统监控目录');
+insert into sys_menu values('3', '系统工具', '0', '4', 'tool',             null, '', '', 1, 0, 'M', '0', '0', '', 'tool',     'admin', sysdate(), '', null, '系统工具目录');
+insert into sys_menu values('4', '若依官网', '0', '99', 'http://ruoyi.vip', null, '', '', 0, 0, 'M', '0', '0', '', 'guide',    'admin', sysdate(), '', null, '若依官网地址');
+insert into sys_menu values('5', '线索管理', '0', '1', 'lead',             null, '', '', 1, 0, 'M', '0', '0', '', 'user',     'admin', sysdate(), '', null, '律所线索管理目录');
 -- 二级菜单
 insert into sys_menu values('100',  '用户管理', '1',   '1', 'user',       'system/user/index',        '', '', 1, 0, 'C', '0', '0', 'system:user:list',        'user',          'admin', sysdate(), '', null, '用户管理菜单');
 insert into sys_menu values('101',  '角色管理', '1',   '2', 'role',       'system/role/index',        '', '', 1, 0, 'C', '0', '0', 'system:role:list',        'peoples',       'admin', sysdate(), '', null, '角色管理菜单');
@@ -182,6 +183,13 @@ insert into sys_menu values('114',  '缓存列表', '2',   '6', 'cacheList',  'm
 insert into sys_menu values('115',  '表单构建', '3',   '1', 'build',      'tool/build/index',         '', '', 1, 0, 'C', '0', '0', 'tool:build:list',         'build',         'admin', sysdate(), '', null, '表单构建菜单');
 insert into sys_menu values('116',  '代码生成', '3',   '2', 'gen',        'tool/gen/index',           '', '', 1, 0, 'C', '0', '0', 'tool:gen:list',           'code',          'admin', sysdate(), '', null, '代码生成菜单');
 insert into sys_menu values('117',  '系统接口', '3',   '3', 'swagger',    'tool/swagger/index',       '', '', 1, 0, 'C', '0', '0', 'tool:swagger:list',       'swagger',       'admin', sysdate(), '', null, '系统接口菜单');
+insert into sys_menu values('200',  '线索工作台', '5', '1', 'dashboard',  'lead/index', '{"module":"dashboard"}', 'LeadDashboard', 1, 0, 'C', '0', '0', 'lead:dashboard:view', 'dashboard', 'admin', sysdate(), '', null, '线索工作台');
+insert into sys_menu values('201',  '全部线索',   '5', '2', 'all',        'lead/index', '{"module":"all"}',       'LeadAll',       1, 0, 'C', '0', '0', 'lead:all:list',       'list',      'admin', sysdate(), '', null, '全部线索');
+insert into sys_menu values('202',  '我的线索',   '5', '3', 'mine',       'lead/index', '{"module":"mine"}',      'LeadMine',      1, 0, 'C', '0', '0', 'lead:mine:list',      'user',      'admin', sysdate(), '', null, '我的线索');
+insert into sys_menu values('203',  '线索公海',   '5', '4', 'pool',       'lead/index', '{"module":"pool"}',      'LeadPool',      1, 0, 'C', '0', '0', 'lead:pool:list',      'peoples',   'admin', sysdate(), '', null, '线索公海');
+insert into sys_menu values('204',  '跟进任务',   '5', '5', 'followup',   'lead/index', '{"module":"followup"}',  'LeadFollowup',  1, 0, 'C', '0', '0', 'lead:followup:list',  'time',      'admin', sysdate(), '', null, '跟进任务');
+insert into sys_menu values('205',  '线索回收站', '5', '6', 'recycle',    'lead/index', '{"module":"recycle"}',   'LeadRecycle',   1, 0, 'C', '0', '0', 'lead:recycle:list',   'delete',    'admin', sysdate(), '', null, '线索回收站');
+insert into sys_menu values('206',  '线索设置',   '5', '7', 'settings',   'lead/index', '{"module":"settings"}',  'LeadSettings',  1, 0, 'C', '0', '0', 'lead:settings:list',  'edit',      'admin', sysdate(), '', null, '线索设置');
 -- 三级菜单
 insert into sys_menu values('500',  '操作日志', '108', '1', 'operlog',    'monitor/operlog/index',    '', '', 1, 0, 'C', '0', '0', 'monitor:operlog:list',    'form',          'admin', sysdate(), '', null, '操作日志菜单');
 insert into sys_menu values('501',  '登录日志', '108', '2', 'logininfor', 'monitor/logininfor/index', '', '', 1, 0, 'C', '0', '0', 'monitor:logininfor:list', 'logininfor',    'admin', sysdate(), '', null, '登录日志菜单');

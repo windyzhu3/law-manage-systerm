@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizCustomerMapper">
+    <resultMap type="BizCustomer" id="BizCustomerResult">
+        <id property="customerId" column="customer_id"/>
+        <result property="customerNo" column="customer_no"/>
+        <result property="customerName" column="customer_name"/>
+        <result property="customerType" column="customer_type"/>
+        <result property="mobile" column="mobile"/>
+        <result property="wechat" column="wechat"/>
+        <result property="email" column="email"/>
+        <result property="companyName" column="company_name"/>
+        <result property="creditCode" column="credit_code"/>
+        <result property="industry" column="industry"/>
+        <result property="region" column="region"/>
+        <result property="sourceCode" column="source_code"/>
+        <result property="customerLevel" column="customer_level"/>
+        <result property="mainDemand" column="main_demand"/>
+        <result property="ownerId" column="owner_id"/>
+        <result property="ownerName" column="owner_name"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="firstContactTime" column="first_contact_time"/>
+        <result property="lastFollowTime" column="last_follow_time"/>
+        <result property="nextFollowTime" column="next_follow_time"/>
+        <result property="leadId" column="lead_id"/>
+        <result property="status" column="status"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="tagNames" column="tag_names"/>
+        <result property="tagColors" column="tag_colors"/>
+        <result property="contractCount" column="contract_count"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <sql id="selectCustomerVo">
+        select c.*, u.nick_name owner_name, d.dept_name,
+            (
+                select group_concat(t.tag_name order by t.order_num, t.tag_id separator ',')
+                from biz_customer_tag_rel r
+                inner join biz_customer_tag t on t.tag_id = r.tag_id and t.status = '0'
+                where r.customer_id = c.customer_id
+            ) tag_names,
+            (
+                select group_concat(coalesce(t.tag_color, '') order by t.order_num, t.tag_id separator ',')
+                from biz_customer_tag_rel r
+                inner join biz_customer_tag t on t.tag_id = r.tag_id and t.status = '0'
+                where r.customer_id = c.customer_id
+            ) tag_colors,
+            (
+                select count(1)
+                from biz_contract bc
+                where bc.customer_id = c.customer_id and bc.del_flag = '0'
+            ) contract_count
+        from biz_customer c
+        left join sys_user u on u.user_id = c.owner_id
+        left join sys_dept d on d.dept_id = c.dept_id
+    </sql>
+
+    <sql id="customerDataScope">
+        <!-- 路径 1：@Param 形式的 dataScope 布尔参数（dashboard/统计/计数等场景） -->
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur
+                inner join sys_role r on r.role_id = ur.role_id and r.status = '0'
+            where ur.user_id = #{currentUserId}
+            and (
+                #{permissions} is null or #{permissions} = ''
+                or exists (
+                    select 1 from sys_role_menu rm
+                    inner join sys_menu m on m.menu_id = rm.menu_id
+                    where rm.role_id = r.role_id
+                    and m.status = '0'
+                    and m.perms is not null
+                    and m.perms != ''
+                    and find_in_set(m.perms, #{permissions}) > 0
+                )
+            )
+            and (
+                r.data_scope = '1'
+                or (r.data_scope = '2' and c.dept_id in (select rd.dept_id from sys_role_dept rd where rd.role_id = r.role_id))
+                    or (r.data_scope = '3' and c.dept_id = #{currentDeptId})
+                    or (r.data_scope = '4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id = #{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope = '5' and c.owner_id = #{currentUserId})
+                )
+            )
+        </if>
+        <!-- 路径 2：@DataScope 注解注入的 SQL 片段（list/getInfo 场景），仅在路径 1 未启用时回退 -->
+        <if test="(dataScope == null or !dataScope) and _parameter instanceof java.util.Map and params != null and params.dataScope != null and params.dataScope != ''">
+            ${params.dataScope}
+        </if>
+    </sql>
+
+    <select id="selectCustomerList" parameterType="BizCustomer" resultMap="BizCustomerResult">
+        <include refid="selectCustomerVo"/>
+        <where>
+            and c.del_flag = '0'
+            <if test="customerName != null and customerName != ''">and (c.customer_name like concat('%',#{customerName},'%') or c.company_name like concat('%',#{customerName},'%') or c.mobile like concat('%',#{customerName},'%'))</if>
+            <if test="customerType != null and customerType != ''">and c.customer_type = #{customerType}</if>
+            <if test="industry != null and industry != ''">and c.industry = #{industry}</if>
+            <if test="customerLevel != null and customerLevel != ''">and c.customer_level = #{customerLevel}</if>
+            <if test="ownerId != null">and c.owner_id = #{ownerId}</if>
+            <if test="tagId != null">and exists (select 1 from biz_customer_tag_rel r where r.customer_id = c.customer_id and r.tag_id = #{tagId})</if>
+            <include refid="customerDataScope"/>
+        </where>
+        order by c.update_time desc, c.customer_id desc
+    </select>
+
+    <select id="selectCustomerById" resultMap="BizCustomerResult"><include refid="selectCustomerVo"/> where c.customer_id = #{customerId}</select>
+    <select id="selectCustomerByLeadId" resultMap="BizCustomerResult"><include refid="selectCustomerVo"/> where c.lead_id = #{leadId} and c.del_flag='0' limit 1</select>
+    <select id="selectDuplicateCustomer" resultMap="BizCustomerResult">
+        <include refid="selectCustomerVo"/>
+        where c.del_flag='0'
+        and (
+            (#{mobile} is not null and #{mobile} != '' and c.mobile = #{mobile})
+            or (#{creditCode} is not null and #{creditCode} != '' and c.credit_code = #{creditCode})
+            or (#{customerName} is not null and #{customerName} != '' and c.customer_name = #{customerName})
+        )
+        limit 1
+    </select>
+    <select id="selectDuplicateCustomerInScope" resultMap="BizCustomerResult">
+        <include refid="selectCustomerVo"/>
+        <where>
+            and c.del_flag='0'
+            and c.status != '2'
+            and (
+                (#{mobile} is not null and #{mobile} != '' and c.mobile = #{mobile})
+                or (#{creditCode} is not null and #{creditCode} != '' and c.credit_code = #{creditCode})
+                or (#{customerName} is not null and #{customerName} != '' and c.customer_name = #{customerName})
+            )
+            <include refid="customerDataScope"/>
+        </where>
+        order by c.customer_id desc
+        limit 1
+    </select>
+    <select id="selectCustomersByExactNameInScope" resultMap="BizCustomerResult">
+        <include refid="selectCustomerVo"/>
+        <where>
+            and c.del_flag='0'
+            and c.status != '2'
+            and c.customer_name = #{customerName}
+            <include refid="customerDataScope"/>
+        </where>
+        order by c.customer_id desc
+        limit 2
+    </select>
+
+    <insert id="insertCustomer" parameterType="BizCustomer" useGeneratedKeys="true" keyProperty="customerId">
+        insert into biz_customer(customer_no,customer_name,customer_type,mobile,wechat,email,company_name,credit_code,industry,region,source_code,customer_level,main_demand,owner_id,dept_id,first_contact_time,lead_id,status,remark,create_by,create_time,update_time)
+        values(#{customerNo},#{customerName},#{customerType},#{mobile},#{wechat},#{email},#{companyName},#{creditCode},#{industry},#{region},#{sourceCode},#{customerLevel},#{mainDemand},#{ownerId},#{deptId},#{firstContactTime},#{leadId},'0',#{remark},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateCustomer" parameterType="BizCustomer">
+        update biz_customer
+        <set>
+            <if test="customerName != null">customer_name=#{customerName},</if><if test="customerType != null">customer_type=#{customerType},</if><if test="mobile != null">mobile=#{mobile},</if><if test="wechat != null">wechat=#{wechat},</if><if test="email != null">email=#{email},</if><if test="companyName != null">company_name=#{companyName},</if><if test="creditCode != null">credit_code=#{creditCode},</if><if test="industry != null">industry=#{industry},</if><if test="region != null">region=#{region},</if><if test="sourceCode != null">source_code=#{sourceCode},</if><if test="customerLevel != null">customer_level=#{customerLevel},</if><if test="mainDemand != null">main_demand=#{mainDemand},</if><if test="ownerId != null">owner_id=#{ownerId},</if><if test="deptId != null">dept_id=#{deptId},</if><if test="firstContactTime != null">first_contact_time=#{firstContactTime},</if><if test="remark != null">remark=#{remark},</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where customer_id=#{customerId}
+        and del_flag='0'
+        and status != '2'
+    </update>
+    <update id="deleteCustomerByIds">update biz_customer set del_flag='2', update_by=#{updateBy}, update_time=sysdate() where del_flag='0' and status != '2' and customer_id in <foreach collection="customerIds" item="id" open="(" separator="," close=")">#{id}</foreach></update>
+    <select id="countContractsByCustomerId" resultType="int">
+        select count(1) from biz_contract where customer_id=#{customerId} and del_flag='0'
+    </select>
+    <select id="countCustomerInDataScope" resultType="int">
+        select count(1) from biz_customer c where c.customer_id=#{customerId} and c.del_flag='0'
+        and exists (
+            select 1 from sys_user_role ur inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+            where ur.user_id=#{currentUserId}
+            and (
+                #{permissions} is null or #{permissions} = ''
+                or exists (
+                    select 1 from sys_role_menu rm
+                    inner join sys_menu m on m.menu_id = rm.menu_id
+                    where rm.role_id = r.role_id
+                    and m.status = '0'
+                    and m.perms is not null
+                    and m.perms != ''
+                    and find_in_set(m.perms, #{permissions}) > 0
+                )
+            )
+            and (r.data_scope='1' or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id)) or (r.data_scope='3' and c.dept_id=#{currentDeptId}) or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors))) or (r.data_scope='5' and c.owner_id=#{currentUserId}))
+        )
+    </select>
+
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'total' metricKey,count(*) metricValue from biz_customer c where del_flag='0' <include refid="customerDataScope"/>
+        union all select 'monthNew',count(*) from biz_customer c where del_flag='0' and date_format(create_time,'%Y%m')=date_format(sysdate(),'%Y%m') <include refid="customerDataScope"/>
+        union all select 'highValue',count(*) from biz_customer c where del_flag='0' and customer_level='1' <include refid="customerDataScope"/>
+        union all select 'signed',count(distinct c.customer_id) from biz_customer c inner join biz_contract bc on bc.customer_id=c.customer_id and bc.del_flag='0' and bc.sign_status='1' where c.del_flag='0' <include refid="customerDataScope"/>
+        union all select 'active',count(*) from biz_customer c where del_flag='0' and last_follow_time is not null <include refid="customerDataScope"/>
+    </select>
+    <select id="selectTypeStats" resultType="java.util.Map">select customer_type itemName,count(*) itemValue from biz_customer c where del_flag='0' <include refid="customerDataScope"/> group by customer_type</select>
+
+    <select id="selectContacts" resultType="java.util.Map">
+        select ct.*, c.customer_name customerName, u.nick_name ownerName from biz_customer_contact ct left join biz_customer c on c.customer_id=ct.customer_id left join sys_user u on u.user_id=ct.owner_id
+        <where>
+            <if test="customerId != null and customerId != ''">and ct.customer_id=#{customerId}</if>
+            <if test="contactName != null and contactName != ''">and ct.contact_name like concat('%',#{contactName},'%')</if>
+            <if test="customerName != null and customerName != ''">and c.customer_name like concat('%',#{customerName},'%')</if>
+            <if test="mobile != null and mobile != ''">and ct.mobile like concat('%',#{mobile},'%')</if>
+            and ct.del_flag='0'
+            and c.del_flag='0'
+            <include refid="customerDataScope"/>
+        </where>
+        order by ct.key_contact desc, ct.contact_id desc
+    </select>
+    <select id="selectContactCustomerId" resultType="java.lang.Long">select customer_id from biz_customer_contact where contact_id=#{contactId} and del_flag='0'</select>
+    <select id="countContactByCustomerAndMobileOrName" resultType="int">
+        select count(1) from biz_customer_contact
+        where customer_id=#{customerId} and del_flag='0'
+        and (
+            (#{mobile} is not null and #{mobile} != '' and mobile=#{mobile})
+            or (#{contactName} is not null and #{contactName} != '' and contact_name=#{contactName})
+        )
+    </select>
+    <insert id="insertContact" parameterType="map" useGeneratedKeys="true" keyProperty="contactId">insert into biz_customer_contact(customer_id,contact_name,position_name,mobile,wechat,email,relation_type,key_contact,owner_id,remark,create_by,create_time) values(#{customerId},#{contactName},#{positionName},#{mobile},#{wechat},#{email},#{relationType},#{keyContact},#{ownerId},#{remark},#{createBy},sysdate())</insert>
+    <update id="updateContact" parameterType="map">update biz_customer_contact set contact_name=#{contactName},position_name=#{positionName},mobile=#{mobile},wechat=#{wechat},email=#{email},relation_type=#{relationType},key_contact=#{keyContact},owner_id=#{ownerId},remark=#{remark},update_by=#{updateBy},update_time=sysdate() where contact_id=#{contactId} and del_flag='0'</update>
+    <update id="deleteContact">update biz_customer_contact set del_flag='2', update_by=#{updateBy}, update_time=sysdate() where contact_id=#{contactId} and del_flag='0'</update>
+
+    <select id="selectFollowups" resultType="java.util.Map">
+        select f.*, c.customer_name customerName, u.nick_name followUserName from biz_customer_followup f left join biz_customer c on c.customer_id=f.customer_id left join sys_user u on u.user_id=f.follow_user_id
+        <where>
+            <if test="customerId != null and customerId != ''">and f.customer_id=#{customerId}</if>
+            and f.del_flag='0'
+            and c.del_flag='0'
+            <include refid="customerDataScope"/>
+        </where>
+        order by f.create_time desc
+    </select>
+    <select id="selectFollowupCustomerId" resultType="java.lang.Long">select customer_id from biz_customer_followup where followup_id=#{followupId} and del_flag='0'</select>
+    <insert id="insertFollowup" parameterType="map" useGeneratedKeys="true" keyProperty="followupId">insert into biz_customer_followup(customer_id,follow_type,follow_result,content,next_follow_time,follow_user_id,task_status,create_by,create_time) values(#{customerId},#{followType},#{followResult},#{content},#{nextFollowTime},#{followUserId},'1',#{createBy},sysdate())</insert>
+    <update id="deleteFollowup">update biz_customer_followup set del_flag='2', update_by=#{updateBy}, update_time=sysdate() where followup_id=#{followupId} and del_flag='0'</update>
+    <update id="touchCustomerFollowTime" parameterType="map">update biz_customer set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime}, update_by=#{createBy}, update_time=sysdate() where customer_id=#{customerId}</update>
+
+    <select id="selectTags" resultType="java.util.Map">
+        select * from biz_customer_tag
+        <where>
+            <if test="tagName != null and tagName != ''">and tag_name like concat('%',#{tagName},'%')</if>
+            <if test="status != null and status != ''">and status = #{status}</if>
+        </where>
+        order by order_num, tag_id
+    </select>
+    <insert id="insertTag" parameterType="map" useGeneratedKeys="true" keyProperty="tagId">insert into biz_customer_tag(tag_name,tag_color,order_num,status,remark,create_by,create_time) values(#{tagName},#{tagColor},#{orderNum},#{status},#{remark},#{createBy},sysdate())</insert>
+    <update id="updateTag" parameterType="map">update biz_customer_tag set tag_name=#{tagName},tag_color=#{tagColor},order_num=#{orderNum},status=#{status},remark=#{remark},update_by=#{updateBy},update_time=sysdate() where tag_id=#{tagId}</update>
+    <delete id="deleteTag">delete from biz_customer_tag where tag_id=#{tagId}</delete>
+    <delete id="deleteTagRelations">delete from biz_customer_tag_rel where tag_id=#{tagId}</delete>
+    <select id="countEnabledTag" resultType="int">select count(1) from biz_customer_tag where tag_id=#{tagId} and status='0'</select>
+    <delete id="deleteCustomerTags">delete from biz_customer_tag_rel where customer_id=#{customerId}</delete>
+    <insert id="insertCustomerTag">insert ignore into biz_customer_tag_rel(customer_id,tag_id) values(#{customerId},#{tagId})</insert>
+    <select id="selectCustomerTagIds" resultType="java.lang.Long">select tag_id from biz_customer_tag_rel where customer_id=#{customerId}</select>
+    <select id="selectMergeCandidates" parameterType="BizCustomer" resultType="java.util.Map">
+        select c.customer_id customerId,c.customer_no customerNo,c.customer_name customerName,c.mobile,c.credit_code creditCode,c.company_name companyName from biz_customer c
+        where c.del_flag='0'
+        and c.status='0'
+        <if test="customerName != null and customerName != ''">and c.customer_name like concat('%',#{customerName},'%')</if>
+        <if test="mobile != null and mobile != ''">and c.mobile like concat('%',#{mobile},'%')</if>
+        <if test="creditCode != null and creditCode != ''">and c.credit_code like concat('%',#{creditCode},'%')</if>
+        <include refid="customerDataScope"/>
+        order by c.customer_id desc
+    </select>
+    <select id="selectMergeLogs" resultType="java.util.Map">
+        select l.merge_id logId,
+               l.main_customer_id mainCustomerId,
+               c.customer_name mainCustomerName,
+               l.merged_customer_id mergedCustomerId,
+               merged.customer_name mergedCustomerName,
+               l.merge_content mergeContent,
+               l.create_by createBy,
+               l.create_time createTime
+        from biz_customer_merge_log l
+        inner join biz_customer c on c.customer_id = l.main_customer_id
+        left join biz_customer merged on merged.customer_id = l.merged_customer_id
+        <where>
+            <if test="customerId != null and customerId != ''">
+                and (l.main_customer_id = #{customerId} or l.merged_customer_id = #{customerId})
+            </if>
+            <include refid="customerDataScope"/>
+        </where>
+        order by l.create_time desc, l.merge_id desc
+    </select>
+    <select id="selectContractIdsByCustomerId" resultType="java.lang.Long">
+        select contract_id from biz_contract where customer_id=#{customerId} and del_flag='0'
+    </select>
+    <update id="moveContacts">update biz_customer_contact set customer_id=#{toId}, update_by=#{updateBy}, update_time=sysdate() where customer_id=#{fromId} and del_flag='0'</update>
+    <update id="moveFollowups">update biz_customer_followup set customer_id=#{toId}, update_by=#{updateBy}, update_time=sysdate() where customer_id=#{fromId} and del_flag='0'</update>
+    <update id="moveTagRelations">update ignore biz_customer_tag_rel set customer_id=#{toId} where customer_id=#{fromId}</update>
+    <update id="moveContracts">
+        update biz_contract c
+        inner join biz_customer target on target.customer_id=#{toId}
+        set c.customer_id=#{toId}, c.customer_name=target.customer_name, c.update_by=#{updateBy}, c.update_time=sysdate()
+        where c.customer_id=#{fromId}
+        and c.del_flag='0'
+    </update>
+    <update id="markMerged">update biz_customer set status='2', del_flag='2', update_by=#{updateBy}, update_time=sysdate() where customer_id=#{fromId} and del_flag='0' and status != '2'</update>
+    <insert id="insertMergeLog">insert into biz_customer_merge_log(main_customer_id,merged_customer_id,merge_content,create_by,create_time) values(#{mainId},#{mergedId},#{content},#{createBy},sysdate())</insert>
+</mapper>

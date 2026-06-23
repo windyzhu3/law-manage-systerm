@@ -8,6 +8,10 @@
 target/
 !.mvn/wrapper/maven-wrapper.jar
 
+# Repository-local JDK installed by bin/setup-jdk17.ps1
+.jdk/
+.run/
+
 ######################################################################
 # IDE
 

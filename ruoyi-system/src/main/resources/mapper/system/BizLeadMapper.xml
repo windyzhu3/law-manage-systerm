@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizLeadMapper">
+
+    <resultMap type="BizLead" id="BizLeadResult">
+        <id property="leadId" column="lead_id" />
+        <result property="leadNo" column="lead_no" />
+        <result property="leadName" column="lead_name" />
+        <result property="contactName" column="contact_name" />
+        <result property="mobile" column="mobile" />
+        <result property="wechat" column="wechat" />
+        <result property="companyName" column="company_name" />
+        <result property="sourceCode" column="source_code" />
+        <result property="status" column="status" />
+        <result property="poolStatus" column="pool_status" />
+        <result property="priority" column="priority" />
+        <result property="legalDemand" column="legal_demand" />
+        <result property="estimatedAmount" column="estimated_amount" />
+        <result property="ownerId" column="owner_id" />
+        <result property="ownerName" column="owner_name" />
+        <result property="deptId" column="dept_id" />
+        <result property="deptName" column="dept_name" />
+        <result property="nextFollowTime" column="next_follow_time" />
+        <result property="lastFollowTime" column="last_follow_time" />
+        <result property="convertedTime" column="converted_time" />
+        <result property="customerId" column="customer_id" />
+        <result property="invalidReason" column="invalid_reason" />
+        <result property="poolReason" column="pool_reason" />
+        <result property="delFlag" column="del_flag" />
+        <result property="deleteTime" column="delete_time" />
+        <result property="createBy" column="create_by" />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy" column="update_by" />
+        <result property="updateTime" column="update_time" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <sql id="selectLeadVo">
+        select l.*, u.nick_name as owner_name, d.dept_name
+        from biz_lead l
+        left join sys_user u on u.user_id = l.owner_id
+        left join sys_dept d on d.dept_id = l.dept_id
+    </sql>
+
+    <sql id="leadDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1
+                from sys_user_role ur
+                inner join sys_role r on r.role_id = ur.role_id and r.status = '0'
+                where ur.user_id = #{currentUserId}
+                and (
+                    r.data_scope = '1'
+                    or (r.data_scope = '2' and l.dept_id in (select rd.dept_id from sys_role_dept rd where rd.role_id = r.role_id))
+                    or (r.data_scope = '3' and l.dept_id = #{currentDeptId})
+                    or (r.data_scope = '4' and l.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id = #{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope = '5' and l.owner_id = #{currentUserId})
+                )
+            )
+        </if>
+    </sql>
+
+    <select id="selectLeadList" parameterType="BizLead" resultMap="BizLeadResult">
+        <include refid="selectLeadVo"/>
+        <where>
+            <if test="listMode == null or listMode != 'recycle'">and l.del_flag = '0'</if>
+            <if test="listMode != null and listMode == 'recycle'">and l.del_flag = '2'</if>
+            <if test="listMode != null and listMode == 'pool'">and l.pool_status = '1'</if>
+            <if test="listMode != null and listMode == 'mine'">and l.owner_id = #{currentUserId} and l.pool_status = '0'</if>
+            <if test="leadName != null and leadName != ''">and (l.lead_name like concat('%', #{leadName}, '%') or l.company_name like concat('%', #{leadName}, '%'))</if>
+            <if test="contactName != null and contactName != ''">and l.contact_name like concat('%', #{contactName}, '%')</if>
+            <if test="mobile != null and mobile != ''">and l.mobile like concat('%', #{mobile}, '%')</if>
+            <if test="sourceCode != null and sourceCode != ''">and l.source_code = #{sourceCode}</if>
+            <if test="status != null and status != ''">and l.status = #{status}</if>
+            <if test="priority != null and priority != ''">and l.priority = #{priority}</if>
+            <include refid="leadDataScope"/>
+        </where>
+        order by l.update_time desc, l.lead_id desc
+    </select>
+
+    <select id="selectLeadById" parameterType="Long" resultMap="BizLeadResult">
+        <include refid="selectLeadVo"/>
+        where l.lead_id = #{leadId}
+    </select>
+
+    <insert id="insertLead" parameterType="BizLead" useGeneratedKeys="true" keyProperty="leadId">
+        insert into biz_lead (
+            lead_no, lead_name, contact_name, mobile, wechat, company_name, source_code,
+            status, pool_status, priority, legal_demand, estimated_amount, owner_id, dept_id,
+            next_follow_time, remark, create_by, create_time, update_time
+        ) values (
+            #{leadNo},
+            #{leadName}, #{contactName}, #{mobile}, #{wechat}, #{companyName}, #{sourceCode},
+            #{status}, #{poolStatus}, #{priority}, #{legalDemand}, #{estimatedAmount}, #{ownerId}, #{deptId},
+            #{nextFollowTime}, #{remark}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <update id="updateLead" parameterType="BizLead">
+        update biz_lead
+        <set>
+            <if test="leadName != null">lead_name = #{leadName},</if>
+            <if test="contactName != null">contact_name = #{contactName},</if>
+            <if test="mobile != null">mobile = #{mobile},</if>
+            <if test="wechat != null">wechat = #{wechat},</if>
+            <if test="companyName != null">company_name = #{companyName},</if>
+            <if test="sourceCode != null">source_code = #{sourceCode},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="priority != null">priority = #{priority},</if>
+            <if test="legalDemand != null">legal_demand = #{legalDemand},</if>
+            <if test="estimatedAmount != null">estimated_amount = #{estimatedAmount},</if>
+            <if test="nextFollowTime != null">next_follow_time = #{nextFollowTime},</if>
+            <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            update_by = #{updateBy}, update_time = sysdate()
+        </set>
+        where lead_id = #{leadId}
+    </update>
+
+    <update id="softDeleteLead">
+        update biz_lead set del_flag = '2', delete_time = sysdate(), update_by = #{updateBy}, update_time = sysdate()
+        where lead_id in <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+    <update id="restoreLead">
+        update biz_lead set del_flag = '0', delete_time = null, update_by = #{updateBy}, update_time = sysdate()
+        where lead_id in <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+    <delete id="purgeLeadFollowups">
+        delete from biz_lead_followup where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_followup.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadAssignmentLogs">
+        delete from biz_lead_assignment_log where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_assignment_log.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLead">
+        delete from biz_lead where del_flag = '2' and lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <update id="assignLead">
+        update biz_lead set owner_id = #{ownerId}, dept_id = (select dept_id from sys_user where user_id = #{ownerId}), pool_status = '0',
+        status = case when status = '0' then '1' else status end, pool_reason = null,
+        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and status not in ('3','4','5')
+    </update>
+    <update id="moveToPool">
+        update biz_lead set owner_id = null, dept_id = null, pool_status = '1', status = '0', pool_reason = #{reason},
+        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and status not in ('3','4','5')
+    </update>
+    <update id="claimLead">
+        update biz_lead set owner_id = #{ownerId}, dept_id = #{deptId}, pool_status = '0',
+        status = case when status = '0' then '1' else status end, pool_reason = null,
+        update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and pool_status = '1' and del_flag = '0' and status not in ('3','4','5')
+    </update>
+    <update id="convertLead">
+        update biz_lead set status = '3', converted_time = sysdate(), update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and owner_id is not null and status in ('1','2')
+    </update>
+    <update id="bindCustomer">
+        update biz_lead set customer_id = #{customerId}, update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId}
+    </update>
+    <insert id="insertAssignmentLog">
+        insert into biz_lead_assignment_log(lead_id, from_owner_id, to_owner_id, action_type, reason, create_by, create_time)
+        values(#{leadId}, #{fromOwnerId}, #{toOwnerId}, #{actionType}, #{reason}, #{createBy}, sysdate())
+    </insert>
+
+    <select id="selectFollowupList" parameterType="BizLeadFollowup" resultType="BizLeadFollowup">
+        select f.followup_id as followupId, f.lead_id as leadId, l.lead_name as leadName,
+        f.follow_type as followType, f.follow_result as followResult, f.content,
+        f.next_follow_time as nextFollowTime, f.follow_user_id as followUserId,
+        u.nick_name as followUserName, f.task_status as taskStatus, f.create_time as createTime
+        from biz_lead_followup f
+        inner join biz_lead l on l.lead_id = f.lead_id
+        left join sys_user u on u.user_id = f.follow_user_id
+        <where>
+            <if test="leadId != null">and f.lead_id = #{leadId}</if>
+            <if test="listMode != null and listMode == 'mine'">and f.follow_user_id = #{currentUserId}</if>
+            <if test="taskStatus != null and taskStatus != ''">and f.task_status = #{taskStatus}</if>
+        </where>
+        order by f.create_time desc
+    </select>
+    <insert id="insertFollowup" parameterType="BizLeadFollowup" useGeneratedKeys="true" keyProperty="followupId">
+        insert into biz_lead_followup(lead_id, follow_type, follow_result, content, next_follow_time, follow_user_id, task_status, create_by, create_time)
+        values(#{leadId}, #{followType}, #{followResult}, #{content}, #{nextFollowTime}, #{followUserId}, '1', #{createBy}, sysdate())
+    </insert>
+    <update id="updateFollowup" parameterType="BizLeadFollowup">
+        update biz_lead_followup set follow_type=#{followType}, follow_result=#{followResult}, content=#{content},
+        next_follow_time=#{nextFollowTime}, task_status=#{taskStatus}, update_by=#{updateBy}, update_time=sysdate()
+        where followup_id=#{followupId}
+    </update>
+    <delete id="deleteFollowup">delete from biz_lead_followup where followup_id = #{followupId}</delete>
+    <update id="touchLeadFollowTime">
+        update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime},
+        status=case when status in ('0','1') then '2' else status end, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null and status in ('1','2')
+    </update>
+
+    <select id="countLeadInDataScope" resultType="int">
+        select count(1)
+        from biz_lead l
+        where l.lead_id = #{leadId}
+        <if test="includeDeleted == null or includeDeleted == false">and l.del_flag = '0'</if>
+        <if test="includeDeleted != null and includeDeleted == true">and l.del_flag in ('0','2')</if>
+        <if test="currentUserId != null and currentDeptId != null">
+            and exists (
+                select 1
+                from sys_user_role ur
+                inner join sys_role r on r.role_id = ur.role_id and r.status = '0'
+                where ur.user_id = #{currentUserId}
+                and (
+                    r.data_scope = '1'
+                    or (r.data_scope = '2' and l.dept_id in (select rd.dept_id from sys_role_dept rd where rd.role_id = r.role_id))
+                    or (r.data_scope = '3' and l.dept_id = #{currentDeptId})
+                    or (r.data_scope = '4' and l.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id = #{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope = '5' and l.owner_id = #{currentUserId})
+                )
+            )
+        </if>
+    </select>
+
+    <select id="selectSettingList" parameterType="BizLeadSetting" resultType="BizLeadSetting">
+        select setting_id as settingId, setting_type as settingType, setting_code as settingCode,
+        setting_name as settingName, color, order_num as orderNum, status, remark
+        from biz_lead_setting
+        <where><if test="settingType != null and settingType != ''">and setting_type=#{settingType}</if></where>
+        order by setting_type, order_num, setting_id
+    </select>
+    <insert id="insertSetting" parameterType="BizLeadSetting" useGeneratedKeys="true" keyProperty="settingId">
+        insert into biz_lead_setting(setting_type, setting_code, setting_name, color, order_num, status, remark, create_by, create_time)
+        values(#{settingType}, #{settingCode}, #{settingName}, #{color}, #{orderNum}, #{status}, #{remark}, #{createBy}, sysdate())
+    </insert>
+    <update id="updateSetting" parameterType="BizLeadSetting">
+        update biz_lead_setting set setting_type=#{settingType}, setting_code=#{settingCode}, setting_name=#{settingName},
+        color=#{color}, order_num=#{orderNum}, status=#{status}, remark=#{remark}, update_by=#{updateBy}, update_time=sysdate()
+        where setting_id=#{settingId}
+    </update>
+    <delete id="deleteSetting">delete from biz_lead_setting where setting_id=#{settingId}</delete>
+
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'total' metricKey, count(*) metricValue from biz_lead l where del_flag='0' <include refid="leadDataScope"/>
+        union all select 'mine', count(*) from biz_lead l where del_flag='0' and owner_id=#{currentUserId}
+        union all select 'pool', count(*) from biz_lead l where del_flag='0' and pool_status='1'
+        union all select 'followToday', count(*) from biz_lead l where del_flag='0' and date(next_follow_time) &lt;= curdate() and status not in ('3','4','5') <include refid="leadDataScope"/>
+    </select>
+    <select id="selectSourceStats" resultType="java.util.Map">
+        select coalesce(s.setting_name, l.source_code, '未设置') itemName, count(*) itemValue
+        from biz_lead l left join biz_lead_setting s on s.setting_type='source' and s.setting_code=l.source_code
+        where l.del_flag='0' <include refid="leadDataScope"/> group by coalesce(s.setting_name, l.source_code, '未设置') order by itemValue desc
+    </select>
+    <select id="selectStatusStats" resultType="java.util.Map">
+        select status itemName, count(*) itemValue from biz_lead l where del_flag='0' <include refid="leadDataScope"/> group by status order by status
+    </select>
+</mapper>

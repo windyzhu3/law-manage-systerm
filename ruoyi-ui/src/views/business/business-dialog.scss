@@ -1,0 +1,176 @@
+.biz-dialog {
+  --biz-font-base: 13px;
+  --biz-font-small: 12px;
+  --biz-font-mini: 11px;
+  --biz-font-section: 18px;
+
+  .el-dialog__header {
+    padding: 18px 22px 12px;
+    border-bottom: 1px solid #edf1f7;
+  }
+
+  .el-dialog__title {
+    color: #172b4d;
+    font-size: var(--biz-font-section);
+    font-weight: 700;
+  }
+
+  .el-dialog__body {
+    padding: 20px 22px 10px;
+    color: #334155;
+    font-size: var(--biz-font-base);
+  }
+
+  .el-dialog__footer {
+    padding: 12px 22px 18px;
+    border-top: 1px solid #edf1f7;
+  }
+
+  .el-form-item__label,
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-radio__label,
+  .el-checkbox__label,
+  .el-switch__label,
+  .el-button {
+    font-size: var(--biz-font-small);
+  }
+
+  .el-form-item {
+    margin-bottom: 18px;
+  }
+
+  .el-select,
+  .el-date-editor.el-input,
+  .el-input-number {
+    width: 100%;
+  }
+
+  .el-color-picker__trigger {
+    width: 34px;
+    height: 34px;
+  }
+
+  .upload-file {
+    font-size: var(--biz-font-small);
+
+    .upload-file-uploader .el-button {
+      height: 28px;
+      padding: 7px 12px;
+      font-size: var(--biz-font-small);
+      line-height: 1;
+    }
+
+    .el-upload__tip,
+    .upload-file-list .el-upload-list__item {
+      font-size: var(--biz-font-mini);
+    }
+  }
+}
+
+.biz-dialog.biz-size-default {
+  --biz-font-base: 14px;
+  --biz-font-small: 13px;
+  --biz-font-mini: 12px;
+  --biz-font-section: 19px;
+}
+
+.biz-dialog.biz-size-small {
+  --biz-font-base: 12px;
+  --biz-font-small: 11px;
+  --biz-font-mini: 10px;
+  --biz-font-section: 17px;
+}
+
+.biz-dialog.biz-size-mini {
+  --biz-font-base: 11px;
+  --biz-font-small: 10px;
+  --biz-font-mini: 9px;
+  --biz-font-section: 16px;
+}
+
+.biz-message-box {
+  --biz-font-base: 13px;
+  --biz-font-small: 12px;
+  --biz-font-section: 18px;
+
+  .el-message-box__title {
+    color: #172b4d;
+    font-size: var(--biz-font-section);
+    font-weight: 700;
+  }
+
+  .el-message-box__content,
+  .el-message-box__input .el-input__inner,
+  .el-button {
+    font-size: var(--biz-font-small);
+  }
+
+  .el-message-box__message {
+    color: #334155;
+    font-size: var(--biz-font-base);
+  }
+}
+
+.biz-message-box.biz-size-default {
+  --biz-font-base: 14px;
+  --biz-font-small: 13px;
+  --biz-font-section: 19px;
+}
+
+.biz-message-box.biz-size-small {
+  --biz-font-base: 12px;
+  --biz-font-small: 11px;
+  --biz-font-section: 17px;
+}
+
+.biz-message-box.biz-size-mini {
+  --biz-font-base: 11px;
+  --biz-font-small: 10px;
+  --biz-font-section: 16px;
+}
+
+.business-advanced-popover {
+  padding: 0;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(28, 54, 102, .16);
+
+  .advanced-filter-panel {
+    padding: 14px;
+  }
+
+  .advanced-title {
+    margin-bottom: 12px;
+
+    strong,
+    span {
+      display: block;
+    }
+
+    strong {
+      color: #172b4d;
+      font-size: var(--biz-font-card, 14px);
+    }
+
+    span {
+      margin-top: 4px;
+      color: #94a3b8;
+      font-size: var(--biz-font-mini, 11px);
+    }
+  }
+
+  .el-form-item {
+    margin-bottom: 12px;
+  }
+
+  .el-select {
+    width: 100%;
+  }
+
+  .advanced-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+  }
+}

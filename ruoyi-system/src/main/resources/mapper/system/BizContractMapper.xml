@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizContractMapper">
+    <resultMap type="BizContract" id="BizContractResult">
+        <id property="contractId" column="contract_id"/>
+        <result property="contractNo" column="contract_no"/>
+        <result property="contractName" column="contract_name"/>
+        <result property="customerId" column="customer_id"/>
+        <result property="customerName" column="customer_name"/>
+        <result property="caseType" column="case_type"/>
+        <result property="lawyerId" column="lawyer_id"/>
+        <result property="lawyerName" column="lawyer_name"/>
+        <result property="ownerId" column="owner_id"/>
+        <result property="ownerName" column="owner_name"/>
+        <result property="deptId" column="dept_id"/>
+        <result property="deptName" column="dept_name"/>
+        <result property="signAmount" column="sign_amount"/>
+        <result property="feeType" column="fee_type"/>
+        <result property="signDate" column="sign_date"/>
+        <result property="effectiveDate" column="effective_date"/>
+        <result property="expireDate" column="expire_date"/>
+        <result property="signMethod" column="sign_method"/>
+        <result property="signStatus" column="sign_status"/>
+        <result property="auditStatus" column="audit_status"/>
+        <result property="contractStatus" column="contract_status"/>
+        <result property="riskLevel" column="risk_level"/>
+        <result property="delFlag" column="del_flag"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+    <sql id="selectContractVo">select c.*, u.nick_name owner_name, d.dept_name from biz_contract c left join sys_user u on u.user_id=c.owner_id left join sys_dept d on d.dept_id=c.dept_id</sql>
+    <sql id="contractDataScope">
+        <!-- 路径 1：@Param 形式的 dataScope 布尔参数（dashboard/统计/计数等场景） -->
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    #{permissions} is null or #{permissions} = ''
+                    or exists (
+                        select 1 from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id = rm.menu_id
+                        where rm.role_id = r.role_id
+                        and m.status = '0'
+                        and m.perms is not null
+                        and m.perms != ''
+                        and find_in_set(m.perms, #{permissions}) > 0
+                    )
+                )
+                and (r.data_scope='1' or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id)) or (r.data_scope='3' and c.dept_id=#{currentDeptId}) or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors))) or (r.data_scope='5' and c.owner_id=#{currentUserId}))
+            )
+        </if>
+        <!-- 路径 2：@DataScope 注解注入的 SQL 片段（list/getInfo 场景），仅在路径 1 未启用时回退 -->
+        <if test="(dataScope == null or !dataScope) and params != null and params.dataScope != null and params.dataScope != ''">
+            ${params.dataScope}
+        </if>
+    </sql>
+    <select id="selectContractList" parameterType="BizContract" resultMap="BizContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or c.contract_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="contractNo != null and contractNo != ''">and c.contract_no like concat('%',#{contractNo},'%')</if>
+            <if test="contractName != null and contractName != ''">and c.contract_name like concat('%',#{contractName},'%')</if>
+            <if test="customerId != null">and c.customer_id=#{customerId}</if>
+            <if test="customerName != null and customerName != ''">and c.customer_name like concat('%',#{customerName},'%')</if>
+            <if test="caseType != null and caseType != ''">and c.case_type=#{caseType}</if>
+            <if test="auditStatus != null and auditStatus != ''">and c.audit_status=#{auditStatus}</if>
+            <if test="signStatus != null and signStatus != ''">and c.sign_status=#{signStatus}</if>
+            <if test="contractStatus != null and contractStatus != ''">and c.contract_status=#{contractStatus}</if>
+            <if test="ownerId != null">and c.owner_id=#{ownerId}</if>
+            <include refid="contractDataScope"/>
+        </where>
+        order by c.update_time desc, c.contract_id desc
+    </select>
+    <select id="selectContractById" resultMap="BizContractResult"><include refid="selectContractVo"/> where c.contract_id=#{contractId}</select>
+    <select id="selectContractsByExactNameInScope" resultMap="BizContractResult">
+        <include refid="selectContractVo"/>
+        <where>
+            and c.del_flag='0'
+            and c.contract_name=#{contractName}
+            <include refid="contractDataScope"/>
+        </where>
+        order by c.contract_id desc
+        limit 2
+    </select>
+    <insert id="insertContract" parameterType="BizContract" useGeneratedKeys="true" keyProperty="contractId">
+        insert into biz_contract(contract_no,contract_name,customer_id,customer_name,case_type,lawyer_id,lawyer_name,owner_id,dept_id,sign_amount,fee_type,sign_date,effective_date,expire_date,sign_method,sign_status,audit_status,contract_status,risk_level,remark,create_by,create_time,update_time)
+        values(#{contractNo},#{contractName},#{customerId},#{customerName},#{caseType},#{lawyerId},#{lawyerName},#{ownerId},#{deptId},#{signAmount},#{feeType},#{signDate},#{effectiveDate},#{expireDate},#{signMethod},#{signStatus},#{auditStatus},#{contractStatus},#{riskLevel},#{remark},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateContract" parameterType="BizContract">
+        update biz_contract
+        <set>
+            <if test="contractName != null">contract_name=#{contractName},</if><if test="customerId != null">customer_id=#{customerId},</if><if test="customerName != null">customer_name=#{customerName},</if><if test="caseType != null">case_type=#{caseType},</if><if test="lawyerId != null">lawyer_id=#{lawyerId},</if><if test="lawyerName != null">lawyer_name=#{lawyerName},</if><if test="ownerId != null">owner_id=#{ownerId},</if><if test="deptId != null">dept_id=#{deptId},</if><if test="signAmount != null">sign_amount=#{signAmount},</if><if test="feeType != null">fee_type=#{feeType},</if><if test="signDate != null">sign_date=#{signDate},</if><if test="effectiveDate != null">effective_date=#{effectiveDate},</if><if test="expireDate != null">expire_date=#{expireDate},</if><if test="signMethod != null">sign_method=#{signMethod},</if><if test="riskLevel != null">risk_level=#{riskLevel},</if><if test="remark != null">remark=#{remark},</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where contract_id=#{contractId}
+        and del_flag='0'
+        and audit_status not in ('1','2')
+        and contract_status not in ('2','3','4')
+    </update>
+    <update id="deleteContractByIds">update biz_contract set del_flag='2', update_by=#{updateBy}, update_time=sysdate() where del_flag='0' and audit_status != '1' and contract_status not in ('1','2') and contract_id in <foreach collection="contractIds" item="id" open="(" separator="," close=")">#{id}</foreach></update>
+    <select id="countContractInDataScope" resultType="int">
+        select count(1) from biz_contract c where c.contract_id=#{contractId} and c.del_flag='0'
+        and exists (
+            select 1 from sys_user_role ur
+            inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+            where ur.user_id=#{currentUserId}
+            and (
+                #{permissions} is null or #{permissions} = ''
+                or exists (
+                    select 1 from sys_role_menu rm
+                    inner join sys_menu m on m.menu_id = rm.menu_id
+                    where rm.role_id = r.role_id
+                    and m.status = '0'
+                    and m.perms is not null
+                    and m.perms != ''
+                    and find_in_set(m.perms, #{permissions}) > 0
+                )
+            )
+            and (
+                r.data_scope='1'
+                or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                or (r.data_scope='5' and c.owner_id=#{currentUserId})
+            )
+        )
+    </select>
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'total' metricKey,count(*) metricValue from biz_contract c where del_flag='0' <include refid="contractDataScope"/>
+        union all select 'monthNew',count(*) from biz_contract c where del_flag='0' and date_format(create_time,'%Y%m')=date_format(sysdate(),'%Y%m') <include refid="contractDataScope"/>
+        union all select 'pendingAudit',count(*) from biz_contract c where del_flag='0' and audit_status='1' <include refid="contractDataScope"/>
+        union all select 'performing',count(*) from biz_contract c where del_flag='0' and contract_status='1' <include refid="contractDataScope"/>
+        union all select 'monthAmount',coalesce(sum(sign_amount),0) from biz_contract c where del_flag='0' and date_format(sign_date,'%Y%m')=date_format(sysdate(),'%Y%m') <include refid="contractDataScope"/>
+    </select>
+    <select id="selectCaseStats" resultType="java.util.Map">select case_type itemName,count(*) itemValue from biz_contract c where del_flag='0' <include refid="contractDataScope"/> group by case_type</select>
+    <select id="selectActiveNoRule" resultType="java.util.Map">select rule_id ruleId, prefix, date_pattern datePattern, serial_length serialLength, current_serial currentSerial from biz_contract_no_rule where status='0' order by rule_id limit 1 for update</select>
+    <update id="updateNoRule">update biz_contract_no_rule set current_serial=#{currentSerial}, update_by=#{updateBy}, update_time=sysdate() where rule_id=#{ruleId}</update>
+    <update id="disableOtherNoRules">update biz_contract_no_rule set status='1', update_by=#{updateBy}, update_time=sysdate() where status='0' and rule_id != #{ruleId}</update>
+    <select id="countOtherEnabledNoRules" resultType="int">select count(1) from biz_contract_no_rule where status='0' and rule_id != #{ruleId}</select>
+    <select id="selectRules" resultType="java.util.Map">select rule_id ruleId,rule_name ruleName,prefix,date_pattern datePattern,serial_length serialLength,current_serial currentSerial,status,remark from biz_contract_no_rule order by rule_id</select>
+    <update id="updateRule" parameterType="map">update biz_contract_no_rule set rule_name=#{ruleName},prefix=#{prefix},date_pattern=#{datePattern},serial_length=#{serialLength},status=#{status},remark=#{remark},update_by=#{updateBy},update_time=sysdate() where rule_id=#{ruleId}</update>
+
+    <select id="selectTemplates" resultType="java.util.Map">select template_id templateId,template_name templateName,case_type caseType,file_name fileName,file_url fileUrl,version_no versionNo,status,remark,create_time createTime from biz_contract_template <where><if test="templateName != null and templateName != ''">and template_name like concat('%',#{templateName},'%')</if><if test="caseType != null and caseType != ''">and case_type=#{caseType}</if><if test="status != null and status != ''">and status=#{status}</if></where> order by template_id desc</select>
+    <select id="selectTemplateById" resultType="java.util.Map">select template_id templateId,template_name templateName,status from biz_contract_template where template_id=#{templateId}</select>
+    <insert id="insertTemplate" parameterType="map" useGeneratedKeys="true" keyProperty="templateId">insert into biz_contract_template(template_name,case_type,file_name,file_url,version_no,status,remark,create_by,create_time) values(#{templateName},#{caseType},#{fileName},#{fileUrl},#{versionNo},#{status},#{remark},#{createBy},sysdate())</insert>
+    <update id="updateTemplate" parameterType="map">update biz_contract_template set template_name=#{templateName},case_type=#{caseType},file_name=#{fileName},file_url=#{fileUrl},version_no=#{versionNo},status=#{status},remark=#{remark},update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId}</update>
+    <delete id="deleteTemplate">delete from biz_contract_template where template_id=#{templateId}</delete>
+    <select id="selectApprovals" resultType="java.util.Map">
+        select a.*, c.contract_no contractNo,c.contract_name contractName,c.customer_name customerName from biz_contract_approval a left join biz_contract c on c.contract_id=a.contract_id
+        <where>
+            <if test="contractId != null and contractId != ''">and a.contract_id=#{contractId}</if>
+            and c.del_flag='0'
+            <include refid="contractDataScope"/>
+        </where>
+        order by a.create_time desc
+    </select>
+    <insert id="insertApproval" parameterType="map" useGeneratedKeys="true" keyProperty="approvalId">insert into biz_contract_approval(contract_id,approval_action,approval_opinion,approver_id,approver_name,create_by,create_time) values(#{contractId},#{approvalAction},#{approvalOpinion},#{approverId},#{approverName},#{createBy},sysdate())</insert>
+    <update id="updateAuditStatus">
+        update biz_contract
+        set audit_status=#{auditStatus}, contract_status=#{contractStatus}, update_by=#{updateBy}, update_time=sysdate()
+        where contract_id=#{contractId}
+        and del_flag='0'
+        and audit_status=#{expectedAuditStatus}
+        and contract_status=#{expectedContractStatus}
+    </update>
+    <update id="updateLifecycleStatus">
+        update biz_contract
+        <set>
+            <if test="signStatus != null">sign_status=#{signStatus},</if>
+            <if test="contractStatus != null">contract_status=#{contractStatus},</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where contract_id=#{contractId}
+        and del_flag='0'
+        and audit_status=#{expectedAuditStatus}
+        and contract_status=#{expectedContractStatus}
+    </update>
+    <select id="selectFeePlans" resultType="java.util.Map">
+        select p.*, c.contract_no contractNo,c.contract_name contractName,c.customer_name customerName,c.contract_status contractStatus from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        <where>
+            <if test="contractId != null and contractId != ''">and p.contract_id=#{contractId}</if>
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or c.contract_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
+            <if test="invoiceStatus != null and invoiceStatus != ''">and p.invoice_status=#{invoiceStatus}</if>
+            and c.del_flag='0'
+            <include refid="contractDataScope"/>
+        </where>
+        order by p.contract_id desc,p.period_no
+    </select>
+    <select id="selectFeePlanById" resultType="java.util.Map">
+        select p.*, c.contract_no contractNo,c.contract_name contractName,c.customer_name customerName,c.contract_status contractStatus from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id where p.plan_id=#{planId} and c.del_flag='0'
+    </select>
+    <select id="selectFeePlanContractId" resultType="java.lang.Long">select contract_id from biz_contract_fee_plan where plan_id=#{planId}</select>
+    <insert id="insertFeePlan" parameterType="map" useGeneratedKeys="true" keyProperty="planId">insert into biz_contract_fee_plan(contract_id,period_no,receivable_amount,plan_receive_date,received_amount,confirm_status,invoice_status,finance_user_id,remark,create_by,create_time) values(#{contractId},#{periodNo},#{receivableAmount},#{planReceiveDate},#{receivedAmount},#{confirmStatus},#{invoiceStatus},#{financeUserId},#{remark},#{createBy},sysdate())</insert>
+    <update id="updateFeePlan" parameterType="map">
+        update biz_contract_fee_plan
+        set period_no=#{periodNo},
+            receivable_amount=#{receivableAmount},
+            plan_receive_date=#{planReceiveDate},
+            finance_user_id=#{financeUserId},
+            remark=#{remark},
+            update_by=#{updateBy},
+            update_time=sysdate()
+        where plan_id=#{planId}
+        and confirm_status=#{expectedConfirmStatus}
+        and invoice_status=#{expectedInvoiceStatus}
+        and exists (
+            select 1 from biz_contract c
+            where c.contract_id = biz_contract_fee_plan.contract_id
+            and c.del_flag = '0'
+            and c.contract_status = #{expectedContractStatus}
+        )
+    </update>
+    <update id="updateFeePlanStatus" parameterType="map">
+        update biz_contract_fee_plan
+        <set>
+            <if test="receivedAmount != null">received_amount=#{receivedAmount},</if>
+            <if test="confirmStatus != null">confirm_status=#{confirmStatus},</if>
+            <if test="invoiceStatus != null">invoice_status=#{invoiceStatus},</if>
+            <if test="remark != null">remark=#{remark},</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where plan_id=#{planId}
+        <if test="expectedConfirmStatus != null">and confirm_status=#{expectedConfirmStatus}</if>
+        <if test="expectedInvoiceStatus != null">and invoice_status=#{expectedInvoiceStatus}</if>
+        <if test="expectedContractStatus != null">
+            and exists (
+                select 1 from biz_contract c
+                where c.contract_id = biz_contract_fee_plan.contract_id
+                and c.del_flag = '0'
+                and c.contract_status = #{expectedContractStatus}
+            )
+        </if>
+    </update>
+    <delete id="deleteFeePlan">
+        delete from biz_contract_fee_plan
+        where plan_id=#{planId}
+        and confirm_status=#{expectedConfirmStatus}
+        and invoice_status=#{expectedInvoiceStatus}
+        and exists (
+            select 1 from biz_contract c
+            where c.contract_id = biz_contract_fee_plan.contract_id
+            and c.del_flag = '0'
+            and c.contract_status = #{expectedContractStatus}
+        )
+    </delete>
+    <select id="selectAttachments" resultType="java.util.Map">
+        select a.*, c.contract_no contractNo,c.contract_name contractName,c.contract_status contractStatus from biz_contract_attachment a left join biz_contract c on c.contract_id=a.contract_id
+        <where>
+            <if test="contractId != null and contractId != ''">and a.contract_id=#{contractId}</if>
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or c.contract_name like concat('%',#{keyword},'%') or a.file_name like concat('%',#{keyword},'%'))</if>
+            <if test="fileType != null and fileType != ''">and a.file_type like concat('%',#{fileType},'%')</if>
+            and c.del_flag='0'
+            <include refid="contractDataScope"/>
+        </where>
+        order by a.create_time desc
+    </select>
+    <select id="selectAttachmentContractId" resultType="java.lang.Long">select contract_id from biz_contract_attachment where attachment_id=#{attachmentId}</select>
+    <insert id="insertAttachment" parameterType="map" useGeneratedKeys="true" keyProperty="attachmentId">insert into biz_contract_attachment(contract_id,file_name,file_url,file_type,file_size,remark,create_by,create_time) values(#{contractId},#{fileName},#{fileUrl},#{fileType},#{fileSize},#{remark},#{createBy},sysdate())</insert>
+    <delete id="deleteAttachment">delete from biz_contract_attachment where attachment_id=#{attachmentId} and contract_id=#{contractId}</delete>
+    <select id="selectStatusLogs" resultType="java.util.Map">
+        select l.*, c.contract_no contractNo,c.contract_name contractName from biz_contract_status_log l left join biz_contract c on c.contract_id=l.contract_id
+        <where>
+            <if test="contractId != null and contractId != ''">and l.contract_id=#{contractId}</if>
+            and c.del_flag='0'
+            <include refid="contractDataScope"/>
+        </where>
+        order by l.create_time desc
+    </select>
+    <insert id="insertStatusLog">insert into biz_contract_status_log(contract_id,from_status,to_status,action_type,content,create_by,create_time) values(#{contractId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())</insert>
+</mapper>

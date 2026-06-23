@@ -7,6 +7,7 @@ echo.
 cd %~dp0
 
 cd ..
+call "%~dp0set-jdk17.bat" || exit /b 1
 call mvn clean package -Dmaven.test.skip=true
 
 pause

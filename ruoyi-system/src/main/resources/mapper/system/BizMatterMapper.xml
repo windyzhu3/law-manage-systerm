@@ -1,0 +1,329 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizMatterMapper">
+    <sql id="matterDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    #{permissions} is null or #{permissions} = ''
+                    or exists (
+                        select 1 from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id = rm.menu_id
+                        where rm.role_id = r.role_id
+                        and m.status = '0'
+                        and m.perms is not null
+                        and m.perms != ''
+                        and find_in_set(m.perms, #{permissions}) > 0
+                    )
+                )
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                    or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope='5' and (c.owner_id=#{currentUserId} or c.main_lawyer_id=#{currentUserId} or find_in_set(#{currentUserId}, ifnull(c.assistant_lawyer_ids,''))))
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="selectMatterVo">
+        select c.*, u.nick_name ownerName, d.dept_name deptName,
+               ct.contract_name contractName,
+               ct.sign_amount contractSignAmount,
+               (select coalesce(sum(p.receivable_amount),0) from biz_contract_fee_plan p where p.contract_id=c.contract_id) contractReceivableAmount,
+               (select coalesce(sum(p.received_amount),0) from biz_contract_fee_plan p where p.contract_id=c.contract_id and p.confirm_status='1') contractReceivedAmount,
+               (select count(1) from biz_case_node n inner join biz_case_node_material m on m.node_id=n.node_id where n.case_id=c.case_id and n.del_flag='0') nodeMaterialTotal,
+               (select count(1) from biz_case_node n inner join biz_case_node_material m on m.node_id=n.node_id where n.case_id=c.case_id and n.del_flag='0' and m.material_status='ready') nodeMaterialReady,
+               (select count(1) from biz_case_archive a inner join biz_case_archive_material m on m.archive_id=a.archive_id where a.case_id=c.case_id) archiveMaterialTotal,
+               (select count(1) from biz_case_archive a inner join biz_case_archive_material m on m.archive_id=a.archive_id where a.case_id=c.case_id and m.material_status='ready') archiveMaterialReady
+        from biz_case c
+        left join biz_contract ct on ct.contract_id=c.contract_id and ct.del_flag='0'
+        left join sys_user u on u.user_id=c.owner_id
+        left join sys_dept d on d.dept_id=c.dept_id
+    </sql>
+
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'active' metricKey,count(*) metricValue from biz_case c where c.del_flag='0' and c.case_status in ('processing','closing','closed') <include refid="matterDataScope"/>
+        union all select 'todayProgress',count(*) from biz_case_progress p left join biz_case c on c.case_id=p.case_id where p.del_flag='0' and c.del_flag='0' and date(p.create_time)=curdate() <include refid="matterDataScope"/>
+        union all select 'dueNodes',count(*) from biz_case_node n left join biz_case c on c.case_id=n.case_id where n.del_flag='0' and c.del_flag='0' and n.node_status in ('pending','current') and n.plan_date between curdate() and date_add(curdate(), interval 7 day) <include refid="matterDataScope"/>
+        union all select 'closing',count(*) from biz_case c where c.del_flag='0' and c.case_status='closing' <include refid="matterDataScope"/>
+        union all select 'monthArchived',count(*) from biz_case c where c.del_flag='0' and c.case_status='archived' and date_format(c.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') <include refid="matterDataScope"/>
+    </select>
+
+    <select id="selectCaseTypeStats" resultType="java.util.Map">
+        select c.case_type itemName,count(*) itemValue
+        from biz_case c
+        where c.del_flag='0'
+        <include refid="matterDataScope"/>
+        group by c.case_type
+        order by itemValue desc
+    </select>
+
+    <select id="selectReminders" resultType="java.util.Map">
+        select 'dueNodes' metricKey,count(*) metricValue from biz_case_node n left join biz_case c on c.case_id=n.case_id where n.del_flag='0' and c.del_flag='0' and n.node_status in ('pending','current') and n.plan_date between curdate() and date_add(curdate(), interval 7 day) <include refid="matterDataScope"/>
+        union all select 'missingMaterial',count(*) from biz_case_node_material m left join biz_case_node n on n.node_id=m.node_id left join biz_case c on c.case_id=n.case_id where n.del_flag='0' and c.del_flag='0' and m.material_status!='ready' <include refid="matterDataScope"/>
+        union all select 'closing',count(*) from biz_case c where c.del_flag='0' and c.case_status='closing' <include refid="matterDataScope"/>
+        union all select 'staleProgress',count(*) from biz_case c where c.del_flag='0' and c.case_status='processing' and (c.last_progress_time is null or c.last_progress_time &lt; date_sub(sysdate(), interval 7 day)) <include refid="matterDataScope"/>
+    </select>
+
+    <select id="selectMatterList" parameterType="map" resultType="java.util.Map">
+        <include refid="selectMatterVo"/>
+        <where>
+            and c.del_flag='0'
+            <if test="mode == null or mode == '' or mode == 'list'">and c.case_status in ('processing','closing','closed','archived')</if>
+            <if test="mode == 'mine'">and c.case_status in ('processing','closing','closed','archived') and (c.owner_id=#{currentUserId} or c.main_lawyer_id=#{currentUserId} or find_in_set(#{currentUserId}, ifnull(c.assistant_lawyer_ids,'')))</if>
+            <if test="mode == 'archive'">and c.case_status in ('closing','closed','archived')</if>
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%') or c.main_lawyer_name like concat('%',#{keyword},'%'))</if>
+            <if test="caseType != null and caseType != ''">and c.case_type=#{caseType}</if>
+            <if test="caseStage != null and caseStage != ''">and c.case_stage=#{caseStage}</if>
+            <if test="caseStatus != null and caseStatus != ''">and c.case_status=#{caseStatus}</if>
+            <if test="riskLevel != null and riskLevel != ''">and c.risk_level=#{riskLevel}</if>
+            <if test="urgency != null and urgency != ''">and c.urgency=#{urgency}</if>
+            <if test="archiveStatus != null and archiveStatus != ''">and c.archive_status=#{archiveStatus}</if>
+            <if test="customerId != null and customerId != ''">and c.customer_id=#{customerId}</if>
+            <if test="contractId != null and contractId != ''">and c.contract_id=#{contractId}</if>
+            <if test="mainLawyerId != null and mainLawyerId != ''">and c.main_lawyer_id=#{mainLawyerId}</if>
+            <if test="assistantLawyerId != null and assistantLawyerId != ''">and find_in_set(#{assistantLawyerId}, ifnull(c.assistant_lawyer_ids,''))</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by c.next_key_date asc, c.update_time desc, c.case_id desc
+    </select>
+
+    <select id="selectMatterById" resultType="java.util.Map">
+        <include refid="selectMatterVo"/>
+        where c.case_id=#{caseId} and c.del_flag='0'
+    </select>
+
+    <select id="selectMatterByContractId" resultType="java.util.Map">
+        select * from biz_case where contract_id=#{contractId} and del_flag='0' limit 1
+    </select>
+
+    <insert id="insertMatter" parameterType="map" useGeneratedKeys="true" keyProperty="caseId">
+        insert into biz_case(case_no,case_name,customer_id,customer_name,contract_id,contract_no,case_type,urgency,case_status,priority,risk_level,case_stage,fee_status,archive_status,owner_id,dept_id,main_lawyer_id,main_lawyer_name,current_node,cause,dispute_amount,court_name,case_filing_no,case_summary,create_by,create_time,update_time)
+        values(#{caseNo},#{caseName},#{customerId},#{customerName},#{contractId},#{contractNo},#{caseType},#{urgency},#{caseStatus},#{priority},#{riskLevel},#{caseStage},#{feeStatus},#{archiveStatus},#{ownerId},#{deptId},#{mainLawyerId},#{mainLawyerName},#{currentNode},#{cause},#{disputeAmount},#{courtName},#{caseFilingNo},#{caseSummary},#{createBy},sysdate(),sysdate())
+    </insert>
+
+    <update id="updateMatter" parameterType="map">
+        update biz_case
+        <set>
+            <if test="caseName != null">case_name=#{caseName},</if>
+            <if test="caseType != null">case_type=#{caseType},</if>
+            <if test="urgency != null">urgency=#{urgency},</if>
+            <if test="priority != null">priority=#{priority},</if>
+            <if test="riskLevel != null">risk_level=#{riskLevel},</if>
+            <if test="caseStage != null">case_stage=#{caseStage},</if>
+            <if test="feeStatus != null">fee_status=#{feeStatus},</if>
+            <if test="archiveStatus != null">archive_status=#{archiveStatus},</if>
+            <if test="cause != null">cause=#{cause},</if>
+            <if test="disputeAmount != null">dispute_amount=#{disputeAmount},</if>
+            <if test="courtName != null">court_name=#{courtName},</if>
+            <if test="caseFilingNo != null">case_filing_no=#{caseFilingNo},</if>
+            <if test="caseSummary != null">case_summary=#{caseSummary},</if>
+            <if test="recentProgress != null">recent_progress=#{recentProgress}, last_progress_time=sysdate(),</if>
+            <if test="currentNode != null">current_node=#{currentNode},</if>
+            <if test="refreshNextDate != null">next_key_date=(select min(n.plan_date) from biz_case_node n where n.case_id=#{caseId} and n.del_flag='0' and n.node_status in ('pending','current')) ,</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where case_id=#{caseId} and del_flag='0'
+    </update>
+
+    <update id="updateMatterStatus" parameterType="map">
+        update biz_case
+        <set>
+            case_status=#{caseStatus},
+            <if test="archiveStatus != null">archive_status=#{archiveStatus},</if>
+            <if test="currentNode != null">current_node=#{currentNode},</if>
+            update_by=#{updateBy}, update_time=sysdate()
+        </set>
+        where case_id=#{caseId} and del_flag='0' and case_status=#{expectedStatus}
+    </update>
+
+    <select id="countMatterInDataScope" resultType="int">
+        select count(1) from biz_case c where c.case_id=#{caseId} and c.del_flag='0'
+        <include refid="matterDataScope"/>
+    </select>
+
+    <select id="countUnfinishedNodes" resultType="int">
+        select count(1)
+        from biz_case_node
+        where case_id=#{caseId}
+          and del_flag='0'
+          and node_status in ('pending','current','overdue')
+    </select>
+
+    <select id="selectCurrentOpenNode" resultType="java.util.Map">
+        select node_id,node_name,node_type,node_status,plan_date
+        from biz_case_node
+        where case_id=#{caseId}
+          and del_flag='0'
+          and node_status in ('current','overdue','pending')
+        order by case node_status when 'current' then 1 when 'overdue' then 2 else 3 end,
+                 plan_date asc,
+                 node_id asc
+        limit 1
+    </select>
+
+    <select id="countExpenseByCaseId" resultType="int">
+        select count(1)
+        from biz_case_expense
+        where case_id=#{caseId}
+          and del_flag='0'
+    </select>
+
+    <select id="countUnpaidExpenseByCaseId" resultType="int">
+        select count(1)
+        from biz_case_expense
+        where case_id=#{caseId}
+          and del_flag='0'
+          and ifnull(pay_status, 'pending') != 'paid'
+    </select>
+
+    <select id="selectFieldValues" resultType="java.util.Map">
+        select * from biz_case_field_value where case_id=#{caseId} order by order_num asc, field_id asc
+    </select>
+    <select id="selectFieldConfigs" resultType="java.util.Map">
+        select * from biz_case_field_config
+        where case_type=#{caseType} and status='0'
+        order by order_num asc, config_id asc
+    </select>
+    <delete id="deleteFieldValues">delete from biz_case_field_value where case_id=#{caseId}</delete>
+    <insert id="insertFieldValue" parameterType="map">
+        insert into biz_case_field_value(case_id,field_code,field_name,field_value,order_num,create_by,create_time)
+        values(#{caseId},#{fieldCode},#{fieldName},#{fieldValue},#{orderNum},#{createBy},sysdate())
+    </insert>
+
+    <select id="selectProgressList" resultType="java.util.Map">
+        select p.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_status caseStatus
+        from biz_case_progress p left join biz_case c on c.case_id=p.case_id
+        <where>
+            and p.del_flag='0' and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and p.case_id=#{caseId}</if>
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or p.content like concat('%',#{keyword},'%'))</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by p.record_time desc,p.progress_id desc
+    </select>
+    <select id="selectProgressById" resultType="java.util.Map">select * from biz_case_progress where progress_id=#{progressId}</select>
+    <insert id="insertProgress" parameterType="map" useGeneratedKeys="true" keyProperty="progressId">
+        insert into biz_case_progress(case_id,record_time,record_user_id,record_user_name,content,next_plan,sync_customer,attachment_url,attachment_name,create_by,create_time,update_time)
+        values(#{caseId},coalesce(#{recordTime},sysdate()),#{recordUserId},#{recordUserName},#{content},#{nextPlan},#{syncCustomer},#{attachmentUrl},#{attachmentName},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateProgress" parameterType="map">
+        update biz_case_progress set record_time=#{recordTime},content=#{content},next_plan=#{nextPlan},sync_customer=#{syncCustomer},attachment_url=#{attachmentUrl},attachment_name=#{attachmentName},update_by=#{updateBy},update_time=sysdate()
+        where progress_id=#{progressId} and del_flag='0'
+    </update>
+    <update id="deleteProgress">update biz_case_progress set del_flag='2',update_by=#{updateBy},update_time=sysdate() where progress_id=#{progressId} and del_flag='0'</update>
+
+    <select id="selectNodeList" resultType="java.util.Map">
+        select n.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_status caseStatus
+        from biz_case_node n left join biz_case c on c.case_id=n.case_id
+        <where>
+            and n.del_flag='0' and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and n.case_id=#{caseId}</if>
+            <if test="nodeStatus != null and nodeStatus != ''">and n.node_status=#{nodeStatus}</if>
+            <if test="nodeType != null and nodeType != ''">and n.node_type=#{nodeType}</if>
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or n.node_name like concat('%',#{keyword},'%'))</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by n.plan_date asc,n.node_id asc
+    </select>
+    <select id="selectNodeById" resultType="java.util.Map">select * from biz_case_node where node_id=#{nodeId}</select>
+    <insert id="insertNode" parameterType="map" useGeneratedKeys="true" keyProperty="nodeId">
+        insert into biz_case_node(case_id,node_name,node_type,node_status,plan_date,actual_date,court_place,court_room,owner_id,owner_name,remind_time,remind_targets,remark,create_by,create_time,update_time)
+        values(#{caseId},#{nodeName},#{nodeType},#{nodeStatus},#{planDate},#{actualDate},#{courtPlace},#{courtRoom},#{ownerId},#{ownerName},#{remindTime},#{remindTargets},#{remark},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateNode" parameterType="map">
+        update biz_case_node set node_name=#{nodeName},node_type=#{nodeType},node_status=#{nodeStatus},plan_date=#{planDate},actual_date=#{actualDate},court_place=#{courtPlace},court_room=#{courtRoom},owner_id=#{ownerId},owner_name=#{ownerName},remind_time=#{remindTime},remind_targets=#{remindTargets},remark=#{remark},update_by=#{updateBy},update_time=sysdate()
+        where node_id=#{nodeId} and del_flag='0'
+    </update>
+    <update id="deleteNode">update biz_case_node set del_flag='2',update_by=#{updateBy},update_time=sysdate() where node_id=#{nodeId} and del_flag='0'</update>
+    <select id="selectNodeMaterials" resultType="java.util.Map">select * from biz_case_node_material where node_id=#{nodeId} order by material_id asc</select>
+    <delete id="deleteNodeMaterials">delete from biz_case_node_material where node_id=#{nodeId}</delete>
+    <insert id="insertNodeMaterial" parameterType="map">
+        insert into biz_case_node_material(node_id,material_name,material_status,file_url,file_name,remark,create_by,create_time)
+        values(#{nodeId},#{materialName},#{materialStatus},#{fileUrl},#{fileName},#{remark},#{createBy},sysdate())
+    </insert>
+
+    <select id="selectExpenseList" resultType="java.util.Map">
+        select e.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_status caseStatus
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        <where>
+            and e.del_flag='0' and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and e.case_id=#{caseId}</if>
+            <if test="expenseType != null and expenseType != ''">and e.expense_type=#{expenseType}</if>
+            <if test="payStatus != null and payStatus != ''">and e.pay_status=#{payStatus}</if>
+            <if test="keyword != null and keyword != ''">and (e.expense_no like concat('%',#{keyword},'%') or c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%'))</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by e.occur_date desc,e.expense_id desc
+    </select>
+    <select id="selectExpenseById" resultType="java.util.Map">select * from biz_case_expense where expense_id=#{expenseId}</select>
+    <insert id="insertExpense" parameterType="map" useGeneratedKeys="true" keyProperty="expenseId">
+        insert into biz_case_expense(expense_no,case_id,expense_type,amount,occur_date,pay_status,reimburse_status,voucher_status,handler_id,handler_name,voucher_url,voucher_name,remark,create_by,create_time,update_time)
+        values(#{expenseNo},#{caseId},#{expenseType},#{amount},#{occurDate},#{payStatus},#{reimburseStatus},#{voucherStatus},#{handlerId},#{handlerName},#{voucherUrl},#{voucherName},#{remark},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateExpense" parameterType="map">
+        update biz_case_expense set expense_type=#{expenseType},amount=#{amount},occur_date=#{occurDate},pay_status=#{payStatus},reimburse_status=#{reimburseStatus},voucher_status=#{voucherStatus},handler_id=#{handlerId},handler_name=#{handlerName},voucher_url=#{voucherUrl},voucher_name=#{voucherName},remark=#{remark},update_by=#{updateBy},update_time=sysdate()
+        where expense_id=#{expenseId} and del_flag='0'
+    </update>
+    <update id="deleteExpense">update biz_case_expense set del_flag='2',update_by=#{updateBy},update_time=sysdate() where expense_id=#{expenseId} and del_flag='0'</update>
+
+    <select id="selectDocumentList" resultType="java.util.Map">
+        select d.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_status caseStatus
+        from biz_case_document d left join biz_case c on c.case_id=d.case_id
+        <where>
+            and d.del_flag='0' and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and d.case_id=#{caseId}</if>
+            <if test="documentType != null and documentType != ''">and d.document_type=#{documentType}</if>
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%') or d.file_name like concat('%',#{keyword},'%'))</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by d.create_time desc,d.document_id desc
+    </select>
+    <select id="selectDocumentById" resultType="java.util.Map">select * from biz_case_document where document_id=#{documentId}</select>
+    <insert id="insertDocument" parameterType="map" useGeneratedKeys="true" keyProperty="documentId">
+        insert into biz_case_document(case_id,document_type,file_name,file_url,file_type,file_size,remark,create_by,create_time)
+        values(#{caseId},#{documentType},#{fileName},#{fileUrl},#{fileType},#{fileSize},#{remark},#{createBy},sysdate())
+    </insert>
+    <update id="deleteDocument">update biz_case_document set del_flag='2',update_by=#{updateBy},update_time=sysdate() where document_id=#{documentId} and del_flag='0'</update>
+
+    <select id="selectArchiveByCaseId" resultType="java.util.Map">select * from biz_case_archive where case_id=#{caseId} limit 1</select>
+    <insert id="insertArchive" parameterType="map" useGeneratedKeys="true" keyProperty="archiveId">
+        insert into biz_case_archive(case_id,close_result,close_date,actual_received_amount,fee_clear_status,satisfaction,summary,archive_status,readonly_flag,create_by,create_time,update_time)
+        values(#{caseId},#{closeResult},#{closeDate},#{actualReceivedAmount},#{feeClearStatus},#{satisfaction},#{summary},#{archiveStatus},#{readonlyFlag},#{createBy},sysdate(),sysdate())
+    </insert>
+    <update id="updateArchive" parameterType="map">
+        update biz_case_archive set close_result=#{closeResult},close_date=#{closeDate},actual_received_amount=#{actualReceivedAmount},fee_clear_status=#{feeClearStatus},satisfaction=#{satisfaction},summary=#{summary},archive_status=#{archiveStatus},archive_no=#{archiveNo},archiver_id=#{archiverId},archiver_name=#{archiverName},readonly_flag=#{readonlyFlag},update_by=#{updateBy},update_time=sysdate()
+        where archive_id=#{archiveId}
+    </update>
+    <select id="selectArchiveMaterials" resultType="java.util.Map">select * from biz_case_archive_material where archive_id=#{archiveId} order by material_id asc</select>
+    <select id="countArchiveMaterials" resultType="int">select count(1) from biz_case_archive_material where archive_id=#{archiveId}</select>
+    <select id="countNotReadyArchiveMaterials" resultType="int">
+        select count(1)
+        from biz_case_archive_material
+        where archive_id=#{archiveId}
+          and material_status != 'ready'
+    </select>
+    <delete id="deleteArchiveMaterials">delete from biz_case_archive_material where archive_id=#{archiveId}</delete>
+    <insert id="insertArchiveMaterial" parameterType="map">
+        insert into biz_case_archive_material(archive_id,material_name,material_status,file_url,file_name,remark,create_by,create_time)
+        values(#{archiveId},#{materialName},#{materialStatus},#{fileUrl},#{fileName},#{remark},#{createBy},sysdate())
+    </insert>
+
+    <select id="selectStatusLogs" resultType="java.util.Map">
+        select l.*, c.case_no caseNo,c.case_name caseName from biz_case_status_log l left join biz_case c on c.case_id=l.case_id
+        <where>
+            and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and l.case_id=#{caseId}</if>
+            <include refid="matterDataScope"/>
+        </where>
+        order by l.create_time desc
+    </select>
+    <insert id="insertStatusLog" parameterType="map">
+        insert into biz_case_status_log(case_id,from_status,to_status,action_type,content,create_by,create_time)
+        values(#{caseId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())
+    </insert>
+</mapper>

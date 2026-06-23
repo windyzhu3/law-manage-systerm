@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizCaseMapper">
+    <sql id="caseDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    #{permissions} is null or #{permissions} = ''
+                    or exists (
+                        select 1 from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id = rm.menu_id
+                        where rm.role_id = r.role_id
+                        and m.status = '0'
+                        and m.perms is not null
+                        and m.perms != ''
+                        and find_in_set(m.perms, #{permissions}) > 0
+                    )
+                )
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                    or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope='5' and (c.owner_id=#{currentUserId} or c.main_lawyer_id=#{currentUserId} or find_in_set(#{currentUserId}, ifnull(c.assistant_lawyer_ids,''))))
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="selectCaseVo">
+        select c.*, u.nick_name ownerName, d.dept_name deptName
+        from biz_case c
+        left join sys_user u on u.user_id=c.owner_id
+        left join sys_dept d on d.dept_id=c.dept_id
+    </sql>
+
+    <select id="selectCaseList" parameterType="map" resultType="java.util.Map">
+        <include refid="selectCaseVo"/>
+        <where>
+            and c.del_flag='0'
+            <if test="mode == 'pending'">and c.case_status='pending'</if>
+            <if test="mode == 'processing'">and c.case_status in ('processing','transfering')</if>
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%') or c.contract_no like concat('%',#{keyword},'%') or c.main_lawyer_name like concat('%',#{keyword},'%'))</if>
+            <if test="caseType != null and caseType != ''">and c.case_type=#{caseType}</if>
+            <if test="urgency != null and urgency != ''">and c.urgency=#{urgency}</if>
+            <if test="caseStatus != null and caseStatus != ''">and c.case_status=#{caseStatus}</if>
+            <if test="mainLawyerId != null and mainLawyerId != ''">and c.main_lawyer_id=#{mainLawyerId}</if>
+            <if test="contractId != null and contractId != ''">and c.contract_id=#{contractId}</if>
+            <if test="contractNo != null and contractNo != ''">and c.contract_no like concat('%',#{contractNo},'%')</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by c.create_time desc, c.case_id desc
+    </select>
+
+    <select id="selectCaseById" resultType="java.util.Map">
+        <include refid="selectCaseVo"/> where c.case_id=#{caseId} and c.del_flag='0'
+    </select>
+
+    <select id="selectCaseByContractId" resultType="java.util.Map">
+        select * from biz_case where contract_id=#{contractId} and del_flag='0' limit 1
+    </select>
+
+    <insert id="insertCase" parameterType="map" useGeneratedKeys="true" keyProperty="caseId">
+        insert into biz_case(case_no,case_name,customer_id,customer_name,contract_id,contract_no,case_type,urgency,case_status,priority,estimated_workload,owner_id,dept_id,current_node,create_by,create_time,update_time)
+        values(#{caseNo},#{caseName},#{customerId},#{customerName},#{contractId},#{contractNo},#{caseType},#{urgency},#{caseStatus},#{priority},#{estimatedWorkload},#{ownerId},#{deptId},'待分案',#{createBy},sysdate(),sysdate())
+    </insert>
+
+    <update id="updateCaseAssignment" parameterType="map">
+        update biz_case
+        set main_lawyer_id=#{mainLawyerId},
+            main_lawyer_name=#{mainLawyerName},
+            assistant_lawyer_ids=#{assistantLawyerIds},
+            assistant_lawyer_names=#{assistantLawyerNames},
+            priority=#{priority},
+            estimated_cycle=#{estimatedCycle},
+            plan_start_date=#{planStartDate},
+            estimated_workload=#{estimatedWorkload},
+            case_status=#{caseStatus},
+            current_node=#{currentNode},
+            update_by=#{updateBy},
+            update_time=sysdate()
+        where case_id=#{caseId}
+        and del_flag='0'
+        and case_status='pending'
+    </update>
+
+    <update id="updateCaseStatus" parameterType="map">
+        update biz_case
+        <set>
+            case_status=#{caseStatus},
+            current_node=#{currentNode},
+            <if test="mainLawyerId != null">main_lawyer_id=#{mainLawyerId},</if>
+            <if test="mainLawyerName != null">main_lawyer_name=#{mainLawyerName},</if>
+            update_by=#{updateBy},
+            update_time=sysdate()
+        </set>
+        where case_id=#{caseId}
+        and del_flag='0'
+        and case_status=#{expectedStatus}
+    </update>
+
+    <update id="updateCaseConfirmResult" parameterType="map">
+        update biz_case
+        <set>
+            case_status=#{caseStatus},
+            current_node=#{currentNode},
+            <if test="clearAssignment != null and clearAssignment">
+                main_lawyer_id=null,
+                main_lawyer_name=null,
+                assistant_lawyer_ids=null,
+                assistant_lawyer_names=null,
+            </if>
+            update_by=#{updateBy},
+            update_time=sysdate()
+        </set>
+        where case_id=#{caseId}
+        and del_flag='0'
+        and case_status in ('confirming','processing')
+    </update>
+
+    <select id="countCaseInDataScope" resultType="int">
+        select count(1) from biz_case c where c.case_id=#{caseId} and c.del_flag='0'
+        and exists (
+            select 1 from sys_user_role ur inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+            where ur.user_id=#{currentUserId}
+            and (
+                #{permissions} is null or #{permissions} = ''
+                or exists (
+                    select 1 from sys_role_menu rm inner join sys_menu m on m.menu_id=rm.menu_id
+                    where rm.role_id=r.role_id and m.status='0' and m.perms is not null and m.perms != '' and find_in_set(m.perms, #{permissions}) > 0
+                )
+            )
+            and (
+                r.data_scope='1'
+                or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                or (r.data_scope='5' and (c.owner_id=#{currentUserId} or c.main_lawyer_id=#{currentUserId} or find_in_set(#{currentUserId}, ifnull(c.assistant_lawyer_ids,''))))
+            )
+        )
+    </select>
+
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'pending' metricKey,count(*) metricValue from biz_case c where c.del_flag='0' and c.case_status='pending' <include refid="caseDataScope"/>
+        union all select 'todayNew',count(*) from biz_case c where c.del_flag='0' and date(c.create_time)=curdate() <include refid="caseDataScope"/>
+        union all select 'transferPending',count(*) from biz_case_transfer t left join biz_case c on c.case_id=t.case_id where c.del_flag='0' and t.transfer_status='pending' <include refid="caseDataScope"/>
+        union all select 'highLoadLawyers',count(*) from (select c.main_lawyer_id, sum(ifnull(c.estimated_workload,0)) workload from biz_case c where c.del_flag='0' and c.case_status in ('processing','transfering') and c.main_lawyer_id is not null <include refid="caseDataScope"/> group by c.main_lawyer_id having workload >= 80) x
+        union all select 'avgAssignDays',round(avg(timestampdiff(hour, c.create_time, a.create_time))/24,1) from biz_case c left join biz_case_assignment a on a.case_id=c.case_id where c.del_flag='0' and a.assignment_id is not null <include refid="caseDataScope"/>
+    </select>
+
+    <select id="selectLawyerLoads" resultType="java.util.Map">
+        select u.user_id userId,
+               u.nick_name lawyerName,
+               u.nick_name nickName,
+               d.dept_name deptName,
+               coalesce(p.lawyer_role,'lawyer') lawyerRole,
+               coalesce(p.specialties,'business') specialties,
+               coalesce(p.load_limit,100) loadLimit,
+               coalesce(p.assign_enabled,'Y') assignEnabled,
+               coalesce(sum(case when c.case_status in ('processing','transfering') then c.estimated_workload else 0 end),0) currentLoad,
+               round(coalesce(sum(case when c.case_status in ('processing','transfering') then c.estimated_workload else 0 end),0) / coalesce(p.load_limit,100) * 100,0) loadRate,
+               count(case when c.case_status in ('processing','transfering') then 1 end) activeCases,
+               count(case when date_format(c.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') then 1 end) monthAssigned,
+               coalesce(p.avg_response_hours,4.0) avgResponseHours
+        from sys_user u
+        left join sys_dept d on d.dept_id=u.dept_id
+        left join biz_lawyer_profile p on p.user_id=u.user_id
+        left join biz_case c on c.main_lawyer_id=u.user_id and c.del_flag='0'
+        where u.del_flag='0' and u.status='0' and coalesce(p.assign_enabled,'Y')='Y'
+        <if test="keyword != null and keyword != ''">and (u.nick_name like concat('%',#{keyword},'%') or d.dept_name like concat('%',#{keyword},'%') or p.specialties like concat('%',#{keyword},'%'))</if>
+        <if test="lawyerRole != null and lawyerRole != ''">and p.lawyer_role=#{lawyerRole}</if>
+        <if test="specialty != null and specialty != ''">and find_in_set(#{specialty}, p.specialties)</if>
+        group by u.user_id,u.nick_name,d.dept_name,p.lawyer_role,p.specialties,p.load_limit,p.assign_enabled,p.avg_response_hours
+        order by loadRate asc, activeCases asc, monthAssigned asc
+    </select>
+
+    <select id="selectLawyerSpecialtyStats" resultType="java.util.Map">
+        select coalesce(p.specialties,'business') itemName, count(*) itemValue
+        from sys_user u left join biz_lawyer_profile p on p.user_id=u.user_id
+        where u.del_flag='0' and u.status='0' and coalesce(p.assign_enabled,'Y')='Y'
+        group by coalesce(p.specialties,'business')
+    </select>
+
+    <select id="selectLawyerProfiles" parameterType="map" resultType="java.util.Map">
+        select p.profile_id profileId,
+               u.user_id userId,
+               u.user_name userName,
+               u.nick_name nickName,
+               u.nick_name lawyerName,
+               d.dept_name deptName,
+               coalesce(p.lawyer_role,'lawyer') lawyerRole,
+               coalesce(p.specialties,'business') specialties,
+               coalesce(p.load_limit,100) loadLimit,
+               coalesce(p.avg_response_hours,4.0) avgResponseHours,
+               coalesce(p.assign_enabled,'Y') assignEnabled,
+               p.remark,
+               p.create_time createTime,
+               p.update_time updateTime
+        from sys_user u
+        left join sys_dept d on d.dept_id=u.dept_id
+        left join biz_lawyer_profile p on p.user_id=u.user_id
+        where u.del_flag='0' and u.status='0'
+        <if test="keyword != null and keyword != ''">and (u.user_name like concat('%',#{keyword},'%') or u.nick_name like concat('%',#{keyword},'%') or d.dept_name like concat('%',#{keyword},'%') or p.specialties like concat('%',#{keyword},'%'))</if>
+        <if test="lawyerRole != null and lawyerRole != ''">and coalesce(p.lawyer_role,'lawyer')=#{lawyerRole}</if>
+        <if test="specialty != null and specialty != ''">and find_in_set(#{specialty}, coalesce(p.specialties,'business'))</if>
+        <if test="assignEnabled != null and assignEnabled != ''">and coalesce(p.assign_enabled,'Y')=#{assignEnabled}</if>
+        order by coalesce(p.assign_enabled,'Y') desc, u.dept_id asc, u.user_id asc
+    </select>
+
+    <select id="selectLawyerProfileByUserId" resultType="java.util.Map">
+        select p.profile_id profileId,
+               u.user_id userId,
+               u.user_name userName,
+               u.nick_name nickName,
+               u.nick_name lawyerName,
+               d.dept_name deptName,
+               coalesce(p.lawyer_role,'lawyer') lawyerRole,
+               coalesce(p.specialties,'business') specialties,
+               coalesce(p.load_limit,100) loadLimit,
+               coalesce(p.avg_response_hours,4.0) avgResponseHours,
+               coalesce(p.assign_enabled,'Y') assignEnabled,
+               p.remark,
+               p.create_time createTime,
+               p.update_time updateTime
+        from sys_user u
+        left join sys_dept d on d.dept_id=u.dept_id
+        left join biz_lawyer_profile p on p.user_id=u.user_id
+        where u.user_id=#{userId} and u.del_flag='0' and u.status='0'
+    </select>
+
+    <insert id="insertLawyerProfile" parameterType="map" useGeneratedKeys="true" keyProperty="profileId">
+        insert into biz_lawyer_profile(user_id,lawyer_role,specialties,load_limit,avg_response_hours,assign_enabled,remark,create_by,create_time,update_by,update_time)
+        values(#{userId},#{lawyerRole},#{specialties},#{loadLimit},#{avgResponseHours},#{assignEnabled},#{remark},#{createBy},sysdate(),#{updateBy},sysdate())
+    </insert>
+
+    <update id="updateLawyerProfile" parameterType="map">
+        update biz_lawyer_profile
+        set lawyer_role=#{lawyerRole},
+            specialties=#{specialties},
+            load_limit=#{loadLimit},
+            avg_response_hours=#{avgResponseHours},
+            assign_enabled=#{assignEnabled},
+            remark=#{remark},
+            update_by=#{updateBy},
+            update_time=sysdate()
+        where user_id=#{userId}
+    </update>
+
+    <update id="updateLawyerProfileStatus" parameterType="map">
+        update biz_lawyer_profile
+        set assign_enabled=#{assignEnabled}, update_by=#{updateBy}, update_time=sysdate()
+        where user_id=#{userId}
+    </update>
+
+    <insert id="insertAssignment" parameterType="map" useGeneratedKeys="true" keyProperty="assignmentId">
+        insert into biz_case_assignment(case_id,assign_method,main_lawyer_id,main_lawyer_name,assistant_lawyer_ids,assistant_lawyer_names,priority,estimated_cycle,plan_start_date,assign_reason,remark,notify_flag,create_by,create_time)
+        values(#{caseId},#{assignMethod},#{mainLawyerId},#{mainLawyerName},#{assistantLawyerIds},#{assistantLawyerNames},#{priority},#{estimatedCycle},#{planStartDate},#{assignReason},#{remark},#{notifyFlag},#{createBy},sysdate())
+    </insert>
+
+    <select id="selectAssignments" resultType="java.util.Map">
+        select a.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_type caseType,c.case_status caseStatus
+        from biz_case_assignment a left join biz_case c on c.case_id=a.case_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or a.main_lawyer_name like concat('%',#{keyword},'%'))</if>
+            <if test="mainLawyerId != null and mainLawyerId != ''">and a.main_lawyer_id=#{mainLawyerId}</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by a.create_time desc
+    </select>
+
+    <insert id="insertTransfer" parameterType="map" useGeneratedKeys="true" keyProperty="transferId">
+        insert into biz_case_transfer(transfer_no,case_id,from_lawyer_id,from_lawyer_name,to_lawyer_id,to_lawyer_name,applicant_id,applicant_name,transfer_reason,risk_level,detail,transfer_status,current_node,create_by,create_time,update_time)
+        values(#{transferNo},#{caseId},#{fromLawyerId},#{fromLawyerName},#{toLawyerId},#{toLawyerName},#{applicantId},#{applicantName},#{transferReason},#{riskLevel},#{detail},#{transferStatus},#{currentNode},#{createBy},sysdate(),sysdate())
+    </insert>
+
+    <update id="updateTransferApproval" parameterType="map">
+        update biz_case_transfer
+        set transfer_status=#{transferStatus}, current_node=#{currentNode}, approval_opinion=#{opinion}, approver_id=#{approverId}, approver_name=#{approverName}, update_by=#{updateBy}, update_time=sysdate()
+        where transfer_id=#{transferId} and transfer_status=#{expectedStatus}
+    </update>
+
+    <select id="selectTransfers" resultType="java.util.Map">
+        select t.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName,c.case_type caseType
+        from biz_case_transfer t left join biz_case c on c.case_id=t.case_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (t.transfer_no like concat('%',#{keyword},'%') or c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or t.from_lawyer_name like concat('%',#{keyword},'%') or t.to_lawyer_name like concat('%',#{keyword},'%'))</if>
+            <if test="transferStatus != null and transferStatus != ''">and t.transfer_status=#{transferStatus}</if>
+            <if test="riskLevel != null and riskLevel != ''">and t.risk_level=#{riskLevel}</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by t.create_time desc
+    </select>
+
+    <select id="selectTransferById" resultType="java.util.Map">
+        select * from biz_case_transfer where transfer_id=#{transferId}
+    </select>
+
+    <insert id="insertConfirm" parameterType="map" useGeneratedKeys="true" keyProperty="confirmId">
+        insert into biz_case_confirm(case_id,confirm_type,confirm_status,confirm_user_id,confirm_user_name,content,create_by,create_time,update_time)
+        values(#{caseId},#{confirmType},#{confirmStatus},#{confirmUserId},#{confirmUserName},#{content},#{createBy},sysdate(),sysdate())
+    </insert>
+
+    <update id="updateConfirm" parameterType="map">
+        update biz_case_confirm set confirm_status=#{confirmResult}, handler_id=#{handlerId}, handler_name=#{handlerName}, remark=#{remark}, update_by=#{updateBy}, update_time=sysdate()
+        where confirm_id=#{confirmId} and confirm_status=#{expectedStatus}
+    </update>
+
+    <select id="selectConfirmById" resultType="java.util.Map">
+        select cf.*, c.case_no caseNo, c.case_name caseName, c.case_status caseStatus
+        from biz_case_confirm cf left join biz_case c on c.case_id=cf.case_id
+        where cf.confirm_id=#{confirmId} and c.del_flag='0'
+    </select>
+
+    <select id="selectConfirms" resultType="java.util.Map">
+        select cf.*, c.case_no caseNo,c.case_name caseName,c.customer_name customerName
+        from biz_case_confirm cf left join biz_case c on c.case_id=cf.case_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or cf.confirm_user_name like concat('%',#{keyword},'%'))</if>
+            <if test="confirmStatus != null and confirmStatus != ''">and cf.confirm_status=#{confirmStatus}</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by cf.create_time desc
+    </select>
+
+    <select id="selectStatusLogs" resultType="java.util.Map">
+        select l.*, c.case_no caseNo,c.case_name caseName from biz_case_status_log l left join biz_case c on c.case_id=l.case_id
+        <where>
+            and c.del_flag='0'
+            <if test="caseId != null and caseId != ''">and l.case_id=#{caseId}</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by l.create_time desc
+    </select>
+
+    <insert id="insertStatusLog" parameterType="map">
+        insert into biz_case_status_log(case_id,from_status,to_status,action_type,content,create_by,create_time)
+        values(#{caseId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())
+    </insert>
+</mapper>
