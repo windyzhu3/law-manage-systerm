@@ -259,43 +259,66 @@
       </el-table>
     </biz-table-card>
 
-    <section v-else class="report-grid">
-      <article class="finance-card report-main">
-        <div class="finance-card-title"><div><h3>收入趋势表</h3><p>确认回款的月度趋势</p></div></div>
-        <svg class="trend-chart report-trend" viewBox="0 0 700 180" preserveAspectRatio="none">
-          <polyline class="trend-grid" points="0,150 700,150" />
-          <polyline class="trend-grid" points="0,90 700,90" />
-          <polyline class="trend-line" :points="reportTrendPoints" />
-        </svg>
-      </article>
-      <article class="finance-card" v-for="card in reportCards" :key="card.key">
-        <div class="report-stat">
-          <span>{{ card.title }}</span>
-          <strong>{{ formatMoney(card.value) }}</strong>
-          <small>{{ card.desc }}</small>
+    <template v-else>
+      <div class="finance-report-toolbar finance-card">
+        <div>
+          <h3>报表周期</h3>
+          <p>按回款、费用发生、线索转化和签约日期汇总财务数据</p>
         </div>
-      </article>
-      <article class="finance-card">
-        <div class="finance-card-title"><div><h3>律师创收统计</h3><p>按合同承办律师统计确认回款</p></div></div>
-        <div class="bar-list"><div v-for="item in report.lawyerRevenue || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.lawyerRevenue) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
-      </article>
-      <article class="finance-card">
-        <div class="finance-card-title"><div><h3>案件成本分析</h3><p>按案件类型汇总办案费用</p></div></div>
-        <div class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
-      </article>
-      <article class="finance-card report-main">
-        <div class="finance-card-title"><div><h3>线索来源转化</h3><p>按线索来源统计转化率和预计转化金额</p></div></div>
-        <div class="source-conversion-list">
-          <div v-for="item in leadSourceConversion" :key="item.itemName">
-            <span>{{ item.itemName }}</span>
-            <i><em :style="{ width: conversionBarWidth(item) }" /></i>
-            <strong>{{ Number(item.conversionRate || 0).toFixed(2) }}%</strong>
-            <small>{{ item.convertedCount || 0 }}/{{ item.leadCount || 0 }} · {{ formatMoney(item.estimatedAmount) }}</small>
+        <div class="report-toolbar-actions">
+          <el-date-picker
+            v-model="reportDateRange"
+            :size="controlSize"
+            type="daterange"
+            value-format="yyyy-MM-dd"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            clearable
+            @change="handleReportDateChange"
+          />
+          <el-button :size="controlSize" plain icon="el-icon-refresh" @click="resetReportRange">重置</el-button>
+        </div>
+      </div>
+
+      <section class="report-grid">
+        <article class="finance-card report-main">
+          <div class="finance-card-title"><div><h3>收入趋势表</h3><p>{{ reportRangeText }}确认回款的月度趋势</p></div></div>
+          <svg class="trend-chart report-trend" viewBox="0 0 700 180" preserveAspectRatio="none">
+            <polyline class="trend-grid" points="0,150 700,150" />
+            <polyline class="trend-grid" points="0,90 700,90" />
+            <polyline class="trend-line" :points="reportTrendPoints" />
+          </svg>
+        </article>
+        <article class="finance-card" v-for="card in reportCards" :key="card.key">
+          <div class="report-stat">
+            <span>{{ card.title }}</span>
+            <strong>{{ formatMoney(card.value) }}</strong>
+            <small>{{ card.desc }}</small>
           </div>
-          <el-empty v-if="!leadSourceConversion.length" :image-size="80" description="暂无线索转化数据" />
-        </div>
-      </article>
-    </section>
+        </article>
+        <article class="finance-card">
+          <div class="finance-card-title"><div><h3>律师创收统计</h3><p>按合同承办律师统计确认回款</p></div></div>
+          <div class="bar-list"><div v-for="item in report.lawyerRevenue || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.lawyerRevenue) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+        </article>
+        <article class="finance-card">
+          <div class="finance-card-title"><div><h3>案件成本分析</h3><p>按案件类型汇总办案费用</p></div></div>
+          <div class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+        </article>
+        <article class="finance-card report-main">
+          <div class="finance-card-title"><div><h3>线索来源转化</h3><p>按线索来源统计转化率和预计转化金额</p></div></div>
+          <div class="source-conversion-list">
+            <div v-for="item in leadSourceConversion" :key="item.itemName">
+              <span>{{ item.itemName }}</span>
+              <i><em :style="{ width: conversionBarWidth(item) }" /></i>
+              <strong>{{ Number(item.conversionRate || 0).toFixed(2) }}%</strong>
+              <small>{{ item.convertedCount || 0 }}/{{ item.leadCount || 0 }} · {{ formatMoney(item.estimatedAmount) }}</small>
+            </div>
+            <el-empty v-if="!leadSourceConversion.length" :image-size="80" description="暂无线索转化数据" />
+          </div>
+        </article>
+      </section>
+    </template>
 
     <el-dialog title="确认回款" :visible.sync="paymentOpen" width="520px" :custom-class="dialogClass" append-to-body>
       <el-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" label-width="110px">
@@ -483,6 +506,7 @@ export default {
       pendingPayments: [],
       dueReceivables: [],
       query: { pageNum: 1, pageSize: 10 },
+      reportDateRange: [],
       paymentOpen: false,
       rejectOpen: false,
       invoiceOpen: false,
@@ -618,6 +642,9 @@ export default {
         { key: 'invoicePending', title: '待开票', value: map.invoicePending || 0, desc: '已收未开票' }
       ]
     },
+    reportRangeText() {
+      return this.query.beginDate && this.query.endDate ? `${this.query.beginDate} 至 ${this.query.endDate} ` : '近 6 个月'
+    },
     caseFinanceSummary() {
       return this.caseFinance.summary || {}
     },
@@ -690,7 +717,7 @@ export default {
     },
     search() {
       this.query.pageNum = 1
-      this.loadPage()
+      this.load()
     },
     reset() {
       this.resetQuery()
@@ -698,8 +725,20 @@ export default {
     },
     resetQuery() {
       this.query = { pageNum: 1, pageSize: 10 }
+      this.reportDateRange = []
       this.total = 0
       this.list = []
+    },
+    handleReportDateChange(value) {
+      this.query.beginDate = value && value.length ? value[0] : undefined
+      this.query.endDate = value && value.length ? value[1] : undefined
+      this.loadReport()
+    },
+    resetReportRange() {
+      this.reportDateRange = []
+      this.query.beginDate = undefined
+      this.query.endDate = undefined
+      this.loadReport()
     },
     openPayment(row) {
       this.paymentForm = { ...row, receivedAmount: Number(row.pendingAmount || row.receivableAmount || 0) }
@@ -1123,6 +1162,34 @@ export default {
   grid-column: 1 / -1;
 }
 
+.finance-report-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+
+  h3 {
+    margin: 0 0 6px;
+    color: #0f2147;
+    font-size: var(--biz-font-lg);
+  }
+
+  p {
+    margin: 0;
+    color: #64748b;
+    font-size: var(--biz-font-sm);
+  }
+}
+
+.report-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .report-stat {
   display: grid;
   gap: 8px;
@@ -1318,6 +1385,11 @@ export default {
   .finance-tables-grid,
   .report-grid {
     grid-template-columns: 1fr;
+  }
+
+  .finance-report-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .case-finance-summary,

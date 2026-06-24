@@ -145,7 +145,16 @@
     <select id="selectReceiveTrend" resultType="java.util.Map">
         select date_format(p.update_time, '%Y-%m') itemName, coalesce(sum(ifnull(p.received_amount,0)),0) itemValue
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' and p.confirm_status='1' and p.update_time &gt;= date_sub(curdate(), interval 6 month)
+        where c.del_flag='0' and p.confirm_status='1'
+        <choose>
+            <when test="beginDate != null and beginDate != ''">
+                and p.update_time &gt;= #{beginDate}
+            </when>
+            <otherwise>
+                and p.update_time &gt;= date_sub(curdate(), interval 6 month)
+            </otherwise>
+        </choose>
+        <if test="endDate != null and endDate != ''">and p.update_time &lt; date_add(#{endDate}, interval 1 day)</if>
         <include refid="contractDataScope"/>
         group by date_format(p.update_time, '%Y-%m')
         order by itemName asc
@@ -203,23 +212,38 @@
     <select id="selectLeadFunnel" resultType="java.util.Map">
         select 'leadTotal' metricKey, count(*) metricValue, coalesce(sum(ifnull(l.estimated_amount,0)),0) amountValue
         from biz_lead l
-        where l.del_flag='0' <include refid="leadDataScope"/>
+        where l.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and l.create_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and l.create_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="leadDataScope"/>
         union all
         select 'convertedLeads', count(*), coalesce(sum(ifnull(l.estimated_amount,0)),0)
         from biz_lead l
-        where l.del_flag='0' and l.status='3' <include refid="leadDataScope"/>
+        where l.del_flag='0' and l.status='3'
+        <if test="beginDate != null and beginDate != ''">and l.converted_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and l.converted_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="leadDataScope"/>
         union all
         select 'linkedCustomers', count(distinct l.customer_id), coalesce(sum(ifnull(l.estimated_amount,0)),0)
         from biz_lead l
-        where l.del_flag='0' and l.status='3' and l.customer_id is not null <include refid="leadDataScope"/>
+        where l.del_flag='0' and l.status='3' and l.customer_id is not null
+        <if test="beginDate != null and beginDate != ''">and l.converted_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and l.converted_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="leadDataScope"/>
         union all
         select 'signedCustomers', count(distinct c.customer_id), coalesce(sum(ifnull(c.sign_amount,0)),0)
         from biz_contract c
-        where c.del_flag='0' and c.sign_status in ('1','2') <include refid="contractDataScope"/>
+        where c.del_flag='0' and c.sign_status in ('1','2')
+        <if test="beginDate != null and beginDate != ''">and c.sign_date &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and c.sign_date &lt;= #{endDate}</if>
+        <include refid="contractDataScope"/>
         union all
         select 'signedContracts', count(distinct c.contract_id), coalesce(sum(ifnull(c.sign_amount,0)),0)
         from biz_contract c
-        where c.del_flag='0' and c.sign_status in ('1','2') <include refid="contractDataScope"/>
+        where c.del_flag='0' and c.sign_status in ('1','2')
+        <if test="beginDate != null and beginDate != ''">and c.sign_date &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and c.sign_date &lt;= #{endDate}</if>
+        <include refid="contractDataScope"/>
     </select>
 
     <select id="selectLeadSourceConversion" resultType="java.util.Map">
@@ -231,7 +255,10 @@
             coalesce(sum(if(l.status='3', ifnull(l.estimated_amount,0), 0)),0) estimatedAmount
         from biz_lead l
         left join biz_lead_setting s on s.setting_type='source' and s.setting_code=l.source_code and s.status='0'
-        where l.del_flag='0' <include refid="leadDataScope"/>
+        where l.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and l.create_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and l.create_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="leadDataScope"/>
         group by coalesce(s.setting_name, l.source_code, '未设置')
         order by convertedCount desc, leadCount desc
         limit 8
@@ -427,25 +454,40 @@
     <select id="selectReportCards" resultType="java.util.Map">
         select 'income' metricKey, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) metricValue
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' <include refid="contractDataScope"/>
+        where c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and p.update_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and p.update_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="contractDataScope"/>
         union all
         select 'cost', coalesce(sum(e.amount),0)
         from biz_case_expense e left join biz_case c on c.case_id=e.case_id
-        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        where e.del_flag='0' and c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and e.occur_date &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and e.occur_date &lt;= #{endDate}</if>
+        <include refid="caseDataScope"/>
         union all
         select 'arrears', coalesce(sum(case when p.confirm_status!='1' then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' <include refid="contractDataScope"/>
+        where c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and p.plan_receive_date &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and p.plan_receive_date &lt;= #{endDate}</if>
+        <include refid="contractDataScope"/>
         union all
         select 'invoicePending', coalesce(sum(case when p.confirm_status='1' and p.invoice_status in ('0','2') then p.received_amount else 0 end),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' <include refid="contractDataScope"/>
+        where c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and p.update_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and p.update_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="contractDataScope"/>
     </select>
 
     <select id="selectLawyerRevenue" resultType="java.util.Map">
         select ifnull(c.lawyer_name, '未指定') itemName, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) itemValue
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' <include refid="contractDataScope"/>
+        where c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and p.update_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and p.update_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="contractDataScope"/>
         group by ifnull(c.lawyer_name, '未指定')
         order by itemValue desc
         limit 8
@@ -454,7 +496,10 @@
     <select id="selectCaseCost" resultType="java.util.Map">
         select ifnull(c.case_type, 'unknown') itemName, coalesce(sum(e.amount),0) itemValue
         from biz_case_expense e left join biz_case c on c.case_id=e.case_id
-        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        where e.del_flag='0' and c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and e.occur_date &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and e.occur_date &lt;= #{endDate}</if>
+        <include refid="caseDataScope"/>
         group by ifnull(c.case_type, 'unknown')
         order by itemValue desc
         limit 8
@@ -465,7 +510,10 @@
         from biz_contract_fee_plan p
         left join biz_contract c on c.contract_id=p.contract_id
         left join sys_user u on u.user_id=c.owner_id
-        where c.del_flag='0' <include refid="contractDataScope"/>
+        where c.del_flag='0'
+        <if test="beginDate != null and beginDate != ''">and p.update_time &gt;= #{beginDate}</if>
+        <if test="endDate != null and endDate != ''">and p.update_time &lt; date_add(#{endDate}, interval 1 day)</if>
+        <include refid="contractDataScope"/>
         group by ifnull(u.nick_name, '未指定')
         order by itemValue desc
         limit 8
