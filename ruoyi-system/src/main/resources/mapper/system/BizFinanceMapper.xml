@@ -1,0 +1,320 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BizFinanceMapper">
+    <sql id="contractDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1
+                from sys_user_role ur
+                inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    #{permissions} is null or #{permissions} = ''
+                    or exists (
+                        select 1
+                        from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id=rm.menu_id
+                        where rm.role_id=r.role_id
+                        and m.status='0'
+                        and m.perms is not null
+                        and m.perms!=''
+                        and find_in_set(m.perms, #{permissions}) > 0
+                    )
+                )
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                    or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope='5' and c.owner_id=#{currentUserId})
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="caseDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1
+                from sys_user_role ur
+                inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    #{permissions} is null or #{permissions} = ''
+                    or exists (
+                        select 1
+                        from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id=rm.menu_id
+                        where rm.role_id=r.role_id
+                        and m.status='0'
+                        and m.perms is not null
+                        and m.perms!=''
+                        and find_in_set(m.perms, #{permissions}) > 0
+                    )
+                )
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and c.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                    or (r.data_scope='3' and c.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and c.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope='5' and (c.owner_id=#{currentUserId} or c.main_lawyer_id=#{currentUserId} or find_in_set(#{currentUserId}, ifnull(c.assistant_lawyer_ids,''))))
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="receivableColumns">
+        p.plan_id planId,
+        concat('YS', date_format(ifnull(p.create_time, sysdate()), '%Y%m%d'), lpad(p.plan_id, 4, '0')) receivableNo,
+        p.contract_id contractId,
+        c.contract_no contractNo,
+        c.contract_name contractName,
+        ca.case_id caseId,
+        ca.case_no caseNo,
+        ca.case_name caseName,
+        c.customer_id customerId,
+        c.customer_name customerName,
+        c.case_type caseType,
+        p.period_no periodNo,
+        p.receivable_amount receivableAmount,
+        ifnull(p.received_amount, 0) receivedAmount,
+        greatest(p.receivable_amount - ifnull(p.received_amount, 0), 0) pendingAmount,
+        p.plan_receive_date planReceiveDate,
+        case when p.plan_receive_date is null then 0 else greatest(datediff(curdate(), p.plan_receive_date), 0) end agingDays,
+        case
+            when p.confirm_status='2' then 'rejected'
+            when p.confirm_status='1' and ifnull(p.received_amount,0) >= p.receivable_amount then 'received'
+            when p.confirm_status='1' and ifnull(p.received_amount,0) &lt; p.receivable_amount then 'partial'
+            when p.plan_receive_date is not null and p.plan_receive_date &lt; curdate() then 'overdue'
+            else 'pending'
+        end receivableStatus,
+        p.confirm_status confirmStatus,
+        p.invoice_status invoiceStatus,
+        c.owner_id ownerId,
+        u.nick_name ownerName,
+        c.risk_level riskLevel,
+        p.remark,
+        p.create_time createTime,
+        p.update_time updateTime
+    </sql>
+
+    <select id="selectDashboardCards" resultType="java.util.Map">
+        select 'receivableTotal' metricKey, coalesce(sum(p.receivable_amount),0) metricValue
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'receivedTotal', coalesce(sum(case when p.confirm_status='1' then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'pendingTotal', coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'overdueTotal', coalesce(sum(case when p.confirm_status!='1' and p.plan_receive_date &lt; curdate() then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'monthReceived', coalesce(sum(case when p.confirm_status='1' and date_format(p.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'pendingInvoiceTotal', coalesce(sum(case when p.confirm_status='1' and p.invoice_status in ('0','2') then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectReceiveTrend" resultType="java.util.Map">
+        select date_format(p.update_time, '%Y-%m') itemName, coalesce(sum(ifnull(p.received_amount,0)),0) itemValue
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' and p.confirm_status='1' and p.update_time &gt;= date_sub(curdate(), interval 6 month)
+        <include refid="contractDataScope"/>
+        group by date_format(p.update_time, '%Y-%m')
+        order by itemName asc
+    </select>
+
+    <select id="selectAgingStats" resultType="java.util.Map">
+        select bucket itemName, count(*) itemValue, coalesce(sum(pendingAmount),0) amountValue
+        from (
+            select
+                case
+                    when p.plan_receive_date is null or datediff(curdate(), p.plan_receive_date) &lt;= 0 then 'current'
+                    when datediff(curdate(), p.plan_receive_date) &lt;= 30 then 'd30'
+                    when datediff(curdate(), p.plan_receive_date) &lt;= 60 then 'd60'
+                    when datediff(curdate(), p.plan_receive_date) &lt;= 90 then 'd90'
+                    else 'd90plus'
+                end bucket,
+                greatest(p.receivable_amount - ifnull(p.received_amount,0),0) pendingAmount
+            from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+            where c.del_flag='0' and p.confirm_status!='1'
+            <include refid="contractDataScope"/>
+        ) t
+        group by bucket
+    </select>
+
+    <select id="selectLinkStats" resultType="java.util.Map">
+        select 'contracts' metricKey, count(distinct c.contract_id) metricValue, coalesce(sum(c.sign_amount),0) amountValue
+        from biz_contract c where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'matters', count(distinct ca.case_id), coalesce(sum(ifnull(c.sign_amount,0)),0)
+        from biz_contract c left join biz_case ca on ca.contract_id=c.contract_id and ca.del_flag='0'
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'expenses', count(distinct e.expense_id), coalesce(sum(e.amount),0)
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+    </select>
+
+    <select id="selectReminders" resultType="java.util.Map">
+        select 'overdueReceivable' metricKey, count(*) metricValue, coalesce(sum(p.receivable_amount - ifnull(p.received_amount,0)),0) amountValue
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' and p.confirm_status!='1' and p.plan_receive_date &lt; curdate()
+        <include refid="contractDataScope"/>
+        union all
+        select 'pendingInvoice', count(*), coalesce(sum(ifnull(p.received_amount,0)),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' and p.confirm_status='1' and p.invoice_status in ('0','2')
+        <include refid="contractDataScope"/>
+        union all
+        select 'highRisk', count(*), coalesce(sum(p.receivable_amount - ifnull(p.received_amount,0)),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' and c.risk_level='3' and p.confirm_status!='1'
+        <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectReceivableList" resultType="java.util.Map">
+        select <include refid="receivableColumns"/>
+        from biz_contract_fee_plan p
+        left join biz_contract c on c.contract_id=p.contract_id
+        left join biz_case ca on ca.contract_id=c.contract_id and ca.del_flag='0'
+        left join sys_user u on u.user_id=c.owner_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or ca.case_no like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="contractNo != null and contractNo != ''">and c.contract_no like concat('%',#{contractNo},'%')</if>
+            <if test="caseNo != null and caseNo != ''">and ca.case_no like concat('%',#{caseNo},'%')</if>
+            <if test="customerName != null and customerName != ''">and c.customer_name like concat('%',#{customerName},'%')</if>
+            <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
+            <if test="invoiceStatus != null and invoiceStatus != ''">and p.invoice_status=#{invoiceStatus}</if>
+            <if test="ownerId != null and ownerId != ''">and c.owner_id=#{ownerId}</if>
+            <if test="riskLevel != null and riskLevel != ''">and c.risk_level=#{riskLevel}</if>
+            <if test="ageBucket != null and ageBucket != ''">
+                <choose>
+                    <when test="ageBucket == 'current'">and (p.plan_receive_date is null or datediff(curdate(), p.plan_receive_date) &lt;= 0)</when>
+                    <when test="ageBucket == 'd30'">and datediff(curdate(), p.plan_receive_date) between 1 and 30</when>
+                    <when test="ageBucket == 'd60'">and datediff(curdate(), p.plan_receive_date) between 31 and 60</when>
+                    <when test="ageBucket == 'd90'">and datediff(curdate(), p.plan_receive_date) between 61 and 90</when>
+                    <when test="ageBucket == 'd90plus'">and datediff(curdate(), p.plan_receive_date) &gt; 90</when>
+                </choose>
+            </if>
+            <include refid="contractDataScope"/>
+        </where>
+        order by p.plan_receive_date asc, p.plan_id desc
+        <if test="dashboardLimit != null and dashboardLimit != ''">limit #{dashboardLimit}</if>
+    </select>
+
+    <select id="selectPaymentList" resultType="java.util.Map">
+        select <include refid="receivableColumns"/>,
+               concat('HK', date_format(ifnull(p.update_time, p.create_time), '%Y%m%d'), lpad(p.plan_id, 4, '0')) paymentNo,
+               p.update_time paymentDate,
+               p.finance_user_id financeUserId
+        from biz_contract_fee_plan p
+        left join biz_contract c on c.contract_id=p.contract_id
+        left join biz_case ca on ca.contract_id=c.contract_id and ca.del_flag='0'
+        left join sys_user u on u.user_id=c.owner_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or ca.case_no like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
+            <if test="ownerId != null and ownerId != ''">and c.owner_id=#{ownerId}</if>
+            <include refid="contractDataScope"/>
+        </where>
+        order by case when p.confirm_status='0' then 0 else 1 end, p.update_time desc, p.plan_id desc
+        <if test="dashboardLimit != null and dashboardLimit != ''">limit #{dashboardLimit}</if>
+    </select>
+
+    <select id="selectInvoiceList" resultType="java.util.Map">
+        select <include refid="receivableColumns"/>,
+               concat('KP', date_format(ifnull(p.update_time, p.create_time), '%Y%m%d'), lpad(p.plan_id, 4, '0')) invoiceApplyNo,
+               case when p.invoice_status='1' then concat('FP', date_format(p.update_time, '%Y%m%d'), lpad(p.plan_id, 4, '0')) else null end invoiceNo
+        from biz_contract_fee_plan p
+        left join biz_contract c on c.contract_id=p.contract_id
+        left join biz_case ca on ca.contract_id=c.contract_id and ca.del_flag='0'
+        left join sys_user u on u.user_id=c.owner_id
+        <where>
+            and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or ca.case_no like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
+            <if test="invoiceStatus != null and invoiceStatus != ''">and p.invoice_status=#{invoiceStatus}</if>
+            <include refid="contractDataScope"/>
+        </where>
+        order by p.update_time desc, p.plan_id desc
+    </select>
+
+    <select id="selectExpenseList" resultType="java.util.Map">
+        select e.*, c.case_no caseNo, c.case_name caseName, c.customer_name customerName, c.contract_no contractNo,
+               c.case_type caseType, c.case_status caseStatus, c.main_lawyer_name mainLawyerName,
+               ct.contract_name contractName, ct.sign_amount contractSignAmount
+        from biz_case_expense e
+        left join biz_case c on c.case_id=e.case_id
+        left join biz_contract ct on ct.contract_id=c.contract_id and ct.del_flag='0'
+        <where>
+            and e.del_flag='0' and c.del_flag='0'
+            <if test="keyword != null and keyword != ''">and (e.expense_no like concat('%',#{keyword},'%') or c.case_no like concat('%',#{keyword},'%') or c.case_name like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
+            <if test="caseId != null and caseId != ''">and e.case_id=#{caseId}</if>
+            <if test="expenseType != null and expenseType != ''">and e.expense_type=#{expenseType}</if>
+            <if test="payStatus != null and payStatus != ''">and e.pay_status=#{payStatus}</if>
+            <if test="reimburseStatus != null and reimburseStatus != ''">and e.reimburse_status=#{reimburseStatus}</if>
+            <if test="voucherStatus != null and voucherStatus != ''">and e.voucher_status=#{voucherStatus}</if>
+            <include refid="caseDataScope"/>
+        </where>
+        order by e.occur_date desc, e.expense_id desc
+    </select>
+
+    <select id="selectReportCards" resultType="java.util.Map">
+        select 'income' metricKey, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) metricValue
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'cost', coalesce(sum(e.amount),0)
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        union all
+        select 'arrears', coalesce(sum(case when p.confirm_status!='1' then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'invoicePending', coalesce(sum(case when p.confirm_status='1' and p.invoice_status in ('0','2') then p.received_amount else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectLawyerRevenue" resultType="java.util.Map">
+        select ifnull(c.lawyer_name, '未指定') itemName, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) itemValue
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        group by ifnull(c.lawyer_name, '未指定')
+        order by itemValue desc
+        limit 8
+    </select>
+
+    <select id="selectCaseCost" resultType="java.util.Map">
+        select ifnull(c.case_type, 'unknown') itemName, coalesce(sum(e.amount),0) itemValue
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        group by ifnull(c.case_type, 'unknown')
+        order by itemValue desc
+        limit 8
+    </select>
+
+    <select id="selectSalesCollection" resultType="java.util.Map">
+        select ifnull(u.nick_name, '未指定') itemName, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) itemValue
+        from biz_contract_fee_plan p
+        left join biz_contract c on c.contract_id=p.contract_id
+        left join sys_user u on u.user_id=c.owner_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        group by ifnull(u.nick_name, '未指定')
+        order by itemValue desc
+        limit 8
+    </select>
+</mapper>
