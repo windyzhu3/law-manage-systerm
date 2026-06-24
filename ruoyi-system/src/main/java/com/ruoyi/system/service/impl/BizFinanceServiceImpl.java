@@ -39,6 +39,8 @@ public class BizFinanceServiceImpl implements IBizFinanceService
         data.put("aging", financeMapper.selectAgingStats(params));
         data.put("links", financeMapper.selectLinkStats(params));
         data.put("reminders", financeMapper.selectReminders(params));
+        data.put("leadFunnel", financeMapper.selectLeadFunnel(params));
+        data.put("leadSourceConversion", financeMapper.selectLeadSourceConversion(params));
         data.put("pendingPayments", financeMapper.selectPaymentList(withLimit(params, 5, "0")));
         data.put("dueReceivables", financeMapper.selectReceivableList(withLimit(params, 5, null)));
         return data;
@@ -79,6 +81,8 @@ public class BizFinanceServiceImpl implements IBizFinanceService
         data.put("lawyerRevenue", financeMapper.selectLawyerRevenue(scoped));
         data.put("caseCost", financeMapper.selectCaseCost(scoped));
         data.put("salesCollection", financeMapper.selectSalesCollection(scoped));
+        data.put("leadFunnel", financeMapper.selectLeadFunnel(scoped));
+        data.put("leadSourceConversion", financeMapper.selectLeadSourceConversion(scoped));
         return data;
     }
 

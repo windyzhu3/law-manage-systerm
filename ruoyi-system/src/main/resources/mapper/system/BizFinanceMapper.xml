@@ -63,6 +63,24 @@
         </if>
     </sql>
 
+    <sql id="leadDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1
+                from sys_user_role ur
+                inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and l.dept_id in (select rd.dept_id from sys_role_dept rd where rd.role_id=r.role_id))
+                    or (r.data_scope='3' and l.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and l.dept_id in (select sd.dept_id from sys_dept sd where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId}, sd.ancestors)))
+                    or (r.data_scope='5' and l.owner_id=#{currentUserId})
+                )
+            )
+        </if>
+    </sql>
+
     <sql id="receivableColumns">
         p.plan_id planId,
         concat('YS', date_format(ifnull(p.create_time, sysdate()), '%Y%m%d'), lpad(p.plan_id, 4, '0')) receivableNo,
@@ -180,6 +198,43 @@
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0' and c.risk_level='3' and p.confirm_status!='1'
         <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectLeadFunnel" resultType="java.util.Map">
+        select 'leadTotal' metricKey, count(*) metricValue, coalesce(sum(ifnull(l.estimated_amount,0)),0) amountValue
+        from biz_lead l
+        where l.del_flag='0' <include refid="leadDataScope"/>
+        union all
+        select 'convertedLeads', count(*), coalesce(sum(ifnull(l.estimated_amount,0)),0)
+        from biz_lead l
+        where l.del_flag='0' and l.status='3' <include refid="leadDataScope"/>
+        union all
+        select 'linkedCustomers', count(distinct l.customer_id), coalesce(sum(ifnull(l.estimated_amount,0)),0)
+        from biz_lead l
+        where l.del_flag='0' and l.status='3' and l.customer_id is not null <include refid="leadDataScope"/>
+        union all
+        select 'signedCustomers', count(distinct c.customer_id), coalesce(sum(ifnull(c.sign_amount,0)),0)
+        from biz_contract c
+        where c.del_flag='0' and c.sign_status in ('1','2') <include refid="contractDataScope"/>
+        union all
+        select 'signedContracts', count(distinct c.contract_id), coalesce(sum(ifnull(c.sign_amount,0)),0)
+        from biz_contract c
+        where c.del_flag='0' and c.sign_status in ('1','2') <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectLeadSourceConversion" resultType="java.util.Map">
+        select
+            coalesce(s.setting_name, l.source_code, '未设置') itemName,
+            count(*) leadCount,
+            sum(case when l.status='3' then 1 else 0 end) convertedCount,
+            round(sum(case when l.status='3' then 1 else 0 end) * 100 / nullif(count(*),0), 2) conversionRate,
+            coalesce(sum(if(l.status='3', ifnull(l.estimated_amount,0), 0)),0) estimatedAmount
+        from biz_lead l
+        left join biz_lead_setting s on s.setting_type='source' and s.setting_code=l.source_code and s.status='0'
+        where l.del_flag='0' <include refid="leadDataScope"/>
+        group by coalesce(s.setting_name, l.source_code, '未设置')
+        order by convertedCount desc, leadCount desc
+        limit 8
     </select>
 
     <select id="selectReceivableList" resultType="java.util.Map">

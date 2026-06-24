@@ -67,6 +67,24 @@
           </div>
         </article>
 
+        <article class="finance-card funnel-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>线索转化漏斗</h3>
+              <p>从线索预计金额到客户签约金额</p>
+            </div>
+            <strong>{{ leadConversionRate }}%</strong>
+          </div>
+          <div class="funnel-list">
+            <div v-for="item in leadFunnelCards" :key="item.key">
+              <span>{{ item.title }}</span>
+              <i><em :style="{ width: item.width }" /></i>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.desc }}</small>
+            </div>
+          </div>
+        </article>
+
         <article class="finance-card reminder-card">
           <div class="finance-card-title">
             <div>
@@ -253,6 +271,18 @@
         <div class="finance-card-title"><div><h3>案件成本分析</h3><p>按案件类型汇总办案费用</p></div></div>
         <div class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
       </article>
+      <article class="finance-card report-main">
+        <div class="finance-card-title"><div><h3>线索来源转化</h3><p>按线索来源统计转化率和预计转化金额</p></div></div>
+        <div class="source-conversion-list">
+          <div v-for="item in leadSourceConversion" :key="item.itemName">
+            <span>{{ item.itemName }}</span>
+            <i><em :style="{ width: conversionBarWidth(item) }" /></i>
+            <strong>{{ Number(item.conversionRate || 0).toFixed(2) }}%</strong>
+            <small>{{ item.convertedCount || 0 }}/{{ item.leadCount || 0 }} · {{ formatMoney(item.estimatedAmount) }}</small>
+          </div>
+          <el-empty v-if="!leadSourceConversion.length" :image-size="80" description="暂无线索转化数据" />
+        </div>
+      </article>
     </section>
 
     <el-dialog title="确认回款" :visible.sync="paymentOpen" width="520px" :custom-class="dialogClass" append-to-body>
@@ -373,6 +403,8 @@ export default {
       aging: [],
       links: [],
       reminders: [],
+      leadFunnel: [],
+      leadSourceConversion: [],
       pendingPayments: [],
       dueReceivables: [],
       query: { pageNum: 1, pageSize: 10 },
@@ -472,6 +504,25 @@ export default {
         { key: 'expenses', title: '案件费用', value: map.expenses ? map.expenses.metricValue : 0, desc: this.formatMoney(map.expenses && map.expenses.amountValue), icon: 'el-icon-money' }
       ]
     },
+    leadFunnelMap() {
+      return this.keyed(this.leadFunnel || [])
+    },
+    leadConversionRate() {
+      const total = Number(this.leadFunnelMap.leadTotal && this.leadFunnelMap.leadTotal.metricValue || 0)
+      const converted = Number(this.leadFunnelMap.convertedLeads && this.leadFunnelMap.convertedLeads.metricValue || 0)
+      return total ? (converted * 100 / total).toFixed(1) : '0.0'
+    },
+    leadFunnelCards() {
+      const map = this.leadFunnelMap
+      const total = Math.max(Number(map.leadTotal && map.leadTotal.metricValue || 0), 1)
+      const signedAmount = map.signedContracts && map.signedContracts.amountValue
+      return [
+        { key: 'leadTotal', title: '线索总量', value: Number(map.leadTotal && map.leadTotal.metricValue || 0), desc: this.formatMoney(map.leadTotal && map.leadTotal.amountValue), width: '100%' },
+        { key: 'convertedLeads', title: '已转化线索', value: Number(map.convertedLeads && map.convertedLeads.metricValue || 0), desc: this.formatMoney(map.convertedLeads && map.convertedLeads.amountValue), width: Math.max(8, Number(map.convertedLeads && map.convertedLeads.metricValue || 0) / total * 100) + '%' },
+        { key: 'linkedCustomers', title: '生成客户', value: Number(map.linkedCustomers && map.linkedCustomers.metricValue || 0), desc: '客户去重后关联', width: Math.max(8, Number(map.linkedCustomers && map.linkedCustomers.metricValue || 0) / total * 100) + '%' },
+        { key: 'signedContracts', title: '签约合同', value: Number(map.signedContracts && map.signedContracts.metricValue || 0), desc: this.formatMoney(signedAmount), width: Math.max(8, Number(map.signedContracts && map.signedContracts.metricValue || 0) / total * 100) + '%' }
+      ]
+    },
     reminderCards() {
       const map = this.keyed(this.reminders || [])
       return [
@@ -518,6 +569,8 @@ export default {
         this.aging = data.aging || []
         this.links = data.links || []
         this.reminders = data.reminders || []
+        this.leadFunnel = data.leadFunnel || []
+        this.leadSourceConversion = data.leadSourceConversion || []
         this.pendingPayments = (data.pendingPayments || []).slice(0, 5)
         this.dueReceivables = (data.dueReceivables || []).slice(0, 5)
       }).finally(() => { this.loading = false })
@@ -525,7 +578,10 @@ export default {
     loadReport() {
       this.loading = true
       getFinanceReport(this.query).then(res => {
-        this.report = res.data || {}
+        const data = res.data || {}
+        this.report = data
+        this.leadFunnel = data.leadFunnel || []
+        this.leadSourceConversion = data.leadSourceConversion || []
       }).finally(() => { this.loading = false })
     },
     loadPage() {
@@ -644,6 +700,9 @@ export default {
     barWidth(value, rows) {
       const max = Math.max(...(rows || []).map(item => Number(item.itemValue || 0)), 1)
       return Math.max(8, Number(value || 0) / max * 100) + '%'
+    },
+    conversionBarWidth(item) {
+      return Math.max(8, Number(item.conversionRate || 0)) + '%'
     },
     num(item) {
       return item ? Number(item.metricValue || 0) : 0
@@ -850,6 +909,48 @@ export default {
   }
 }
 
+.funnel-list {
+  display: grid;
+  gap: 11px;
+
+  div {
+    display: grid;
+    grid-template-columns: 86px 1fr auto;
+    align-items: center;
+    gap: 10px;
+  }
+
+  span {
+    color: #334155;
+    font-size: var(--biz-font-small);
+  }
+
+  i {
+    height: 8px;
+    border-radius: 999px;
+    background: #eef2ff;
+    overflow: hidden;
+  }
+
+  em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #38bdf8);
+  }
+
+  strong {
+    color: #0f172a;
+    font-size: var(--biz-font-card);
+  }
+
+  small {
+    grid-column: 2 / 4;
+    color: #94a3b8;
+    font-size: var(--biz-font-mini);
+  }
+}
+
 .reminder-list {
   display: grid;
   gap: 10px;
@@ -961,6 +1062,51 @@ export default {
   strong {
     text-align: right;
     color: #0f172a;
+  }
+}
+
+.source-conversion-list {
+  display: grid;
+  gap: 12px;
+
+  > div {
+    display: grid;
+    grid-template-columns: 150px minmax(160px, 1fr) 72px 180px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  span {
+    color: #334155;
+    font-size: var(--biz-font-small);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  i {
+    height: 9px;
+    border-radius: 999px;
+    background: #eef2ff;
+    overflow: hidden;
+  }
+
+  em {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #7c3aed, #22d3ee);
+  }
+
+  strong {
+    color: #2563eb;
+    font-size: var(--biz-font-card);
+  }
+
+  small {
+    color: #64748b;
+    font-size: var(--biz-font-mini);
+    text-align: right;
   }
 }
 

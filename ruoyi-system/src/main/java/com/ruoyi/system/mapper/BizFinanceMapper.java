@@ -15,6 +15,10 @@ public interface BizFinanceMapper
 
     List<Map<String, Object>> selectReminders(Map<String, Object> params);
 
+    List<Map<String, Object>> selectLeadFunnel(Map<String, Object> params);
+
+    List<Map<String, Object>> selectLeadSourceConversion(Map<String, Object> params);
+
     List<Map<String, Object>> selectReceivableList(Map<String, Object> params);
 
     List<Map<String, Object>> selectPaymentList(Map<String, Object> params);
