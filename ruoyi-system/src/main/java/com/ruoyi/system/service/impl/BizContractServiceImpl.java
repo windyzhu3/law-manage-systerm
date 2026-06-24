@@ -465,24 +465,38 @@ public class BizContractServiceImpl implements IBizContractService
     public int confirmFeePlan(Long planId, String receivedAmount) {
         Map<String, Object> plan = feePlanInScope(planId);
         requireFeeCollectableContractStatus(plan.get("contractStatus"));
-        if (!RECEIVE_PENDING.equals(String.valueOf(plan.get("confirm_status")))) {
-            throw new ServiceException("只有待确认的收费计划可以确认收款");
+        String currentConfirmStatus = String.valueOf(plan.get("confirm_status"));
+        BigDecimal receivableAmount = parseAmount(String.valueOf(plan.get("receivable_amount")), plan.get("receivable_amount"));
+        BigDecimal currentReceivedAmount = parseAmount(String.valueOf(plan.get("received_amount")), BigDecimal.ZERO);
+        BigDecimal remainingAmount = receivableAmount.subtract(currentReceivedAmount);
+        if (!RECEIVE_PENDING.equals(currentConfirmStatus) && !RECEIVE_CONFIRMED.equals(currentConfirmStatus)) {
+            throw new ServiceException("当前收费计划状态不允许确认收款");
         }
-        BigDecimal amount = parseAmount(receivedAmount, plan.get("receivable_amount"));
+        if (RECEIVE_CONFIRMED.equals(currentConfirmStatus) && remainingAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ServiceException("收费计划已收齐，不能重复确认收款");
+        }
+        BigDecimal amount = parseAmount(receivedAmount, remainingAmount.compareTo(BigDecimal.ZERO) > 0 ? remainingAmount : plan.get("receivable_amount"));
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new ServiceException("实收金额必须大于0");
         }
+        if (amount.compareTo(remainingAmount.compareTo(BigDecimal.ZERO) > 0 ? remainingAmount : receivableAmount) > 0) {
+            throw new ServiceException("本次回款不能超过待收金额");
+        }
+        BigDecimal totalReceivedAmount = currentReceivedAmount.add(amount);
         Map<String, Object> update = new HashMap<>();
         update.put("planId", planId);
-        update.put("receivedAmount", amount);
+        update.put("receivedAmount", totalReceivedAmount);
         update.put("confirmStatus", RECEIVE_CONFIRMED);
-        update.put("expectedConfirmStatus", plan.get("confirm_status"));
+        update.put("expectedConfirmStatus", currentConfirmStatus);
         update.put("expectedInvoiceStatus", plan.get("invoice_status"));
         update.put("expectedContractStatus", plan.get("contractStatus"));
         update.put("updateBy", SecurityUtils.getUsername());
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
-        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), String.valueOf(plan.get("confirm_status")), RECEIVE_CONFIRMED, "fee_confirm", "确认收款: 第 " + plan.get("period_no") + " 期，实收 " + amount);
+        String actionText = totalReceivedAmount.compareTo(receivableAmount) >= 0
+            ? (RECEIVE_CONFIRMED.equals(currentConfirmStatus) ? "补齐收款" : "确认收款")
+            : "部分收款";
+        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", actionText + ": 第 " + plan.get("period_no") + " 期，本次实收 " + amount + "，累计实收 " + totalReceivedAmount);
         return rows;
     }
     @Override

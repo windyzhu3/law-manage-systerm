@@ -194,7 +194,7 @@
           <template slot-scope="{ row }">
             <span class="action-buttons">
               <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">财务视图</el-button>
-              <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">确认回款</el-button>
+              <el-button v-if="canCollect(row)" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">{{ row.confirmStatus === '1' ? '补齐回款' : '确认回款' }}</el-button>
               <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">开票</el-button>
             </span>
           </template>
@@ -212,7 +212,7 @@
           <template slot-scope="{ row }">
             <span class="action-buttons">
               <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">财务视图</el-button>
-              <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">确认</el-button>
+              <el-button v-if="canCollect(row)" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">{{ row.confirmStatus === '1' ? '补齐' : '确认' }}</el-button>
               <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:reject']" :size="controlSize" type="text" class="danger-text" @click="openReject(row)">驳回</el-button>
               <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">开票</el-button>
             </span>
@@ -796,6 +796,9 @@ export default {
     },
     canInvoice(row) {
       return row.confirmStatus === '1' && row.invoiceStatus !== '1'
+    },
+    canCollect(row) {
+      return row.confirmStatus === '0' || (row.confirmStatus === '1' && Number(row.pendingAmount || 0) > 0)
     },
     buildTrendPoints(rows, width) {
       const list = rows && rows.length ? rows : [{ itemName: '-', itemValue: 0 }]
