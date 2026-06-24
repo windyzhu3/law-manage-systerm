@@ -755,6 +755,7 @@ export default {
       }
       this.caseFinanceOpen = true
       this.caseFinanceLoading = true
+      this.caseFinance = {}
       getCaseFinance(caseId).then(res => {
         this.caseFinance = res.data || {}
       }).finally(() => {
@@ -1313,6 +1314,12 @@ export default {
   .finance-overview-grid,
   .finance-tables-grid,
   .report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .case-finance-summary,
+  .case-finance-metrics,
+  .case-finance-grid {
     grid-template-columns: 1fr;
   }
 }
