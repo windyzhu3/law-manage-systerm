@@ -326,6 +326,104 @@
         order by e.occur_date desc, e.expense_id desc
     </select>
 
+    <select id="selectCaseFinanceSummary" resultType="java.util.Map">
+        select
+            c.case_id caseId,
+            c.case_no caseNo,
+            c.case_name caseName,
+            c.customer_name customerName,
+            c.case_type caseType,
+            c.case_status caseStatus,
+            c.main_lawyer_name mainLawyerName,
+            c.assistant_lawyer_names assistantLawyerNames,
+            c.contract_id contractId,
+            c.contract_no contractNo,
+            ct.contract_name contractName,
+            ct.sign_amount contractAmount,
+            ct.sign_status signStatus,
+            ct.contract_status contractStatus,
+            ifnull(fp.receivableTotal,0) receivableTotal,
+            ifnull(fp.receivedTotal,0) receivedTotal,
+            ifnull(fp.pendingTotal,0) pendingTotal,
+            ifnull(fp.overdueTotal,0) overdueTotal,
+            ifnull(ex.expenseTotal,0) expenseTotal,
+            ifnull(ex.paidExpenseTotal,0) paidExpenseTotal,
+            ifnull(ex.unpaidExpenseTotal,0) unpaidExpenseTotal,
+            ifnull(ex.voucherMissingCount,0) voucherMissingCount,
+            ifnull(fp.receivedTotal,0) - ifnull(ex.expenseTotal,0) grossProfit,
+            case when ifnull(fp.receivedTotal,0) = 0 then 0 else round((ifnull(fp.receivedTotal,0) - ifnull(ex.expenseTotal,0)) * 100 / ifnull(fp.receivedTotal,0), 2) end grossMargin
+        from biz_case c
+        left join biz_contract ct on ct.contract_id=c.contract_id and ct.del_flag='0'
+        left join (
+            select
+                p.contract_id,
+                coalesce(sum(p.receivable_amount),0) receivableTotal,
+                coalesce(sum(case when p.confirm_status='1' then ifnull(p.received_amount,0) else 0 end),0) receivedTotal,
+                coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0) pendingTotal,
+                coalesce(sum(case when p.confirm_status!='1' and p.plan_receive_date &lt; curdate() then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0) overdueTotal
+            from biz_contract_fee_plan p
+            group by p.contract_id
+        ) fp on fp.contract_id=ct.contract_id
+        left join (
+            select
+                e.case_id,
+                coalesce(sum(e.amount),0) expenseTotal,
+                coalesce(sum(case when e.pay_status='paid' then e.amount else 0 end),0) paidExpenseTotal,
+                coalesce(sum(case when ifnull(e.pay_status,'pending')!='paid' then e.amount else 0 end),0) unpaidExpenseTotal,
+                sum(case when ifnull(e.voucher_status,'missing')!='uploaded' then 1 else 0 end) voucherMissingCount
+            from biz_case_expense e
+            where e.del_flag='0'
+            group by e.case_id
+        ) ex on ex.case_id=c.case_id
+        where c.del_flag='0' and c.case_id=#{caseId}
+        <include refid="caseDataScope"/>
+    </select>
+
+    <select id="selectCaseFinanceFeePlans" resultType="java.util.Map">
+        select
+            p.plan_id planId,
+            p.period_no periodNo,
+            p.receivable_amount receivableAmount,
+            ifnull(p.received_amount,0) receivedAmount,
+            greatest(p.receivable_amount - ifnull(p.received_amount,0),0) pendingAmount,
+            p.plan_receive_date planReceiveDate,
+            p.confirm_status confirmStatus,
+            p.invoice_status invoiceStatus,
+            p.finance_user_id financeUserId,
+            p.remark,
+            p.create_time createTime,
+            p.update_time updateTime
+        from biz_case c
+        inner join biz_contract_fee_plan p on p.contract_id=c.contract_id
+        where c.del_flag='0' and c.case_id=#{caseId}
+        <include refid="caseDataScope"/>
+        order by p.period_no, p.plan_id
+    </select>
+
+    <select id="selectCaseFinanceExpenses" resultType="java.util.Map">
+        select
+            e.expense_id expenseId,
+            e.expense_no expenseNo,
+            e.case_id caseId,
+            e.expense_type expenseType,
+            e.amount,
+            e.occur_date occurDate,
+            e.pay_status payStatus,
+            e.reimburse_status reimburseStatus,
+            e.voucher_status voucherStatus,
+            e.handler_name handlerName,
+            e.voucher_url voucherUrl,
+            e.voucher_name voucherName,
+            e.remark,
+            e.create_time createTime,
+            e.update_time updateTime
+        from biz_case c
+        inner join biz_case_expense e on e.case_id=c.case_id and e.del_flag='0'
+        where c.del_flag='0' and c.case_id=#{caseId}
+        <include refid="caseDataScope"/>
+        order by e.occur_date desc, e.expense_id desc
+    </select>
+
     <select id="selectReportCards" resultType="java.util.Map">
         select 'income' metricKey, coalesce(sum(case when p.confirm_status='1' then p.received_amount else 0 end),0) metricValue
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id

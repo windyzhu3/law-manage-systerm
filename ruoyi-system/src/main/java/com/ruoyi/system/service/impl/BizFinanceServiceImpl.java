@@ -71,6 +71,27 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     }
 
     @Override
+    public Map<String, Object> selectCaseFinance(Long caseId)
+    {
+        if (caseId == null)
+        {
+            throw new ServiceException("请选择案件");
+        }
+        Map<String, Object> params = scopeParams(new HashMap<>());
+        params.put("caseId", caseId);
+        Map<String, Object> data = new HashMap<>();
+        Map<String, Object> summary = financeMapper.selectCaseFinanceSummary(params);
+        if (summary == null)
+        {
+            throw new ServiceException("案件不存在或无权查看");
+        }
+        data.put("summary", summary);
+        data.put("feePlans", financeMapper.selectCaseFinanceFeePlans(params));
+        data.put("expenses", financeMapper.selectCaseFinanceExpenses(params));
+        return data;
+    }
+
+    @Override
     public Map<String, Object> selectReports(Map<String, Object> params)
     {
         Map<String, Object> scoped = scopeParams(params);

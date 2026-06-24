@@ -15,6 +15,8 @@ public interface IBizFinanceService
 
     List<Map<String, Object>> selectExpenseList(Map<String, Object> params);
 
+    Map<String, Object> selectCaseFinance(Long caseId);
+
     Map<String, Object> selectReports(Map<String, Object> params);
 
     int confirmPayment(Map<String, Object> body);

@@ -20,6 +20,10 @@ export function listFinanceExpense(query) {
   return request({ url: '/finance/expense/list', method: 'get', params: query })
 }
 
+export function getCaseFinance(caseId) {
+  return request({ url: '/finance/case/' + caseId, method: 'get' })
+}
+
 export function getFinanceReport(query) {
   return request({ url: '/finance/report', method: 'get', params: query })
 }

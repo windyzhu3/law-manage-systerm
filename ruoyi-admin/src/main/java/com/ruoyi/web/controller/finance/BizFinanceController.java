@@ -4,6 +4,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -61,6 +62,13 @@ public class BizFinanceController extends BaseController
     {
         startPage();
         return getDataTable(financeService.selectExpenseList(params));
+    }
+
+    @PreAuthorize("@ss.hasPermi('finance:expense:list')")
+    @GetMapping("/case/{caseId}")
+    public AjaxResult caseFinance(@PathVariable Long caseId)
+    {
+        return success(financeService.selectCaseFinance(caseId));
     }
 
     @PreAuthorize("@ss.hasPermi('finance:report:list')")

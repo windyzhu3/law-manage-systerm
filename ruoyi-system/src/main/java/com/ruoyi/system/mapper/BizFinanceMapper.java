@@ -27,6 +27,12 @@ public interface BizFinanceMapper
 
     List<Map<String, Object>> selectExpenseList(Map<String, Object> params);
 
+    Map<String, Object> selectCaseFinanceSummary(Map<String, Object> params);
+
+    List<Map<String, Object>> selectCaseFinanceFeePlans(Map<String, Object> params);
+
+    List<Map<String, Object>> selectCaseFinanceExpenses(Map<String, Object> params);
+
     List<Map<String, Object>> selectReportCards(Map<String, Object> params);
 
     List<Map<String, Object>> selectLawyerRevenue(Map<String, Object> params);
