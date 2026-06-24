@@ -190,9 +190,10 @@
         <el-table-column label="账龄" width="90" align="center"><template slot-scope="{ row }"><span :class="{ overdue: row.receivableStatus === 'overdue' }">{{ row.agingDays || 0 }} 天</span></template></el-table-column>
         <el-table-column label="回款状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_receivable_status" :value="row.receivableStatus" /></template></el-table-column>
         <el-table-column label="开票状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
-        <el-table-column label="操作" width="170" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
+        <el-table-column label="操作" width="220" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
           <template slot-scope="{ row }">
             <span class="action-buttons">
+              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">财务视图</el-button>
               <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">确认回款</el-button>
               <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">开票</el-button>
             </span>
@@ -207,9 +208,10 @@
         <el-table-column label="计划日期" prop="planReceiveDate" width="120" />
         <el-table-column label="提交状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
         <el-table-column label="负责人" prop="ownerName" width="110" />
-        <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
+        <el-table-column label="操作" width="230" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
           <template slot-scope="{ row }">
             <span class="action-buttons">
+              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">财务视图</el-button>
               <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">确认</el-button>
               <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:reject']" :size="controlSize" type="text" class="danger-text" @click="openReject(row)">驳回</el-button>
               <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">开票</el-button>
@@ -225,8 +227,13 @@
         <el-table-column label="开票金额" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount || row.receivableAmount) }}</template></el-table-column>
         <el-table-column label="回款状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
         <el-table-column label="开票状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
-        <el-table-column label="操作" width="120" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
-          <template slot-scope="{ row }"><el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">{{ row.invoiceStatus === '2' ? '补齐开票' : '开票' }}</el-button></template>
+        <el-table-column label="操作" width="190" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
+          <template slot-scope="{ row }">
+            <span class="action-buttons">
+              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">财务视图</el-button>
+              <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">{{ row.invoiceStatus === '2' ? '补齐开票' : '开票' }}</el-button>
+            </span>
+          </template>
         </el-table-column>
       </el-table>
 

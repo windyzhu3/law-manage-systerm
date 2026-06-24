@@ -64,7 +64,7 @@ public class BizFinanceController extends BaseController
         return getDataTable(financeService.selectExpenseList(params));
     }
 
-    @PreAuthorize("@ss.hasPermi('finance:expense:list')")
+    @PreAuthorize("@ss.hasAnyPermi('finance:receivable:list,finance:payment:list,finance:invoice:list,finance:expense:list,finance:report:list')")
     @GetMapping("/case/{caseId}")
     public AjaxResult caseFinance(@PathVariable Long caseId)
     {
