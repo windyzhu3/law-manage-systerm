@@ -87,6 +87,14 @@
               </template>
             </el-table-column>
             <el-table-column label="备注" prop="remark" min-width="120" show-overflow-tooltip />
+            <el-table-column v-if="actionable" label="操作" width="150" align="center" fixed="right" class-name="small-padding fixed-width biz-operation-column">
+              <template slot-scope="{ row }">
+                <span class="action-buttons">
+                  <el-button v-if="canCollect(row)" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="handleCollect(row)">{{ row.confirmStatus === '1' ? '补齐' : '回款' }}</el-button>
+                  <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="handleInvoice(row)">开票</el-button>
+                </span>
+              </template>
+            </el-table-column>
           </el-table>
         </article>
 
@@ -120,6 +128,11 @@
             <el-table-column label="凭证文件" min-width="120" show-overflow-tooltip>
               <template slot-scope="{ row }">{{ row.voucherName || '-' }}</template>
             </el-table-column>
+            <el-table-column v-if="actionable" label="操作" width="96" align="center" fixed="right" class-name="small-padding fixed-width biz-operation-column">
+              <template slot-scope="{ row }">
+                <el-button v-hasPermi="['finance:expense:edit']" :size="controlSize" type="text" @click="handleExpense(row)">处理</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </article>
       </section>
@@ -148,6 +161,10 @@ export default {
     dictOptions: {
       type: Object,
       default: () => ({})
+    },
+    actionable: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -213,6 +230,21 @@ export default {
       }).finally(() => {
         this.loading = false
       })
+    },
+    canInvoice(row) {
+      return row.confirmStatus === '1' && row.invoiceStatus !== '1'
+    },
+    canCollect(row) {
+      return row.confirmStatus === '0' || (row.confirmStatus === '1' && Number(row.pendingAmount || 0) > 0)
+    },
+    handleCollect(row) {
+      this.$emit('confirm-payment', { ...row, ...this.summary })
+    },
+    handleInvoice(row) {
+      this.$emit('handle-invoice', { ...row, ...this.summary })
+    },
+    handleExpense(row) {
+      this.$emit('edit-expense', { ...row, ...this.summary })
     },
     formatMoney(value) {
       const num = Number(value || 0)

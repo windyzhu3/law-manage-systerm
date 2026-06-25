@@ -413,10 +413,15 @@
     </el-dialog>
 
     <case-finance-drawer
+      ref="caseFinanceDrawer"
       :visible.sync="caseFinanceOpen"
       :case-id="caseFinanceCaseId"
       :control-size="controlSize"
       :dict-options="dict.type"
+      actionable
+      @confirm-payment="openPayment"
+      @handle-invoice="openInvoice"
+      @edit-expense="openExpense"
     />
   </div>
 </template>
@@ -769,6 +774,7 @@ export default {
           this.$modal.msgSuccess('回款已确认')
           this.paymentOpen = false
           this.load()
+          this.refreshCaseFinance()
         })
       })
     },
@@ -803,6 +809,7 @@ export default {
           this.$modal.msgSuccess('开票状态已更新')
           this.invoiceOpen = false
           this.load()
+          this.refreshCaseFinance()
         })
       })
     },
@@ -814,6 +821,11 @@ export default {
       }
       this.caseFinanceCaseId = caseId
       this.caseFinanceOpen = true
+    },
+    refreshCaseFinance() {
+      if (this.caseFinanceOpen && this.$refs.caseFinanceDrawer) {
+        this.$refs.caseFinanceDrawer.load()
+      }
     },
     openExpense(row) {
       this.expenseForm = {
@@ -844,6 +856,7 @@ export default {
           this.$modal.msgSuccess('费用状态已更新')
           this.expenseOpen = false
           this.load()
+          this.refreshCaseFinance()
         })
       })
     },
