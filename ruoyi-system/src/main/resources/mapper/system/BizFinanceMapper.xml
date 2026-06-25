@@ -371,6 +371,40 @@
         order by e.occur_date desc, e.expense_id desc
     </select>
 
+    <select id="selectFinanceExpenseById" resultType="java.util.Map">
+        select e.*, c.case_id caseId, c.case_no caseNo, c.case_name caseName, c.customer_name customerName,
+               c.case_status caseStatus, c.contract_no contractNo
+        from biz_case_expense e
+        left join biz_case c on c.case_id=e.case_id
+        <where>
+            and e.del_flag='0' and c.del_flag='0' and e.expense_id=#{expenseId}
+            <include refid="caseDataScope"/>
+        </where>
+    </select>
+
+    <update id="updateFinanceExpense" parameterType="map">
+        update biz_case_expense
+        set expense_type=#{expenseType},
+            amount=#{amount},
+            occur_date=#{occurDate},
+            pay_status=#{payStatus},
+            reimburse_status=#{reimburseStatus},
+            voucher_status=#{voucherStatus},
+            handler_id=#{handlerId},
+            handler_name=#{handlerName},
+            voucher_url=#{voucherUrl},
+            voucher_name=#{voucherName},
+            remark=#{remark},
+            update_by=#{updateBy},
+            update_time=sysdate()
+        where expense_id=#{expenseId} and del_flag='0'
+    </update>
+
+    <insert id="insertCaseStatusLog" parameterType="map">
+        insert into biz_case_status_log(case_id,from_status,to_status,action_type,content,create_by,create_time)
+        values(#{caseId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())
+    </insert>
+
     <select id="selectCaseFinanceSummary" resultType="java.util.Map">
         select
             c.case_id caseId,
