@@ -32,9 +32,11 @@ public interface IBizContractService
     int deleteFeePlan(Long planId);
     int confirmFeePlan(Long planId, String receivedAmount);
     int confirmFeePlan(Long planId, String receivedAmount, String remark);
+    int confirmFeePlan(Long planId, String receivedAmount, String remark, String paymentMethod);
     int rejectFeePlan(Long planId, String reason);
     int invoiceFeePlan(Long planId, String invoiceStatus);
     int invoiceFeePlan(Long planId, String invoiceStatus, String remark);
+    int invoiceFeePlan(Long planId, String invoiceStatus, String remark, String invoiceType);
     List<Map<String, Object>> selectAttachments(Map<String, Object> params);
     int insertAttachment(Map<String, Object> attachment);
     int deleteAttachment(Long attachmentId);

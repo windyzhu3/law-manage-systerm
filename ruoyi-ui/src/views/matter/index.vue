@@ -290,7 +290,7 @@ export default {
   name: 'Matter',
   mixins: [businessUi],
   components: { BizHero, BizMetrics, BizPageHeader, BizTableCard, MatterDetailDrawer, MatterMaterialList, CaseFinanceDrawer },
-  dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority', 'law_case_risk_level', 'law_case_stage', 'law_case_cause', 'law_case_node_status', 'law_case_node_type', 'law_case_material_status', 'law_case_document_type', 'law_case_expense_type', 'law_case_pay_status', 'law_case_reimburse_status', 'law_case_voucher_status', 'law_case_fee_status', 'law_case_close_result', 'law_case_fee_clear_status', 'law_case_archive_status', 'law_case_status_action'],
+  dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority', 'law_case_risk_level', 'law_case_stage', 'law_case_cause', 'law_case_node_status', 'law_case_node_type', 'law_case_material_status', 'law_case_document_type', 'law_case_expense_type', 'law_case_pay_status', 'law_case_reimburse_status', 'law_case_voucher_status', 'law_case_fee_status', 'law_case_close_result', 'law_case_fee_clear_status', 'law_case_archive_status', 'law_case_status_action', 'law_finance_payment_method', 'law_finance_invoice_type'],
   data() {
     return {
       mode: 'list',

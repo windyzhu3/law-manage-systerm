@@ -93,7 +93,7 @@
             </div>
           </div>
           <div class="reminder-list">
-            <button v-for="item in reminderCards" :key="item.key" @click="switchMode(item.mode)">
+            <button v-for="item in reminderCards" :key="item.key" @click="switchMode(item.mode, item.query)">
               <i :class="item.icon" />
               <span><b>{{ item.title }}</b><small>{{ item.desc }}</small></span>
               <strong>{{ item.value }}</strong>
@@ -120,7 +120,7 @@
             </el-table-column>
             <el-table-column label="应收金额" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivableAmount) }}</template></el-table-column>
             <el-table-column label="计划日期" prop="planReceiveDate" width="120" />
-            <el-table-column label="操作" width="100" align="center" fixed="right"><template slot-scope="{ row }"><el-button :size="controlSize" type="text" @click="openPayment(row)">确认</el-button></template></el-table-column>
+            <el-table-column label="操作" width="100" align="center" fixed="right"><template slot-scope="{ row }"><el-button v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">确认</el-button></template></el-table-column>
           </el-table>
         </biz-table-card>
 
@@ -173,6 +173,23 @@
           <el-select v-if="mode === 'expense'" v-model="query.payStatus" :size="controlSize" placeholder="付款状态" clearable @change="search">
             <el-option v-for="item in dict.type.law_case_pay_status" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.reimburseStatus" :size="controlSize" placeholder="报销状态" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_reimburse_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.voucherStatus" :size="controlSize" placeholder="凭证状态" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_voucher_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-date-picker
+            v-model="listDateRange"
+            :size="controlSize"
+            type="daterange"
+            value-format="yyyy-MM-dd"
+            range-separator="至"
+            :start-placeholder="listDatePlaceholder[0]"
+            :end-placeholder="listDatePlaceholder[1]"
+            clearable
+            @change="handleListDateChange"
+          />
         </div>
         <div class="biz-filter-actions">
           <el-button :size="controlSize" plain icon="el-icon-refresh" @click="reset">重置</el-button>
@@ -207,6 +224,7 @@
         <el-table-column label="本次金额" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount || row.receivableAmount) }}</template></el-table-column>
         <el-table-column label="计划日期" prop="planReceiveDate" width="120" />
         <el-table-column label="提交状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
+        <el-table-column label="付款方式" width="112" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_payment_method" :value="row.paymentMethod" /></template></el-table-column>
         <el-table-column label="负责人" prop="ownerName" width="110" />
         <el-table-column label="操作" width="230" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
           <template slot-scope="{ row }">
@@ -227,6 +245,7 @@
         <el-table-column label="开票金额" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount || row.receivableAmount) }}</template></el-table-column>
         <el-table-column label="回款状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
         <el-table-column label="开票状态" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
+        <el-table-column label="发票类型" width="132" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_invoice_type" :value="row.invoiceType" /></template></el-table-column>
         <el-table-column label="操作" width="190" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
           <template slot-scope="{ row }">
             <span class="action-buttons">
@@ -238,16 +257,16 @@
       </el-table>
 
       <el-table v-else v-loading="loading" :data="list" :size="controlSize">
-        <el-table-column label="费用编号" prop="expense_no" width="150" show-overflow-tooltip />
+        <el-table-column label="费用编号" width="150" show-overflow-tooltip><template slot-scope="{ row }">{{ field(row, 'expenseNo', 'expense_no') }}</template></el-table-column>
         <el-table-column label="案件/客户" min-width="220" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link">{{ row.caseName || row.case_name }}</span><small class="sub-text">{{ row.customerName || row.customer_name || '-' }}</small></template></el-table-column>
         <el-table-column label="合同编号" prop="contractNo" width="140" show-overflow-tooltip />
-        <el-table-column label="费用类型" width="112" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_expense_type" :value="row.expense_type" /></template></el-table-column>
+        <el-table-column label="费用类型" width="112" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_expense_type" :value="field(row, 'expenseType', 'expense_type')" /></template></el-table-column>
         <el-table-column label="金额" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column>
-        <el-table-column label="发生日期" prop="occur_date" width="120" />
-        <el-table-column label="付款" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_pay_status" :value="row.pay_status" /></template></el-table-column>
-        <el-table-column label="报销" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_reimburse_status" :value="row.reimburse_status" /></template></el-table-column>
-        <el-table-column label="凭证" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_voucher_status" :value="row.voucher_status" /></template></el-table-column>
-        <el-table-column label="负责人" prop="handler_name" width="110" />
+        <el-table-column label="发生日期" width="120"><template slot-scope="{ row }">{{ field(row, 'occurDate', 'occur_date') || '-' }}</template></el-table-column>
+        <el-table-column label="付款" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_pay_status" :value="field(row, 'payStatus', 'pay_status')" /></template></el-table-column>
+        <el-table-column label="报销" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_reimburse_status" :value="field(row, 'reimburseStatus', 'reimburse_status')" /></template></el-table-column>
+        <el-table-column label="凭证" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_voucher_status" :value="field(row, 'voucherStatus', 'voucher_status')" /></template></el-table-column>
+        <el-table-column label="负责人" width="110"><template slot-scope="{ row }">{{ field(row, 'handlerName', 'handler_name') || '-' }}</template></el-table-column>
         <el-table-column label="操作" width="170" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
           <template slot-scope="{ row }">
             <span class="action-buttons">
@@ -284,11 +303,18 @@
       <section class="report-grid">
         <article class="finance-card report-main">
           <div class="finance-card-title"><div><h3>收入趋势表</h3><p>{{ reportRangeText }}确认回款的月度趋势</p></div></div>
-          <svg class="trend-chart report-trend" viewBox="0 0 700 180" preserveAspectRatio="none">
-            <polyline class="trend-grid" points="0,150 700,150" />
-            <polyline class="trend-grid" points="0,90 700,90" />
-            <polyline class="trend-line" :points="reportTrendPoints" />
-          </svg>
+          <template v-if="(report.trend || []).length">
+            <svg class="trend-chart report-trend" viewBox="0 0 700 180" preserveAspectRatio="none">
+              <polyline class="trend-grid" points="0,150 700,150" />
+              <polyline class="trend-grid" points="0,90 700,90" />
+              <polyline class="trend-line" :points="reportTrendPoints" />
+              <circle v-for="(point, index) in reportTrendPointList" :key="index" :cx="point.x" :cy="point.y" r="4" />
+            </svg>
+            <div class="trend-labels">
+              <span v-for="item in report.trend" :key="item.itemName">{{ item.itemName }}</span>
+            </div>
+          </template>
+          <el-empty v-else :image-size="80" description="暂无收入趋势数据" />
         </article>
         <article class="finance-card" v-for="card in reportCards" :key="card.key">
           <div class="report-stat">
@@ -299,15 +325,18 @@
         </article>
         <article class="finance-card">
           <div class="finance-card-title"><div><h3>律师创收统计</h3><p>按合同承办律师统计确认回款</p></div></div>
-          <div class="bar-list"><div v-for="item in report.lawyerRevenue || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.lawyerRevenue) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <div v-if="(report.lawyerRevenue || []).length" class="bar-list"><div v-for="item in report.lawyerRevenue || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.lawyerRevenue) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <el-empty v-else :image-size="72" description="暂无律师创收数据" />
         </article>
         <article class="finance-card">
           <div class="finance-card-title"><div><h3>案件成本分析</h3><p>按案件类型汇总办案费用</p></div></div>
-          <div class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <div v-if="(report.caseCost || []).length" class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <el-empty v-else :image-size="72" description="暂无案件成本数据" />
         </article>
         <article class="finance-card">
           <div class="finance-card-title"><div><h3>销售回款统计</h3><p>按合同负责人统计确认回款</p></div></div>
-          <div class="bar-list"><div v-for="item in report.salesCollection || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.salesCollection) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <div v-if="(report.salesCollection || []).length" class="bar-list"><div v-for="item in report.salesCollection || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.salesCollection) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
+          <el-empty v-else :image-size="72" description="暂无销售回款数据" />
         </article>
         <article class="finance-card report-main">
           <div class="finance-card-title"><div><h3>线索来源转化</h3><p>按线索来源统计转化率和预计转化金额</p></div></div>
@@ -329,6 +358,11 @@
         <el-form-item label="客户名称"><span>{{ paymentForm.customerName || '-' }}</span></el-form-item>
         <el-form-item label="应收金额"><span>{{ formatMoney(paymentForm.receivableAmount) }}</span></el-form-item>
         <el-form-item label="本次回款" prop="receivedAmount"><el-input-number v-model="paymentForm.receivedAmount" :size="controlSize" :min="0" :precision="2" /></el-form-item>
+        <el-form-item label="付款方式" prop="paymentMethod">
+          <el-select v-model="paymentForm.paymentMethod" :size="controlSize" placeholder="请选择付款方式">
+            <el-option v-for="item in dict.type.law_finance_payment_method" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="处理备注"><el-input v-model="paymentForm.reason" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
       </el-form>
       <div slot="footer"><el-button :size="controlSize" @click="paymentOpen=false">取消</el-button><el-button :size="controlSize" type="primary" @click="submitPayment">确认入账</el-button></div>
@@ -351,6 +385,11 @@
             <el-radio v-if="invoiceForm.currentInvoiceStatus !== '2'" label="2">部分开票</el-radio>
             <el-radio label="1">{{ invoiceForm.currentInvoiceStatus === '2' ? '补齐开票' : '已开票' }}</el-radio>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="发票类型" prop="invoiceType">
+          <el-select v-model="invoiceForm.invoiceType" :size="controlSize" placeholder="请选择发票类型">
+            <el-option v-for="item in dict.type.law_finance_invoice_type" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
         </el-form-item>
         <el-form-item label="处理备注"><el-input v-model="invoiceForm.reason" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
       </el-form>
@@ -411,6 +450,8 @@ export default {
   dicts: [
     'law_finance_receivable_status',
     'law_finance_age_bucket',
+    'law_finance_payment_method',
+    'law_finance_invoice_type',
     'law_contract_receive_status',
     'law_contract_invoice_status',
     'law_contract_risk_level',
@@ -458,6 +499,7 @@ export default {
       dueReceivables: [],
       query: { pageNum: 1, pageSize: 10 },
       reportDateRange: [],
+      listDateRange: [],
       paymentOpen: false,
       rejectOpen: false,
       invoiceOpen: false,
@@ -468,9 +510,15 @@ export default {
       rejectForm: {},
       invoiceForm: {},
       expenseForm: {},
-      paymentRules: { receivedAmount: [{ required: true, message: '请输入本次回款金额', trigger: 'blur' }] },
+      paymentRules: {
+        receivedAmount: [{ required: true, message: '请输入本次回款金额', trigger: 'blur' }],
+        paymentMethod: [{ required: true, message: '请选择付款方式', trigger: 'change' }]
+      },
       rejectRules: { reason: [{ required: true, message: '请填写驳回原因', trigger: 'blur' }] },
-      invoiceRules: { invoiceStatus: [{ required: true, message: '请选择开票动作', trigger: 'change' }] },
+      invoiceRules: {
+        invoiceStatus: [{ required: true, message: '请选择开票动作', trigger: 'change' }],
+        invoiceType: [{ required: true, message: '请选择发票类型', trigger: 'change' }]
+      },
       expenseRules: {
         expenseType: [{ required: true, message: '请选择费用类型', trigger: 'change' }],
         amount: [{ required: true, message: '请输入费用金额', trigger: 'blur' }],
@@ -545,8 +593,11 @@ export default {
     trendPoints() {
       return this.trendPointList.map(item => `${item.x},${item.y}`).join(' ')
     },
+    reportTrendPointList() {
+      return this.buildTrendPoints(this.report.trend || [], 700)
+    },
     reportTrendPoints() {
-      return this.buildTrendPoints(this.report.trend || [], 700).map(item => `${item.x},${item.y}`).join(' ')
+      return this.reportTrendPointList.map(item => `${item.x},${item.y}`).join(' ')
     },
     linkCards() {
       const map = this.keyed(this.links || [])
@@ -578,9 +629,9 @@ export default {
     reminderCards() {
       const map = this.keyed(this.reminders || [])
       return [
-        { key: 'overdueReceivable', title: '逾期应收', desc: '超过计划回款日的款项', value: this.num(map.overdueReceivable), mode: 'receivable', icon: 'el-icon-warning-outline' },
-        { key: 'pendingInvoice', title: '待开票', desc: '已回款但未完全开票', value: this.num(map.pendingInvoice), mode: 'invoice', icon: 'el-icon-document-checked' },
-        { key: 'highRisk', title: '高风险款项', desc: '高风险合同未收款项', value: this.num(map.highRisk), mode: 'receivable', icon: 'el-icon-bell' }
+        { key: 'overdueReceivable', title: '逾期应收', desc: '超过计划回款日的款项', value: this.num(map.overdueReceivable), mode: 'receivable', query: { overdueOnly: '1' }, icon: 'el-icon-warning-outline' },
+        { key: 'pendingInvoice', title: '待开票', desc: '已回款但未完全开票', value: this.num(map.pendingInvoice), mode: 'invoice', query: { invoicePendingOnly: '1' }, icon: 'el-icon-document-checked' },
+        { key: 'highRisk', title: '高风险款项', desc: '高风险合同未收款项', value: this.num(map.highRisk), mode: 'receivable', query: { riskLevel: '3', pendingOnly: '1' }, icon: 'el-icon-bell' }
       ]
     },
     reportCards() {
@@ -595,10 +646,15 @@ export default {
     reportRangeText() {
       return this.query.beginDate && this.query.endDate ? `${this.query.beginDate} 至 ${this.query.endDate} ` : '近 6 个月'
     },
+    listDatePlaceholder() {
+      if (this.mode === 'expense') return ['费用开始日期', '费用结束日期']
+      if (this.mode === 'payment' || this.mode === 'invoice') return ['处理开始日期', '处理结束日期']
+      return ['计划开始日期', '计划结束日期']
+    },
   },
   watch: {
-    '$route.query.module'(value) {
-      this.mode = value || 'overview'
+    '$route.fullPath'() {
+      this.mode = this.$route.query.module || 'overview'
       this.resetQuery()
       this.load()
     }
@@ -607,17 +663,18 @@ export default {
     this.load()
   },
   methods: {
-    switchMode(mode) {
-      this.$router.push({ path: '/finance/' + mode, query: { module: mode } }).catch(() => {})
+    switchMode(mode, extraQuery = {}) {
+      this.$router.push({ path: '/finance/' + mode, query: { module: mode, ...extraQuery } }).catch(() => {})
     },
     load() {
       if (this.mode === 'overview') return this.loadDashboard()
+      if (!this.dashboard.cards) this.loadDashboard(false)
       if (this.mode === 'report') return this.loadReport()
       return this.loadPage()
     },
-    loadDashboard() {
-      this.loading = true
-      getFinanceDashboard().then(res => {
+    loadDashboard(useLoading = true) {
+      if (useLoading) this.loading = true
+      return getFinanceDashboard().then(res => {
         const data = res.data || {}
         this.dashboard = data
         this.trend = data.trend || []
@@ -628,7 +685,9 @@ export default {
         this.leadSourceConversion = data.leadSourceConversion || []
         this.pendingPayments = (data.pendingPayments || []).slice(0, 5)
         this.dueReceivables = (data.dueReceivables || []).slice(0, 5)
-      }).finally(() => { this.loading = false })
+      }).finally(() => {
+        if (useLoading) this.loading = false
+      })
     },
     loadReport() {
       this.loading = true
@@ -657,14 +716,28 @@ export default {
       this.load()
     },
     reset() {
-      this.resetQuery()
+      const routeQuery = { ...(this.$route.query || {}) }
+      delete routeQuery.module
+      if (Object.keys(routeQuery).length) {
+        this.$router.push({ path: '/finance/' + this.mode, query: { module: this.mode } }).catch(() => {})
+        return
+      }
+      this.resetQuery(false)
       this.load()
     },
-    resetQuery() {
-      this.query = { pageNum: 1, pageSize: 10 }
+    resetQuery(useRouteQuery = true) {
+      const routeQuery = useRouteQuery ? { ...(this.$route.query || {}) } : {}
+      delete routeQuery.module
+      this.query = { pageNum: 1, pageSize: 10, ...routeQuery }
+      this.listDateRange = this.query.beginDate && this.query.endDate ? [this.query.beginDate, this.query.endDate] : []
       this.reportDateRange = []
       this.total = 0
       this.list = []
+    },
+    handleListDateChange(value) {
+      this.query.beginDate = value && value.length ? value[0] : undefined
+      this.query.endDate = value && value.length ? value[1] : undefined
+      this.search()
     },
     handleReportDateChange(value) {
       this.query.beginDate = value && value.length ? value[0] : undefined
@@ -678,7 +751,11 @@ export default {
       this.loadReport()
     },
     openPayment(row) {
-      this.paymentForm = { ...row, receivedAmount: Number(row.pendingAmount || row.receivableAmount || 0) }
+      this.paymentForm = {
+        ...row,
+        receivedAmount: Number(row.pendingAmount || row.receivableAmount || 0),
+        paymentMethod: row.paymentMethod || this.dictDefault('law_finance_payment_method')
+      }
       this.paymentOpen = true
     },
     submitPayment() {
@@ -688,7 +765,7 @@ export default {
           this.$modal.msgError('本次回款金额必须大于 0')
           return
         }
-        confirmPayment({ planId: this.paymentForm.planId, receivedAmount: this.paymentForm.receivedAmount, reason: this.paymentForm.reason }).then(() => {
+        confirmPayment({ planId: this.paymentForm.planId, receivedAmount: this.paymentForm.receivedAmount, paymentMethod: this.paymentForm.paymentMethod, reason: this.paymentForm.reason }).then(() => {
           this.$modal.msgSuccess('回款已确认')
           this.paymentOpen = false
           this.load()
@@ -710,13 +787,19 @@ export default {
       })
     },
     openInvoice(row) {
-      this.invoiceForm = { ...row, currentInvoiceStatus: row.invoiceStatus, invoiceStatus: row.invoiceStatus === '2' ? '1' : '2', reason: '' }
+      this.invoiceForm = {
+        ...row,
+        currentInvoiceStatus: row.invoiceStatus,
+        invoiceStatus: row.invoiceStatus === '2' ? '1' : '2',
+        invoiceType: row.invoiceType || this.dictDefault('law_finance_invoice_type'),
+        reason: ''
+      }
       this.invoiceOpen = true
     },
     submitInvoice() {
       this.$refs.invoiceFormRef.validate(valid => {
         if (!valid) return
-        handleInvoice({ planId: this.invoiceForm.planId, invoiceStatus: this.invoiceForm.invoiceStatus, reason: this.invoiceForm.reason }).then(() => {
+        handleInvoice({ planId: this.invoiceForm.planId, invoiceStatus: this.invoiceForm.invoiceStatus, invoiceType: this.invoiceForm.invoiceType, reason: this.invoiceForm.reason }).then(() => {
           this.$modal.msgSuccess('开票状态已更新')
           this.invoiceOpen = false
           this.load()
@@ -787,6 +870,10 @@ export default {
     conversionBarWidth(item) {
       return Math.max(8, Number(item.conversionRate || 0)) + '%'
     },
+    field(row, camelKey, snakeKey) {
+      if (!row) return undefined
+      return row[camelKey] !== undefined && row[camelKey] !== null ? row[camelKey] : row[snakeKey]
+    },
     num(item) {
       return item ? Number(item.metricValue || 0) : 0
     },
@@ -805,6 +892,16 @@ export default {
 </script>
 
 <style scoped lang="scss">
+.finance-page {
+  --biz-filter-input-width: 220px;
+  --biz-filter-select-width: 132px;
+
+  ::v-deep .biz-filter-main .el-date-editor--daterange {
+    width: 250px;
+    flex: 0 0 250px;
+  }
+}
+
 .finance-overview-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr) minmax(280px, .75fr);

@@ -108,6 +108,8 @@
         end receivableStatus,
         p.confirm_status confirmStatus,
         p.invoice_status invoiceStatus,
+        p.payment_method paymentMethod,
+        p.invoice_type invoiceType,
         c.owner_id ownerId,
         u.nick_name ownerName,
         c.risk_level riskLevel,
@@ -129,7 +131,7 @@
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0' <include refid="contractDataScope"/>
         union all
-        select 'overdueTotal', coalesce(sum(case when p.confirm_status!='1' and p.plan_receive_date &lt; curdate() then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0)
+        select 'overdueTotal', coalesce(sum(case when greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0 and p.plan_receive_date &lt; curdate() then greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) else 0 end),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0' <include refid="contractDataScope"/>
         union all
@@ -173,7 +175,8 @@
                 end bucket,
                 greatest(p.receivable_amount - ifnull(p.received_amount,0),0) pendingAmount
             from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-            where c.del_flag='0' and p.confirm_status!='1'
+            where c.del_flag='0'
+              and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0
             <include refid="contractDataScope"/>
         ) t
         group by bucket
@@ -193,9 +196,11 @@
     </select>
 
     <select id="selectReminders" resultType="java.util.Map">
-        select 'overdueReceivable' metricKey, count(*) metricValue, coalesce(sum(p.receivable_amount - ifnull(p.received_amount,0)),0) amountValue
+        select 'overdueReceivable' metricKey, count(*) metricValue, coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0) amountValue
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' and p.confirm_status!='1' and p.plan_receive_date &lt; curdate()
+        where c.del_flag='0'
+          and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0
+          and p.plan_receive_date &lt; curdate()
         <include refid="contractDataScope"/>
         union all
         select 'pendingInvoice', count(*), coalesce(sum(ifnull(p.received_amount,0)),0)
@@ -203,9 +208,11 @@
         where c.del_flag='0' and p.confirm_status='1' and p.invoice_status in ('0','2')
         <include refid="contractDataScope"/>
         union all
-        select 'highRisk', count(*), coalesce(sum(p.receivable_amount - ifnull(p.received_amount,0)),0)
+        select 'highRisk', count(*), coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
-        where c.del_flag='0' and c.risk_level='3' and p.confirm_status!='1'
+        where c.del_flag='0'
+          and c.risk_level='3'
+          and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0
         <include refid="contractDataScope"/>
     </select>
 
@@ -280,6 +287,10 @@
             <if test="invoiceStatus != null and invoiceStatus != ''">and p.invoice_status=#{invoiceStatus}</if>
             <if test="ownerId != null and ownerId != ''">and c.owner_id=#{ownerId}</if>
             <if test="riskLevel != null and riskLevel != ''">and c.risk_level=#{riskLevel}</if>
+            <if test="beginDate != null and beginDate != ''">and p.plan_receive_date &gt;= #{beginDate}</if>
+            <if test="endDate != null and endDate != ''">and p.plan_receive_date &lt;= #{endDate}</if>
+            <if test="pendingOnly != null and pendingOnly != ''">and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0</if>
+            <if test="overdueOnly != null and overdueOnly != ''">and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0 and p.plan_receive_date &lt; curdate()</if>
             <if test="ageBucket != null and ageBucket != ''">
                 <choose>
                     <when test="ageBucket == 'current'">and (p.plan_receive_date is null or datediff(curdate(), p.plan_receive_date) &lt;= 0)</when>
@@ -309,6 +320,8 @@
             <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or ca.case_no like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
             <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
             <if test="ownerId != null and ownerId != ''">and c.owner_id=#{ownerId}</if>
+            <if test="beginDate != null and beginDate != ''">and coalesce(p.update_time, p.plan_receive_date, p.create_time) &gt;= #{beginDate}</if>
+            <if test="endDate != null and endDate != ''">and coalesce(p.update_time, p.plan_receive_date, p.create_time) &lt; date_add(#{endDate}, interval 1 day)</if>
             <include refid="contractDataScope"/>
         </where>
         order by case when p.confirm_status='0' then 0 else 1 end, p.update_time desc, p.plan_id desc
@@ -328,6 +341,9 @@
             <if test="keyword != null and keyword != ''">and (c.contract_no like concat('%',#{keyword},'%') or ca.case_no like concat('%',#{keyword},'%') or c.customer_name like concat('%',#{keyword},'%'))</if>
             <if test="confirmStatus != null and confirmStatus != ''">and p.confirm_status=#{confirmStatus}</if>
             <if test="invoiceStatus != null and invoiceStatus != ''">and p.invoice_status=#{invoiceStatus}</if>
+            <if test="invoicePendingOnly != null and invoicePendingOnly != ''">and p.confirm_status='1' and p.invoice_status in ('0','2')</if>
+            <if test="beginDate != null and beginDate != ''">and coalesce(p.update_time, p.plan_receive_date, p.create_time) &gt;= #{beginDate}</if>
+            <if test="endDate != null and endDate != ''">and coalesce(p.update_time, p.plan_receive_date, p.create_time) &lt; date_add(#{endDate}, interval 1 day)</if>
             <include refid="contractDataScope"/>
         </where>
         order by p.update_time desc, p.plan_id desc
@@ -348,6 +364,8 @@
             <if test="payStatus != null and payStatus != ''">and e.pay_status=#{payStatus}</if>
             <if test="reimburseStatus != null and reimburseStatus != ''">and e.reimburse_status=#{reimburseStatus}</if>
             <if test="voucherStatus != null and voucherStatus != ''">and e.voucher_status=#{voucherStatus}</if>
+            <if test="beginDate != null and beginDate != ''">and e.occur_date &gt;= #{beginDate}</if>
+            <if test="endDate != null and endDate != ''">and e.occur_date &lt;= #{endDate}</if>
             <include refid="caseDataScope"/>
         </where>
         order by e.occur_date desc, e.expense_id desc
@@ -387,7 +405,7 @@
                 coalesce(sum(p.receivable_amount),0) receivableTotal,
                 coalesce(sum(case when p.confirm_status='1' then ifnull(p.received_amount,0) else 0 end),0) receivedTotal,
                 coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0) pendingTotal,
-                coalesce(sum(case when p.confirm_status!='1' and p.plan_receive_date &lt; curdate() then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0) overdueTotal
+                coalesce(sum(case when greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0 and p.plan_receive_date &lt; curdate() then greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) else 0 end),0) overdueTotal
             from biz_contract_fee_plan p
             group by p.contract_id
         ) fp on fp.contract_id=ct.contract_id
@@ -416,6 +434,8 @@
             p.plan_receive_date planReceiveDate,
             p.confirm_status confirmStatus,
             p.invoice_status invoiceStatus,
+            p.payment_method paymentMethod,
+            p.invoice_type invoiceType,
             p.finance_user_id financeUserId,
             p.remark,
             p.create_time createTime,
@@ -466,7 +486,7 @@
         <if test="endDate != null and endDate != ''">and e.occur_date &lt;= #{endDate}</if>
         <include refid="caseDataScope"/>
         union all
-        select 'arrears', coalesce(sum(case when p.confirm_status!='1' then p.receivable_amount - ifnull(p.received_amount,0) else 0 end),0)
+        select 'arrears', coalesce(sum(greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0)),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0'
         <if test="beginDate != null and beginDate != ''">and p.plan_receive_date &gt;= #{beginDate}</if>

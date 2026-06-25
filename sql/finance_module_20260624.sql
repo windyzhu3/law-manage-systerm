@@ -1,5 +1,29 @@
 -- 财务中心初始化脚本：菜单、按钮权限、财务字典与财务角色
 
+set @fee_payment_method_col_exists = (
+  select count(1) from information_schema.columns
+  where table_schema = database() and table_name = 'biz_contract_fee_plan' and column_name = 'payment_method'
+);
+set @fee_payment_method_col_sql = if(@fee_payment_method_col_exists = 0,
+  'alter table biz_contract_fee_plan add column payment_method varchar(40) default null comment ''付款方式'' after finance_user_id',
+  'select 1'
+);
+prepare stmt from @fee_payment_method_col_sql;
+execute stmt;
+deallocate prepare stmt;
+
+set @fee_invoice_type_col_exists = (
+  select count(1) from information_schema.columns
+  where table_schema = database() and table_name = 'biz_contract_fee_plan' and column_name = 'invoice_type'
+);
+set @fee_invoice_type_col_sql = if(@fee_invoice_type_col_exists = 0,
+  'alter table biz_contract_fee_plan add column invoice_type varchar(40) default null comment ''发票类型'' after payment_method',
+  'select 1'
+);
+prepare stmt from @fee_invoice_type_col_sql;
+execute stmt;
+deallocate prepare stmt;
+
 insert into sys_dict_type(dict_name, dict_type, status, create_by, create_time, remark)
 select item.dict_name, item.dict_type, '0', 'admin', sysdate(), item.dict_name
 from (

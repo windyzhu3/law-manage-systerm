@@ -35,6 +35,17 @@
         </div>
       </section>
 
+      <section v-if="controlAlerts.length" class="case-finance-alerts">
+        <div v-for="item in controlAlerts" :key="item.key" :class="['finance-alert', item.type]">
+          <i :class="item.icon" />
+          <span>
+            <b>{{ item.title }}</b>
+            <small>{{ item.desc }}</small>
+          </span>
+          <strong>{{ item.value }}</strong>
+        </div>
+      </section>
+
       <section class="case-finance-grid">
         <article class="finance-card">
           <div class="finance-card-title">
@@ -51,10 +62,18 @@
             <el-table-column label="已收金额" width="110" align="right">
               <template slot-scope="{ row }">{{ formatMoney(row.receivedAmount) }}</template>
             </el-table-column>
+            <el-table-column label="待收金额" width="110" align="right">
+              <template slot-scope="{ row }"><span :class="{ 'danger-text': Number(row.pendingAmount || 0) > 0 }">{{ formatMoney(row.pendingAmount) }}</span></template>
+            </el-table-column>
             <el-table-column label="计划日期" prop="planReceiveDate" width="110" />
             <el-table-column label="回款" width="96" align="center">
               <template slot-scope="{ row }">
                 <dict-tag :options="dictOptions.law_contract_receive_status || []" :value="row.confirmStatus" />
+              </template>
+            </el-table-column>
+            <el-table-column label="付款方式" width="110" align="center">
+              <template slot-scope="{ row }">
+                <dict-tag :options="dictOptions.law_finance_payment_method || []" :value="row.paymentMethod" />
               </template>
             </el-table-column>
             <el-table-column label="开票" width="96" align="center">
@@ -62,6 +81,12 @@
                 <dict-tag :options="dictOptions.law_contract_invoice_status || []" :value="row.invoiceStatus" />
               </template>
             </el-table-column>
+            <el-table-column label="发票类型" width="120" align="center">
+              <template slot-scope="{ row }">
+                <dict-tag :options="dictOptions.law_finance_invoice_type || []" :value="row.invoiceType" />
+              </template>
+            </el-table-column>
+            <el-table-column label="备注" prop="remark" min-width="120" show-overflow-tooltip />
           </el-table>
         </article>
 
@@ -91,6 +116,9 @@
               <template slot-scope="{ row }">
                 <dict-tag :options="dictOptions.law_case_voucher_status || []" :value="row.voucherStatus" />
               </template>
+            </el-table-column>
+            <el-table-column label="凭证文件" min-width="120" show-overflow-tooltip>
+              <template slot-scope="{ row }">{{ row.voucherName || '-' }}</template>
             </el-table-column>
           </el-table>
         </article>
@@ -142,6 +170,20 @@ export default {
         { key: 'expenseTotal', title: '案件费用', value: row.expenseTotal || 0, desc: '办案支出合计', icon: 'el-icon-money', formatter: this.formatMoney },
         { key: 'grossProfit', title: '案件毛利', value: row.grossProfit || 0, desc: `毛利率 ${Number(row.grossMargin || 0).toFixed(2)}%`, icon: 'el-icon-data-analysis', formatter: this.formatMoney }
       ]
+    },
+    controlAlerts() {
+      const row = this.summary
+      const alerts = []
+      if (Number(row.overdueTotal || 0) > 0) {
+        alerts.push({ key: 'overdue', type: 'danger', title: '存在逾期应收', desc: '该案件有关联合同收费计划已超过计划回款日', value: this.formatMoney(row.overdueTotal), icon: 'el-icon-warning-outline' })
+      }
+      if (Number(row.pendingTotal || 0) > 0) {
+        alerts.push({ key: 'pending', type: 'warning', title: '仍有待收余额', desc: '建议跟进回款计划或拆分后续回款安排', value: this.formatMoney(row.pendingTotal), icon: 'el-icon-bank-card' })
+      }
+      if (Number(row.voucherMissingCount || 0) > 0) {
+        alerts.push({ key: 'voucher', type: 'primary', title: '费用凭证缺失', desc: '存在未上传或未完善凭证的案件费用', value: row.voucherMissingCount + ' 笔', icon: 'el-icon-document-delete' })
+      }
+      return alerts
     }
   },
   watch: {
@@ -270,6 +312,66 @@ export default {
   gap: 14px;
 }
 
+.case-finance-alerts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.finance-alert {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e8edf6;
+  border-radius: 12px;
+  background: #fff;
+
+  i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+  }
+
+  b {
+    display: block;
+    color: #0f172a;
+    font-size: var(--biz-font-small);
+  }
+
+  small {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-size: var(--biz-font-mini);
+  }
+
+  strong {
+    color: #0f172a;
+    font-size: var(--biz-font-card);
+  }
+
+  &.danger i {
+    color: #ef4444;
+    background: #fee2e2;
+  }
+
+  &.warning i {
+    color: #f97316;
+    background: #ffedd5;
+  }
+
+  &.primary i {
+    color: #2563eb;
+    background: #eaf2ff;
+  }
+}
+
 .finance-card {
   padding: 16px;
   border: 1px solid #e8edf6;
@@ -298,8 +400,14 @@ export default {
 @media (max-width: 1280px) {
   .case-finance-summary,
   .case-finance-metrics,
+  .case-finance-alerts,
   .case-finance-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.danger-text {
+  color: #ef4444;
+  font-weight: 600;
 }
 </style>

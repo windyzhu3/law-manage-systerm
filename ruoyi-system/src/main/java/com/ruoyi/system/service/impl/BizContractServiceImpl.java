@@ -469,8 +469,18 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     @Transactional
     public int confirmFeePlan(Long planId, String receivedAmount, String remark) {
+        return confirmFeePlan(planId, receivedAmount, remark, null);
+    }
+
+    @Override
+    @Transactional
+    public int confirmFeePlan(Long planId, String receivedAmount, String remark, String paymentMethod) {
         Map<String, Object> plan = feePlanInScope(planId);
         requireFeeCollectableContractStatus(plan.get("contractStatus"));
+        String cleanPaymentMethod = StringUtils.isEmpty(paymentMethod) ? null : paymentMethod.trim();
+        if (!StringUtils.isEmpty(cleanPaymentMethod)) {
+            assertDictValue("law_finance_payment_method", cleanPaymentMethod, "付款方式不合法");
+        }
         String currentConfirmStatus = String.valueOf(plan.get("confirm_status"));
         BigDecimal receivableAmount = parseAmount(String.valueOf(plan.get("receivable_amount")), plan.get("receivable_amount"));
         BigDecimal currentReceivedAmount = parseAmount(String.valueOf(plan.get("received_amount")), BigDecimal.ZERO);
@@ -501,12 +511,19 @@ public class BizContractServiceImpl implements IBizContractService
         if (!StringUtils.isEmpty(cleanRemark)) {
             update.put("remark", cleanRemark);
         }
+        if (!StringUtils.isEmpty(cleanPaymentMethod)) {
+            update.put("paymentMethod", cleanPaymentMethod);
+        }
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
         String actionText = totalReceivedAmount.compareTo(receivableAmount) >= 0
             ? (RECEIVE_CONFIRMED.equals(currentConfirmStatus) ? "补齐收款" : "确认收款")
             : "部分收款";
-        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", appendRemark(actionText + ": 第 " + plan.get("period_no") + " 期，本次实收 " + amount + "，累计实收 " + totalReceivedAmount, cleanRemark));
+        String content = actionText + ": 第 " + plan.get("period_no") + " 期，本次实收 " + amount + "，累计实收 " + totalReceivedAmount;
+        if (!StringUtils.isEmpty(cleanPaymentMethod)) {
+            content += "，付款方式 " + cleanPaymentMethod;
+        }
+        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", appendRemark(content, cleanRemark));
         return rows;
     }
     @Override
@@ -540,8 +557,18 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     @Transactional
     public int invoiceFeePlan(Long planId, String invoiceStatus, String remark) {
+        return invoiceFeePlan(planId, invoiceStatus, remark, null);
+    }
+
+    @Override
+    @Transactional
+    public int invoiceFeePlan(Long planId, String invoiceStatus, String remark, String invoiceType) {
         Map<String, Object> plan = feePlanInScope(planId);
         requireFeeCollectableContractStatus(plan.get("contractStatus"));
+        String cleanInvoiceType = StringUtils.isEmpty(invoiceType) ? null : invoiceType.trim();
+        if (!StringUtils.isEmpty(cleanInvoiceType)) {
+            assertDictValue("law_finance_invoice_type", cleanInvoiceType, "发票类型不合法");
+        }
         if (!RECEIVE_CONFIRMED.equals(String.valueOf(plan.get("confirm_status")))) {
             throw new ServiceException("只有已确认收款的计划可以开票");
         }
@@ -573,9 +600,15 @@ public class BizContractServiceImpl implements IBizContractService
         if (!StringUtils.isEmpty(cleanRemark)) {
             update.put("remark", cleanRemark);
         }
+        if (!StringUtils.isEmpty(cleanInvoiceType)) {
+            update.put("invoiceType", cleanInvoiceType);
+        }
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
         String content = INVOICE_PARTIAL.equals(invoiceStatus) ? "部分开票: 第 " + plan.get("period_no") + " 期" : (INVOICE_PARTIAL.equals(currentInvoiceStatus) ? "补齐开票: 第 " + plan.get("period_no") + " 期" : "已开票: 第 " + plan.get("period_no") + " 期");
+        if (!StringUtils.isEmpty(cleanInvoiceType)) {
+            content += "，发票类型 " + cleanInvoiceType;
+        }
         insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentInvoiceStatus, invoiceStatus, "fee_invoice", appendRemark(content, cleanRemark));
         return rows;
     }

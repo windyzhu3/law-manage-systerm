@@ -112,7 +112,8 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     {
         Long planId = requiredLong(body, "planId", "请选择收费计划");
         String amount = requiredText(body, "receivedAmount", "请输入本次回款金额");
-        return contractService.confirmFeePlan(planId, amount, optionalText(body, "reason"));
+        String paymentMethod = requiredText(body, "paymentMethod", "请选择付款方式");
+        return contractService.confirmFeePlan(planId, amount, optionalText(body, "reason"), paymentMethod);
     }
 
     @Override
@@ -128,7 +129,8 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     {
         Long planId = requiredLong(body, "planId", "请选择收费计划");
         String invoiceStatus = requiredText(body, "invoiceStatus", "请选择开票状态");
-        return contractService.invoiceFeePlan(planId, invoiceStatus, optionalText(body, "reason"));
+        String invoiceType = requiredText(body, "invoiceType", "请选择发票类型");
+        return contractService.invoiceFeePlan(planId, invoiceStatus, optionalText(body, "reason"), invoiceType);
     }
 
     @Override

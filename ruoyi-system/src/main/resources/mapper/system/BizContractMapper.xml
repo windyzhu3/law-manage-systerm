@@ -222,6 +222,8 @@
             <if test="receivedAmount != null">received_amount=#{receivedAmount},</if>
             <if test="confirmStatus != null">confirm_status=#{confirmStatus},</if>
             <if test="invoiceStatus != null">invoice_status=#{invoiceStatus},</if>
+            <if test="paymentMethod != null">payment_method=#{paymentMethod},</if>
+            <if test="invoiceType != null">invoice_type=#{invoiceType},</if>
             <if test="remark != null">remark=#{remark},</if>
             update_by=#{updateBy}, update_time=sysdate()
         </set>
