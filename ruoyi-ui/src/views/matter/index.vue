@@ -144,8 +144,16 @@
       @expense="openExpense"
       @archive="openArchive"
       @document="openDocument"
+      @finance="openCaseFinance"
       @remove-document="removeDocument"
       @open-file="openBusinessFile"
+    />
+
+    <case-finance-drawer
+      :visible.sync="caseFinanceOpen"
+      :case-id="caseFinanceCaseId"
+      :control-size="controlSize"
+      :dict-options="dict.type"
     />
 
     <el-dialog :title="matterForm.caseId ? '编辑案件' : '新增案件'" :visible.sync="matterOpen" width="760px" :custom-class="dialogClass" append-to-body>
@@ -273,6 +281,7 @@ import BizPageHeader from '@/views/business/components/BizPageHeader'
 import BizTableCard from '@/views/business/components/BizTableCard'
 import MatterDetailDrawer from './components/MatterDetailDrawer'
 import MatterMaterialList from './components/MatterMaterialList'
+import CaseFinanceDrawer from '@/views/finance/components/CaseFinanceDrawer'
 import businessUi from '@/views/business/mixins/businessUi'
 import { listContract } from '@/api/contract'
 import { getMatterDashboard, listMatter, getMatter, getMatterFieldConfigs, addMatter, updateMatter, listProgress, addProgress, updateProgress, delProgress, listNode, addNode, updateNode, delNode, listExpense, addExpense, updateExpense, delExpense, listDocument, addDocument, delDocument, getArchive, applyArchive, confirmClose, confirmArchive, listMatterStatus } from '@/api/matter'
@@ -280,7 +289,7 @@ import { getMatterDashboard, listMatter, getMatter, getMatterFieldConfigs, addMa
 export default {
   name: 'Matter',
   mixins: [businessUi],
-  components: { BizHero, BizMetrics, BizPageHeader, BizTableCard, MatterDetailDrawer, MatterMaterialList },
+  components: { BizHero, BizMetrics, BizPageHeader, BizTableCard, MatterDetailDrawer, MatterMaterialList, CaseFinanceDrawer },
   dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority', 'law_case_risk_level', 'law_case_stage', 'law_case_cause', 'law_case_node_status', 'law_case_node_type', 'law_case_material_status', 'law_case_document_type', 'law_case_expense_type', 'law_case_pay_status', 'law_case_reimburse_status', 'law_case_voucher_status', 'law_case_fee_status', 'law_case_close_result', 'law_case_fee_clear_status', 'law_case_archive_status', 'law_case_status_action'],
   data() {
     return {
@@ -304,6 +313,8 @@ export default {
       contractLoading: false,
       detailOpen: false,
       detail: {},
+      caseFinanceOpen: false,
+      caseFinanceCaseId: null,
       matterOpen: false,
       matterForm: {},
       fieldConfigs: [],
@@ -528,6 +539,15 @@ export default {
       return true
     },
     openDetail(row) { getMatter(row.case_id || row.caseId).then(res => { this.detail = res.data || {}; this.detailOpen = true }) },
+    openCaseFinance(row = {}) {
+      const caseId = row.case_id || row.caseId
+      if (!caseId) {
+        this.$modal.msgError('当前案件缺少案件ID，无法打开财务视图')
+        return
+      }
+      this.caseFinanceCaseId = caseId
+      this.caseFinanceOpen = true
+    },
     searchMatterOptions(keyword) { this.matterSelectLoading = true; listMatter({ pageNum: 1, pageSize: 20, keyword, mode: 'list' }).then(res => { this.matterOptions = res.rows || [] }).finally(() => { this.matterSelectLoading = false }) },
     searchContracts(keyword) {
       this.contractLoading = true

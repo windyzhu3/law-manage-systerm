@@ -34,6 +34,7 @@
           <el-button v-hasPermi="['matter:progress:add']" :size="controlSize" icon="el-icon-plus" :disabled="!canOperate(caseInfo)" @click="$emit('progress', caseInfo)">新增进度</el-button>
           <el-button v-hasPermi="['matter:node:add']" :size="controlSize" icon="el-icon-date" :disabled="!canOperate(caseInfo)" @click="$emit('node', caseInfo)">关键节点</el-button>
           <el-button v-hasPermi="['matter:expense:add']" :size="controlSize" icon="el-icon-money" :disabled="!canOperate(caseInfo)" @click="$emit('expense', caseInfo)">费用录入</el-button>
+          <el-button v-hasPermi="['finance:receivable:list', 'finance:expense:list']" :size="controlSize" icon="el-icon-data-analysis" @click="$emit('finance', caseInfo)">财务视图</el-button>
           <el-button v-hasPermi="['matter:archive:apply']" :size="controlSize" icon="el-icon-folder-checked" :disabled="!canOperate(caseInfo)" @click="$emit('archive', caseInfo)">结案申请</el-button>
           <el-button v-hasPermi="['matter:document:add']" :size="controlSize" icon="el-icon-upload" :disabled="!canOperate(caseInfo)" @click="$emit('document', caseInfo)">文档资料</el-button>
         </div>

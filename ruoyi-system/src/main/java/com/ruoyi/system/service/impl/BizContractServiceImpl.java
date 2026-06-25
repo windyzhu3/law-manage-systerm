@@ -463,6 +463,12 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     @Transactional
     public int confirmFeePlan(Long planId, String receivedAmount) {
+        return confirmFeePlan(planId, receivedAmount, null);
+    }
+
+    @Override
+    @Transactional
+    public int confirmFeePlan(Long planId, String receivedAmount, String remark) {
         Map<String, Object> plan = feePlanInScope(planId);
         requireFeeCollectableContractStatus(plan.get("contractStatus"));
         String currentConfirmStatus = String.valueOf(plan.get("confirm_status"));
@@ -491,12 +497,16 @@ public class BizContractServiceImpl implements IBizContractService
         update.put("expectedInvoiceStatus", plan.get("invoice_status"));
         update.put("expectedContractStatus", plan.get("contractStatus"));
         update.put("updateBy", SecurityUtils.getUsername());
+        String cleanRemark = StringUtils.isEmpty(remark) ? null : remark.trim();
+        if (!StringUtils.isEmpty(cleanRemark)) {
+            update.put("remark", cleanRemark);
+        }
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
         String actionText = totalReceivedAmount.compareTo(receivableAmount) >= 0
             ? (RECEIVE_CONFIRMED.equals(currentConfirmStatus) ? "补齐收款" : "确认收款")
             : "部分收款";
-        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", actionText + ": 第 " + plan.get("period_no") + " 期，本次实收 " + amount + "，累计实收 " + totalReceivedAmount);
+        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", appendRemark(actionText + ": 第 " + plan.get("period_no") + " 期，本次实收 " + amount + "，累计实收 " + totalReceivedAmount, cleanRemark));
         return rows;
     }
     @Override
@@ -524,6 +534,12 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     @Transactional
     public int invoiceFeePlan(Long planId, String invoiceStatus) {
+        return invoiceFeePlan(planId, invoiceStatus, null);
+    }
+
+    @Override
+    @Transactional
+    public int invoiceFeePlan(Long planId, String invoiceStatus, String remark) {
         Map<String, Object> plan = feePlanInScope(planId);
         requireFeeCollectableContractStatus(plan.get("contractStatus"));
         if (!RECEIVE_CONFIRMED.equals(String.valueOf(plan.get("confirm_status")))) {
@@ -553,10 +569,14 @@ public class BizContractServiceImpl implements IBizContractService
         update.put("expectedInvoiceStatus", plan.get("invoice_status"));
         update.put("expectedContractStatus", plan.get("contractStatus"));
         update.put("updateBy", SecurityUtils.getUsername());
+        String cleanRemark = StringUtils.isEmpty(remark) ? null : remark.trim();
+        if (!StringUtils.isEmpty(cleanRemark)) {
+            update.put("remark", cleanRemark);
+        }
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
         String content = INVOICE_PARTIAL.equals(invoiceStatus) ? "部分开票: 第 " + plan.get("period_no") + " 期" : (INVOICE_PARTIAL.equals(currentInvoiceStatus) ? "补齐开票: 第 " + plan.get("period_no") + " 期" : "已开票: 第 " + plan.get("period_no") + " 期");
-        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentInvoiceStatus, invoiceStatus, "fee_invoice", content);
+        insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentInvoiceStatus, invoiceStatus, "fee_invoice", appendRemark(content, cleanRemark));
         return rows;
     }
     @Override public List<Map<String, Object>> selectAttachments(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectAttachments(params); }
@@ -640,6 +660,11 @@ public class BizContractServiceImpl implements IBizContractService
     private String feeContent(String action, Map<String, Object> plan)
     {
         return action + ": 第 " + plan.get("periodNo") + " 期，应收 " + plan.get("receivableAmount");
+    }
+
+    private String appendRemark(String content, String remark)
+    {
+        return StringUtils.isEmpty(remark) ? content : content + "；处理备注：" + remark;
     }
 
     private String nextContractNo()

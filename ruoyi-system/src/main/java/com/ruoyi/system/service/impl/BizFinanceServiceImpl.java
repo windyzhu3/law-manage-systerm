@@ -112,7 +112,7 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     {
         Long planId = requiredLong(body, "planId", "请选择收费计划");
         String amount = requiredText(body, "receivedAmount", "请输入本次回款金额");
-        return contractService.confirmFeePlan(planId, amount);
+        return contractService.confirmFeePlan(planId, amount, optionalText(body, "reason"));
     }
 
     @Override
@@ -128,7 +128,7 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     {
         Long planId = requiredLong(body, "planId", "请选择收费计划");
         String invoiceStatus = requiredText(body, "invoiceStatus", "请选择开票状态");
-        return contractService.invoiceFeePlan(planId, invoiceStatus);
+        return contractService.invoiceFeePlan(planId, invoiceStatus, optionalText(body, "reason"));
     }
 
     @Override
@@ -185,5 +185,12 @@ public class BizFinanceServiceImpl implements IBizFinanceService
             throw new ServiceException(message);
         }
         return text;
+    }
+
+    private String optionalText(Map<String, Object> source, String key)
+    {
+        Object value = source == null ? null : source.get(key);
+        String text = value == null ? null : String.valueOf(value).trim();
+        return StringUtils.isEmpty(text) || "null".equalsIgnoreCase(text) ? null : text;
     }
 }
