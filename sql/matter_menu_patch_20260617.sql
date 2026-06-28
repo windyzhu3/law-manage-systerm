@@ -30,7 +30,7 @@ insert into sys_menu(menu_name,parent_id,order_num,path,component,query,route_na
 select item.menu_name,@matter_menu_id,item.order_num,item.path,'matter/index',item.query,item.route_name,1,0,'C','0','0',item.perms,item.icon,'admin',sysdate(),item.menu_name
 from (
  select '案件列表' menu_name,1 order_num,'list' path,'{"module":"list"}' query,'MatterList' route_name,'matter:list' perms,'list' icon union all
- select '我的案件',2,'mine','{"module":"mine"}','MatterMine','matter:list','user' union all
+ select '我的案件',2,'mine','{"module":"mine"}','MatterMine','matter:mine:list','user' union all
  select '进度记录',3,'progress','{"module":"progress"}','MatterProgress','matter:progress:list','time' union all
  select '关键节点',4,'node','{"module":"node"}','MatterNode','matter:node:list','date' union all
  select '费用管理',5,'expense','{"module":"expense"}','MatterExpense','matter:expense:list','money' union all
@@ -44,7 +44,7 @@ where @matter_menu_id is not null
 update sys_menu m
 join (
  select '案件列表' menu_name,1 order_num,'list' path,'{"module":"list"}' query,'MatterList' route_name,'matter:list' perms,'list' icon union all
- select '我的案件',2,'mine','{"module":"mine"}','MatterMine','matter:list','user' union all
+ select '我的案件',2,'mine','{"module":"mine"}','MatterMine','matter:mine:list','user' union all
  select '进度记录',3,'progress','{"module":"progress"}','MatterProgress','matter:progress:list','time' union all
  select '关键节点',4,'node','{"module":"node"}','MatterNode','matter:node:list','date' union all
  select '费用管理',5,'expense','{"module":"expense"}','MatterExpense','matter:expense:list','money' union all
@@ -76,6 +76,7 @@ select item.menu_name, m.menu_id, item.order_num, '#', '', '', '', 1, 0, 'F', '0
 from sys_menu m
 join (
  select '案件查询' menu_name,'matter:list' parent_perm,1 order_num,'matter:query' perms union all
+ select '我的案件查询','matter:mine:list',1,'matter:mine:query' union all
  select '新增案件','matter:list',2,'matter:add' union all
  select '编辑案件','matter:list',3,'matter:edit' union all
  select '导入案件','matter:list',4,'matter:import' union all
@@ -102,6 +103,7 @@ where @matter_menu_id is not null
 update sys_menu btn
 join (
  select '案件查询' menu_name,'matter:list' parent_perm,1 order_num,'matter:query' perms union all
+ select '我的案件查询','matter:mine:list',1,'matter:mine:query' union all
  select '新增案件','matter:list',2,'matter:add' union all
  select '编辑案件','matter:list',3,'matter:edit' union all
  select '导入案件','matter:list',4,'matter:import' union all
@@ -165,9 +167,9 @@ from sys_menu m
 where @lawyer_role_id is not null
   and (
     m.menu_id=@matter_menu_id
-    or (m.parent_id=@matter_menu_id and m.path in ('list','mine','progress','node','expense','document','archive','status'))
+    or (m.parent_id=@matter_menu_id and m.path in ('mine','progress','node','expense','document','archive','status'))
     or m.perms in (
-      'matter:list','matter:query',
+      'matter:mine:list','matter:mine:query',
       'matter:progress:list','matter:progress:add','matter:progress:edit','matter:progress:remove',
       'matter:node:list','matter:node:add','matter:node:edit','matter:node:remove','matter:node:remind',
       'matter:expense:list','matter:expense:add','matter:expense:edit','matter:expense:remove',
@@ -184,9 +186,9 @@ from sys_menu m
 where @intern_lawyer_role_id is not null
   and (
     m.menu_id=@matter_menu_id
-    or (m.parent_id=@matter_menu_id and m.path in ('list','mine','progress','node','document','status'))
+    or (m.parent_id=@matter_menu_id and m.path in ('mine','progress','node','document','status'))
     or m.perms in (
-      'matter:list','matter:query',
+      'matter:mine:list','matter:mine:query',
       'matter:progress:list','matter:progress:add',
       'matter:node:list',
       'matter:document:list',

@@ -27,14 +27,14 @@ public class BizMatterController extends BaseController
     @Autowired
     private IBizMatterService matterService;
 
-    @PreAuthorize("@ss.hasAnyPermi('matter:list,matter:query')")
+    @PreAuthorize("@ss.hasAnyPermi('matter:list,matter:query,matter:mine:list,matter:mine:query')")
     @GetMapping("/dashboard")
     public AjaxResult dashboard()
     {
         return success(matterService.selectDashboard());
     }
 
-    @PreAuthorize("@ss.hasAnyPermi('matter:list,matter:query')")
+    @PreAuthorize("@ss.hasAnyPermi('matter:list,matter:query,matter:mine:list,matter:mine:query')")
     @GetMapping("/list")
     public TableDataInfo list(@RequestParam Map<String, Object> params)
     {
@@ -42,7 +42,7 @@ public class BizMatterController extends BaseController
         return getDataTable(matterService.selectMatterList(params));
     }
 
-    @PreAuthorize("@ss.hasPermi('matter:query')")
+    @PreAuthorize("@ss.hasAnyPermi('matter:query,matter:mine:query')")
     @GetMapping("/{caseId}")
     public AjaxResult getInfo(@PathVariable Long caseId)
     {

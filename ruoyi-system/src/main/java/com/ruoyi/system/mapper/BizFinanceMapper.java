@@ -15,6 +15,14 @@ public interface BizFinanceMapper
 
     List<Map<String, Object>> selectReminders(Map<String, Object> params);
 
+    List<Map<String, Object>> selectFinanceFlow(Map<String, Object> params);
+
+    List<Map<String, Object>> selectInvoiceExpenseTrend(Map<String, Object> params);
+
+    List<Map<String, Object>> selectInvoiceActivities(Map<String, Object> params);
+
+    List<Map<String, Object>> selectFinanceSummaryRows(Map<String, Object> params);
+
     List<Map<String, Object>> selectLeadFunnel(Map<String, Object> params);
 
     List<Map<String, Object>> selectLeadSourceConversion(Map<String, Object> params);

@@ -120,6 +120,13 @@ insert into sys_menu (menu_name, parent_id, order_num, path, component, query, r
 select item.menu_name, @lead_menu_id, item.order_num, '#', '', '', '', 1, 0, 'F', '0', '0', item.perms, '#', 'admin', sysdate(), '', null, item.menu_name
 from (
   select '线索查询' menu_name, 101 order_num, 'lead:query' perms union all
+  select '我的线索查询', 101, 'lead:mine:query' union all
+  select '我的线索跟进', 102, 'lead:mine:followup' union all
+  select '我的线索入公海', 103, 'lead:mine:pool:move' union all
+  select '我的线索转化', 104, 'lead:mine:convert' union all
+  select '公海线索查询', 101, 'lead:pool:query' union all
+  select '回收站线索查询', 101, 'lead:recycle:query' union all
+  select '线索配置选项', 101, 'lead:setting:options' union all
   select '线索新增', 102, 'lead:add' union all
   select '线索编辑', 103, 'lead:edit' union all
   select '线索删除', 104, 'lead:remove' union all
@@ -141,12 +148,20 @@ where not exists (select 1 from sys_menu where perms = item.perms);
 -- 校正按钮权限挂载点：按钮应挂在对应页面菜单下，而不是线索管理目录下。
 set @lead_dashboard_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'dashboard' limit 1);
 set @lead_all_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'all' limit 1);
+set @lead_mine_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'mine' limit 1);
 set @lead_pool_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'pool' limit 1);
 set @lead_followup_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'followup' limit 1);
 set @lead_recycle_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'recycle' limit 1);
 set @lead_settings_id = (select menu_id from sys_menu where parent_id = @lead_menu_id and path = 'settings' limit 1);
 
 update sys_menu set parent_id = @lead_all_id, order_num = 101 where perms = 'lead:query';
+update sys_menu set parent_id = @lead_mine_id, order_num = 101 where perms = 'lead:mine:query';
+update sys_menu set parent_id = @lead_mine_id, order_num = 102 where perms = 'lead:mine:followup';
+update sys_menu set parent_id = @lead_mine_id, order_num = 103 where perms = 'lead:mine:pool:move';
+update sys_menu set parent_id = @lead_mine_id, order_num = 104 where perms = 'lead:mine:convert';
+update sys_menu set parent_id = @lead_pool_id, order_num = 101 where perms = 'lead:pool:query';
+update sys_menu set parent_id = @lead_recycle_id, order_num = 101 where perms = 'lead:recycle:query';
+update sys_menu set parent_id = @lead_dashboard_id, order_num = 101 where perms = 'lead:setting:options';
 update sys_menu set parent_id = @lead_all_id, order_num = 102 where perms = 'lead:add';
 update sys_menu set parent_id = @lead_all_id, order_num = 103 where perms = 'lead:edit';
 update sys_menu set parent_id = @lead_all_id, order_num = 104 where perms = 'lead:remove';
@@ -162,6 +177,20 @@ update sys_menu set parent_id = @lead_recycle_id, order_num = 102 where perms = 
 update sys_menu set parent_id = @lead_settings_id, order_num = 101 where perms = 'lead:settings:add';
 update sys_menu set parent_id = @lead_settings_id, order_num = 102 where perms = 'lead:settings:edit';
 update sys_menu set parent_id = @lead_settings_id, order_num = 103 where perms = 'lead:settings:remove';
+
+set @sales_role_id = (select role_id from sys_role where role_key='sales' and del_flag='0' limit 1);
+insert into sys_role_menu(role_id, menu_id)
+select @sales_role_id, m.menu_id
+from sys_menu m
+where @sales_role_id is not null
+  and m.perms in (
+    'lead:dashboard:view','lead:mine:list','lead:pool:list','lead:followup:list','lead:recycle:list',
+    'lead:mine:query','lead:mine:followup','lead:mine:pool:move','lead:mine:convert',
+    'lead:pool:query','lead:recycle:query','lead:setting:options',
+    'lead:pool:claim','lead:followup:add','lead:followup:edit','lead:followup:remove',
+    'lead:recycle:restore','lead:recycle:purge'
+  )
+  and not exists(select 1 from sys_role_menu rm where rm.role_id=@sales_role_id and rm.menu_id=m.menu_id);
 
 -- 线索模块字典。前端展示字段通过字典管理维护，避免在页面内写死枚举文本。
 insert into sys_dict_type (dict_name, dict_type, status, create_by, create_time, remark)

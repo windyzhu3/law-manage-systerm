@@ -114,11 +114,13 @@
           <el-table-column label="平均响应" width="100" align="center"><template slot-scope="{ row }">{{ row.avgResponseHours || 0 }}h</template></el-table-column>
           <el-table-column label="匹配倾向" width="105" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_lawyer_match_level" :value="matchLevel(row)" /></template></el-table-column>
           <el-table-column label="状态" width="100" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_lawyer_load_status" :value="loadStatus(row.loadRate)" /></template></el-table-column>
-          <el-table-column label="操作" width="135" align="center" class-name="small-padding fixed-width">
+          <el-table-column label="操作" width="180" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
             <template slot-scope="{ row }">
-              <el-button :size="controlSize" type="text" @click="openLawyerDetail(row)">查看详情</el-button>
-              <el-button v-hasPermi="['case:lawyer:config']" :size="controlSize" type="text" @click="openProfileForm(row)">编辑档案</el-button>
-              <el-button v-hasPermi="['case:pending:assign']" :size="controlSize" type="text" @click="assignRecommended(row)">分配</el-button>
+              <span class="action-buttons">
+                <el-button :size="controlSize" type="text" @click="openLawyerDetail(row)">查看详情</el-button>
+                <el-button v-hasPermi="['case:lawyer:config']" :size="controlSize" type="text" @click="openProfileForm(row)">编辑档案</el-button>
+                <el-button v-hasPermi="['case:pending:assign']" :size="controlSize" type="text" @click="assignRecommended(row)">分配</el-button>
+              </span>
             </template>
           </el-table-column>
         </el-table>
@@ -330,8 +332,10 @@
         <section class="lawyer-reference">
           <header><b>人员参考</b><el-button :size="controlSize" type="text" @click="loadLawyers">换一批</el-button></header>
           <article v-for="item in mainLawyerOptions.slice(0, 5)" :key="item.userId" :class="{ active: sameValue(assignForm.mainLawyerId, item.userId) }" @click="selectAssignLawyer(item)">
-            <span class="owner-cell"><i>{{ avatar(item.lawyerName) }}</i>{{ item.lawyerName }}</span>
-            <dict-tag :options="dict.type.law_lawyer_role" :value="item.lawyerRole" />
+            <div class="reference-lawyer-head">
+              <span class="owner-cell"><i>{{ avatar(item.lawyerName) }}</i>{{ item.lawyerName }}</span>
+              <dict-tag :options="dict.type.law_lawyer_role" :value="item.lawyerRole" />
+            </div>
             <span class="tag-pills compact"><i v-for="specialty in specialtyList(item.specialties)" :key="specialty">{{ dictLabel('law_case_type', specialty) }}</i></span>
             <el-progress :percentage="Number(item.loadRate || 0)" :color="loadColor(item.loadRate)" />
             <small>在办 {{ item.activeCases || 0 }} · 本月分案 {{ item.monthAssigned || 0 }} · {{ dictLabel('law_lawyer_match_level', matchLevel(item)) }}</small>
@@ -364,8 +368,7 @@
         <section class="drawer-card">
           <div class="profile-toolbar">
             <div class="profile-search">
-              <el-input v-model="profileQuery.keyword" :size="controlSize" prefix-icon="el-icon-search" placeholder="搜索律师、账号、部门或专业方向" clearable @clear="loadProfiles" @keyup.enter.native="loadProfiles" />
-              <el-button :size="controlSize" type="primary" icon="el-icon-search" @click="loadProfiles">搜索</el-button>
+              <el-input v-model="profileQuery.keyword" :size="controlSize" prefix-icon="el-icon-search" placeholder="搜索姓名、账号、部门或专业方向" clearable @clear="loadProfiles" @keyup.enter.native="loadProfiles" />
             </div>
             <div class="profile-quick-tabs">
               <button :class="{ active: !profileQuery.assignEnabled }" type="button" @click="setProfileAssignable('')">全部</button>
@@ -385,11 +388,12 @@
               <el-button slot="reference" :size="controlSize" plain icon="el-icon-s-operation">高级筛选</el-button>
             </el-popover>
           </div>
-          <el-table v-loading="profileLoading" :data="profileList" :size="controlSize">
+          <el-table v-loading="profileLoading" :data="profileList" :size="controlSize" class="biz-config-table">
             <el-table-column label="律师" min-width="130"><template slot-scope="{ row }"><span class="owner-cell"><i>{{ avatar(row.nickName) }}</i>{{ row.nickName }}</span><span class="sub-text">{{ row.userName }}</span></template></el-table-column>
             <el-table-column label="部门" prop="deptName" min-width="120" show-overflow-tooltip />
-            <el-table-column label="业务角色" width="100" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_lawyer_role" :value="row.lawyerRole" /></template></el-table-column>
-            <el-table-column label="专业方向" min-width="150"><template slot-scope="{ row }"><span class="tag-pills"><i v-for="item in specialtyList(row.specialties)" :key="item">{{ dictLabel('law_case_type', item) }}</i></span></template></el-table-column>
+            <el-table-column label="配置状态" width="90" align="center"><template slot-scope="{ row }"><span :class="['config-status', row.profileId ? 'is-ready' : 'is-empty']">{{ row.profileId ? '已配置' : '未配置' }}</span></template></el-table-column>
+            <el-table-column label="业务角色" width="100" align="center"><template slot-scope="{ row }"><dict-tag v-if="row.lawyerRole" :options="dict.type.law_lawyer_role" :value="row.lawyerRole" /><span v-else class="muted-text">未设置</span></template></el-table-column>
+            <el-table-column label="专业方向" min-width="150"><template slot-scope="{ row }"><span v-if="row.specialties" class="tag-pills"><i v-for="item in specialtyList(row.specialties)" :key="item">{{ dictLabel('law_case_type', item) }}</i></span><span v-else class="muted-text">未设置</span></template></el-table-column>
             <el-table-column label="负载上限" prop="loadLimit" width="90" align="center" />
             <el-table-column label="平均响应" width="90" align="center"><template slot-scope="{ row }">{{ row.avgResponseHours || 0 }}h</template></el-table-column>
             <el-table-column label="可分案" width="90" align="center">
@@ -397,8 +401,8 @@
                 <el-switch v-model="row.assignEnabled" active-value="Y" inactive-value="N" @change="changeProfileStatus(row)" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="90" align="center" class-name="small-padding fixed-width">
-              <template slot-scope="{ row }"><el-button :size="controlSize" type="text" @click="openProfileForm(row)">编辑</el-button></template>
+            <el-table-column label="操作" width="100" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
+              <template slot-scope="{ row }"><span class="action-buttons"><el-button :size="controlSize" type="text" @click="openProfileForm(row)">编辑</el-button></span></template>
             </el-table-column>
           </el-table>
           <pagination v-show="profileTotal > 0" :total="profileTotal" :page.sync="profileQuery.pageNum" :limit.sync="profileQuery.pageSize" @pagination="loadProfiles" />
@@ -431,7 +435,7 @@ import BizPageHeader from '@/views/business/components/BizPageHeader'
 import BizTableCard from '@/views/business/components/BizTableCard'
 import CaseDetailDrawer from './components/CaseDetailDrawer'
 import CaseFlowDrawer from './components/CaseFlowDrawer'
-import { getCaseDashboard, listCaseLawyer, listCase, getCase, assignCase, batchAssignCase, listAssignment, listLawyerLoad, listLawyerSpecialty, updateLawyerProfile, updateLawyerProfileStatus, listTransfer, requestTransfer, approveTransfer, listConfirm, handleConfirm, listCaseStatus } from '@/api/case'
+import { getCaseDashboard, listCaseLawyer, listCase, getCase, assignCase, batchAssignCase, listAssignment, listLawyerLoad, listLawyerSpecialty, listLawyerProfile, updateLawyerProfile, updateLawyerProfileStatus, listTransfer, requestTransfer, approveTransfer, listConfirm, handleConfirm, listCaseStatus } from '@/api/case'
 
 export default {
   name: 'CaseCenter',
@@ -718,9 +722,10 @@ export default {
     },
     loadProfiles() {
       this.profileLoading = true
-      this.$nextTick(() => {
-        this.profileList = this.filterProfileFallback()
-        this.profileTotal = this.profileList.length
+      listLawyerProfile(this.profileQuery).then(res => {
+        this.profileList = res.rows || []
+        this.profileTotal = res.total || 0
+      }).finally(() => {
         this.profileLoading = false
       })
     },
@@ -734,10 +739,11 @@ export default {
     setProfileForm(data) {
       this.profileForm = {
         ...data,
-        specialties: this.specialtyList(data.specialties || 'business'),
+        lawyerRole: data.lawyerRole || 'lawyer',
+        specialties: this.specialtyList(data.specialties),
         loadLimit: Number(data.loadLimit || 100),
         avgResponseHours: Number(data.avgResponseHours || 4),
-        assignEnabled: data.assignEnabled || 'Y'
+        assignEnabled: data.assignEnabled || 'N'
       }
     },
     filterProfileFallback() {
@@ -773,6 +779,12 @@ export default {
       })
     },
     changeProfileStatus(row) {
+      if (row.assignEnabled === 'Y' && !row.profileId) {
+        row.assignEnabled = 'N'
+        this.$modal.msgWarning('请先编辑并保存律师档案后再启用分案')
+        this.openProfileForm({ ...row, assignEnabled: 'Y' })
+        return
+      }
       updateLawyerProfileStatus({ userId: row.userId, assignEnabled: row.assignEnabled }).then(() => {
         this.$modal.msgSuccess(row.assignEnabled === 'Y' ? '已启用分案' : '已禁用分案')
         this.loadProfiles()
@@ -1019,6 +1031,32 @@ export default {
   color: #4b5d78;
   background: #f1f5fb;
   font-style: normal;
+}
+
+.muted-text {
+  color: #9aa8bd;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.config-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: var(--biz-font-mini, 11px);
+  font-weight: 700;
+}
+
+.config-status.is-ready {
+  color: #059669;
+  background: #ecfdf5;
+}
+
+.config-status.is-empty {
+  color: #64748b;
+  background: #f1f5f9;
 }
 
 .drawer-title {
@@ -1403,7 +1441,34 @@ export default {
   background: #f5f8ff;
 }
 
+.reference-lawyer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.reference-lawyer-head .owner-cell {
+  min-width: 0;
+  font-weight: 700;
+}
+
+.reference-lawyer-head ::v-deep .el-tag {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.lawyer-reference .tag-pills.compact {
+  margin-bottom: 8px;
+}
+
+.lawyer-reference .el-progress {
+  margin-bottom: 6px;
+}
+
 .lawyer-reference small {
+  display: block;
   color: #6b7a90;
 }
 
@@ -1438,5 +1503,28 @@ export default {
 .profile-filter-popover {
   border-radius: 14px;
   box-shadow: 0 18px 42px rgba(36, 73, 135, .16);
+}
+
+.case-profile-drawer {
+  .el-drawer__header {
+    margin-bottom: 14px;
+  }
+
+  .el-table {
+    font-size: var(--biz-font-small, 12px);
+  }
+
+  .el-table th,
+  .el-table td {
+    padding: 8px 0;
+  }
+
+  .el-table .cell {
+    line-height: 1.45;
+  }
+
+  .el-switch {
+    vertical-align: middle;
+  }
 }
 </style>

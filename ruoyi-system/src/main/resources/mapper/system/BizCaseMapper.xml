@@ -158,7 +158,7 @@
                coalesce(p.lawyer_role,'lawyer') lawyerRole,
                coalesce(p.specialties,'business') specialties,
                coalesce(p.load_limit,100) loadLimit,
-               coalesce(p.assign_enabled,'Y') assignEnabled,
+               p.assign_enabled assignEnabled,
                coalesce(sum(case when c.case_status in ('processing','transfering') then c.estimated_workload else 0 end),0) currentLoad,
                round(coalesce(sum(case when c.case_status in ('processing','transfering') then c.estimated_workload else 0 end),0) / coalesce(p.load_limit,100) * 100,0) loadRate,
                count(case when c.case_status in ('processing','transfering') then 1 end) activeCases,
@@ -166,9 +166,9 @@
                coalesce(p.avg_response_hours,4.0) avgResponseHours
         from sys_user u
         left join sys_dept d on d.dept_id=u.dept_id
-        left join biz_lawyer_profile p on p.user_id=u.user_id
+        inner join biz_lawyer_profile p on p.user_id=u.user_id
         left join biz_case c on c.main_lawyer_id=u.user_id and c.del_flag='0'
-        where u.del_flag='0' and u.status='0' and coalesce(p.assign_enabled,'Y')='Y'
+        where u.del_flag='0' and u.status='0' and p.assign_enabled='Y'
         <if test="keyword != null and keyword != ''">and (u.nick_name like concat('%',#{keyword},'%') or d.dept_name like concat('%',#{keyword},'%') or p.specialties like concat('%',#{keyword},'%'))</if>
         <if test="lawyerRole != null and lawyerRole != ''">and p.lawyer_role=#{lawyerRole}</if>
         <if test="specialty != null and specialty != ''">and find_in_set(#{specialty}, p.specialties)</if>
@@ -177,10 +177,10 @@
     </select>
 
     <select id="selectLawyerSpecialtyStats" resultType="java.util.Map">
-        select coalesce(p.specialties,'business') itemName, count(*) itemValue
-        from sys_user u left join biz_lawyer_profile p on p.user_id=u.user_id
-        where u.del_flag='0' and u.status='0' and coalesce(p.assign_enabled,'Y')='Y'
-        group by coalesce(p.specialties,'business')
+        select p.specialties itemName, count(*) itemValue
+        from sys_user u inner join biz_lawyer_profile p on p.user_id=u.user_id
+        where u.del_flag='0' and u.status='0' and p.assign_enabled='Y'
+        group by p.specialties
     </select>
 
     <select id="selectLawyerProfiles" parameterType="map" resultType="java.util.Map">
@@ -190,11 +190,11 @@
                u.nick_name nickName,
                u.nick_name lawyerName,
                d.dept_name deptName,
-               coalesce(p.lawyer_role,'lawyer') lawyerRole,
-               coalesce(p.specialties,'business') specialties,
+               p.lawyer_role lawyerRole,
+               p.specialties specialties,
                coalesce(p.load_limit,100) loadLimit,
                coalesce(p.avg_response_hours,4.0) avgResponseHours,
-               coalesce(p.assign_enabled,'Y') assignEnabled,
+               coalesce(p.assign_enabled,'N') assignEnabled,
                p.remark,
                p.create_time createTime,
                p.update_time updateTime
@@ -203,10 +203,10 @@
         left join biz_lawyer_profile p on p.user_id=u.user_id
         where u.del_flag='0' and u.status='0'
         <if test="keyword != null and keyword != ''">and (u.user_name like concat('%',#{keyword},'%') or u.nick_name like concat('%',#{keyword},'%') or d.dept_name like concat('%',#{keyword},'%') or p.specialties like concat('%',#{keyword},'%'))</if>
-        <if test="lawyerRole != null and lawyerRole != ''">and coalesce(p.lawyer_role,'lawyer')=#{lawyerRole}</if>
-        <if test="specialty != null and specialty != ''">and find_in_set(#{specialty}, coalesce(p.specialties,'business'))</if>
-        <if test="assignEnabled != null and assignEnabled != ''">and coalesce(p.assign_enabled,'Y')=#{assignEnabled}</if>
-        order by coalesce(p.assign_enabled,'Y') desc, u.dept_id asc, u.user_id asc
+        <if test="lawyerRole != null and lawyerRole != ''">and p.lawyer_role=#{lawyerRole}</if>
+        <if test="specialty != null and specialty != ''">and find_in_set(#{specialty}, p.specialties)</if>
+        <if test="assignEnabled != null and assignEnabled != ''">and coalesce(p.assign_enabled,'N')=#{assignEnabled}</if>
+        order by coalesce(p.assign_enabled,'N') desc, case when p.profile_id is null then 1 else 0 end, u.dept_id asc, u.user_id asc
     </select>
 
     <select id="selectLawyerProfileByUserId" resultType="java.util.Map">
@@ -216,11 +216,11 @@
                u.nick_name nickName,
                u.nick_name lawyerName,
                d.dept_name deptName,
-               coalesce(p.lawyer_role,'lawyer') lawyerRole,
-               coalesce(p.specialties,'business') specialties,
+               p.lawyer_role lawyerRole,
+               p.specialties specialties,
                coalesce(p.load_limit,100) loadLimit,
                coalesce(p.avg_response_hours,4.0) avgResponseHours,
-               coalesce(p.assign_enabled,'Y') assignEnabled,
+               coalesce(p.assign_enabled,'N') assignEnabled,
                p.remark,
                p.create_time createTime,
                p.update_time updateTime

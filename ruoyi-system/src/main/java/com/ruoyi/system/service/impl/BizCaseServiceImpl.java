@@ -138,7 +138,7 @@ public class BizCaseServiceImpl implements IBizCaseService
                 assertDictValue("law_case_type", specialty.trim(), "专业方向不合法");
             }
         }
-        String assignEnabled = safeText(profile.get("assignEnabled"), ASSIGN_ENABLED);
+        String assignEnabled = safeText(profile.get("assignEnabled"), ASSIGN_DISABLED);
         if (!ASSIGN_ENABLED.equals(assignEnabled) && !ASSIGN_DISABLED.equals(assignEnabled))
         {
             throw new ServiceException("可分案状态不合法");
@@ -182,14 +182,11 @@ public class BizCaseServiceImpl implements IBizCaseService
         Object profileId = existed.get("profileId");
         if (profileId == null || StringUtils.isEmpty(String.valueOf(profileId)))
         {
-            existed.put("assignEnabled", assignEnabled);
-            existed.put("lawyerRole", safeText(existed.get("lawyerRole"), LAWYER_ROLE_DEFAULT));
-            existed.put("specialties", safeText(existed.get("specialties"), "business"));
-            existed.put("loadLimit", defaultNumber(existed.get("loadLimit"), 100));
-            existed.put("avgResponseHours", defaultNumber(existed.get("avgResponseHours"), 4));
-            existed.put("createBy", SecurityUtils.getUsername());
-            existed.put("updateBy", SecurityUtils.getUsername());
-            return caseMapper.insertLawyerProfile(existed);
+            if (ASSIGN_ENABLED.equals(assignEnabled))
+            {
+                throw new ServiceException("请先编辑并保存律师档案后再启用分案");
+            }
+            return 1;
         }
         profile.put("updateBy", SecurityUtils.getUsername());
         return caseMapper.updateLawyerProfileStatus(profile);
@@ -517,7 +514,7 @@ public class BizCaseServiceImpl implements IBizCaseService
         {
             return;
         }
-        if (caseMapper.countCaseInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), CASE_MODULE_PERMISSIONS) == 0)
+        if (caseMapper.countCaseInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), true, CASE_MODULE_PERMISSIONS) == 0)
         {
             throw new ServiceException("无权访问该案件");
         }
@@ -633,8 +630,12 @@ public class BizCaseServiceImpl implements IBizCaseService
     {
         SysUser user = assertActiveLawyerUser(userId);
         Map<String, Object> profile = caseMapper.selectLawyerProfileByUserId(userId);
-        String assignEnabled = profile == null ? ASSIGN_ENABLED : safeText(profile.get("assignEnabled"), ASSIGN_ENABLED);
-        String lawyerRole = profile == null ? LAWYER_ROLE_DEFAULT : safeText(profile.get("lawyerRole"), LAWYER_ROLE_DEFAULT);
+        if (profile == null || profile.get("profileId") == null || StringUtils.isEmpty(String.valueOf(profile.get("profileId"))))
+        {
+            throw new ServiceException("请先维护律师档案");
+        }
+        String assignEnabled = safeText(profile.get("assignEnabled"), ASSIGN_DISABLED);
+        String lawyerRole = safeText(profile.get("lawyerRole"), LAWYER_ROLE_DEFAULT);
         if (!ASSIGN_ENABLED.equals(assignEnabled))
         {
             throw new ServiceException("律师已禁用分案");
@@ -661,7 +662,11 @@ public class BizCaseServiceImpl implements IBizCaseService
         {
             SysUser user = assertActiveLawyerUser(userId);
             Map<String, Object> profile = caseMapper.selectLawyerProfileByUserId(userId);
-            String assignEnabled = profile == null ? ASSIGN_ENABLED : safeText(profile.get("assignEnabled"), ASSIGN_ENABLED);
+            if (profile == null || profile.get("profileId") == null || StringUtils.isEmpty(String.valueOf(profile.get("profileId"))))
+            {
+                throw new ServiceException("请先维护协办律师档案");
+            }
+            String assignEnabled = safeText(profile.get("assignEnabled"), ASSIGN_DISABLED);
             if (!ASSIGN_ENABLED.equals(assignEnabled))
             {
                 throw new ServiceException("协办律师已禁用分案");

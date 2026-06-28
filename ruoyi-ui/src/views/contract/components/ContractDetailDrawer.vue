@@ -10,23 +10,20 @@
         <div class="summary-main">
           <h3>{{ contract.contractName || '-' }}</h3>
           <p>{{ contract.contractNo || '待生成编号' }} · {{ contract.customerName || '-' }}</p>
-          <div class="summary-tags">
+          <div class="summary-tags summary-status">
             <dict-tag :options="dict.type.law_contract_audit_status" :value="auditStatusOf(contract)" />
             <dict-tag :options="dict.type.law_contract_sign_status" :value="signStatusOf(contract)" />
             <dict-tag :options="dict.type.law_contract_status" :value="contractStatusOf(contract)" />
           </div>
         </div>
-        <div class="summary-actions">
+        <div class="summary-actions managed-actions">
           <el-button v-hasPermi="['contract:edit']" :size="controlSize" type="primary" icon="el-icon-edit" :disabled="!canEdit" @click="$emit('edit', contract)">编辑</el-button>
           <el-button v-hasPermi="['contract:submit']" :size="controlSize" icon="el-icon-s-check" :disabled="!canSubmit" @click="$emit('submit', contract)">提交审批</el-button>
           <el-button v-hasPermi="['contract:approval:handle']" :size="controlSize" icon="el-icon-check" :disabled="!isAuditReviewing" @click="$emit('approval', contract)">审批</el-button>
           <el-button v-hasPermi="['contract:fee:add']" :size="controlSize" icon="el-icon-money" :disabled="!canEditResource" @click="$emit('fee', contract)">新增收费</el-button>
           <el-button v-hasPermi="['contract:attachment:add']" :size="controlSize" icon="el-icon-upload2" :disabled="!canEditResource" @click="$emit('attachment', contract)">上传附件</el-button>
           <el-button v-hasPermi="['contract:sign']" :size="controlSize" icon="el-icon-finished" :disabled="!canSign" @click="$emit('sign', contract)">{{ signActionText }}</el-button>
-          <el-button v-hasPermi="['contract:archive']" :size="controlSize" icon="el-icon-folder-checked" :disabled="!canArchive" @click="$emit('archive', contract)">归档</el-button>
-          <el-button v-hasPermi="['contract:void']" :size="controlSize" icon="el-icon-circle-close" :disabled="!canVoid" @click="$emit('void', contract)">作废</el-button>
-          <el-button v-hasPermi="['contract:terminate']" :size="controlSize" icon="el-icon-remove-outline" :disabled="!canTerminate" @click="$emit('terminate', contract)">终止</el-button>
-          <el-button v-hasPermi="['matter:list']" :size="controlSize" icon="el-icon-folder-opened" @click="$emit('matter', contract)">查看案件</el-button>
+          <el-button v-hasPermi="['matter:list', 'matter:mine:list']" :size="controlSize" icon="el-icon-folder-opened" @click="$emit('matter', contract)">查看案件</el-button>
         </div>
       </section>
 

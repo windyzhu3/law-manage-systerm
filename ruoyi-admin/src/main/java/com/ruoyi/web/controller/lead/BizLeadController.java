@@ -16,6 +16,8 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
@@ -45,7 +47,7 @@ public class BizLeadController extends BaseController
         return getDataTable(leadService.selectLeadList(lead));
     }
 
-    @PreAuthorize("@ss.hasPermi('lead:query')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:query,lead:mine:query,lead:pool:query,lead:recycle:query')")
     @GetMapping("/{leadId}")
     public AjaxResult getInfo(@PathVariable Long leadId) { return success(leadService.selectLeadById(leadId)); }
 
@@ -85,7 +87,7 @@ public class BizLeadController extends BaseController
         return toAjax(leadService.assignLead(leadId, ownerId, (String) body.get("reason")));
     }
 
-    @PreAuthorize("@ss.hasPermi('lead:pool:move')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:pool:move,lead:mine:pool:move')")
     @PostMapping("/pool")
     public AjaxResult pool(@RequestBody Map<String, Object> body)
     {
@@ -96,7 +98,7 @@ public class BizLeadController extends BaseController
     @PostMapping("/claim/{leadId}")
     public AjaxResult claim(@PathVariable Long leadId) { return toAjax(leadService.claimLead(leadId)); }
 
-    @PreAuthorize("@ss.hasPermi('lead:convert')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:convert,lead:mine:convert')")
     @PostMapping("/convert/{leadId}")
     public AjaxResult convert(@PathVariable Long leadId) { return toAjax(leadService.convertLead(leadId)); }
 
@@ -108,7 +110,7 @@ public class BizLeadController extends BaseController
         return getDataTable(leadService.selectFollowupList(followup));
     }
 
-    @PreAuthorize("@ss.hasPermi('lead:followup:add')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:followup:add,lead:mine:followup')")
     @PostMapping("/followup")
     public AjaxResult addFollowup(@RequestBody BizLeadFollowup followup) { return toAjax(leadService.insertFollowup(followup)); }
 
@@ -120,9 +122,22 @@ public class BizLeadController extends BaseController
     @DeleteMapping("/followup/{followupId}")
     public AjaxResult removeFollowup(@PathVariable Long followupId) { return toAjax(leadService.deleteFollowup(followupId)); }
 
-    @PreAuthorize("@ss.hasAnyPermi('lead:query,lead:settings:list')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:query,lead:settings:list,lead:setting:options,lead:mine:query,lead:pool:query,lead:recycle:query,customer:query')")
     @GetMapping("/setting/list")
-    public AjaxResult settingList(BizLeadSetting setting) { return success(leadService.selectSettingList(setting)); }
+    public AjaxResult settingList(BizLeadSetting setting)
+    {
+        boolean hasLeadSettingPerm = SecurityUtils.hasPermi("lead:query")
+                || SecurityUtils.hasPermi("lead:settings:list")
+                || SecurityUtils.hasPermi("lead:setting:options")
+                || SecurityUtils.hasPermi("lead:mine:query")
+                || SecurityUtils.hasPermi("lead:pool:query")
+                || SecurityUtils.hasPermi("lead:recycle:query");
+        if (!hasLeadSettingPerm && !"source".equals(setting.getSettingType()))
+        {
+            throw new ServiceException("Customer permission can only access lead source options");
+        }
+        return success(leadService.selectSettingList(setting));
+    }
 
     @PreAuthorize("@ss.hasPermi('lead:settings:add')")
     @PostMapping("/setting")

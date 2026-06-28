@@ -42,6 +42,11 @@ public class BizFinanceServiceImpl implements IBizFinanceService
         data.put("aging", financeMapper.selectAgingStats(params));
         data.put("links", financeMapper.selectLinkStats(params));
         data.put("reminders", financeMapper.selectReminders(params));
+        data.put("flow", financeMapper.selectFinanceFlow(params));
+        data.put("receiveTrend", financeMapper.selectReceiveTrend(params));
+        data.put("invoiceExpenseTrend", financeMapper.selectInvoiceExpenseTrend(params));
+        data.put("invoiceActivities", financeMapper.selectInvoiceActivities(withLimit(params, 5, null)));
+        data.put("financeSummaryRows", financeMapper.selectFinanceSummaryRows(params));
         data.put("leadFunnel", financeMapper.selectLeadFunnel(params));
         data.put("leadSourceConversion", financeMapper.selectLeadSourceConversion(params));
         data.put("pendingPayments", financeMapper.selectPaymentList(withLimit(params, 5, "0")));
@@ -97,7 +102,7 @@ public class BizFinanceServiceImpl implements IBizFinanceService
     @Override
     public Map<String, Object> selectReports(Map<String, Object> params)
     {
-        Map<String, Object> scoped = scopeParams(params);
+        Map<String, Object> scoped = reportParams(params);
         Map<String, Object> data = new HashMap<>();
         data.put("cards", financeMapper.selectReportCards(scoped));
         data.put("trend", financeMapper.selectReceiveTrend(scoped));
@@ -108,6 +113,22 @@ public class BizFinanceServiceImpl implements IBizFinanceService
         data.put("leadFunnel", financeMapper.selectLeadFunnel(scoped));
         data.put("leadSourceConversion", financeMapper.selectLeadSourceConversion(scoped));
         return data;
+    }
+
+    private Map<String, Object> reportParams(Map<String, Object> params)
+    {
+        Map<String, Object> scoped = scopeParams(params);
+        // 财务报表返回的是聚合图表数据，不应继承列表分页参数，否则 PageHelper 会在固定 limit 后再次追加 LIMIT。
+        scoped.remove("pageNum");
+        scoped.remove("pageSize");
+        scoped.remove("orderByColumn");
+        scoped.remove("isAsc");
+        scoped.remove("reasonable");
+        scoped.remove("pageSizeZero");
+        scoped.remove("count");
+        scoped.remove("orderBy");
+        scoped.remove("params");
+        return scoped;
     }
 
     @Override

@@ -500,6 +500,9 @@ export default {
     canReadFollowup() {
       return this.$auth.hasPermi('customer:followup:list')
     },
+    canReadTag() {
+      return this.$auth.hasPermiOr(['customer:tag:list', 'customer:tag:query', 'customer:tag:assign'])
+    },
     canCreateContract() {
       return this.$auth.hasPermi('contract:add') && this.canReadContract
     },
@@ -525,9 +528,11 @@ export default {
       this.leadSourceOptions = (res.data || []).filter(item => item.status === '0')
     })
     // 启用中的标签下拉
-    listTag({ status: this.dictValue('sys_normal_disable', '0') }).then(res => {
-      this.tagOptions = res.data || []
-    })
+    if (this.canReadTag) {
+      listTag({ status: this.dictValue('sys_normal_disable', '0') }).then(res => {
+        this.tagOptions = res.data || []
+      })
+    }
   },
   methods: {
     normalizeMode(value) {

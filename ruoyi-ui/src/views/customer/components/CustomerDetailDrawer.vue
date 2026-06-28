@@ -10,20 +10,22 @@
         <div class="summary-main">
           <h3>{{ customer.customerName || '-' }}</h3>
           <p>{{ customer.companyName || '个人客户' }}</p>
-          <div class="summary-tags">
+          <div class="summary-tags summary-status">
             <dict-tag :options="dict.type.law_customer_type" :value="customer.customerType" />
             <dict-tag :options="dict.type.law_customer_level" :value="customer.customerLevel" />
             <dict-tag :options="dict.type.law_customer_status" :value="customerStatusOf(customer)" />
+          </div>
+          <div v-if="customerTags.length" class="summary-tags summary-labels">
             <span v-for="item in customerTags" :key="item.name" class="tag-pill" :style="{ borderColor: item.color, color: item.color }">{{ item.name }}</span>
           </div>
         </div>
-        <div class="summary-actions">
+        <div class="summary-actions managed-actions">
           <el-button v-hasPermi="['customer:edit']" :size="controlSize" type="primary" icon="el-icon-edit" :disabled="!canOperate" @click="$emit('edit', customer)">编辑</el-button>
           <el-button v-hasPermi="['customer:contact:add']" :size="controlSize" icon="el-icon-user" :disabled="!canOperate" @click="$emit('contact', customer)">新增联系人</el-button>
           <el-button v-hasPermi="['customer:followup:add']" :size="controlSize" icon="el-icon-chat-line-round" :disabled="!canOperate" @click="$emit('follow', customer)">新增跟进</el-button>
           <el-button v-hasPermi="['customer:tag:assign']" :size="controlSize" icon="el-icon-price-tag" :disabled="!canOperate" @click="$emit('tags', customer)">维护标签</el-button>
           <el-button v-if="canCreateContract" v-hasPermi="['contract:add']" :size="controlSize" icon="el-icon-document-add" :disabled="!canOperate" @click="$emit('new-contract', customer)">新建合同</el-button>
-          <el-button v-hasPermi="['matter:list']" :size="controlSize" icon="el-icon-folder-opened" @click="$emit('matter', customer)">查看案件</el-button>
+          <el-button v-hasPermi="['matter:list', 'matter:mine:list']" :size="controlSize" icon="el-icon-folder-opened" @click="$emit('matter', customer)">查看案件</el-button>
         </div>
       </section>
 

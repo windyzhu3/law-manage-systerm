@@ -28,7 +28,7 @@
           </template>
           <el-table v-loading="loading" :data="list">
             <el-table-column label="案件编号" prop="case_no" min-width="120" show-overflow-tooltip />
-            <el-table-column label="案件名称" min-width="180" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link" @click="openDetail(row)">{{ row.case_name }}</span><small class="sub-text">{{ row.customer_name || '-' }}</small></template></el-table-column>
+            <el-table-column label="案件名称" min-width="180" show-overflow-tooltip><template slot-scope="{ row }"><span v-if="canQueryMatter" class="biz-link" @click="openDetail(row)">{{ row.case_name }}</span><span v-else>{{ row.case_name }}</span><small class="sub-text">{{ row.customer_name || '-' }}</small></template></el-table-column>
             <el-table-column label="案件类型" width="110" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_type" :value="row.case_type" /></template></el-table-column>
             <el-table-column label="当前阶段" width="110" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_stage" :value="row.case_stage" /></template></el-table-column>
             <el-table-column label="风险等级" width="105" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_risk_level" :value="row.risk_level" /></template></el-table-column>
@@ -47,7 +47,7 @@
             <el-table-column label="操作" width="292" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
               <template slot-scope="{ row }">
                 <span class="action-buttons">
-                  <el-button v-hasPermi="['matter:query']" :size="controlSize" type="text" @click="openDetail(row)">查看</el-button>
+                  <el-button v-hasPermi="matterQueryPerms" :size="controlSize" type="text" @click="openDetail(row)">查看</el-button>
                   <el-button v-hasPermi="['matter:progress:add']" :size="controlSize" type="text" :disabled="!canOperate(row)" @click="openProgress(row)">进度</el-button>
                   <el-button v-hasPermi="['matter:node:add']" :size="controlSize" type="text" :disabled="!canOperate(row)" @click="openNode(row)">节点</el-button>
                   <el-button v-hasPermi="['matter:expense:add']" :size="controlSize" type="text" :disabled="!canOperate(row)" @click="openExpense(row)">费用</el-button>
@@ -153,6 +153,7 @@
       :visible.sync="caseFinanceOpen"
       :case-id="caseFinanceCaseId"
       :control-size="controlSize"
+      :size-class="'biz-size-' + appSize"
       :dict-options="dict.type"
     />
 
@@ -386,6 +387,8 @@ export default {
   },
   computed: {
     isMatterList() { return ['list', 'mine'].includes(this.mode) },
+    matterQueryPerms() { return this.mode === 'mine' ? ['matter:mine:query'] : ['matter:query'] },
+    canQueryMatter() { return this.$auth.hasPermiOr(this.matterQueryPerms) },
     heroMeta() {
       return {
         eyebrow: 'MATTER CENTER',

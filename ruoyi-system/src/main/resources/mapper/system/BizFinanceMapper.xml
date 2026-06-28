@@ -142,10 +142,24 @@
         select 'pendingInvoiceTotal', coalesce(sum(case when p.confirm_status='1' and p.invoice_status in ('0','2') then ifnull(p.received_amount,0) else 0 end),0)
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'invoicedTotal', coalesce(sum(case when p.confirm_status='1' and p.invoice_status='1' then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'monthExpense', coalesce(sum(case when date_format(e.occur_date,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(e.amount,0) else 0 end),0)
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        union all
+        select 'pendingPaymentAmount', coalesce(sum(case when p.confirm_status='0' then ifnull(p.receivable_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
     </select>
 
     <select id="selectReceiveTrend" resultType="java.util.Map">
-        select date_format(p.update_time, '%Y-%m') itemName, coalesce(sum(ifnull(p.received_amount,0)),0) itemValue
+        select date_format(p.update_time, '%Y-%m') itemName,
+               coalesce(sum(ifnull(p.received_amount,0)),0) itemValue,
+               count(*) itemCount
         from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         where c.del_flag='0' and p.confirm_status='1'
         <choose>
@@ -214,6 +228,121 @@
           and c.risk_level='3'
           and greatest(p.receivable_amount - ifnull(case when p.confirm_status='1' then p.received_amount else 0 end,0),0) &gt; 0
         <include refid="contractDataScope"/>
+    </select>
+
+    <select id="selectFinanceFlow" resultType="java.util.Map">
+        select 'contractAmount' metricKey, coalesce(sum(ifnull(c.sign_amount,0)),0) metricValue
+        from biz_contract c
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'receivablePlan', coalesce(sum(ifnull(p.receivable_amount,0)),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'receivedAmount', coalesce(sum(case when p.confirm_status='1' then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'invoicedAmount', coalesce(sum(case when p.confirm_status='1' and p.invoice_status='1' then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'expenseAmount', coalesce(sum(ifnull(e.amount,0)),0)
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        union all
+        select 'netIncome', coalesce((
+            select sum(case when p.confirm_status='1' then ifnull(p.received_amount,0) else 0 end)
+            from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+            where c.del_flag='0' <include refid="contractDataScope"/>
+        ),0) - coalesce((
+            select sum(ifnull(e.amount,0))
+            from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+            where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        ),0)
+    </select>
+
+    <select id="selectInvoiceExpenseTrend" resultType="java.util.Map">
+        select itemName,
+               coalesce(sum(invoiceAmount),0) invoiceAmount,
+               coalesce(sum(expenseAmount),0) expenseAmount
+        from (
+            select date_format(p.update_time, '%Y-%m') itemName,
+                   coalesce(sum(case when p.confirm_status='1' and p.invoice_status='1' then ifnull(p.received_amount,0) else 0 end),0) invoiceAmount,
+                   0 expenseAmount
+            from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+            where c.del_flag='0' and p.update_time &gt;= date_sub(curdate(), interval 6 month)
+            <include refid="contractDataScope"/>
+            group by date_format(p.update_time, '%Y-%m')
+            union all
+            select date_format(e.occur_date, '%Y-%m') itemName,
+                   0 invoiceAmount,
+                   coalesce(sum(ifnull(e.amount,0)),0) expenseAmount
+            from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+            where e.del_flag='0' and c.del_flag='0' and e.occur_date &gt;= date_sub(curdate(), interval 6 month)
+            <include refid="caseDataScope"/>
+            group by date_format(e.occur_date, '%Y-%m')
+        ) t
+        where itemName is not null
+        group by itemName
+        order by itemName asc
+    </select>
+
+    <select id="selectInvoiceActivities" resultType="java.util.Map">
+        select concat('KP', date_format(ifnull(p.update_time, p.create_time), '%Y%m%d'), lpad(p.plan_id, 4, '0')) invoiceApplyNo,
+               case when p.invoice_status='1' then concat('FP', date_format(p.update_time, '%Y%m%d'), lpad(p.plan_id, 4, '0')) else null end invoiceNo,
+               c.customer_name customerName,
+               c.contract_no contractNo,
+               ifnull(p.received_amount, p.receivable_amount) amount,
+               p.update_time invoiceDate,
+               p.invoice_status invoiceStatus,
+               p.invoice_type invoiceType
+        from biz_contract_fee_plan p
+        left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' and p.confirm_status='1' and p.invoice_status in ('1','2')
+        <include refid="contractDataScope"/>
+        order by p.update_time desc, p.plan_id desc
+        <if test="dashboardLimit != null and dashboardLimit != ''">limit #{dashboardLimit}</if>
+    </select>
+
+    <select id="selectFinanceSummaryRows" resultType="java.util.Map">
+        select 'expense' metricKey, '费用支出' itemName,
+               coalesce(sum(case when date_format(e.occur_date,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(e.amount,0) else 0 end),0) monthValue,
+               coalesce(sum(case when date_format(e.occur_date,'%Y')=date_format(sysdate(),'%Y') then ifnull(e.amount,0) else 0 end),0) yearValue
+        from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+        where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+        union all
+        select 'received', '回款金额',
+               coalesce(sum(case when p.confirm_status='1' and date_format(p.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(p.received_amount,0) else 0 end),0),
+               coalesce(sum(case when p.confirm_status='1' and date_format(p.update_time,'%Y')=date_format(sysdate(),'%Y') then ifnull(p.received_amount,0) else 0 end),0)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
+        union all
+        select 'netIncome', '净收入',
+               coalesce((
+                   select sum(case when p.confirm_status='1' and date_format(p.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(p.received_amount,0) else 0 end)
+                   from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+                   where c.del_flag='0' <include refid="contractDataScope"/>
+               ),0) - coalesce((
+                   select sum(case when date_format(e.occur_date,'%Y%m')=date_format(sysdate(),'%Y%m') then ifnull(e.amount,0) else 0 end)
+                   from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+                   where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+               ),0),
+               coalesce((
+                   select sum(case when p.confirm_status='1' and date_format(p.update_time,'%Y')=date_format(sysdate(),'%Y') then ifnull(p.received_amount,0) else 0 end)
+                   from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+                   where c.del_flag='0' <include refid="contractDataScope"/>
+               ),0) - coalesce((
+                   select sum(case when date_format(e.occur_date,'%Y')=date_format(sysdate(),'%Y') then ifnull(e.amount,0) else 0 end)
+                   from biz_case_expense e left join biz_case c on c.case_id=e.case_id
+                   where e.del_flag='0' and c.del_flag='0' <include refid="caseDataScope"/>
+               ),0)
+        union all
+        select 'receiveCount', '回款笔数',
+               count(case when p.confirm_status='1' and date_format(p.update_time,'%Y%m')=date_format(sysdate(),'%Y%m') then 1 end),
+               count(case when p.confirm_status='1' and date_format(p.update_time,'%Y')=date_format(sysdate(),'%Y') then 1 end)
+        from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
+        where c.del_flag='0' <include refid="contractDataScope"/>
     </select>
 
     <select id="selectLeadFunnel" resultType="java.util.Map">

@@ -94,6 +94,38 @@
         </if>
     </sql>
 
+    <sql id="customerExplicitDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur
+                inner join sys_role r on r.role_id = ur.role_id and r.status = '0'
+            where ur.user_id = #{currentUserId}
+            and (
+                #{permissions} is null or #{permissions} = ''
+                or exists (
+                    select 1
+                    from sys_role_menu rm
+                    inner join sys_menu m on m.menu_id = rm.menu_id
+                    where rm.role_id = r.role_id
+                    and find_in_set(m.perms, #{permissions}) > 0
+                )
+            )
+            and (
+                    r.data_scope = '1'
+                    or c.owner_id = #{currentUserId}
+                    or (r.data_scope = '2' and c.dept_id = #{currentDeptId})
+                    or (r.data_scope = '3' and c.dept_id in (
+                        select dept_id from sys_dept where dept_id = #{currentDeptId} or find_in_set(#{currentDeptId}, ancestors)
+                    ))
+                    or (r.data_scope = '4' and c.dept_id in (
+                        select dept_id from sys_role_dept where role_id = r.role_id
+                    ))
+                    or (r.data_scope = '5' and c.owner_id = #{currentUserId})
+                )
+            )
+        </if>
+    </sql>
+
     <select id="selectCustomerList" parameterType="BizCustomer" resultMap="BizCustomerResult">
         <include refid="selectCustomerVo"/>
         <where>
@@ -131,7 +163,7 @@
                 or (#{creditCode} is not null and #{creditCode} != '' and c.credit_code = #{creditCode})
                 or (#{customerName} is not null and #{customerName} != '' and c.customer_name = #{customerName})
             )
-            <include refid="customerDataScope"/>
+            <include refid="customerExplicitDataScope"/>
         </where>
         order by c.customer_id desc
         limit 1
@@ -142,7 +174,7 @@
             and c.del_flag='0'
             and c.status != '2'
             and c.customer_name = #{customerName}
-            <include refid="customerDataScope"/>
+            <include refid="customerExplicitDataScope"/>
         </where>
         order by c.customer_id desc
         limit 2

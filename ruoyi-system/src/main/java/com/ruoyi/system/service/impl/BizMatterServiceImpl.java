@@ -38,7 +38,7 @@ public class BizMatterServiceImpl implements IBizMatterService
     private static final String CONTRACT_SIGNED = "1";
     private static final String CONTRACT_PERFORMING = "1";
     private static final String MATTER_PERMISSIONS =
-            "matter:list,matter:query,matter:add,matter:edit,matter:import,matter:export,"
+            "matter:list,matter:query,matter:mine:list,matter:mine:query,matter:add,matter:edit,matter:import,matter:export,"
                     + "matter:progress:list,matter:progress:add,matter:progress:edit,matter:progress:remove,"
                     + "matter:node:list,matter:node:add,matter:node:edit,matter:node:remove,matter:node:remind,"
                     + "matter:expense:list,matter:expense:add,matter:expense:edit,matter:expense:remove,"
@@ -697,7 +697,7 @@ public class BizMatterServiceImpl implements IBizMatterService
         {
             throw new ServiceException("案件不存在或已删除");
         }
-        if (!SecurityUtils.isAdmin() && matterMapper.countMatterInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), MATTER_PERMISSIONS) == 0)
+        if (!SecurityUtils.isAdmin() && matterMapper.countMatterInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), true, MATTER_PERMISSIONS) == 0)
         {
             throw new ServiceException("无权访问该案件");
         }

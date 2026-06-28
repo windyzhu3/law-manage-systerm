@@ -67,7 +67,7 @@
 .summary-card {
   display: flex;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
   padding: 18px;
   margin-bottom: 14px;
 }
@@ -94,25 +94,36 @@
 
 .summary-main {
   flex: 1;
+  min-width: 0;
 
   h3 {
     margin: 0;
     color: #172b4d;
     font-size: var(--biz-font-title);
+    overflow-wrap: anywhere;
   }
 
   p {
     margin: 6px 0 8px;
     color: #64748b;
     font-size: var(--biz-font-base);
+    overflow-wrap: anywhere;
   }
 }
 
 .summary-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px 8px;
   align-items: center;
+}
+
+.summary-status {
+  margin-top: 8px;
+}
+
+.summary-labels {
+  margin-top: 7px;
 }
 
 .tag-pill {
@@ -129,6 +140,28 @@
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.summary-actions.managed-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(88px, max-content));
+  gap: 8px;
+  flex: 0 0 auto;
+  max-width: 390px;
+  justify-content: flex-end;
+  justify-items: end;
+  margin-left: auto;
+}
+
+.summary-actions.managed-actions .el-button {
+  min-width: 88px;
+  margin: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.summary-actions.managed-actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .detail-grid {
@@ -212,7 +245,12 @@ dd {
   }
 }
 
+.timeline {
+  position: relative;
+}
+
 .timeline article {
+  position: relative;
   display: grid;
   grid-template-columns: 30px 1fr;
   gap: 10px;
@@ -223,10 +261,23 @@ dd {
     border-top: 0;
   }
 
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 42px;
+    bottom: -12px;
+    width: 1px;
+    background: #dbe6f5;
+  }
+
   i {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -234,16 +285,27 @@ dd {
     background: #2563eb;
   }
 
+  > div {
+    min-width: 0;
+  }
+
   h5 {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
     margin: 0;
     color: #334155;
     font-size: var(--biz-font-small);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
   }
 
   h5 span {
-    margin-left: 8px;
+    margin-left: 0;
     color: #64748b;
     font-weight: 400;
+    white-space: normal;
   }
 
   p {
@@ -251,16 +313,21 @@ dd {
     color: #64748b;
     font-size: var(--biz-font-small);
     line-height: 1.7;
+    overflow-wrap: anywhere;
   }
 
   small {
+    display: block;
     color: #94a3b8;
     font-size: var(--biz-font-mini);
+    line-height: 1.6;
+    overflow-wrap: anywhere;
   }
 
   em {
     margin-left: 14px;
     font-style: normal;
+    white-space: normal;
   }
 }
 

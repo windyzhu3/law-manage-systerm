@@ -24,7 +24,7 @@ public interface BizMatterMapper
 
     int updateMatterStatus(Map<String, Object> matter);
 
-    int countMatterInDataScope(@Param("caseId") Long caseId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("permissions") String permissions);
+    int countMatterInDataScope(@Param("caseId") Long caseId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope, @Param("permissions") String permissions);
 
     int countUnfinishedNodes(Long caseId);
 

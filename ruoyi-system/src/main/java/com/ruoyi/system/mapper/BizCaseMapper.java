@@ -20,7 +20,7 @@ public interface BizCaseMapper
 
     int updateCaseConfirmResult(Map<String, Object> entity);
 
-    int countCaseInDataScope(@Param("caseId") Long caseId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("permissions") String permissions);
+    int countCaseInDataScope(@Param("caseId") Long caseId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope, @Param("permissions") String permissions);
 
     List<Map<String, Object>> selectDashboardCards(Map<String, Object> params);
 

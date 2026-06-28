@@ -58,11 +58,11 @@ public class BizLeadServiceImpl implements IBizLeadService
         BizLead lead = leadMapper.selectLeadById(leadId);
         if (lead == null || "2".equals(lead.getDelFlag()))
         {
-            throw new ServiceException("线索不存在或已被删除");
+            throw new ServiceException("Lead does not exist or has been deleted");
         }
         if (!canAccessLead(lead, false))
         {
-            throw new ServiceException("没有权限访问该线索");
+            throw new ServiceException("No permission to access this lead");
         }
         return lead;
     }
@@ -92,11 +92,10 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         if (lead.getLeadId() == null)
         {
-            throw new ServiceException("线索ID不能为空");
+            throw new ServiceException("Lead ID is required");
         }
         requiredAccessibleLead(lead.getLeadId(), false, false);
         validateLead(lead);
-        // 状态、归属和公海字段只能通过分配、领取、跟进、转化、入公海等动作变更。
         lead.setStatus(null);
         lead.setPoolStatus(null);
         lead.setOwnerId(null);
@@ -138,7 +137,7 @@ public class BizLeadServiceImpl implements IBizLeadService
             BizLead lead = requiredAccessibleLead(leadId, true, false);
             if (!"2".equals(lead.getDelFlag()))
             {
-                throw new ServiceException("只能彻底删除回收站中的线索");
+                throw new ServiceException("Only recycle-bin leads can be permanently deleted");
             }
         }
         leadMapper.purgeLeadFollowups(leadIds);
@@ -152,15 +151,15 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         if (ownerId == null)
         {
-            throw new ServiceException("请选择负责人");
+            throw new ServiceException("Owner is required");
         }
         BizLead lead = requiredAccessibleLead(leadId, false, true);
-        assertActiveLead(lead, "分配");
+        assertActiveLead(lead, "assign");
         String username = SecurityUtils.getUsername();
         int rows = leadMapper.assignLead(leadId, ownerId, null, username);
         if (rows == 0)
         {
-            throw new ServiceException("当前线索状态不允许分配，请刷新后重试");
+            throw new ServiceException("Lead assignment failed, please refresh and try again");
         }
         leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), ownerId, "assign", reason, username);
         return rows;
@@ -171,16 +170,20 @@ public class BizLeadServiceImpl implements IBizLeadService
     public int moveToPool(Long leadId, String reason)
     {
         BizLead lead = requiredAccessibleLead(leadId, false, false);
-        assertActiveLead(lead, "进入公海");
+        if (!SecurityUtils.hasPermi("lead:pool:move") && SecurityUtils.hasPermi("lead:mine:pool:move"))
+        {
+            assertMineLead(lead, "move to pool");
+        }
+        assertActiveLead(lead, "move to pool");
         if (POOL_YES.equals(lead.getPoolStatus()))
         {
-            throw new ServiceException("该线索已在公海中");
+            throw new ServiceException("Lead is already in public pool");
         }
         String username = SecurityUtils.getUsername();
         int rows = leadMapper.moveToPool(leadId, reason, username);
         if (rows == 0)
         {
-            throw new ServiceException("当前线索状态不允许进入公海，请刷新后重试");
+            throw new ServiceException("Move to public pool failed, please refresh and try again");
         }
         leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), null, "pool", reason, username);
         return rows;
@@ -191,36 +194,40 @@ public class BizLeadServiceImpl implements IBizLeadService
     public int claimLead(Long leadId)
     {
         BizLead lead = requiredLead(leadId);
-        assertActiveLead(lead, "领取");
+        assertActiveLead(lead, "claim");
         if (!POOL_YES.equals(lead.getPoolStatus()))
         {
-            throw new ServiceException("该线索已被领取，请刷新列表");
+            throw new ServiceException("Lead has already been claimed, please refresh the list");
         }
         Long userId = SecurityUtils.getUserId();
         int rows = leadMapper.claimLead(leadId, userId, SecurityUtils.getDeptId(), SecurityUtils.getUsername());
         if (rows == 0)
         {
-            throw new ServiceException("该线索已被领取，请刷新列表");
+            throw new ServiceException("Lead has already been claimed, please refresh the list");
         }
-        leadMapper.insertAssignmentLog(leadId, null, userId, "claim", "公海领取", SecurityUtils.getUsername());
+        leadMapper.insertAssignmentLog(leadId, null, userId, "claim", "claim from public pool", SecurityUtils.getUsername());
         return rows;
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     public int convertLead(Long leadId)
     {
         BizLead lead = requiredAccessibleLead(leadId, false, false);
-        assertActiveLead(lead, "转化");
-        assertOwnedLead(lead, "转化");
+        if (!SecurityUtils.hasPermi("lead:convert") && SecurityUtils.hasPermi("lead:mine:convert"))
+        {
+            assertMineLead(lead, "convert");
+        }
+        assertActiveLead(lead, "convert");
+        assertOwnedLead(lead, "convert");
         if (!STATUS_WAIT_FOLLOW.equals(lead.getStatus()) && !STATUS_FOLLOWING.equals(lead.getStatus()))
         {
-            throw new ServiceException("待分配线索需先分配或领取后才能转化");
+            throw new ServiceException("Only assigned leads in follow-up status can be converted");
         }
         int rows = leadMapper.convertLead(leadId, SecurityUtils.getUsername());
         if (rows == 0)
         {
-            throw new ServiceException("当前线索状态不允许转化，请刷新后重试");
+            throw new ServiceException("Lead conversion failed, please refresh and try again");
         }
         customerService.convertLeadToCustomer(lead);
         return rows;
@@ -242,15 +249,19 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         validateFollowup(followup);
         BizLead lead = requiredAccessibleLead(followup.getLeadId(), false, false);
-        assertActiveLead(lead, "跟进");
-        assertOwnedLead(lead, "跟进");
+        if (!SecurityUtils.hasPermi("lead:followup:add") && SecurityUtils.hasPermi("lead:mine:followup"))
+        {
+            assertMineLead(lead, "follow up");
+        }
+        assertActiveLead(lead, "follow up");
+        assertOwnedLead(lead, "follow up");
         followup.setFollowUserId(SecurityUtils.getUserId());
         followup.setCreateBy(SecurityUtils.getUsername());
         int rows = leadMapper.insertFollowup(followup);
         int touched = leadMapper.touchLeadFollowTime(followup.getLeadId(), followup.getNextFollowTime(), SecurityUtils.getUsername());
         if (touched == 0)
         {
-            throw new ServiceException("当前线索状态不允许跟进，请刷新后重试");
+            throw new ServiceException("Lead follow-up failed, please refresh and try again");
         }
         return rows;
     }
@@ -313,39 +324,39 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         if (lead == null)
         {
-            throw new ServiceException("线索不能为空");
+            throw new ServiceException("Lead is required");
         }
-        requiredText(lead.getLeadName(), "线索名称不能为空");
-        requiredText(lead.getContactName(), "联系人不能为空");
-        requiredText(lead.getMobile(), "手机号不能为空");
-        requiredText(lead.getSourceCode(), "线索来源不能为空");
-        requiredText(lead.getPriority(), "优先级不能为空");
-        requiredText(lead.getLegalDemand(), "法律需求不能为空");
-        assertEnabledSetting("source", lead.getSourceCode(), "线索来源不存在或已停用");
-        assertDictValue("law_lead_priority", lead.getPriority(), "线索优先级不合法");
+        requiredText(lead.getLeadName(), "Lead name is required");
+        requiredText(lead.getContactName(), "Contact name is required");
+        requiredText(lead.getMobile(), "Mobile is required");
+        requiredText(lead.getSourceCode(), "Lead source is required");
+        requiredText(lead.getPriority(), "Lead priority is required");
+        requiredText(lead.getLegalDemand(), "Legal demand is required");
+        assertEnabledSetting("source", lead.getSourceCode(), "Lead source does not exist or has been disabled");
+        assertDictValue("law_lead_priority", lead.getPriority(), "Lead priority is invalid");
     }
 
     private void validateFollowup(BizLeadFollowup followup)
     {
         if (followup == null)
         {
-            throw new ServiceException("跟进记录不能为空");
+            throw new ServiceException("Follow-up record is required");
         }
-        requiredText(followup.getFollowType(), "跟进方式不能为空");
-        requiredText(followup.getContent(), "跟进内容不能为空");
-        assertDictValue("law_lead_follow_type", followup.getFollowType(), "跟进方式不合法");
+        requiredText(followup.getFollowType(), "Follow-up type is required");
+        requiredText(followup.getContent(), "Follow-up content is required");
+        assertDictValue("law_lead_follow_type", followup.getFollowType(), "Follow-up type is invalid");
     }
 
     private void validateSetting(BizLeadSetting setting)
     {
         if (setting == null)
         {
-            throw new ServiceException("线索配置不能为空");
+            throw new ServiceException("Lead setting is required");
         }
-        requiredText(setting.getSettingType(), "配置类型不能为空");
-        requiredText(setting.getSettingCode(), "配置编码不能为空");
-        requiredText(setting.getSettingName(), "配置名称不能为空");
-        assertDictValue("law_lead_setting_type", setting.getSettingType(), "配置类型不合法");
+        requiredText(setting.getSettingType(), "Setting type is required");
+        requiredText(setting.getSettingCode(), "Setting code is required");
+        requiredText(setting.getSettingName(), "Setting name is required");
+        assertDictValue("law_lead_setting_type", setting.getSettingType(), "Setting type is invalid");
     }
 
     private String requiredText(Object value, String message)
@@ -364,7 +375,7 @@ public class BizLeadServiceImpl implements IBizLeadService
         List<SysDictData> options = dictTypeService.selectDictDataByType(dictType);
         if (options == null || options.isEmpty())
         {
-            throw new ServiceException("字典未初始化：" + dictType);
+            throw new ServiceException("Dictionary is not initialized: " + dictType);
         }
         for (SysDictData item : options)
         {
@@ -394,7 +405,6 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         lead.setCurrentUserId(SecurityUtils.getUserId());
         lead.setCurrentDeptId(SecurityUtils.getDeptId());
-        // 公海是共享池，是否可见由 lead:pool:list 控制；其他列表遵循若依角色数据范围。
         lead.setDataScope(!SecurityUtils.isAdmin() && !"pool".equals(lead.getListMode()));
     }
 
@@ -403,7 +413,7 @@ public class BizLeadServiceImpl implements IBizLeadService
         BizLead lead = leadMapper.selectLeadById(leadId);
         if (lead == null || "2".equals(lead.getDelFlag()))
         {
-            throw new ServiceException("线索不存在或已被删除");
+            throw new ServiceException("Lead does not exist or has been deleted");
         }
         return lead;
     }
@@ -413,11 +423,11 @@ public class BizLeadServiceImpl implements IBizLeadService
         BizLead lead = leadMapper.selectLeadById(leadId);
         if (lead == null || (!includeDeleted && "2".equals(lead.getDelFlag())))
         {
-            throw new ServiceException("线索不存在或已被删除");
+            throw new ServiceException("Lead does not exist or has been deleted");
         }
         if (!canAccessLead(lead, allowPool))
         {
-            throw new ServiceException("没有权限操作该线索");
+            throw new ServiceException("No permission to operate this lead");
         }
         return lead;
     }
@@ -428,18 +438,60 @@ public class BizLeadServiceImpl implements IBizLeadService
         {
             return true;
         }
+        Long currentUserId = SecurityUtils.getUserId();
+        if (SecurityUtils.hasPermi("lead:query")
+                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0)
+        {
+            return true;
+        }
+        if (SecurityUtils.hasPermi("lead:mine:query")
+                && !"2".equals(lead.getDelFlag())
+                && POOL_NO.equals(lead.getPoolStatus())
+                && currentUserId != null
+                && currentUserId.equals(lead.getOwnerId()))
+        {
+            return true;
+        }
+        if (SecurityUtils.hasPermi("lead:pool:query")
+                && !"2".equals(lead.getDelFlag())
+                && POOL_YES.equals(lead.getPoolStatus()))
+        {
+            return true;
+        }
+        if (SecurityUtils.hasPermi("lead:recycle:query")
+                && "2".equals(lead.getDelFlag())
+                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), true) > 0)
+        {
+            return true;
+        }
         if (allowPool && POOL_YES.equals(lead.getPoolStatus()) && SecurityUtils.hasPermi("lead:pool:list"))
         {
             return true;
         }
-        return leadMapper.countLeadInDataScope(lead.getLeadId(), SecurityUtils.getUserId(), SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0;
+        return hasLeadOperationPerm()
+                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0;
+    }
+
+    private boolean hasLeadOperationPerm()
+    {
+        return SecurityUtils.hasPermi("lead:edit")
+                || SecurityUtils.hasPermi("lead:remove")
+                || SecurityUtils.hasPermi("lead:assign")
+                || SecurityUtils.hasPermi("lead:pool:move")
+                || SecurityUtils.hasPermi("lead:mine:pool:move")
+                || SecurityUtils.hasPermi("lead:convert")
+                || SecurityUtils.hasPermi("lead:mine:convert")
+                || SecurityUtils.hasPermi("lead:followup:add")
+                || SecurityUtils.hasPermi("lead:mine:followup")
+                || SecurityUtils.hasPermi("lead:recycle:restore")
+                || SecurityUtils.hasPermi("lead:recycle:purge");
     }
 
     private void assertActiveLead(BizLead lead, String action)
     {
         if (STATUS_CONVERTED.equals(lead.getStatus()) || STATUS_INVALID.equals(lead.getStatus()) || STATUS_CLOSED.equals(lead.getStatus()))
         {
-            throw new ServiceException("已转化、无效或关闭的线索不能" + action);
+            throw new ServiceException("Converted, invalid, or closed leads cannot " + action);
         }
     }
 
@@ -447,7 +499,19 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         if (POOL_YES.equals(lead.getPoolStatus()) || lead.getOwnerId() == null)
         {
-            throw new ServiceException("公海或未分配线索需先领取/分配后才能" + action);
+            throw new ServiceException("Public pool or unassigned leads must be claimed or assigned before " + action);
+        }
+    }
+
+    private void assertMineLead(BizLead lead, String action)
+    {
+        if (lead == null
+                || "2".equals(lead.getDelFlag())
+                || POOL_YES.equals(lead.getPoolStatus())
+                || lead.getOwnerId() == null
+                || !lead.getOwnerId().equals(SecurityUtils.getUserId()))
+        {
+            throw new ServiceException("Only assigned owner can " + action + " this lead");
         }
     }
 }

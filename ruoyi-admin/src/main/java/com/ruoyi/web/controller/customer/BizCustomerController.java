@@ -174,7 +174,7 @@ public class BizCustomerController extends BaseController
         return toAjax(customerService.deleteFollowup(followupId));
     }
 
-    @PreAuthorize("@ss.hasPermi('customer:tag:list')")
+    @PreAuthorize("@ss.hasAnyPermi('customer:tag:list,customer:tag:query,customer:tag:assign')")
     @GetMapping("/tag/list")
     public AjaxResult tagList(@RequestParam Map<String, Object> params)
     {

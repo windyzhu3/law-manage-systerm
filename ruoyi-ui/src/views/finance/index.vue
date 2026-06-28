@@ -10,6 +10,165 @@
     <biz-metrics :metrics="metrics" :config="metricConfig" />
 
     <template v-if="mode === 'overview'">
+      <section class="finance-flow-card finance-card">
+        <div class="finance-card-title">
+          <div>
+            <h3>业务财务流程总览</h3>
+            <p>合同签署、应收计划、回款、开票、费用与净收入全链路概览</p>
+          </div>
+        </div>
+        <div class="finance-flow">
+          <div v-for="(item, index) in financeFlowCards" :key="item.key" class="finance-flow-item">
+            <span :class="['flow-icon', item.color]"><i :class="item.icon" /></span>
+            <div>
+              <b>{{ item.title }}</b>
+              <strong>{{ formatMoney(item.value) }}</strong>
+            </div>
+            <em v-if="index < financeFlowCards.length - 1">{{ item.rate }}</em>
+          </div>
+        </div>
+      </section>
+
+      <section class="finance-charts-grid">
+        <article class="finance-card finance-chart-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>回款趋势（万元）</h3>
+              <p>近 6 个月确认回款金额与回款笔数</p>
+            </div>
+            <el-button :size="controlSize" type="text" @click="switchMode('payment')">更多</el-button>
+          </div>
+          <div v-if="receiveTrendRows.length" class="combo-chart">
+            <svg viewBox="0 0 520 210" preserveAspectRatio="none">
+              <polyline class="trend-grid" points="0,175 520,175" />
+              <polyline class="trend-grid" points="0,120 520,120" />
+              <polyline class="trend-grid" points="0,65 520,65" />
+              <rect v-for="bar in receiveBarList" :key="bar.key" class="chart-hover-bar" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" rx="4">
+                <title>{{ bar.title }}</title>
+              </rect>
+              <polyline class="trend-line green" :points="receiveCountPoints" />
+              <circle v-for="point in receiveCountPointList" :key="point.key" class="chart-hover-point" :cx="point.x" :cy="point.y" r="4">
+                <title>{{ point.title }}</title>
+              </circle>
+            </svg>
+            <div class="chart-labels"><span v-for="item in receiveTrendRows" :key="item.itemName">{{ item.itemName }}</span></div>
+            <div class="chart-legend"><span><i class="blue" />回款金额</span><span><i class="green" />回款笔数</span></div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无回款趋势数据" />
+        </article>
+
+        <article class="finance-card finance-chart-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>应收账龄分布</h3>
+              <p>未收款项按账龄区间分布</p>
+            </div>
+          </div>
+          <div class="donut-wrap">
+            <i class="donut" :style="agingDonutStyle"><b>{{ formatShortMoney(agingAmountTotal) }}</b><span>应收总额</span></i>
+            <ul>
+              <li v-for="item in agingStats" :key="item.itemName">
+                <em :style="{ background: item.color }" />
+                <span>{{ item.label }}</span>
+                <strong>{{ formatMoney(item.amountValue) }}</strong>
+                <small>{{ item.percent }}</small>
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="finance-card finance-chart-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>开票 / 费用趋势（万元）</h3>
+              <p>已开票金额与案件费用支出趋势</p>
+            </div>
+            <el-button :size="controlSize" type="text" @click="switchMode('invoice')">更多</el-button>
+          </div>
+          <div v-if="invoiceExpenseRows.length" class="combo-chart">
+            <svg viewBox="0 0 520 210" preserveAspectRatio="none">
+              <polyline class="trend-grid" points="0,175 520,175" />
+              <polyline class="trend-grid" points="0,120 520,120" />
+              <polyline class="trend-grid" points="0,65 520,65" />
+              <rect v-for="bar in invoiceBarList" :key="bar.key" class="chart-hover-bar" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" rx="4">
+                <title>{{ bar.title }}</title>
+              </rect>
+              <polyline class="trend-line green" :points="expenseLinePoints" />
+              <circle v-for="point in expensePointList" :key="point.key" class="chart-hover-point" :cx="point.x" :cy="point.y" r="4">
+                <title>{{ point.title }}</title>
+              </circle>
+            </svg>
+            <div class="chart-labels"><span v-for="item in invoiceExpenseRows" :key="item.itemName">{{ item.itemName }}</span></div>
+            <div class="chart-legend"><span><i class="blue" />开票金额</span><span><i class="green" />费用支出</span></div>
+          </div>
+          <el-empty v-else :image-size="72" description="暂无开票/费用趋势数据" />
+        </article>
+      </section>
+
+      <section class="finance-overview-tables">
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>待确认回款列表</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('payment')">更多</el-button>
+            </div>
+          </template>
+          <el-table :data="pendingPayments" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="客户名称" min-width="118" show-overflow-tooltip>
+              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.receivableAmount) }}</template></el-table-column>
+            <el-table-column label="到账日" width="76"><template slot-scope="{ row }">{{ shortDate(row.planReceiveDate) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>逾期应收客户</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('receivable', { overdueOnly: '1' })">更多</el-button>
+            </div>
+          </template>
+          <el-table :data="overdueReceivables" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="客户名称" min-width="118" show-overflow-tooltip>
+              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="天数" width="62" align="center"><template slot-scope="{ row }">{{ row.agingDays || 0 }}天</template></el-table-column>
+            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.pendingAmount) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>近期发票动态</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('invoice')">更多</el-button>
+            </div>
+          </template>
+          <el-table :data="invoiceActivities" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="客户名称" prop="customerName" min-width="122" show-overflow-tooltip />
+            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.amount) }}</template></el-table-column>
+            <el-table-column label="状态" width="68" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>费用 / 回款概览表</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('report')">查看报表</el-button>
+            </div>
+          </template>
+          <el-table :data="financeSummaryRows" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="项目" prop="itemName" min-width="76" />
+            <el-table-column label="本月" width="76" align="right"><template slot-scope="{ row }">{{ formatSummaryValue(row) }}</template></el-table-column>
+            <el-table-column label="本年" width="82" align="right"><template slot-scope="{ row }">{{ formatSummaryYearValue(row) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
+      </section>
+    </template>
+
+    <template v-else-if="false && mode === 'overview'">
       <section class="finance-overview-grid">
         <article class="finance-card trend-card">
           <div class="finance-card-title">
@@ -417,11 +576,8 @@
       :visible.sync="caseFinanceOpen"
       :case-id="caseFinanceCaseId"
       :control-size="controlSize"
+      :size-class="'biz-size-' + appSize"
       :dict-options="dict.type"
-      actionable
-      @confirm-payment="openPayment"
-      @handle-invoice="openInvoice"
-      @edit-expense="openExpense"
     />
   </div>
 </template>
@@ -498,6 +654,11 @@ export default {
       aging: [],
       links: [],
       reminders: [],
+      flow: [],
+      receiveTrend: [],
+      invoiceExpenseTrend: [],
+      invoiceActivities: [],
+      financeSummaryRows: [],
       leadFunnel: [],
       leadSourceConversion: [],
       pendingPayments: [],
@@ -551,18 +712,100 @@ export default {
       return { eyebrow: item[0], title: item[1], description: item[2] }
     },
     metrics() {
-      const data = this.dashboard.cards || []
-      return data.map(item => ({ key: item.metricKey, value: item.metricValue }))
+      if (this.mode === 'receivable') {
+        return [
+          { metricKey: 'receivableTotal', metricValue: this.formatMoney(this.dashboardValue('receivableTotal')) },
+          { metricKey: 'pendingTotal', metricValue: this.formatMoney(this.dashboardValue('pendingTotal')) },
+          { metricKey: 'overdueTotal', metricValue: this.formatMoney(this.dashboardValue('overdueTotal')) },
+          { metricKey: 'receivedTotal', metricValue: this.formatMoney(this.dashboardValue('receivedTotal')) },
+          { metricKey: 'pendingCount', metricValue: this.listCount(row => row.confirmStatus === '0') },
+          { metricKey: 'overdueCount', metricValue: this.listCount(row => row.receivableStatus === 'overdue') }
+        ]
+      }
+      if (this.mode === 'payment') {
+        return [
+          { metricKey: 'pendingPaymentAmount', metricValue: this.formatMoney(this.dashboardValue('pendingPaymentAmount')) },
+          { metricKey: 'pendingPaymentCount', metricValue: this.listCount(row => row.confirmStatus === '0') },
+          { metricKey: 'confirmedAmount', metricValue: this.formatMoney(this.listSum(row => row.confirmStatus === '1' ? row.receivedAmount || row.receivableAmount : 0)) },
+          { metricKey: 'rejectedCount', metricValue: this.listCount(row => row.confirmStatus === '2') },
+          { metricKey: 'partialCount', metricValue: this.listCount(row => row.receivableStatus === 'partial') },
+          { metricKey: 'invoiceReadyAmount', metricValue: this.formatMoney(this.dashboardValue('pendingInvoiceTotal')) }
+        ]
+      }
+      if (this.mode === 'invoice') {
+        const reminderMap = this.keyed(this.reminders || [])
+        return [
+          { metricKey: 'pendingInvoiceTotal', metricValue: this.formatMoney(this.dashboardValue('pendingInvoiceTotal')) },
+          { metricKey: 'invoicedTotal', metricValue: this.formatMoney(this.dashboardValue('invoicedTotal')) },
+          { metricKey: 'pendingInvoiceCount', metricValue: this.num(reminderMap.pendingInvoice) },
+          { metricKey: 'partialInvoiceCount', metricValue: this.listCount(row => row.invoiceStatus === '2') },
+          { metricKey: 'invoicedCount', metricValue: this.listCount(row => row.invoiceStatus === '1') },
+          { metricKey: 'unInvoiceCount', metricValue: this.listCount(row => row.invoiceStatus === '0') }
+        ]
+      }
+      if (this.mode === 'expense') {
+        return [
+          { metricKey: 'monthExpense', metricValue: this.formatMoney(this.dashboardValue('monthExpense')) },
+          { metricKey: 'pageExpenseAmount', metricValue: this.formatMoney(this.listSum(row => this.field(row, 'amount', 'amount'))) },
+          { metricKey: 'unpaidCount', metricValue: this.listCount(row => this.field(row, 'payStatus', 'pay_status') !== 'paid') },
+          { metricKey: 'paidAmount', metricValue: this.formatMoney(this.listSum(row => this.field(row, 'payStatus', 'pay_status') === 'paid' ? this.field(row, 'amount', 'amount') : 0)) },
+          { metricKey: 'unReimburseCount', metricValue: this.listCount(row => !['reimbursed', 'done', 'paid'].includes(this.field(row, 'reimburseStatus', 'reimburse_status'))) },
+          { metricKey: 'voucherMissingCount', metricValue: this.listCount(row => this.field(row, 'voucherStatus', 'voucher_status') !== 'uploaded') }
+        ]
+      }
+      const map = this.keyed(this.dashboard.cards || [])
+      const keys = ['monthReceived', 'receivableTotal', 'invoicedTotal', 'monthExpense', 'pendingPaymentAmount', 'overdueTotal']
+      return keys.map(key => ({ metricKey: key, metricValue: this.formatMoney(map[key] ? map[key].metricValue : 0) }))
     },
     metricConfig() {
-      return {
-        receivableTotal: { title: '应收总额', icon: 'el-icon-coin', color: 'blue', formatter: this.formatMoney },
-        receivedTotal: { title: '已收金额', icon: 'el-icon-wallet', color: 'green', formatter: this.formatMoney },
-        pendingTotal: { title: '待收金额', icon: 'el-icon-bank-card', color: 'orange', formatter: this.formatMoney },
-        overdueTotal: { title: '逾期金额', icon: 'el-icon-warning-outline', color: 'red', formatter: this.formatMoney },
-        monthReceived: { title: '本月回款', icon: 'el-icon-data-line', color: 'cyan', formatter: this.formatMoney },
-        pendingInvoiceTotal: { title: '待开票金额', icon: 'el-icon-document-checked', color: 'purple', formatter: this.formatMoney }
+      if (this.mode === 'receivable') {
+        return [
+          { key: 'receivableTotal', label: '应收总额', icon: 'money', color: 'blue', hint: '合同收费计划累计' },
+          { key: 'pendingTotal', label: '待收金额', icon: 'time', color: 'orange', hint: '未完成回款金额' },
+          { key: 'overdueTotal', label: '逾期应收', icon: 'time-range', color: 'orange', hint: '超过计划回款日' },
+          { key: 'receivedTotal', label: '已收金额', icon: 'money', color: 'green', hint: '已确认入账' },
+          { key: 'pendingCount', label: '待确认计划', icon: 'documentation', color: 'cyan', hint: '当前筛选待确认' },
+          { key: 'overdueCount', label: '逾期笔数', icon: 'chart', color: 'violet', hint: '当前筛选逾期项' }
+        ]
       }
+      if (this.mode === 'payment') {
+        return [
+          { key: 'pendingPaymentAmount', label: '待确认回款', icon: 'time', color: 'orange', hint: '待财务确认入账' },
+          { key: 'pendingPaymentCount', label: '待处理笔数', icon: 'documentation', color: 'cyan', hint: '当前筛选待确认' },
+          { key: 'confirmedAmount', label: '已确认金额', icon: 'money', color: 'green', hint: '当前筛选已入账' },
+          { key: 'rejectedCount', label: '驳回笔数', icon: 'time-range', color: 'orange', hint: '当前筛选异常回款' },
+          { key: 'partialCount', label: '部分回款', icon: 'chart', color: 'violet', hint: '仍需补齐回款' },
+          { key: 'invoiceReadyAmount', label: '可开票金额', icon: 'documentation', color: 'blue', hint: '已收未完全开票' }
+        ]
+      }
+      if (this.mode === 'invoice') {
+        return [
+          { key: 'pendingInvoiceTotal', label: '待开票金额', icon: 'time', color: 'orange', hint: '已收未完全开票' },
+          { key: 'invoicedTotal', label: '已开票金额', icon: 'documentation', color: 'green', hint: '已完成开票' },
+          { key: 'pendingInvoiceCount', label: '待开票笔数', icon: 'date', color: 'blue', hint: '全局待处理数量' },
+          { key: 'partialInvoiceCount', label: '部分开票', icon: 'chart', color: 'violet', hint: '当前筛选需补齐' },
+          { key: 'invoicedCount', label: '已开票笔数', icon: 'documentation', color: 'cyan', hint: '当前筛选已完成' },
+          { key: 'unInvoiceCount', label: '未开票笔数', icon: 'time-range', color: 'orange', hint: '当前筛选未处理' }
+        ]
+      }
+      if (this.mode === 'expense') {
+        return [
+          { key: 'monthExpense', label: '本月费用支出', icon: 'money', color: 'orange', hint: '案件费用本月发生' },
+          { key: 'pageExpenseAmount', label: '筛选费用合计', icon: 'chart', color: 'blue', hint: '当前筛选页金额' },
+          { key: 'unpaidCount', label: '待付款费用', icon: 'time', color: 'orange', hint: '付款状态未完成' },
+          { key: 'paidAmount', label: '已付款金额', icon: 'money', color: 'green', hint: '当前筛选已付款' },
+          { key: 'unReimburseCount', label: '待报销费用', icon: 'documentation', color: 'violet', hint: '报销状态未完成' },
+          { key: 'voucherMissingCount', label: '凭证缺失', icon: 'date-range', color: 'cyan', hint: '需补充费用凭证' }
+        ]
+      }
+      return [
+        { key: 'monthReceived', label: '本月回款总额', icon: 'money', color: 'blue', hint: '较上月动态统计' },
+        { key: 'receivableTotal', label: '应收总额', icon: 'money', color: 'violet', hint: '合同收费计划累计' },
+        { key: 'invoicedTotal', label: '已开票金额', icon: 'documentation', color: 'green', hint: '已确认开票金额' },
+        { key: 'monthExpense', label: '本月费用支出', icon: 'money', color: 'orange', hint: '案件费用本月发生' },
+        { key: 'pendingPaymentAmount', label: '待确认回款', icon: 'time', color: 'cyan', hint: '待财务确认入账' },
+        { key: 'overdueTotal', label: '逾期应收金额', icon: 'time', color: 'orange', hint: '超过计划回款日' }
+      ]
     },
     searchPlaceholder() {
       return this.mode === 'expense' ? '搜索费用编号、案件、客户' : '搜索合同编号、案件编号、客户名称'
@@ -583,6 +826,30 @@ export default {
       let start = 0
       const parts = this.agingStats.map(item => {
         const deg = item.itemValue / this.agingTotal * 360
+        const text = `${item.color} ${start}deg ${start + deg}deg`
+        start += deg
+        return text
+      })
+      return { background: `conic-gradient(${parts.join(',')})` }
+    },
+    agingStats() {
+      const labels = { current: '0-30天', d30: '31-60天', d60: '61-90天', d90: '90天以上', d90plus: '严重逾期' }
+      const colors = ['#2563eb', '#06b6d4', '#22c55e', '#f97316', '#ef4444']
+      const rows = ['current', 'd30', 'd60', 'd90', 'd90plus'].map((key, index) => {
+        const row = (this.aging || []).find(item => item.itemName === key) || {}
+        return { itemName: key, label: labels[key], itemValue: Number(row.itemValue || 0), amountValue: Number(row.amountValue || 0), color: colors[index] }
+      })
+      const total = rows.reduce((sum, item) => sum + item.amountValue, 0)
+      return rows.map(item => ({ ...item, percent: total ? (item.amountValue * 100 / total).toFixed(1) + '%' : '0%' }))
+    },
+    agingAmountTotal() {
+      return this.agingStats.reduce((sum, item) => sum + item.amountValue, 0)
+    },
+    agingDonutStyle() {
+      if (!this.agingAmountTotal) return { background: '#eef2ff' }
+      let start = 0
+      const parts = this.agingStats.map(item => {
+        const deg = item.amountValue / this.agingAmountTotal * 360
         const text = `${item.color} ${start}deg ${start + deg}deg`
         start += deg
         return text
@@ -639,6 +906,58 @@ export default {
         { key: 'highRisk', title: '高风险款项', desc: '高风险合同未收款项', value: this.num(map.highRisk), mode: 'receivable', query: { riskLevel: '3', pendingOnly: '1' }, icon: 'el-icon-bell' }
       ]
     },
+    flowMap() {
+      return this.keyed(this.flow || [])
+    },
+    financeFlowCards() {
+      const value = key => Number(this.flowMap[key] && this.flowMap[key].metricValue || 0)
+      const rows = [
+        { key: 'contractAmount', title: '合同金额', value: value('contractAmount'), icon: 'el-icon-document', color: 'blue' },
+        { key: 'receivablePlan', title: '应收计划', value: value('receivablePlan'), icon: 'el-icon-date', color: 'purple' },
+        { key: 'receivedAmount', title: '已回款', value: value('receivedAmount'), icon: 'el-icon-coin', color: 'green' },
+        { key: 'invoicedAmount', title: '已开票', value: value('invoicedAmount'), icon: 'el-icon-document-checked', color: 'cyan' },
+        { key: 'expenseAmount', title: '费用支出', value: value('expenseAmount'), icon: 'el-icon-suitcase', color: 'orange' },
+        { key: 'netIncome', title: '净收入', value: value('netIncome'), icon: 'el-icon-pie-chart', color: 'blue' }
+      ]
+      return rows.map((item, index) => {
+        const next = rows[index + 1]
+        const rate = next && item.value ? (next.value * 100 / item.value).toFixed(1) + '%' : '--'
+        return { ...item, rate }
+      })
+    },
+    receiveTrendRows() {
+      return this.completeMonthlyRows(this.receiveTrend && this.receiveTrend.length ? this.receiveTrend : this.trend, {
+        itemValue: 0,
+        itemCount: 0
+      })
+    },
+    receiveBarList() {
+      return this.buildBars(this.receiveTrendRows, 'itemValue')
+    },
+    receiveCountPointList() {
+      return this.buildLinePoints(this.receiveTrendRows, 'itemCount')
+    },
+    receiveCountPoints() {
+      return this.receiveCountPointList.map(item => `${item.x},${item.y}`).join(' ')
+    },
+    invoiceExpenseRows() {
+      return this.completeMonthlyRows(this.invoiceExpenseTrend || [], {
+        invoiceAmount: 0,
+        expenseAmount: 0
+      })
+    },
+    invoiceBarList() {
+      return this.buildBars(this.invoiceExpenseRows, 'invoiceAmount')
+    },
+    expensePointList() {
+      return this.buildLinePoints(this.invoiceExpenseRows, 'expenseAmount')
+    },
+    expenseLinePoints() {
+      return this.expensePointList.map(item => `${item.x},${item.y}`).join(' ')
+    },
+    overdueReceivables() {
+      return (this.dueReceivables || []).filter(item => Number(item.agingDays || 0) > 0 || item.receivableStatus === 'overdue').slice(0, 5)
+    },
     reportCards() {
       const map = this.keyed(this.report.cards || [], 'metricValue')
       return [
@@ -686,6 +1005,11 @@ export default {
         this.aging = data.aging || []
         this.links = data.links || []
         this.reminders = data.reminders || []
+        this.flow = data.flow || []
+        this.receiveTrend = data.receiveTrend || data.trend || []
+        this.invoiceExpenseTrend = data.invoiceExpenseTrend || []
+        this.invoiceActivities = (data.invoiceActivities || []).slice(0, 5)
+        this.financeSummaryRows = data.financeSummaryRows || []
         this.leadFunnel = data.leadFunnel || []
         this.leadSourceConversion = data.leadSourceConversion || []
         this.pendingPayments = (data.pendingPayments || []).slice(0, 5)
@@ -870,6 +1194,52 @@ export default {
     canCollect(row) {
       return row.confirmStatus === '0' || (row.confirmStatus === '1' && Number(row.pendingAmount || 0) > 0)
     },
+    dashboardValue(key) {
+      const map = this.keyed(this.dashboard.cards || [])
+      return Number(map[key] && map[key].metricValue || 0)
+    },
+    listSum(getter) {
+      return (this.list || []).reduce((sum, row) => sum + Number(getter(row) || 0), 0)
+    },
+    listCount(predicate) {
+      return (this.list || []).filter(row => predicate(row)).length
+    },
+    completeMonthlyRows(rows, defaults) {
+      const map = (rows || []).reduce((target, item) => {
+        target[item.itemName] = item
+        return target
+      }, {})
+      return this.lastSixMonths().map(month => ({ itemName: month, ...defaults, ...(map[month] || {}) }))
+    },
+    lastSixMonths() {
+      const now = new Date()
+      const months = []
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        months.push(date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0'))
+      }
+      return months
+    },
+    buildBars(rows, valueKey) {
+      const list = rows && rows.length ? rows : []
+      const max = Math.max(...list.map(item => Number(item[valueKey] || 0)), 1)
+      const gap = list.length ? 520 / list.length : 520
+      const width = Math.max(18, Math.min(42, gap * 0.34))
+      return list.map((item, index) => {
+        const value = Number(item[valueKey] || 0)
+        const height = Math.max(6, value / max * 130)
+        return { key: item.itemName + '-' + index, x: Math.round(index * gap + gap / 2 - width / 2), y: Math.round(175 - height), width, height, title: `${item.itemName}：${this.formatMoney(value)}` }
+      })
+    },
+    buildLinePoints(rows, valueKey) {
+      const list = rows && rows.length ? rows : []
+      const max = Math.max(...list.map(item => Number(item[valueKey] || 0)), 1)
+      const gap = list.length <= 1 ? 520 : 520 / (list.length - 1)
+      return list.map((item, index) => {
+        const value = Number(item[valueKey] || 0)
+        return { key: item.itemName + '-' + index, x: Math.round(index * gap), y: Math.round(175 - value / max * 130), title: `${item.itemName}：${value.toLocaleString()}` }
+      })
+    },
     buildTrendPoints(rows, width) {
       const list = rows && rows.length ? rows : [{ itemName: '-', itemValue: 0 }]
       const max = Math.max(...list.map(item => Number(item.itemValue || 0)), 1)
@@ -895,6 +1265,28 @@ export default {
         target[item.metricKey] = valueKey ? item[valueKey] : item
         return target
       }, {})
+    },
+    formatPlainMoney(value) {
+      return Number(value || 0).toLocaleString()
+    },
+    formatShortMoney(value) {
+      const amount = Number(value || 0)
+      if (Math.abs(amount) >= 10000) return (amount / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + '万'
+      return amount.toLocaleString()
+    },
+    formatCompactMoney(value) {
+      const amount = Number(value || 0)
+      if (Math.abs(amount) >= 10000) return (amount / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + '万'
+      return amount.toLocaleString()
+    },
+    shortDate(value) {
+      return value ? String(value).slice(5, 10) : '-'
+    },
+    formatSummaryValue(row) {
+      return row.metricKey === 'receiveCount' ? Number(row.monthValue || 0).toLocaleString() : this.formatCompactMoney(row.monthValue)
+    },
+    formatSummaryYearValue(row) {
+      return row.metricKey === 'receiveCount' ? Number(row.yearValue || 0).toLocaleString() : this.formatCompactMoney(row.yearValue)
     },
     formatMoney(value) {
       if (value == null || value === '') return '¥ 0'
@@ -994,7 +1386,7 @@ export default {
 .donut-wrap {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
 }
 
 .donut {
@@ -1003,15 +1395,15 @@ export default {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 118px;
-  height: 118px;
+  width: 138px;
+  height: 138px;
   border-radius: 50%;
-  flex: 0 0 118px;
+  flex: 0 0 138px;
 
   &::after {
     content: '';
     position: absolute;
-    inset: 22px;
+    inset: 26px;
     border-radius: 50%;
     background: #fff;
   }
@@ -1203,6 +1595,200 @@ export default {
   margin-top: 16px;
 }
 
+.finance-flow-card {
+  margin-top: 16px;
+}
+
+.finance-flow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.finance-flow-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 70px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+
+  > div {
+    min-width: 0;
+  }
+
+  b,
+  strong {
+    display: block;
+  }
+
+  b {
+    color: #64748b;
+    font-size: var(--biz-font-small);
+  }
+
+  strong {
+    margin-top: 4px;
+    color: #0f172a;
+    font-size: var(--biz-font-card);
+    white-space: nowrap;
+  }
+
+  > em {
+    position: absolute;
+    right: -16px;
+    top: 50%;
+    z-index: 1;
+    min-width: 38px;
+    transform: translateY(-50%);
+    color: #64748b;
+    font-size: var(--biz-font-mini);
+    font-style: normal;
+    text-align: center;
+
+    &::after {
+      content: '';
+      display: block;
+      width: 24px;
+      height: 1px;
+      margin: 3px auto 0;
+      background: #cbd5e1;
+    }
+  }
+}
+
+.flow-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: #2563eb;
+  background: #eaf2ff;
+  font-size: 18px;
+
+  &.green { color: #16a34a; background: #eafaf1; }
+  &.purple { color: #7c3aed; background: #f3e8ff; }
+  &.orange { color: #f97316; background: #fff3e7; }
+  &.cyan { color: #0891b2; background: #e6fbff; }
+}
+
+.finance-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.finance-chart-card {
+  min-height: 270px;
+}
+
+.combo-chart {
+  svg {
+    width: 100%;
+    height: 210px;
+  }
+
+  .trend-line {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  rect {
+    fill: url(#financeBarGradient);
+    fill: #2563eb;
+  }
+
+  circle {
+    fill: #fff;
+    stroke: #22c55e;
+    stroke-width: 3;
+  }
+
+  .chart-hover-bar,
+  .chart-hover-point {
+    cursor: pointer;
+    transition: opacity .18s ease, filter .18s ease;
+
+    &:hover {
+      opacity: .82;
+      filter: drop-shadow(0 4px 7px rgba(37, 99, 235, .22));
+    }
+  }
+}
+
+.trend-line.green {
+  stroke: #22c55e;
+}
+
+.chart-labels,
+.chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: var(--biz-font-mini);
+}
+
+.chart-legend {
+  justify-content: flex-start;
+  margin-top: 8px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &.blue { background: #2563eb; }
+    &.green { background: #22c55e; }
+  }
+}
+
+.finance-overview-tables {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+
+  ::v-deep .biz-table-card {
+    min-width: 0;
+  }
+}
+
+.overview-mini-table {
+  ::v-deep .el-table__cell {
+    padding: 6px 0;
+    font-size: var(--biz-font-mini);
+  }
+
+  ::v-deep th.el-table__cell {
+    background: #f8fafc;
+  }
+
+  ::v-deep .cell {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  ::v-deep .el-table__body-wrapper {
+    overflow-x: hidden;
+  }
+}
+
 .report-main {
   grid-column: 1 / -1;
 }
@@ -1338,9 +1924,19 @@ export default {
 
 @media (max-width: 1280px) {
   .finance-overview-grid,
+  .finance-charts-grid,
+  .finance-overview-tables,
   .finance-tables-grid,
   .report-grid {
     grid-template-columns: 1fr;
+  }
+
+  .finance-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-flow-item > em {
+    display: none;
   }
 
   .finance-report-toolbar {

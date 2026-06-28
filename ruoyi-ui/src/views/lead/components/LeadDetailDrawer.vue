@@ -5,7 +5,7 @@
         <button class="drawer-close" @click="visible=false"><i class="el-icon-close" /></button>
         <div class="detail-title"><div class="initial">{{ initial }}</div><div><h2>{{ lead.contactName || lead.leadName }}</h2><p>{{ maskMobile(lead.mobile) }} <i /> {{ lead.wechat || '未填写微信' }}</p></div><el-tag size="mini" :type="status.type">{{ status.label }}</el-tag></div>
         <div class="summary-strip"><span>线索编号：<b>{{ lead.leadNo }}</b></span><span>来源：<b>{{ sourceName }}</b></span><span>优先级：<b>{{ priorityName || '-' }}</b></span><span>创建时间：<b>{{ lead.createTime || '-' }}</b></span></div>
-        <div class="detail-actions"><el-button v-if="canEdit" v-hasPermi="['lead:edit']" type="primary" icon="el-icon-edit" @click="$emit('edit',lead)">编辑</el-button><el-button v-if="canAssign" v-hasPermi="['lead:assign']" icon="el-icon-user" @click="$emit('assign',lead)">分配</el-button><el-button v-if="canFollow" v-hasPermi="['lead:followup:add']" icon="el-icon-plus" @click="$emit('follow',lead)">新增跟进</el-button></div>
+        <div class="detail-actions"><el-button v-if="canEdit" v-hasPermi="['lead:edit']" type="primary" icon="el-icon-edit" @click="$emit('edit',lead)">编辑</el-button><el-button v-if="canAssign" v-hasPermi="['lead:assign']" icon="el-icon-user" @click="$emit('assign',lead)">分配</el-button><el-button v-if="canFollow" v-hasPermi="followPerms" icon="el-icon-plus" @click="$emit('follow',lead)">新增跟进</el-button></div>
         <section><h3>基础信息</h3><dl><dt>客户名称</dt><dd>{{ lead.contactName || '-' }}</dd><dt>线索名称</dt><dd>{{ lead.leadName || '-' }}</dd><dt>联系电话</dt><dd>{{ lead.mobile || '-' }}</dd><dt>微信号</dt><dd>{{ lead.wechat || '-' }}</dd><dt>单位名称</dt><dd>{{ lead.companyName || '-' }}</dd><dt>负责人</dt><dd>{{ lead.ownerName || '待领取' }}</dd></dl></section>
         <section><h3>法律需求</h3><dl><dt>需求描述</dt><dd class="wide">{{ lead.legalDemand || '暂未填写需求描述' }}</dd><dt>预计金额</dt><dd>{{ amount }}</dd><dt>下次跟进</dt><dd>{{ lead.nextFollowTime || '-' }}</dd><dt>备注</dt><dd class="wide">{{ lead.remark || '-' }}</dd></dl></section>
         <section><h3>分配信息</h3><dl><dt>当前负责人</dt><dd>{{ lead.ownerName || '待领取' }}</dd><dt>所属部门</dt><dd>{{ lead.deptName || '-' }}</dd><dt>公海状态</dt><dd>{{ poolStatusName || '-' }}</dd><dt>最后跟进</dt><dd>{{ lead.lastFollowTime || '-' }}</dd></dl></section>
@@ -19,7 +19,7 @@
           </article>
         </div>
         <el-empty v-else description="暂无跟进记录" :image-size="64" />
-        <el-button v-if="canFollow" v-hasPermi="['lead:followup:add']" class="follow-button" type="primary" icon="el-icon-plus" @click="$emit('follow',lead)">新增跟进</el-button>
+        <el-button v-if="canFollow" v-hasPermi="followPerms" class="follow-button" type="primary" icon="el-icon-plus" @click="$emit('follow',lead)">新增跟进</el-button>
       </aside>
     </div>
   </el-drawer>
@@ -28,7 +28,7 @@
 <script>
 export default {
   name:'LeadDetailDrawer',
-  props:{value:Boolean,lead:{type:Object,default:null},followups:{type:Array,default:()=>[]},sourceName:String,status:{type:Object,default:()=>({})},priorityName:String,poolStatusName:String,followTypeOptions:{type:Array,default:()=>[]},sizeClass:{type:String,default:'lead-size-medium'}},
+  props:{value:Boolean,lead:{type:Object,default:null},followups:{type:Array,default:()=>[]},sourceName:String,status:{type:Object,default:()=>({})},priorityName:String,poolStatusName:String,followTypeOptions:{type:Array,default:()=>[]},followPerms:{type:Array,default:()=>['lead:followup:add']},sizeClass:{type:String,default:'lead-size-medium'}},
   computed:{visible:{get(){return this.value},set(value){this.$emit('input',value)}},initial(){return(this.lead.contactName||this.lead.leadName||'线').slice(0,1)},amount(){return this.lead.estimatedAmount ? '¥ ' + Number(this.lead.estimatedAmount).toLocaleString() : '-'},terminal(){return ['3','4','5'].includes(this.lead.status)},inPool(){return this.lead.poolStatus === '1'},canEdit(){return !this.terminal},canAssign(){return !this.terminal},canFollow(){return !this.terminal && !this.inPool && !!this.lead.ownerId}},
   methods:{maskMobile(value){return value ? value.replace(/(\d{3})\d{4}(\d{4})/,'$1****$2') : '未填写电话'},followType(type){const item=this.followTypeOptions.find(option=>String(option.value)===String(type));return item?item.label:(type||'-')},followIcon(type){return({phone:'phone',wechat:'wechat',meeting:'peoples',email:'email'})[type]||'message'}}
 }

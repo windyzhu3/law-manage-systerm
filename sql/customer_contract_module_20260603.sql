@@ -389,9 +389,10 @@ from (
  select '联系人删除',@customer_contact_id,3,'customer:contact:remove' union all
  select '客户跟进新增',@customer_followup_id,1,'customer:followup:add' union all
  select '客户跟进删除',@customer_followup_id,2,'customer:followup:remove' union all
- select '标签新增',@customer_tag_id,1,'customer:tag:add' union all
- select '标签编辑',@customer_tag_id,2,'customer:tag:edit' union all
- select '标签删除',@customer_tag_id,3,'customer:tag:remove' union all
+ select '客户标签查询',@customer_tag_id,1,'customer:tag:query' union all
+ select '标签新增',@customer_tag_id,2,'customer:tag:add' union all
+ select '标签编辑',@customer_tag_id,3,'customer:tag:edit' union all
+ select '标签删除',@customer_tag_id,4,'customer:tag:remove' union all
  select '客户合并',@customer_merge_id,1,'customer:merge:merge' union all
  select '合同查询',@contract_list_id,1,'contract:query' union all
  select '合同新增',@contract_list_id,2,'contract:add' union all
@@ -437,9 +438,10 @@ join (
  select @customer_contact_id,3,'customer:contact:remove' union all
  select @customer_followup_id,1,'customer:followup:add' union all
  select @customer_followup_id,2,'customer:followup:remove' union all
- select @customer_tag_id,1,'customer:tag:add' union all
- select @customer_tag_id,2,'customer:tag:edit' union all
- select @customer_tag_id,3,'customer:tag:remove' union all
+ select @customer_tag_id,1,'customer:tag:query' union all
+ select @customer_tag_id,2,'customer:tag:add' union all
+ select @customer_tag_id,3,'customer:tag:edit' union all
+ select @customer_tag_id,4,'customer:tag:remove' union all
  select @customer_merge_id,1,'customer:merge:merge' union all
  select @contract_list_id,1,'contract:query' union all
  select @contract_list_id,2,'contract:add' union all
