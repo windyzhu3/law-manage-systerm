@@ -295,41 +295,6 @@ public class BizMatterServiceImpl implements IBizMatterService
         return archiveService.archive(archive);
     }
 
-    private void saveArchiveMaterials(Long archiveId, List<Map<String, Object>> materials)
-    {
-        matterMapper.deleteArchiveMaterials(archiveId);
-        if (materials == null)
-        {
-            return;
-        }
-        for (Map<String, Object> material : materials)
-        {
-            if (StringUtils.isEmpty(text(material.get("materialName"))))
-            {
-                continue;
-            }
-            material.put("archiveId", archiveId);
-            material.put("materialStatus", defaultText(material.get("materialStatus"), "pending"));
-            assertDictValue("law_case_material_status", material.get("materialStatus"), "材料状态不合法");
-            material.put("createBy", SecurityUtils.getUsername());
-            matterMapper.insertArchiveMaterial(material);
-        }
-    }
-
-    private List<Map<String, Object>> fillNodeMaterials(List<Map<String, Object>> nodes)
-    {
-        if (nodes == null || nodes.isEmpty())
-        {
-            return nodes;
-        }
-        for (Map<String, Object> node : nodes)
-        {
-            Long nodeId = toLong(node.get("node_id"), "关键节点不存在");
-            node.put("materials", matterMapper.selectNodeMaterials(nodeId));
-        }
-        return nodes;
-    }
-
     private void validateMatter(Map<String, Object> matter)
     {
         requiredText(matter.get("caseName"), "请输入案件名称");
@@ -343,85 +308,6 @@ public class BizMatterServiceImpl implements IBizMatterService
         assertDictValue("law_case_type", matter.get("caseType"), "案件类型不合法");
         assertDictValue("law_case_stage", matter.get("caseStage"), "办理阶段不合法");
         assertDictValue("law_case_risk_level", matter.get("riskLevel"), "风险等级不合法");
-    }
-
-    private void validateNode(Map<String, Object> node)
-    {
-        requiredText(node.get("nodeName"), "请输入节点名称");
-        requiredText(node.get("planDate"), "请选择计划日期");
-        assertDictValue("law_case_node_status", node.get("nodeStatus"), "节点状态不合法");
-        assertDictValue("law_case_node_type", node.get("nodeType"), "节点类型不合法");
-        String nodeStatus = text(node.get("nodeStatus"));
-        String actualDate = text(node.get("actualDate"));
-        if ("done".equals(nodeStatus) && StringUtils.isEmpty(actualDate))
-        {
-            throw new ServiceException("已完成节点必须填写实际日期");
-        }
-        if (!StringUtils.isEmpty(actualDate) && ("pending".equals(nodeStatus) || "current".equals(nodeStatus)))
-        {
-            throw new ServiceException("已填写实际日期的节点不能保持待开始或当前节点状态");
-        }
-    }
-
-    private void validateExpense(Map<String, Object> expense)
-    {
-        requiredText(expense.get("expenseType"), "请选择费用类型");
-        BigDecimal amount = decimalValue(requiredText(expense.get("amount"), "请输入费用金额"));
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
-        {
-            throw new ServiceException("费用金额必须大于0");
-        }
-        requiredText(expense.get("occurDate"), "请选择发生日期");
-        assertDictValue("law_case_expense_type", expense.get("expenseType"), "费用类型不合法");
-        assertDictValue("law_case_pay_status", expense.get("payStatus"), "付款状态不合法");
-        assertDictValue("law_case_reimburse_status", expense.get("reimburseStatus"), "报销状态不合法");
-        assertDictValue("law_case_voucher_status", expense.get("voucherStatus"), "凭证状态不合法");
-    }
-
-    private void validateCloseReady(Long caseId)
-    {
-        if (matterMapper.countUnfinishedNodes(caseId) > 0)
-        {
-            throw new ServiceException("仍有未完成或超期的关键节点，不能发起结案");
-        }
-    }
-
-    private void validateCaseFeeCleared(Long caseId)
-    {
-        if (matterMapper.countUnpaidExpenseByCaseId(caseId) > 0)
-        {
-            throw new ServiceException("仍有未付款的案件费用，不能确认结案或归档");
-        }
-    }
-
-    private void validateArchiveReady(Long archiveId, Map<String, Object> archive)
-    {
-        validateArchiveFeeMarkedCleared(archive);
-        if (matterMapper.countArchiveMaterials(archiveId) == 0)
-        {
-            throw new ServiceException("请维护归档资料清单后再确认归档");
-        }
-        if (matterMapper.countNotReadyArchiveMaterials(archiveId) > 0)
-        {
-            throw new ServiceException("仍有未准备完成的归档资料，不能确认归档");
-        }
-    }
-
-    private void validateArchiveFeeMarkedCleared(Map<String, Object> archive)
-    {
-        if (!"cleared".equals(text(archive.get("feeClearStatus"))))
-        {
-            throw new ServiceException("费用未结清，不能确认结案或归档");
-        }
-    }
-
-    private void validateArchive(Map<String, Object> archive)
-    {
-        requiredText(archive.get("closeResult"), "请选择结案结果");
-        requiredText(archive.get("closeDate"), "请选择结案日期");
-        requiredText(archive.get("summary"), "请输入办案总结");
-        assertDictValue("law_case_close_result", archive.get("closeResult"), "结案结果不合法");
-        assertDictValue("law_case_fee_clear_status", archive.get("feeClearStatus"), "费用结清状态不合法");
     }
 
     private void validateFieldValues(String caseType, Object rawFields)
@@ -511,120 +397,6 @@ public class BizMatterServiceImpl implements IBizMatterService
         return matter;
     }
 
-    private Map<String, Object> requireProcessingMatter(Long caseId)
-    {
-        Map<String, Object> matter = requireMatter(caseId);
-        if (!STATUS_PROCESSING.equals(text(matter.get("case_status"))))
-        {
-            throw new ServiceException("只有办理中案件可以发起该操作");
-        }
-        return matter;
-    }
-
-    private void requireProcessEditableMatter(Long caseId)
-    {
-        requireProcessingMatter(caseId);
-    }
-
-    private Map<String, Object> requireOwnedProgress(Long progressId)
-    {
-        Map<String, Object> row = matterMapper.selectProgressById(progressId);
-        if (row == null || "2".equals(text(row.get("del_flag"))))
-        {
-            throw new ServiceException("进度记录不存在");
-        }
-        requireMatter(toLong(row.get("case_id"), "请选择案件"));
-        return row;
-    }
-
-    private Map<String, Object> requireOwnedNode(Long nodeId)
-    {
-        Map<String, Object> row = matterMapper.selectNodeById(nodeId);
-        if (row == null || "2".equals(text(row.get("del_flag"))))
-        {
-            throw new ServiceException("关键节点不存在");
-        }
-        requireMatter(toLong(row.get("case_id"), "请选择案件"));
-        return row;
-    }
-
-    private Map<String, Object> requireOwnedExpense(Long expenseId)
-    {
-        Map<String, Object> row = matterMapper.selectExpenseById(expenseId);
-        if (row == null || "2".equals(text(row.get("del_flag"))))
-        {
-            throw new ServiceException("费用不存在");
-        }
-        requireMatter(toLong(row.get("case_id"), "请选择案件"));
-        return row;
-    }
-
-    private void updateMatterTouch(Long caseId, Object content, String action, String logContent)
-    {
-        Map<String, Object> update = new HashMap<>();
-        update.put("caseId", caseId);
-        update.put("recentProgress", limitText(text(content), 300));
-        update.put("currentNode", "办理中");
-        update.put("updateBy", SecurityUtils.getUsername());
-        matterMapper.updateMatter(update);
-        insertStatusLog(caseId, null, null, action, logContent);
-    }
-
-    private void syncMatterNodeState(Long caseId)
-    {
-        Map<String, Object> currentNode = matterMapper.selectCurrentOpenNode(caseId);
-        Map<String, Object> update = new HashMap<>();
-        update.put("caseId", caseId);
-        update.put("updateBy", SecurityUtils.getUsername());
-        update.put("refreshNextDate", true);
-        if (currentNode == null)
-        {
-            update.put("currentNode", "办理中");
-        }
-        else
-        {
-            update.put("currentNode", currentNode.get("node_name"));
-            update.put("caseStage", nodeTypeToStage(text(currentNode.get("node_type"))));
-        }
-        matterMapper.updateMatter(update);
-    }
-
-    private String nodeTypeToStage(String nodeType)
-    {
-        if ("evidence".equals(nodeType))
-        {
-            return "evidence";
-        }
-        if ("hearing".equals(nodeType) || "judgment".equals(nodeType))
-        {
-            return "hearing";
-        }
-        if ("execution".equals(nodeType))
-        {
-            return "execution";
-        }
-        if ("archive".equals(nodeType))
-        {
-            return "archive";
-        }
-        return "opening";
-    }
-
-    private void updateMatterFeeStatus(Long caseId)
-    {
-        Map<String, Object> update = new HashMap<>();
-        update.put("caseId", caseId);
-        int expenseCount = matterMapper.countExpenseByCaseId(caseId);
-        String feeStatus = "none";
-        if (expenseCount > 0)
-        {
-            feeStatus = matterMapper.countUnpaidExpenseByCaseId(caseId) == 0 ? "settled" : "partial";
-        }
-        update.put("feeStatus", feeStatus);
-        update.put("updateBy", SecurityUtils.getUsername());
-        matterMapper.updateMatter(update);
-    }
-
     private void saveFieldValues(Long caseId, Object rawFields)
     {
         matterMapper.deleteFieldValues(caseId);
@@ -659,34 +431,6 @@ public class BizMatterServiceImpl implements IBizMatterService
         }
     }
 
-    private List<Map<String, Object>> buildDetailFieldValues(List<Map<String, Object>> configs, List<Map<String, Object>> values)
-    {
-        Map<String, Map<String, Object>> valueMap = new HashMap<>();
-        for (Map<String, Object> value : values)
-        {
-            valueMap.put(text(value.get("field_code")), value);
-        }
-        List<Map<String, Object>> result = new ArrayList<>();
-        for (Map<String, Object> config : configs)
-        {
-            String code = text(config.get("field_code"));
-            Map<String, Object> merged = new HashMap<>(config);
-            Map<String, Object> value = valueMap.get(code);
-            if (value != null)
-            {
-                merged.putAll(value);
-            }
-            else
-            {
-                merged.put("field_code", code);
-                merged.put("field_name", config.get("field_name"));
-                merged.put("field_value", "");
-            }
-            result.add(merged);
-        }
-        return result;
-    }
-
     private void insertStatusLog(Long caseId, String fromStatus, String toStatus, String actionType, String content)
     {
         assertDictValue("law_case_status_action", actionType, "案件状态动作不合法");
@@ -698,20 +442,6 @@ public class BizMatterServiceImpl implements IBizMatterService
         log.put("content", content);
         log.put("createBy", SecurityUtils.getUsername());
         assertRows(matterMapper.insertStatusLog(log), "案件状态记录创建失败");
-    }
-
-    private Map<String, Object> scopeParams(Map<String, Object> params)
-    {
-        Map<String, Object> target = new HashMap<>();
-        if (params != null)
-        {
-            target.putAll(params);
-        }
-        target.put("currentUserId", SecurityUtils.getUserId());
-        target.put("currentDeptId", SecurityUtils.getDeptId());
-        target.put("dataScope", !SecurityUtils.isAdmin());
-        target.put("permissions", MATTER_PERMISSIONS);
-        return target;
     }
 
     private void assertDictValue(String dictType, Object value, String message)
@@ -795,15 +525,6 @@ public class BizMatterServiceImpl implements IBizMatterService
     private String text(Object value)
     {
         return value == null || "null".equalsIgnoreCase(String.valueOf(value)) ? null : String.valueOf(value).trim();
-    }
-
-    private String limitText(String value, int maxLength)
-    {
-        if (value == null || value.length() <= maxLength)
-        {
-            return value;
-        }
-        return value.substring(0, maxLength);
     }
 
     @SuppressWarnings("unchecked")
