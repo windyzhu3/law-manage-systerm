@@ -27,6 +27,7 @@ import com.ruoyi.system.service.matter.MatterDocumentService;
 import com.ruoyi.system.service.matter.MatterExpenseService;
 import com.ruoyi.system.service.matter.MatterNodeService;
 import com.ruoyi.system.service.matter.MatterArchiveService;
+import com.ruoyi.system.service.matter.MatterQueryService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -78,49 +79,31 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Autowired
     private MatterArchiveService archiveService;
 
+    @Autowired
+    private MatterQueryService queryService;
+
     @Override
     public Map<String, Object> selectDashboard()
     {
-        Map<String, Object> params = scopeParams(new HashMap<>());
-        Map<String, Object> data = new HashMap<>();
-        data.put("cards", matterMapper.selectDashboardCards(params));
-        data.put("types", matterMapper.selectCaseTypeStats(params));
-        data.put("reminders", matterMapper.selectReminders(params));
-        return data;
+        return queryService.dashboard();
     }
 
     @Override
     public List<Map<String, Object>> selectMatterList(Map<String, Object> params)
     {
-        return matterMapper.selectMatterList(scopeParams(params));
+        return queryService.matters(params);
     }
 
     @Override
     public Map<String, Object> selectMatterDetail(Long caseId)
     {
-        Map<String, Object> matter = requireMatter(caseId);
-        List<Map<String, Object>> fieldConfigs = matterMapper.selectFieldConfigs(text(matter.get("case_type")));
-        matter.put("fieldConfigs", fieldConfigs);
-        matter.put("fieldValues", buildDetailFieldValues(fieldConfigs, matterMapper.selectFieldValues(caseId)));
-        matter.put("progress", matterMapper.selectProgressList(scopeParams(Map.of("caseId", caseId, "pageSize", 10))));
-        matter.put("nodes", selectNodeList(Map.of("caseId", caseId, "pageSize", 20)));
-        matter.put("expenses", matterMapper.selectExpenseList(scopeParams(Map.of("caseId", caseId, "pageSize", 10))));
-        matter.put("documents", matterMapper.selectDocumentList(scopeParams(Map.of("caseId", caseId, "pageSize", 10))));
-        Map<String, Object> archive = matterMapper.selectArchiveByCaseId(caseId);
-        if (archive != null)
-        {
-            archive.put("materials", matterMapper.selectArchiveMaterials(toLong(archive.get("archive_id"), "归档记录不存在")));
-        }
-        matter.put("archive", archive);
-        matter.put("statusLogs", matterMapper.selectStatusLogs(scopeParams(Map.of("caseId", caseId, "pageSize", 20))));
-        return matter;
+        return queryService.detail(caseId);
     }
 
     @Override
     public List<Map<String, Object>> selectFieldConfigs(String caseType)
     {
-        assertDictValue("law_case_type", caseType, "案件类型不合法");
-        return matterMapper.selectFieldConfigs(caseType);
+        return queryService.fieldConfigs(caseType);
     }
 
     @Override
@@ -195,11 +178,11 @@ public class BizMatterServiceImpl implements IBizMatterService
         return rows;
     }
 
-    @Override public List<Map<String, Object>> selectProgressList(Map<String, Object> params) { return matterMapper.selectProgressList(scopeParams(params)); }
-    @Override public List<Map<String, Object>> selectNodeList(Map<String, Object> params) { return fillNodeMaterials(matterMapper.selectNodeList(scopeParams(params))); }
-    @Override public List<Map<String, Object>> selectExpenseList(Map<String, Object> params) { return matterMapper.selectExpenseList(scopeParams(params)); }
-    @Override public List<Map<String, Object>> selectDocumentList(Map<String, Object> params) { return matterMapper.selectDocumentList(scopeParams(params)); }
-    @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { return matterMapper.selectStatusLogs(scopeParams(params)); }
+    @Override public List<Map<String, Object>> selectProgressList(Map<String, Object> params) { return queryService.progress(params); }
+    @Override public List<Map<String, Object>> selectNodeList(Map<String, Object> params) { return queryService.nodes(params); }
+    @Override public List<Map<String, Object>> selectExpenseList(Map<String, Object> params) { return queryService.expenses(params); }
+    @Override public List<Map<String, Object>> selectDocumentList(Map<String, Object> params) { return queryService.documents(params); }
+    @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { return queryService.statusLogs(params); }
 
     @Override
     @Transactional
