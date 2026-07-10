@@ -12,12 +12,12 @@
     <artifactId>ruoyi-system</artifactId>
 
     <description>
-        system绯荤粺妯″潡
+        system系统模块
     </description>
 
     <dependencies>
 
-        <!-- 閫氱敤宸ュ叿-->
+        <!-- 通用工具-->
         <dependency>
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-common</artifactId>

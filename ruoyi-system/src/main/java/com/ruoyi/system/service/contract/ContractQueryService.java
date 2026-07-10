@@ -31,7 +31,7 @@ public class ContractQueryService
     public BizContract contract(Long contractId)
     {
         BizContract contract = contractMapper.selectContractById(contractId);
-        if (contract == null || "2".equals(contract.getDelFlag())) throw new ServiceException("鍚堝悓涓嶅瓨鍦ㄦ垨宸插垹闄?);
+        if (contract == null || "2".equals(contract.getDelFlag())) throw new ServiceException("合同不存在或已删除");
         requireAccess(contractId);
         return contract;
     }
@@ -65,10 +65,10 @@ public class ContractQueryService
 
     private void requireAccess(Long contractId)
     {
-        if (contractId == null) throw new ServiceException("鍚堝悓涓嶅瓨鍦ㄦ垨宸插垹闄?);
+        if (contractId == null) throw new ServiceException("合同不存在或已删除");
         if (!SecurityUtils.isAdmin() && contractMapper.countContractInDataScope(contractId,
                 SecurityUtils.getUserId(), SecurityUtils.getDeptId(), ContractPermissions.DATA_SCOPE) == 0)
-            throw new ServiceException("鏃犳潈璁块棶璇ュ悎鍚?);
+            throw new ServiceException("无权访问该合同");
     }
 }
 

@@ -43,15 +43,15 @@ public class MatterCommandService
     @Transactional
     public int create(Map<String, Object> matter)
     {
-        Long contractId = toLong(matter.get("contractId"), "璇烽€夋嫨鏉ユ簮鍚堝悓");
-        if (mapper.selectMatterByContractId(contractId) != null) throw new ServiceException("璇ュ悎鍚屽凡鐢熸垚妗堜欢");
+        Long contractId = toLong(matter.get("contractId"), "请选择来源合同");
+        if (mapper.selectMatterByContractId(contractId) != null) throw new ServiceException("该合同已生成案件");
         BizContract contract = contractMapper.selectContractById(contractId);
-        if (contract == null) throw new ServiceException("鏉ユ簮鍚堝悓涓嶅瓨鍦?);
-        if (contract.getCustomerId() == null) throw new ServiceException("鍚堝悓鏈叧鑱斿鎴凤紝涓嶈兘鍒涘缓妗堜欢");
+        if (contract == null) throw new ServiceException("来源合同不存在");
+        if (contract.getCustomerId() == null) throw new ServiceException("合同未关联客户，不能创建案件");
         if (!"2".equals(contract.getAuditStatus()) || !"1".equals(contract.getSignStatus()) || !"1".equals(contract.getContractStatus()))
-            throw new ServiceException("鍙湁瀹℃牳閫氳繃銆佸凡绛捐涓斿饱绾︿腑鐨勫悎鍚屽彲浠ュ垱寤烘浠?);
+            throw new ServiceException("只有审核通过、已签订且履约中的合同可以创建案件");
         BizCustomer customer = customerMapper.selectCustomerById(contract.getCustomerId());
-        if (customer == null || "2".equals(customer.getDelFlag())) throw new ServiceException("瀹㈡埛涓嶅瓨鍦ㄦ垨宸插垹闄?);
+        if (customer == null || "2".equals(customer.getDelFlag())) throw new ServiceException("客户不存在或已删除");
         matter.put("caseNo", "AJ" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
         matter.put("caseName", defaultText(matter.get("caseName"), contract.getContractName()));
         matter.put("customerId", contract.getCustomerId()); matter.put("customerName", contract.getCustomerName());
@@ -59,43 +59,43 @@ public class MatterCommandService
         matter.put("caseType", defaultText(matter.get("caseType"), contract.getCaseType()));
         matter.put("caseStatus", PROCESSING); matter.put("archiveStatus", "none"); matter.put("feeStatus", "none");
         matter.put("caseStage", defaultText(matter.get("caseStage"), "opening"));
-        matter.put("riskLevel", defaultText(matter.get("riskLevel"), "medium")); matter.put("currentNode", "鍔炵悊涓?);
+        matter.put("riskLevel", defaultText(matter.get("riskLevel"), "medium")); matter.put("currentNode", "办理中");
         matter.put("createBy", SecurityUtils.getUsername()); matter.put("ownerId", SecurityUtils.getUserId());
         matter.put("deptId", SecurityUtils.getDeptId()); matter.put("mainLawyerId", SecurityUtils.getUserId());
         matter.put("mainLawyerName", SecurityUtils.getLoginUser().getUser().getNickName());
-        requiredText(matter.get("caseName"), "璇疯緭鍏ユ浠跺悕绉?); requiredText(matter.get("caseType"), "璇烽€夋嫨妗堜欢绫诲瀷");
-        assertDict("law_case_type", matter.get("caseType"), "妗堜欢绫诲瀷涓嶅悎娉?);
+        requiredText(matter.get("caseName"), "请输入案件名称"); requiredText(matter.get("caseType"), "请选择案件类型");
+        assertDict("law_case_type", matter.get("caseType"), "案件类型不合法");
         validateFields(text(matter.get("caseType")), matter.get("fieldValues"));
-        int rows = mapper.insertMatter(matter); assertRows(rows, "妗堜欢鍒涘缓澶辫触");
-        Long caseId = toLong(matter.get("caseId"), "妗堜欢鍒涘缓澶辫触");
-        saveFields(caseId, matter.get("fieldValues")); log(caseId, null, PROCESSING, "create", "鎵嬪姩鍒涘缓鍔炵悊涓浠?);
+        int rows = mapper.insertMatter(matter); assertRows(rows, "案件创建失败");
+        Long caseId = toLong(matter.get("caseId"), "案件创建失败");
+        saveFields(caseId, matter.get("fieldValues")); log(caseId, null, PROCESSING, "create", "手动创建办理中案件");
         return rows;
     }
 
     @Transactional
     public int update(Map<String, Object> matter)
     {
-        Long caseId = toLong(matter.get("caseId"), "璇烽€夋嫨妗堜欢");
+        Long caseId = toLong(matter.get("caseId"), "请选择案件");
         Map<String, Object> existed = requireEditable(caseId);
         matter.put("updateBy", SecurityUtils.getUsername()); matter.put("expectedStatus", existed.get("case_status"));
-        requiredText(matter.get("caseName"), "璇疯緭鍏ユ浠跺悕绉?);
-        assertDict("law_case_type", matter.get("caseType"), "妗堜欢绫诲瀷涓嶅悎娉?);
-        assertDict("law_case_stage", matter.get("caseStage"), "鍔炵悊闃舵涓嶅悎娉?);
-        assertDict("law_case_risk_level", matter.get("riskLevel"), "椋庨櫓绛夌骇涓嶅悎娉?);
+        requiredText(matter.get("caseName"), "请输入案件名称");
+        assertDict("law_case_type", matter.get("caseType"), "案件类型不合法");
+        assertDict("law_case_stage", matter.get("caseStage"), "办理阶段不合法");
+        assertDict("law_case_risk_level", matter.get("riskLevel"), "风险等级不合法");
         validateFields(text(matter.get("caseType")), matter.get("fieldValues"));
-        int rows = mapper.updateMatter(matter); assertRows(rows, "妗堜欢宸插彉鍖栵紝璇峰埛鏂板悗閲嶈瘯");
+        int rows = mapper.updateMatter(matter); assertRows(rows, "案件已变化，请刷新后重试");
         saveFields(caseId, matter.get("fieldValues"));
-        log(caseId, text(existed.get("case_status")), text(existed.get("case_status")), "edit", "缂栬緫妗堜欢淇℃伅");
+        log(caseId, text(existed.get("case_status")), text(existed.get("case_status")), "edit", "编辑案件信息");
         return rows;
     }
 
     private Map<String, Object> requireEditable(Long caseId)
     {
         Map<String, Object> matter = mapper.selectMatterById(caseId);
-        if (matter == null) throw new ServiceException("妗堜欢涓嶅瓨鍦ㄦ垨宸插垹闄?);
+        if (matter == null) throw new ServiceException("案件不存在或已删除");
         if (!SecurityUtils.isAdmin() && mapper.countMatterInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), true, MATTER_PERMISSIONS) == 0)
-            throw new ServiceException("鏃犳潈璁块棶璇ユ浠?);
-        if (!PROCESSING.equals(text(matter.get("case_status")))) throw new ServiceException("鍙湁鍔炵悊涓浠跺厑璁哥紪杈戝姙妗堜俊鎭?);
+            throw new ServiceException("无权访问该案件");
+        if (!PROCESSING.equals(text(matter.get("case_status")))) throw new ServiceException("只有办理中案件允许编辑办案信息");
         return matter;
     }
 
@@ -113,7 +113,7 @@ public class MatterCommandService
         {
             String value = values.get(text(config.get("field_code")));
             if ("Y".equals(text(config.get("required_flag"))) && StringUtils.isEmpty(value))
-                throw new ServiceException("璇峰～鍐欐浠朵笓灞炰俊鎭細" + config.get("field_name"));
+                throw new ServiceException("请填写案件专属信息：" + config.get("field_name"));
             validateFieldType(config, value);
         }
     }
@@ -128,7 +128,7 @@ public class MatterCommandService
             else if ("date".equals(type)) LocalDate.parse(value);
             else if ("switch".equals(type) && !"Y".equals(value) && !"N".equals(value)) throw new IllegalArgumentException();
         }
-        catch (RuntimeException e) { throw new ServiceException("妗堜欢涓撳睘淇℃伅鏍煎紡涓嶆纭細" + config.get("field_name")); }
+        catch (RuntimeException e) { throw new ServiceException("案件专属信息格式不正确：" + config.get("field_name")); }
     }
 
     private void saveFields(Long caseId, Object raw)
@@ -151,10 +151,10 @@ public class MatterCommandService
 
     private void log(Long id, String from, String to, String action, String content)
     {
-        assertDict("law_case_status_action", action, "妗堜欢鐘舵€佸姩浣滀笉鍚堟硶");
+        assertDict("law_case_status_action", action, "案件状态动作不合法");
         Map<String, Object> row = new HashMap<>(); row.put("caseId", id); row.put("fromStatus", from); row.put("toStatus", to);
         row.put("actionType", action); row.put("content", content); row.put("createBy", SecurityUtils.getUsername());
-        assertRows(mapper.insertStatusLog(row), "妗堜欢鐘舵€佽褰曞垱寤哄け璐?);
+        assertRows(mapper.insertStatusLog(row), "案件状态记录创建失败");
     }
 
     private void assertDict(String type, Object value, String message)
@@ -162,7 +162,7 @@ public class MatterCommandService
         String expected = text(value); if (StringUtils.isEmpty(expected)) return;
         List<SysDictData> values = dictService.selectDictDataByType(type); if (contains(values, expected)) return;
         dictService.resetDictCache(); values = dictService.selectDictDataByType(type);
-        if (values == null || values.isEmpty()) throw new ServiceException("瀛楀吀鏈垵濮嬪寲锛? + type);
+        if (values == null || values.isEmpty()) throw new ServiceException("字典未初始化：" + type);
         if (!contains(values, expected)) throw new ServiceException(message);
     }
 

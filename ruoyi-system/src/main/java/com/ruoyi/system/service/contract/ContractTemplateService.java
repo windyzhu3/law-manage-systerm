@@ -34,7 +34,7 @@ public class ContractTemplateService
     {
         validate(template);
         template.put("createBy", SecurityUtils.getUsername());
-        return assertChanged(contractMapper.insertTemplate(template), "鍚堝悓妯℃澘鍒涘缓澶辫触");
+        return assertChanged(contractMapper.insertTemplate(template), "合同模板创建失败");
     }
 
     @Transactional
@@ -43,7 +43,7 @@ public class ContractTemplateService
         requireId(template == null ? null : template.get("templateId"));
         validate(template);
         template.put("updateBy", SecurityUtils.getUsername());
-        return assertChanged(contractMapper.updateTemplate(template), "鍚堝悓妯℃澘宸插彉鍖栵紝璇峰埛鏂板悗閲嶈瘯");
+        return assertChanged(contractMapper.updateTemplate(template), "合同模板已变化，请刷新后重试");
     }
 
     @Transactional
@@ -51,22 +51,22 @@ public class ContractTemplateService
     {
         requireId(templateId);
         Map<String, Object> template = contractMapper.selectTemplateById(templateId);
-        if (template == null) throw new ServiceException("鍚堝悓妯℃澘涓嶅瓨鍦?);
+        if (template == null) throw new ServiceException("合同模板不存在");
         if ("0".equals(String.valueOf(template.get("status"))))
         {
-            throw new ServiceException("鍚敤涓殑鍚堝悓妯℃澘涓嶅厑璁稿垹闄わ紝璇峰厛鍋滅敤");
+            throw new ServiceException("启用中的合同模板不允许删除，请先停用");
         }
-        return assertChanged(contractMapper.deleteTemplate(templateId), "鍚堝悓妯℃澘宸插彉鍖栵紝璇峰埛鏂板悗閲嶈瘯");
+        return assertChanged(contractMapper.deleteTemplate(templateId), "合同模板已变化，请刷新后重试");
     }
 
     private void validate(Map<String, Object> template)
     {
-        requiredText(template, "templateName", "璇疯緭鍏ユā鏉垮悕绉?);
-        requiredText(template, "caseType", "璇烽€夋嫨妗堜欢绫诲瀷");
-        requiredText(template, "fileUrl", "璇蜂笂浼犳ā鏉挎枃浠?);
-        assertDictValue("law_contract_case_type", template.get("caseType"), "妯℃澘妗堜欢绫诲瀷涓嶅悎娉?);
+        requiredText(template, "templateName", "请输入模板名称");
+        requiredText(template, "caseType", "请选择案件类型");
+        requiredText(template, "fileUrl", "请上传模板文件");
+        assertDictValue("law_contract_case_type", template.get("caseType"), "模板案件类型不合法");
         if (isEmpty(template.get("status"))) template.put("status", "0");
-        assertDictValue("sys_normal_disable", template.get("status"), "妯℃澘鐘舵€佷笉鍚堟硶");
+        assertDictValue("sys_normal_disable", template.get("status"), "模板状态不合法");
         if (isEmpty(template.get("versionNo"))) template.put("versionNo", "v1");
     }
 
@@ -75,7 +75,7 @@ public class ContractTemplateService
         String expected = value == null ? null : String.valueOf(value).trim();
         if (StringUtils.isEmpty(expected)) return;
         List<SysDictData> options = dictTypeService.selectDictDataByType(dictType);
-        if (options == null || options.isEmpty()) throw new ServiceException("瀛楀吀鏈垵濮嬪寲锛? + dictType);
+        if (options == null || options.isEmpty()) throw new ServiceException("字典未初始化：" + dictType);
         for (SysDictData option : options) if (expected.equals(option.getDictValue())) return;
         throw new ServiceException(message);
     }
@@ -89,9 +89,9 @@ public class ContractTemplateService
 
     private void requireId(Object value)
     {
-        if (value == null || StringUtils.isEmpty(String.valueOf(value))) throw new ServiceException("璇烽€夋嫨鍚堝悓妯℃澘");
+        if (value == null || StringUtils.isEmpty(String.valueOf(value))) throw new ServiceException("请选择合同模板");
         try { Long.valueOf(String.valueOf(value)); }
-        catch (NumberFormatException e) { throw new ServiceException("鍚堝悓妯℃澘缂栧彿涓嶅悎娉?); }
+        catch (NumberFormatException e) { throw new ServiceException("合同模板编号不合法"); }
     }
 
     private boolean isEmpty(Object value)

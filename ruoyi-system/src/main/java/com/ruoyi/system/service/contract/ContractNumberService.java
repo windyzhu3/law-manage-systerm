@@ -38,15 +38,15 @@ public class ContractNumberService
         validateRule(rule);
         rule.put("updateBy", SecurityUtils.getUsername());
         int rows = contractMapper.updateRule(rule);
-        assertChanged(rows, "缂栧彿瑙勫垯涓嶅瓨鍦ㄦ垨宸插彉鍖栵紝璇峰埛鏂板悗閲嶈瘯");
-        Long ruleId = toLong(rule.get("ruleId"), "缂栧彿瑙勫垯涓嶅瓨鍦?);
+        assertChanged(rows, "编号规则不存在或已变化，请刷新后重试");
+        Long ruleId = toLong(rule.get("ruleId"), "编号规则不存在");
         if ("0".equals(String.valueOf(rule.get("status"))))
         {
             contractMapper.disableOtherNoRules(ruleId, SecurityUtils.getUsername());
         }
         else if (contractMapper.countOtherEnabledNoRules(ruleId) == 0)
         {
-            throw new ServiceException("鑷冲皯闇€瑕佷繚鐣欎竴涓惎鐢ㄧ殑鍚堝悓缂栧彿瑙勫垯");
+            throw new ServiceException("至少需要保留一个启用的合同编号规则");
         }
         return rows;
     }
@@ -55,41 +55,41 @@ public class ContractNumberService
     public String nextNumber()
     {
         Map<String, Object> rule = contractMapper.selectActiveNoRule();
-        if (rule == null) throw new ServiceException("鏈厤缃惎鐢ㄧ殑鍚堝悓缂栧彿瑙勫垯");
-        Long ruleId = toLong(rule.get("ruleId"), "缂栧彿瑙勫垯涓嶅瓨鍦?);
+        if (rule == null) throw new ServiceException("未配置启用的合同编号规则");
+        Long ruleId = toLong(rule.get("ruleId"), "编号规则不存在");
         String prefix = String.valueOf(rule.get("prefix"));
         String datePattern = String.valueOf(rule.get("datePattern"));
-        Integer length = toInteger(rule.get("serialLength"), "缂栧彿娴佹按闀垮害蹇呴』涓烘暟瀛?);
-        Integer serial = toInteger(rule.get("currentSerial"), "缂栧彿褰撳墠娴佹按蹇呴』涓烘暟瀛?) + 1;
-        assertChanged(contractMapper.updateNoRule(ruleId, serial, SecurityUtils.getUsername()), "鍚堝悓缂栧彿瑙勫垯宸插彉鍖栵紝璇峰埛鏂板悗閲嶈瘯");
+        Integer length = toInteger(rule.get("serialLength"), "编号流水长度必须为数字");
+        Integer serial = toInteger(rule.get("currentSerial"), "编号当前流水必须为数字") + 1;
+        assertChanged(contractMapper.updateNoRule(ruleId, serial, SecurityUtils.getUsername()), "合同编号规则已变化，请刷新后重试");
         return prefix + formatDatePattern(datePattern) + String.format("%0" + length + "d", serial);
     }
 
     private void validateRule(Map<String, Object> rule)
     {
-        if (rule == null) throw new ServiceException("缂栧彿瑙勫垯涓嶅瓨鍦?);
-        toLong(rule.get("ruleId"), "缂栧彿瑙勫垯涓嶅瓨鍦?);
-        String prefix = requiredText(rule, "prefix", "缂栧彿瑙勫垯鍓嶇紑涓嶈兘涓虹┖");
-        String datePattern = requiredText(rule, "datePattern", "缂栧彿瑙勫垯鏃ユ湡鏍煎紡涓嶈兘涓虹┖");
-        Integer length = toInteger(rule.get("serialLength"), "缂栧彿娴佹按闀垮害蹇呴』涓烘暟瀛?);
-        if (StringUtils.isEmpty(prefix)) throw new ServiceException("缂栧彿瑙勫垯鍓嶇紑涓嶈兘涓虹┖");
-        if (length < 3 || length > 12) throw new ServiceException("缂栧彿娴佹按闀垮害蹇呴』鍦?鍒?2涔嬮棿");
-        requiredText(rule, "status", "璇烽€夋嫨缂栧彿瑙勫垯鐘舵€?);
-        assertDictValue("sys_normal_disable", rule.get("status"), "缂栧彿瑙勫垯鐘舵€佷笉鍚堟硶");
+        if (rule == null) throw new ServiceException("编号规则不存在");
+        toLong(rule.get("ruleId"), "编号规则不存在");
+        String prefix = requiredText(rule, "prefix", "编号规则前缀不能为空");
+        String datePattern = requiredText(rule, "datePattern", "编号规则日期格式不能为空");
+        Integer length = toInteger(rule.get("serialLength"), "编号流水长度必须为数字");
+        if (StringUtils.isEmpty(prefix)) throw new ServiceException("编号规则前缀不能为空");
+        if (length < 3 || length > 12) throw new ServiceException("编号流水长度必须在3到12之间");
+        requiredText(rule, "status", "请选择编号规则状态");
+        assertDictValue("sys_normal_disable", rule.get("status"), "编号规则状态不合法");
         formatDatePattern(datePattern);
     }
 
     private String formatDatePattern(String pattern)
     {
         try { return LocalDate.now().format(DateTimeFormatter.ofPattern(pattern)); }
-        catch (IllegalArgumentException | DateTimeException e) { throw new ServiceException("缂栧彿瑙勫垯鏃ユ湡鏍煎紡涓嶅悎娉?); }
+        catch (IllegalArgumentException | DateTimeException e) { throw new ServiceException("编号规则日期格式不合法"); }
     }
 
     private void assertDictValue(String dictType, Object value, String message)
     {
         String expected = value == null ? null : String.valueOf(value).trim();
         List<SysDictData> options = dictTypeService.selectDictDataByType(dictType);
-        if (options == null || options.isEmpty()) throw new ServiceException("瀛楀吀鏈垵濮嬪寲锛? + dictType);
+        if (options == null || options.isEmpty()) throw new ServiceException("字典未初始化：" + dictType);
         for (SysDictData option : options) if (expected.equals(option.getDictValue())) return;
         throw new ServiceException(message);
     }
