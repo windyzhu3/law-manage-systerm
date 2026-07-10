@@ -26,6 +26,7 @@ import com.ruoyi.system.service.matter.MatterProgressService;
 import com.ruoyi.system.service.matter.MatterDocumentService;
 import com.ruoyi.system.service.matter.MatterExpenseService;
 import com.ruoyi.system.service.matter.MatterNodeService;
+import com.ruoyi.system.service.matter.MatterArchiveService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -73,6 +74,9 @@ public class BizMatterServiceImpl implements IBizMatterService
 
     @Autowired
     private MatterNodeService nodeService;
+
+    @Autowired
+    private MatterArchiveService archiveService;
 
     @Override
     public Map<String, Object> selectDashboard()
@@ -284,126 +288,28 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Override
     public Map<String, Object> selectArchive(Long caseId)
     {
-        requireMatter(caseId);
-        Map<String, Object> archive = matterMapper.selectArchiveByCaseId(caseId);
-        if (archive != null)
-        {
-            archive.put("materials", matterMapper.selectArchiveMaterials(toLong(archive.get("archive_id"), "归档记录不存在")));
-        }
-        return archive;
+        return archiveService.select(caseId);
     }
 
     @Override
     @Transactional
     public int applyArchive(Map<String, Object> archive)
     {
-        Long caseId = toLong(archive.get("caseId"), "请选择案件");
-        Map<String, Object> matter = requireProcessingMatter(caseId);
-        validateCloseReady(caseId);
-        validateArchive(archive);
-        archive.put("archiveStatus", "pending");
-        archive.put("createBy", SecurityUtils.getUsername());
-        Map<String, Object> existed = matterMapper.selectArchiveByCaseId(caseId);
-        int rows;
-        if (existed == null)
-        {
-            rows = matterMapper.insertArchive(archive);
-        }
-        else
-        {
-            archive.put("archiveId", existed.get("archive_id"));
-            archive.put("updateBy", SecurityUtils.getUsername());
-            rows = matterMapper.updateArchive(archive);
-        }
-        assertRows(rows, "结案申请保存失败");
-        Long archiveId = toLong(existed == null ? archive.get("archiveId") : existed.get("archive_id"), "归档记录不存在");
-        saveArchiveMaterials(archiveId, listValue(archive.get("materials")));
-        Map<String, Object> status = new HashMap<>();
-        status.put("caseId", caseId);
-        status.put("caseStatus", STATUS_CLOSING);
-        status.put("archiveStatus", "pending");
-        status.put("currentNode", "结案申请");
-        status.put("expectedStatus", matter.get("case_status"));
-        status.put("updateBy", SecurityUtils.getUsername());
-        assertRows(matterMapper.updateMatterStatus(status), "案件状态已变化，请刷新后重试");
-        insertStatusLog(caseId, text(matter.get("case_status")), STATUS_CLOSING, "archive_apply", "发起结案申请");
-        return rows;
+        return archiveService.apply(archive);
     }
 
     @Override
     @Transactional
     public int confirmClose(Map<String, Object> archive)
     {
-        Long caseId = toLong(archive.get("caseId"), "请选择案件");
-        Map<String, Object> matter = requireMatter(caseId);
-        if (!STATUS_CLOSING.equals(text(matter.get("case_status"))))
-        {
-            throw new ServiceException("只有结案申请中的案件可以确认结案");
-        }
-        Map<String, Object> existed = matterMapper.selectArchiveByCaseId(caseId);
-        if (existed == null)
-        {
-            throw new ServiceException("请先提交结案申请");
-        }
-        validateArchive(archive);
-        validateCloseReady(caseId);
-        validateArchiveFeeMarkedCleared(archive);
-        validateCaseFeeCleared(caseId);
-        archive.put("archiveId", existed.get("archive_id"));
-        archive.put("archiveStatus", "pending");
-        archive.put("updateBy", SecurityUtils.getUsername());
-        int rows = matterMapper.updateArchive(archive);
-        assertRows(rows, "确认结案失败");
-        saveArchiveMaterials(toLong(existed.get("archive_id"), "归档记录不存在"), listValue(archive.get("materials")));
-        Map<String, Object> status = new HashMap<>();
-        status.put("caseId", caseId);
-        status.put("caseStatus", STATUS_CLOSED);
-        status.put("archiveStatus", "pending");
-        status.put("currentNode", "已结案");
-        status.put("expectedStatus", matter.get("case_status"));
-        status.put("updateBy", SecurityUtils.getUsername());
-        assertRows(matterMapper.updateMatterStatus(status), "案件状态已变化，请刷新后重试");
-        insertStatusLog(caseId, text(matter.get("case_status")), STATUS_CLOSED, "archive_close", "确认结案");
-        return rows;
+        return archiveService.close(archive);
     }
 
     @Override
     @Transactional
     public int confirmArchive(Map<String, Object> archive)
     {
-        Long caseId = toLong(archive.get("caseId"), "请选择案件");
-        Map<String, Object> matter = requireMatter(caseId);
-        if (!STATUS_CLOSED.equals(text(matter.get("case_status"))))
-        {
-            throw new ServiceException("只有结案中或已结案案件可以归档");
-        }
-        Map<String, Object> existed = matterMapper.selectArchiveByCaseId(caseId);
-        if (existed == null)
-        {
-            throw new ServiceException("请先提交结案申请");
-        }
-        validateArchive(archive);
-        archive.put("archiveId", existed.get("archive_id"));
-        archive.put("archiveStatus", "archived");
-        archive.put("archiveNo", defaultText(archive.get("archiveNo"), "JG" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"))));
-        archive.put("archiverId", SecurityUtils.getUserId());
-        archive.put("archiverName", SecurityUtils.getLoginUser().getUser().getNickName());
-        archive.put("updateBy", SecurityUtils.getUsername());
-        int rows = matterMapper.updateArchive(archive);
-        assertRows(rows, "归档失败");
-        saveArchiveMaterials(toLong(existed.get("archive_id"), "归档记录不存在"), listValue(archive.get("materials")));
-        validateCaseFeeCleared(caseId);
-        validateArchiveReady(toLong(existed.get("archive_id"), "归档记录不存在"), archive);
-        Map<String, Object> status = new HashMap<>();
-        status.put("caseId", caseId);
-        status.put("caseStatus", STATUS_ARCHIVED);
-        status.put("archiveStatus", "archived");
-        status.put("currentNode", "已归档");
-        status.put("expectedStatus", matter.get("case_status"));
-        status.put("updateBy", SecurityUtils.getUsername());
-        assertRows(matterMapper.updateMatterStatus(status), "案件状态已变化，请刷新后重试");
-        insertStatusLog(caseId, text(matter.get("case_status")), STATUS_ARCHIVED, "archive_confirm", "确认归档");
-        return rows;
+        return archiveService.archive(archive);
     }
 
     private void saveArchiveMaterials(Long archiveId, List<Map<String, Object>> materials)
