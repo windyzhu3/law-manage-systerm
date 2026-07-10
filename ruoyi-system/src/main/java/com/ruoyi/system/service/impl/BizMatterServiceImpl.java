@@ -22,6 +22,7 @@ import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.IBizMatterService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.matter.MatterProgressService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -57,6 +58,9 @@ public class BizMatterServiceImpl implements IBizMatterService
 
     @Autowired
     private ISysDictTypeService dictTypeService;
+
+    @Autowired
+    private MatterProgressService progressService;
 
     @Override
     public Map<String, Object> selectDashboard()
@@ -185,42 +189,21 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Transactional
     public int insertProgress(Map<String, Object> progress)
     {
-        Long caseId = toLong(progress.get("caseId"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        requiredText(progress.get("content"), "请输入进展内容");
-        progress.put("recordUserId", SecurityUtils.getUserId());
-        progress.put("recordUserName", SecurityUtils.getLoginUser().getUser().getNickName());
-        progress.put("createBy", SecurityUtils.getUsername());
-        int rows = matterMapper.insertProgress(progress);
-        assertRows(rows, "进度记录创建失败");
-        updateMatterTouch(caseId, progress.get("content"), "progress_add", "新增进度记录");
-        return rows;
+        return progressService.create(progress);
     }
 
     @Override
     @Transactional
     public int updateProgress(Map<String, Object> progress)
     {
-        Map<String, Object> existed = requireOwnedProgress(toLong(progress.get("progressId"), "请选择进度记录"));
-        requireProcessEditableMatter(toLong(existed.get("case_id"), "请选择案件"));
-        requiredText(progress.get("content"), "请输入进展内容");
-        progress.put("updateBy", SecurityUtils.getUsername());
-        int rows = matterMapper.updateProgress(progress);
-        assertRows(rows, "进度记录已变化，请刷新后重试");
-        insertStatusLog(toLong(existed.get("case_id"), "请选择案件"), null, null, "progress_edit", "编辑进度记录");
-        return rows;
+        return progressService.update(progress);
     }
 
     @Override
     @Transactional
     public int deleteProgress(Long progressId)
     {
-        Map<String, Object> existed = requireOwnedProgress(progressId);
-        requireProcessEditableMatter(toLong(existed.get("case_id"), "请选择案件"));
-        int rows = matterMapper.deleteProgress(progressId, SecurityUtils.getUsername());
-        assertRows(rows, "进度记录已变化，请刷新后重试");
-        insertStatusLog(toLong(existed.get("case_id"), "请选择案件"), null, null, "progress_remove", "删除进度记录");
-        return rows;
+        return progressService.delete(progressId);
     }
 
     @Override
