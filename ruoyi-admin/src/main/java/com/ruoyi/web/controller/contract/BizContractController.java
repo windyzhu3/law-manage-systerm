@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.contract;
 
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -20,8 +21,12 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
-import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.StringUtils;
+import com.law.business.contract.dto.ContractApprovalCommand;
+import com.law.business.contract.dto.ContractReasonCommand;
+import com.law.business.contract.dto.ContractSignCommand;
+import com.law.business.contract.dto.FeeConfirmCommand;
+import com.law.business.contract.dto.FeeInvoiceCommand;
+import com.law.business.contract.dto.FeeRejectCommand;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizContract;
@@ -129,52 +134,41 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:approval:handle')")
     @Log(title = "contract-approval", businessType = BusinessType.UPDATE)
     @PostMapping("/approval")
-    public AjaxResult approval(@RequestBody Map<String, Object> body)
+    public AjaxResult approval(@Valid @RequestBody ContractApprovalCommand command)
     {
-        Long contractId = requiredLong(body, "contractId", "请选择合同");
-        String action = text(body, "action");
-        String opinion = text(body, "opinion");
-        return toAjax(contractService.approveContract(contractId, action, opinion));
+        return toAjax(contractService.approveContract(command.getContractId(), command.getAction(), command.getOpinion()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:sign')")
     @Log(title = "contract-sign", businessType = BusinessType.UPDATE)
     @PostMapping("/sign")
-    public AjaxResult sign(@RequestBody Map<String, Object> body)
+    public AjaxResult sign(@Valid @RequestBody ContractSignCommand command)
     {
-        Long contractId = requiredLong(body, "contractId", "请选择合同");
-        String signStatus = text(body, "signStatus");
-        return toAjax(contractService.signContract(contractId, signStatus));
+        return toAjax(contractService.signContract(command.getContractId(), command.getSignStatus()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:archive')")
     @Log(title = "contract-archive", businessType = BusinessType.UPDATE)
     @PostMapping("/archive")
-    public AjaxResult archive(@RequestBody Map<String, Object> body)
+    public AjaxResult archive(@Valid @RequestBody ContractReasonCommand command)
     {
-        Long contractId = requiredLong(body, "contractId", "请选择合同");
-        String reason = text(body, "reason");
-        return toAjax(contractService.archiveContract(contractId, reason));
+        return toAjax(contractService.archiveContract(command.getContractId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:void')")
     @Log(title = "contract-void", businessType = BusinessType.UPDATE)
     @PostMapping("/void")
-    public AjaxResult voidContract(@RequestBody Map<String, Object> body)
+    public AjaxResult voidContract(@Valid @RequestBody ContractReasonCommand command)
     {
-        Long contractId = requiredLong(body, "contractId", "请选择合同");
-        String reason = text(body, "reason");
-        return toAjax(contractService.voidContract(contractId, reason));
+        return toAjax(contractService.voidContract(command.getContractId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:terminate')")
     @Log(title = "contract-terminate", businessType = BusinessType.UPDATE)
     @PostMapping("/terminate")
-    public AjaxResult terminate(@RequestBody Map<String, Object> body)
+    public AjaxResult terminate(@Valid @RequestBody ContractReasonCommand command)
     {
-        Long contractId = requiredLong(body, "contractId", "请选择合同");
-        String reason = text(body, "reason");
-        return toAjax(contractService.terminateContract(contractId, reason));
+        return toAjax(contractService.terminateContract(command.getContractId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:rule:list')")
@@ -267,31 +261,25 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:fee:confirm')")
     @Log(title = "contract-fee-confirm", businessType = BusinessType.UPDATE)
     @PostMapping("/fee/confirm")
-    public AjaxResult confirmFee(@RequestBody Map<String, Object> body)
+    public AjaxResult confirmFee(@Valid @RequestBody FeeConfirmCommand command)
     {
-        Long planId = requiredLong(body, "planId", "请选择收费计划");
-        String receivedAmount = text(body, "receivedAmount");
-        return toAjax(contractService.confirmFeePlan(planId, receivedAmount));
+        return toAjax(contractService.confirmFeePlan(command.getPlanId(), command.getReceivedAmount()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:reject')")
     @Log(title = "contract-fee-reject", businessType = BusinessType.UPDATE)
     @PostMapping("/fee/reject")
-    public AjaxResult rejectFee(@RequestBody Map<String, Object> body)
+    public AjaxResult rejectFee(@Valid @RequestBody FeeRejectCommand command)
     {
-        Long planId = requiredLong(body, "planId", "请选择收费计划");
-        String reason = text(body, "reason");
-        return toAjax(contractService.rejectFeePlan(planId, reason));
+        return toAjax(contractService.rejectFeePlan(command.getPlanId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:invoice')")
     @Log(title = "contract-fee-invoice", businessType = BusinessType.UPDATE)
     @PostMapping("/fee/invoice")
-    public AjaxResult invoiceFee(@RequestBody Map<String, Object> body)
+    public AjaxResult invoiceFee(@Valid @RequestBody FeeInvoiceCommand command)
     {
-        Long planId = requiredLong(body, "planId", "请选择收费计划");
-        String invoiceStatus = text(body, "invoiceStatus");
-        return toAjax(contractService.invoiceFeePlan(planId, invoiceStatus));
+        return toAjax(contractService.invoiceFeePlan(command.getPlanId(), command.getInvoiceStatus()));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:attachment:list')")
@@ -326,19 +314,4 @@ public class BizContractController extends BaseController
         return getDataTable(contractService.selectStatusLogs(params));
     }
 
-    private Long requiredLong(Map<String, Object> body, String key, String message)
-    {
-        Object value = body == null ? null : body.get(key);
-        if (value == null || StringUtils.isEmpty(String.valueOf(value)) || "null".equalsIgnoreCase(String.valueOf(value)))
-        {
-            throw new ServiceException(message);
-        }
-        return Long.valueOf(String.valueOf(value));
-    }
-
-    private String text(Map<String, Object> body, String key)
-    {
-        Object value = body == null ? null : body.get(key);
-        return value == null || "null".equalsIgnoreCase(String.valueOf(value)) ? null : String.valueOf(value);
-    }
 }
