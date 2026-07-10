@@ -25,6 +25,7 @@ import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.matter.MatterProgressService;
 import com.ruoyi.system.service.matter.MatterDocumentService;
 import com.ruoyi.system.service.matter.MatterExpenseService;
+import com.ruoyi.system.service.matter.MatterNodeService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -69,6 +70,9 @@ public class BizMatterServiceImpl implements IBizMatterService
 
     @Autowired
     private MatterExpenseService expenseService;
+
+    @Autowired
+    private MatterNodeService nodeService;
 
     @Override
     public Map<String, Object> selectDashboard()
@@ -218,73 +222,28 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Transactional
     public int insertNode(Map<String, Object> node)
     {
-        Long caseId = toLong(node.get("caseId"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        validateNode(node);
-        node.put("createBy", SecurityUtils.getUsername());
-        int rows = matterMapper.insertNode(node);
-        assertRows(rows, "关键节点创建失败");
-        saveNodeMaterials(toLong(node.get("nodeId"), "关键节点创建失败"), listValue(node.get("materials")));
-        syncMatterNodeState(caseId);
-        insertStatusLog(caseId, null, null, "node_add", "新增关键节点：" + node.get("nodeName"));
-        return rows;
+        return nodeService.create(node);
     }
 
     @Override
     @Transactional
     public int updateNode(Map<String, Object> node)
     {
-        Map<String, Object> existed = requireOwnedNode(toLong(node.get("nodeId"), "请选择关键节点"));
-        requireProcessEditableMatter(toLong(existed.get("case_id"), "请选择案件"));
-        validateNode(node);
-        node.put("updateBy", SecurityUtils.getUsername());
-        int rows = matterMapper.updateNode(node);
-        assertRows(rows, "关键节点已变化，请刷新后重试");
-        saveNodeMaterials(toLong(node.get("nodeId"), "请选择关键节点"), listValue(node.get("materials")));
-        syncMatterNodeState(toLong(existed.get("case_id"), "请选择案件"));
-        insertStatusLog(toLong(existed.get("case_id"), "请选择案件"), null, null, "node_edit", "编辑关键节点：" + node.get("nodeName"));
-        return rows;
+        return nodeService.update(node);
     }
 
     @Override
     @Transactional
     public int deleteNode(Long nodeId)
     {
-        Map<String, Object> existed = requireOwnedNode(nodeId);
-        Long caseId = toLong(existed.get("case_id"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        matterMapper.deleteNodeMaterials(nodeId);
-        int rows = matterMapper.deleteNode(nodeId, SecurityUtils.getUsername());
-        assertRows(rows, "关键节点已变化，请刷新后重试");
-        syncMatterNodeState(caseId);
-        insertStatusLog(caseId, null, null, "node_remove", "删除关键节点");
-        return rows;
+        return nodeService.delete(nodeId);
     }
 
     @Override
     @Transactional
     public int saveNodeMaterials(Long nodeId, List<Map<String, Object>> materials)
     {
-        Map<String, Object> node = requireOwnedNode(nodeId);
-        requireProcessEditableMatter(toLong(node.get("case_id"), "请选择案件"));
-        matterMapper.deleteNodeMaterials(nodeId);
-        if (materials == null)
-        {
-            return 1;
-        }
-        for (Map<String, Object> material : materials)
-        {
-            if (StringUtils.isEmpty(text(material.get("materialName"))))
-            {
-                continue;
-            }
-            material.put("nodeId", nodeId);
-            material.put("materialStatus", defaultText(material.get("materialStatus"), "pending"));
-            assertDictValue("law_case_material_status", material.get("materialStatus"), "材料状态不合法");
-            material.put("createBy", SecurityUtils.getUsername());
-            matterMapper.insertNodeMaterial(material);
-        }
-        return 1;
+        return nodeService.saveMaterials(nodeId, materials);
     }
 
     @Override
