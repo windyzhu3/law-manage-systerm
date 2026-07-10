@@ -24,6 +24,7 @@ import com.ruoyi.system.service.IBizMatterService;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.matter.MatterProgressService;
 import com.ruoyi.system.service.matter.MatterDocumentService;
+import com.ruoyi.system.service.matter.MatterExpenseService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -65,6 +66,9 @@ public class BizMatterServiceImpl implements IBizMatterService
 
     @Autowired
     private MatterDocumentService documentService;
+
+    @Autowired
+    private MatterExpenseService expenseService;
 
     @Override
     public Map<String, Object> selectDashboard()
@@ -287,45 +291,21 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Transactional
     public int insertExpense(Map<String, Object> expense)
     {
-        Long caseId = toLong(expense.get("caseId"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        validateExpense(expense);
-        expense.put("expenseNo", "FY" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
-        expense.put("createBy", SecurityUtils.getUsername());
-        int rows = matterMapper.insertExpense(expense);
-        assertRows(rows, "费用创建失败");
-        updateMatterFeeStatus(caseId);
-        insertStatusLog(caseId, null, null, "expense_add", "新增案件费用：" + expense.get("amount"));
-        return rows;
+        return expenseService.create(expense);
     }
 
     @Override
     @Transactional
     public int updateExpense(Map<String, Object> expense)
     {
-        Map<String, Object> existed = requireOwnedExpense(toLong(expense.get("expenseId"), "请选择费用"));
-        requireProcessEditableMatter(toLong(existed.get("case_id"), "请选择案件"));
-        validateExpense(expense);
-        expense.put("updateBy", SecurityUtils.getUsername());
-        int rows = matterMapper.updateExpense(expense);
-        assertRows(rows, "费用已变化，请刷新后重试");
-        updateMatterFeeStatus(toLong(existed.get("case_id"), "请选择案件"));
-        insertStatusLog(toLong(existed.get("case_id"), "请选择案件"), null, null, "expense_edit", "编辑案件费用");
-        return rows;
+        return expenseService.update(expense);
     }
 
     @Override
     @Transactional
     public int deleteExpense(Long expenseId)
     {
-        Map<String, Object> existed = requireOwnedExpense(expenseId);
-        Long caseId = toLong(existed.get("case_id"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        int rows = matterMapper.deleteExpense(expenseId, SecurityUtils.getUsername());
-        assertRows(rows, "费用已变化，请刷新后重试");
-        updateMatterFeeStatus(caseId);
-        insertStatusLog(caseId, null, null, "expense_remove", "删除案件费用");
-        return rows;
+        return expenseService.delete(expenseId);
     }
 
     @Override
