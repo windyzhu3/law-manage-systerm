@@ -23,6 +23,14 @@ import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.service.IBizCaseService;
 import com.ruoyi.system.service.IBizContractService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.status.ContractAuditStatus;
+import com.law.business.shared.status.ContractSignStatus;
+import com.law.business.shared.status.ContractStatus;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.ruoyi.common.utils.uuid.IdUtils;
+import com.law.business.security.ContractPermissions;
 
 @Service
 public class BizContractServiceImpl implements IBizContractService
@@ -35,30 +43,23 @@ public class BizContractServiceImpl implements IBizContractService
                     + "customer:followup:list,customer:followup:add,customer:followup:remove,"
                     + "customer:tag:list,customer:tag:add,customer:tag:edit,customer:tag:remove,customer:tag:assign,"
                     + "customer:merge:list,customer:merge:merge";
-    private static final String CONTRACT_MODULE_PERMISSIONS =
-            "contract:list,contract:query,contract:add,contract:edit,contract:remove,contract:import,contract:export,"
-                    + "contract:submit,contract:sign,contract:archive,contract:void,contract:terminate,"
-                    + "contract:template:list,contract:template:add,contract:template:edit,contract:template:remove,"
-                    + "contract:approval:list,contract:approval:handle,"
-                    + "contract:fee:list,contract:fee:add,contract:fee:edit,contract:fee:remove,contract:fee:confirm,contract:fee:reject,contract:fee:invoice,"
-                    + "contract:attachment:list,contract:attachment:add,contract:attachment:remove,"
-                    + "contract:status:list,contract:rule:list,contract:rule:edit";
+    private static final String CONTRACT_MODULE_PERMISSIONS = ContractPermissions.DATA_SCOPE;
 
-    private static final String AUDIT_PENDING = "0";
-    private static final String AUDIT_REVIEWING = "1";
-    private static final String AUDIT_PASSED = "2";
-    private static final String AUDIT_REJECTED = "3";
-    private static final String AUDIT_BACK = "4";
+    private static final String AUDIT_PENDING = ContractAuditStatus.PENDING.code();
+    private static final String AUDIT_REVIEWING = ContractAuditStatus.REVIEWING.code();
+    private static final String AUDIT_PASSED = ContractAuditStatus.PASSED.code();
+    private static final String AUDIT_REJECTED = ContractAuditStatus.REJECTED.code();
+    private static final String AUDIT_BACK = ContractAuditStatus.BACK.code();
 
-    private static final String CONTRACT_DRAFT = "0";
-    private static final String CONTRACT_PERFORMING = "1";
-    private static final String CONTRACT_ARCHIVED = "2";
-    private static final String CONTRACT_VOID = "3";
-    private static final String CONTRACT_TERMINATED = "4";
+    private static final String CONTRACT_DRAFT = ContractStatus.DRAFT.code();
+    private static final String CONTRACT_PERFORMING = ContractStatus.PERFORMING.code();
+    private static final String CONTRACT_ARCHIVED = ContractStatus.ARCHIVED.code();
+    private static final String CONTRACT_VOID = ContractStatus.VOID.code();
+    private static final String CONTRACT_TERMINATED = ContractStatus.TERMINATED.code();
 
-    private static final String SIGN_UNSIGNED = "0";
-    private static final String SIGN_SIGNED = "1";
-    private static final String SIGN_PARTIAL = "2";
+    private static final String SIGN_UNSIGNED = ContractSignStatus.UNSIGNED.code();
+    private static final String SIGN_SIGNED = ContractSignStatus.SIGNED.code();
+    private static final String SIGN_PARTIAL = ContractSignStatus.PARTIAL.code();
 
     private static final String RECEIVE_PENDING = "0";
     private static final String RECEIVE_CONFIRMED = "1";
@@ -79,6 +80,9 @@ public class BizContractServiceImpl implements IBizContractService
 
     @Autowired
     private ISysDictTypeService dictTypeService;
+
+    @Autowired
+    private BusinessEventPublisher eventPublisher;
 
     @Override
     @DataScope(deptAlias = "c", userAlias = "c", userField = "owner_id")
@@ -208,6 +212,7 @@ public class BizContractServiceImpl implements IBizContractService
         int rows = contractMapper.updateAuditStatus(contractId, AUDIT_REVIEWING, contract.getContractStatus(), contract.getAuditStatus(), CONTRACT_DRAFT, SecurityUtils.getUsername());
         assertStateChanged(rows);
         insertStatusLog(contractId, contract.getAuditStatus(), AUDIT_REVIEWING, "submit", "提交审批");
+        publish(BusinessEventType.CONTRACT_SUBMITTED, contract, eventPayload("auditStatus", AUDIT_REVIEWING));
         return rows;
     }
 
@@ -244,6 +249,8 @@ public class BizContractServiceImpl implements IBizContractService
         assertStateChanged(rows);
         assertRowsChanged(contractMapper.insertApproval(approval), "Approval record was not created");
         insertStatusLog(contractId, contract.getAuditStatus(), auditStatus, "approval", opinion);
+        publish(BusinessEventType.CONTRACT_APPROVED, contract,
+                eventPayload("action", action, "auditStatus", auditStatus, "opinion", opinion));
         return rows;
     }
 
@@ -293,6 +300,7 @@ public class BizContractServiceImpl implements IBizContractService
             BizContract signedContract = selectContractById(contractId);
             caseService.createCaseFromContract(signedContract);
         }
+        publish(BusinessEventType.CONTRACT_SIGNED, contract, eventPayload("signStatus", signStatus));
         return rows;
     }
 
@@ -524,6 +532,8 @@ public class BizContractServiceImpl implements IBizContractService
             content += "，付款方式 " + cleanPaymentMethod;
         }
         insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentConfirmStatus, RECEIVE_CONFIRMED, "fee_confirm", appendRemark(content, cleanRemark));
+        publishForPlan(BusinessEventType.PAYMENT_CONFIRMED, plan,
+                eventPayload("planId", planId, "receivedAmount", amount, "totalReceivedAmount", totalReceivedAmount));
         return rows;
     }
     @Override
@@ -546,6 +556,8 @@ public class BizContractServiceImpl implements IBizContractService
         int rows = contractMapper.updateFeePlanStatus(update);
         assertStateChanged(rows);
         insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), String.valueOf(plan.get("confirm_status")), RECEIVE_REJECTED, "fee_reject", rejectReason);
+        publishForPlan(BusinessEventType.PAYMENT_REJECTED, plan,
+                eventPayload("planId", planId, "reason", rejectReason));
         return rows;
     }
     @Override
@@ -610,6 +622,8 @@ public class BizContractServiceImpl implements IBizContractService
             content += "，发票类型 " + cleanInvoiceType;
         }
         insertStatusLog(Long.valueOf(String.valueOf(plan.get("contract_id"))), currentInvoiceStatus, invoiceStatus, "fee_invoice", appendRemark(content, cleanRemark));
+        publishForPlan(BusinessEventType.INVOICE_HANDLED, plan,
+                eventPayload("planId", planId, "invoiceStatus", invoiceStatus, "invoiceType", cleanInvoiceType));
         return rows;
     }
     @Override public List<Map<String, Object>> selectAttachments(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectAttachments(params); }
@@ -1098,5 +1112,29 @@ public class BizContractServiceImpl implements IBizContractService
         {
             throw new ServiceException("无权访问该合同");
         }
+    }
+
+    private void publish(BusinessEventType type, BizContract contract, Map<String, Object> payload)
+    {
+        eventPublisher.publish(new BusinessEventCommand(type, "CONTRACT", contract.getContractId(),
+                contract.getContractNo(), type.name() + ":" + contract.getContractId() + ":" + IdUtils.fastUUID(), payload));
+    }
+
+    private void publishForPlan(BusinessEventType type, Map<String, Object> plan, Map<String, Object> payload)
+    {
+        Long contractId = Long.valueOf(String.valueOf(plan.get("contract_id")));
+        String contractNo = plan.get("contract_no") == null ? null : String.valueOf(plan.get("contract_no"));
+        eventPublisher.publish(new BusinessEventCommand(type, "CONTRACT", contractId, contractNo,
+                type.name() + ":" + contractId + ":" + IdUtils.fastUUID(), payload));
+    }
+
+    private Map<String, Object> eventPayload(Object... values)
+    {
+        Map<String, Object> payload = new HashMap<>();
+        for (int i = 0; i + 1 < values.length; i += 2)
+        {
+            if (values[i + 1] != null) payload.put(String.valueOf(values[i]), values[i + 1]);
+        }
+        return payload;
     }
 }

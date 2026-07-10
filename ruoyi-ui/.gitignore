@@ -10,6 +10,8 @@ tests/**/coverage/
 tests/e2e/reports
 selenium-debug.log
 
+package-lock.json
+
 # Editor directories and files
 .idea
 .vscode
@@ -19,5 +21,4 @@ selenium-debug.log
 *.sln
 *.local
 
-package-lock.json
 yarn.lock

@@ -22,18 +22,19 @@ import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.IBizMatterService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.status.CaseStatus;
 
 @Service
 public class BizMatterServiceImpl implements IBizMatterService
 {
-    private static final String STATUS_PENDING = "pending";
-    private static final String STATUS_CONFIRMING = "confirming";
-    private static final String STATUS_TRANSFERING = "transfering";
-    private static final String STATUS_PROCESSING = "processing";
-    private static final String STATUS_CLOSING = "closing";
-    private static final String STATUS_CLOSED = "closed";
-    private static final String STATUS_ARCHIVED = "archived";
-    private static final String STATUS_TERMINATED = "terminated";
+    private static final String STATUS_PENDING = CaseStatus.PENDING.code();
+    private static final String STATUS_CONFIRMING = CaseStatus.CONFIRMING.code();
+    private static final String STATUS_TRANSFERING = CaseStatus.TRANSFERRING.code();
+    private static final String STATUS_PROCESSING = CaseStatus.PROCESSING.code();
+    private static final String STATUS_CLOSING = CaseStatus.CLOSING.code();
+    private static final String STATUS_CLOSED = CaseStatus.CLOSED.code();
+    private static final String STATUS_ARCHIVED = CaseStatus.ARCHIVED.code();
+    private static final String STATUS_TERMINATED = CaseStatus.TERMINATED.code();
     private static final String CONTRACT_AUDIT_PASSED = "2";
     private static final String CONTRACT_SIGNED = "1";
     private static final String CONTRACT_PERFORMING = "1";

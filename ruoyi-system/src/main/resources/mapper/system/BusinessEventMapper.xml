@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.BusinessEventMapper">
+    <insert id="insertBusinessEvent" parameterType="com.ruoyi.system.domain.BusinessEventRecord" useGeneratedKeys="true" keyProperty="eventId">
+        insert into business_event(
+            event_type, aggregate_type, aggregate_id, aggregate_no, idempotency_key,
+            payload, event_status, retry_count, create_by, create_time, update_time
+        ) values (
+            #{eventType}, #{aggregateType}, #{aggregateId}, #{aggregateNo}, #{idempotencyKey},
+            #{payload}, #{eventStatus}, #{retryCount}, #{createBy}, sysdate(), sysdate()
+        )
+    </insert>
+
+    <select id="selectPendingEvents" resultType="com.ruoyi.system.domain.BusinessEventRecord">
+        select event_id eventId, event_type eventType, aggregate_type aggregateType,
+               aggregate_id aggregateId, aggregate_no aggregateNo, idempotency_key idempotencyKey,
+               payload, event_status eventStatus, retry_count retryCount, next_retry_time nextRetryTime,
+               create_by createBy
+        from business_event
+        where event_status in ('PENDING', 'FAILED')
+          and (next_retry_time is null or next_retry_time &lt;= sysdate())
+        order by event_id
+        limit #{limit}
+    </select>
+
+    <update id="markProcessed">
+        update business_event
+        set event_status='PROCESSED', processed_time=sysdate(), update_time=sysdate()
+        where event_id=#{eventId} and event_status in ('PENDING','FAILED','PROCESSING')
+    </update>
+
+    <update id="markFailed">
+        update business_event
+        set event_status='FAILED', retry_count=retry_count+1,
+            next_retry_time=date_add(sysdate(), interval least(retry_count+1, 10) minute),
+            error_message=#{errorMessage}, update_time=sysdate()
+        where event_id=#{eventId}
+    </update>
+</mapper>

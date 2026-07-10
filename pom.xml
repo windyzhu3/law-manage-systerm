@@ -163,6 +163,13 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <!-- 律所业务基础模块 -->
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>law-business</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -177,6 +184,7 @@
         <module>ruoyi-admin</module>
         <module>ruoyi-framework</module>
         <module>ruoyi-system</module>
+        <module>law-business</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
         <module>ruoyi-common</module>
@@ -206,6 +214,11 @@
 
     <repositories>
         <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </repository>
+        <repository>
             <id>public</id>
             <name>aliyun nexus</name>
             <url>https://maven.aliyun.com/repository/public</url>
@@ -216,6 +229,11 @@
     </repositories>
 
     <pluginRepositories>
+        <pluginRepository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+        </pluginRepository>
         <pluginRepository>
             <id>public</id>
             <name>aliyun nexus</name>

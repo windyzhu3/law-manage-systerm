@@ -23,6 +23,11 @@
             <artifactId>ruoyi-common</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>law-business</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>

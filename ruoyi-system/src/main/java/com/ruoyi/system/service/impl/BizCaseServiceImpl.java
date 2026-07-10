@@ -20,31 +20,33 @@ import com.ruoyi.system.service.IBizCaseService;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.ISysNoticeService;
 import com.ruoyi.system.service.ISysUserService;
+import com.law.business.shared.status.CaseStatus;
+import com.law.business.shared.status.CaseTransferStatus;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.ruoyi.common.utils.uuid.IdUtils;
+import com.law.business.security.CasePermissions;
 
 @Service
 public class BizCaseServiceImpl implements IBizCaseService
 {
-    private static final String CASE_PENDING = "pending";
-    private static final String CASE_PROCESSING = "processing";
-    private static final String CASE_CONFIRMING = "confirming";
-    private static final String CASE_TRANSFERING = "transfering";
+    private static final String CASE_PENDING = CaseStatus.PENDING.code();
+    private static final String CASE_PROCESSING = CaseStatus.PROCESSING.code();
+    private static final String CASE_CONFIRMING = CaseStatus.CONFIRMING.code();
+    private static final String CASE_TRANSFERING = CaseStatus.TRANSFERRING.code();
 
-    private static final String TRANSFER_PENDING = "pending";
-    private static final String TRANSFER_PASSED = "passed";
-    private static final String TRANSFER_REJECTED = "rejected";
-    private static final String TRANSFER_SUPPLEMENT = "supplement";
+    private static final String TRANSFER_PENDING = CaseTransferStatus.PENDING.code();
+    private static final String TRANSFER_PASSED = CaseTransferStatus.PASSED.code();
+    private static final String TRANSFER_REJECTED = CaseTransferStatus.REJECTED.code();
+    private static final String TRANSFER_SUPPLEMENT = CaseTransferStatus.SUPPLEMENT.code();
 
     private static final String LAWYER_ROLE_DEFAULT = "lawyer";
     private static final String LAWYER_ROLE_ASSISTANT = "assistant";
     private static final String ASSIGN_ENABLED = "Y";
     private static final String ASSIGN_DISABLED = "N";
 
-    private static final String CASE_MODULE_PERMISSIONS =
-            "case:pending:list,case:pending:query,case:pending:assign,case:pending:batchAssign,"
-                    + "case:assign:list,case:assign:query,"
-                    + "case:transfer:list,case:transfer:query,case:transfer:add,case:transfer:approve,"
-                    + "case:lawyer:list,case:lawyer:query,case:lawyer:config,case:lawyer:assign,"
-                    + "case:confirm:list,case:confirm:query,case:confirm:handle,case:status:list";
+    private static final String CASE_MODULE_PERMISSIONS = CasePermissions.DATA_SCOPE;
 
     @Autowired
     private BizCaseMapper caseMapper;
@@ -57,6 +59,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Autowired
     private ISysNoticeService noticeService;
+
+    @Autowired
+    private BusinessEventPublisher eventPublisher;
 
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
@@ -223,6 +228,8 @@ public class BizCaseServiceImpl implements IBizCaseService
         assertRowsChanged(rows, "案件创建失败");
         insertStatusLog(toLong(entity.get("caseId"), "案件创建失败"), null, CASE_PENDING, "create", "合同签署后生成待分案案件");
         createNotice("新案件待分配", "合同 " + contract.getContractNo() + " 已签署，生成待分案案件：" + contract.getContractName());
+        publish(BusinessEventType.CASE_CREATED, toLong(entity.get("caseId"), "案件创建失败"),
+                String.valueOf(entity.get("caseNo")), eventPayload("contractId", contract.getContractId()));
         return rows;
     }
 
@@ -288,6 +295,8 @@ public class BizCaseServiceImpl implements IBizCaseService
         {
             createNotice("案件已分配", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，当前进入办理中。");
         }
+        publish(BusinessEventType.CASE_ASSIGNED, caseId, text(existed.get("case_no")),
+                eventPayload("mainLawyerId", mainLawyerId, "needConfirm", needConfirm));
         return rows;
     }
 
@@ -337,6 +346,8 @@ public class BizCaseServiceImpl implements IBizCaseService
         assertRowsChanged(caseMapper.updateCaseStatus(update), "案件状态已变化，请刷新后重试");
         insertStatusLog(caseId, CASE_PROCESSING, CASE_TRANSFERING, "transfer_request", "发起转案申请：" + safeText(transfer.get("transferReason"), "转案申请"));
         createNotice("转案申请待审批", "案件 " + existed.get("case_no") + " 发起转案申请：" + existed.get("main_lawyer_name") + " -> " + toLawyer.getNickName());
+        publish(BusinessEventType.CASE_TRANSFER_REQUESTED, caseId, text(existed.get("case_no")),
+                eventPayload("transferId", transfer.get("transferId"), "toLawyerId", toLawyerId));
         return rows;
     }
 
@@ -388,6 +399,8 @@ public class BizCaseServiceImpl implements IBizCaseService
         assertRowsChanged(caseMapper.updateCaseStatus(caseUpdate), "案件状态已变化，请刷新后重试");
         insertStatusLog(toLong(transfer.get("case_id"), "请选择案件"), CASE_TRANSFERING, CASE_PROCESSING, "transfer_approve", "转案审批：" + action + "，" + opinion);
         createNotice("转案审批已处理", "转案单 " + transfer.get("transfer_no") + " 审批结果：" + transferActionLabel(action) + "，案件已回到办理流程。");
+        publish(BusinessEventType.CASE_TRANSFER_APPROVED, toLong(transfer.get("case_id"), "请选择案件"),
+                text(transfer.get("case_no")), eventPayload("transferId", transferId, "action", action));
         return rows;
     }
 
@@ -439,6 +452,8 @@ public class BizCaseServiceImpl implements IBizCaseService
         insertStatusLog(caseId, text(confirmEntity.get("caseStatus")), "accepted".equals(result) ? CASE_PROCESSING : CASE_PENDING,
                 "confirm", "律师接案确认：" + ("accepted".equals(result) ? "已接收" : "已拒绝"));
         createNotice("律师接案确认", "案件 " + confirmEntity.get("caseNo") + " 接案确认结果：" + ("accepted".equals(result) ? "已接收" : "已拒绝"));
+        publish("accepted".equals(result) ? BusinessEventType.CASE_ACCEPTED : BusinessEventType.CASE_REJECTED,
+                caseId, text(confirmEntity.get("caseNo")), eventPayload("confirmId", confirmId));
         return rows;
     }
 
@@ -746,5 +761,21 @@ public class BizCaseServiceImpl implements IBizCaseService
         {
             throw new ServiceException(message);
         }
+    }
+
+    private void publish(BusinessEventType type, Long caseId, String caseNo, Map<String, Object> payload)
+    {
+        eventPublisher.publish(new BusinessEventCommand(type, "CASE", caseId, caseNo,
+                type.name() + ":" + caseId + ":" + IdUtils.fastUUID(), payload));
+    }
+
+    private Map<String, Object> eventPayload(Object... values)
+    {
+        Map<String, Object> payload = new HashMap<>();
+        for (int i = 0; i + 1 < values.length; i += 2)
+        {
+            if (values[i + 1] != null) payload.put(String.valueOf(values[i]), values[i + 1]);
+        }
+        return payload;
     }
 }

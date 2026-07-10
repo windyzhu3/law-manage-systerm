@@ -7,7 +7,7 @@ ruoyi:
   # 版权年份
   copyrightYear: 2026
   # 文件路径 示例（ Windows配置D:/ruoyi/uploadPath，Linux配置 /home/ruoyi/uploadPath）
-  profile: D:/ruoyi/uploadPath
+  profile: ${RUOYI_PROFILE:/tmp/law-manage/uploads}
   # 获取ip地址开关
   addressEnabled: false
   # 验证码类型 math 数字计算 char 字符验证
@@ -34,7 +34,7 @@ server:
 # 日志配置
 logging:
   level:
-    com.ruoyi: debug
+    com.ruoyi: ${APP_LOG_LEVEL:info}
     org.springframework: warn
 
 # 用户配置
@@ -52,7 +52,12 @@ spring:
     # 国际化资源文件路径
     basename: i18n/messages
   profiles:
-    active: druid
+    active: ${SPRING_PROFILES_ACTIVE:druid}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    baseline-version: 0.15.0
+    locations: classpath:db/migration
   # 文件上传
   servlet:
     multipart:
@@ -67,18 +72,18 @@ spring:
   devtools:
     restart:
       # 热部署开关
-      enabled: true
+      enabled: ${DEVTOOLS_ENABLED:false}
   data:
     # redis 配置
     redis:
       # 地址
-      host: localhost
+      host: ${REDIS_HOST:localhost}
       # 端口，默认为6379
-      port: 6379
+      port: ${REDIS_PORT:6379}
       # 数据库索引
       database: 0
       # 密码
-      password:
+      password: ${REDIS_PASSWORD:}
       # 连接超时时间
       timeout: 10s
       lettuce:
@@ -97,7 +102,7 @@ token:
   # 令牌自定义标识
   header: Authorization
   # 令牌密钥
-  secret: abcdefghijklmnopqrstuvwxyz
+  secret: ${TOKEN_SECRET}
   # 令牌有效期（默认30分钟）
   expireTime: 30
 
@@ -121,7 +126,7 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   swagger-ui:
-    enabled: true
+    enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
     tags-sorter: alpha
   group-configs:
