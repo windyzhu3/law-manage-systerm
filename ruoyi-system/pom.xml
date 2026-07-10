@@ -12,12 +12,12 @@
     <artifactId>ruoyi-system</artifactId>
 
     <description>
-        system系统模块
+        system绯荤粺妯″潡
     </description>
 
     <dependencies>
 
-        <!-- 通用工具-->
+        <!-- 閫氱敤宸ュ叿-->
         <dependency>
             <groupId>com.ruoyi</groupId>
             <artifactId>ruoyi-common</artifactId>
@@ -28,6 +28,13 @@
             <artifactId>law-business</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
 </project>
+
