@@ -71,4 +71,3 @@ public class ContractQueryService
             throw new ServiceException("无权访问该合同");
     }
 }
-

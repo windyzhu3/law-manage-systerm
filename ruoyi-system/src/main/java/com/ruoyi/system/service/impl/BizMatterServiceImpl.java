@@ -65,4 +65,3 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Override public int confirmArchive(Map<String, Object> archive) { return archiveService.archive(archive); }
     @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { return queryService.statusLogs(params); }
 }
-

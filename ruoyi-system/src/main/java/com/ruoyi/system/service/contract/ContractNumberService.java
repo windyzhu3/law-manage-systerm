@@ -119,4 +119,3 @@ public class ContractNumberService
         if (rows <= 0) throw new ServiceException(message);
     }
 }
-

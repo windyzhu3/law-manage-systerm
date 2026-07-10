@@ -174,4 +174,3 @@ public class MatterCommandService
     @SuppressWarnings("unchecked") private List<Map<String, Object>> list(Object value) { return value instanceof List ? (List<Map<String, Object>>) value : List.of(); }
     private void assertRows(int rows, String message) { if (rows <= 0) throw new ServiceException(message); }
 }
-
