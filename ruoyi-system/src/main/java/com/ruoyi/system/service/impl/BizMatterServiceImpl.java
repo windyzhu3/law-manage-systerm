@@ -23,6 +23,7 @@ import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.IBizMatterService;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.matter.MatterProgressService;
+import com.ruoyi.system.service.matter.MatterDocumentService;
 import com.law.business.shared.status.CaseStatus;
 
 @Service
@@ -61,6 +62,9 @@ public class BizMatterServiceImpl implements IBizMatterService
 
     @Autowired
     private MatterProgressService progressService;
+
+    @Autowired
+    private MatterDocumentService documentService;
 
     @Override
     public Map<String, Object> selectDashboard()
@@ -328,34 +332,14 @@ public class BizMatterServiceImpl implements IBizMatterService
     @Transactional
     public int insertDocument(Map<String, Object> document)
     {
-        Long caseId = toLong(document.get("caseId"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        requiredText(document.get("documentType"), "请选择文档类型");
-        requiredText(document.get("fileName"), "请填写文件名称");
-        requiredText(document.get("fileUrl"), "请上传文件");
-        assertDictValue("law_case_document_type", document.get("documentType"), "文档类型不合法");
-        document.put("createBy", SecurityUtils.getUsername());
-        int rows = matterMapper.insertDocument(document);
-        assertRows(rows, "文档创建失败");
-        insertStatusLog(caseId, null, null, "document_add", "新增案件文档：" + document.get("fileName"));
-        return rows;
+        return documentService.create(document);
     }
 
     @Override
     @Transactional
     public int deleteDocument(Long documentId)
     {
-        Map<String, Object> existed = matterMapper.selectDocumentById(documentId);
-        if (existed == null)
-        {
-            throw new ServiceException("文档不存在");
-        }
-        Long caseId = toLong(existed.get("case_id"), "请选择案件");
-        requireProcessEditableMatter(caseId);
-        int rows = matterMapper.deleteDocument(documentId, SecurityUtils.getUsername());
-        assertRows(rows, "文档已变化，请刷新后重试");
-        insertStatusLog(caseId, null, null, "document_remove", "删除案件文档");
-        return rows;
+        return documentService.delete(documentId);
     }
 
     @Override
