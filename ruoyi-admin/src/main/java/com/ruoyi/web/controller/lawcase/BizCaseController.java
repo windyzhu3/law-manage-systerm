@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.lawcase;
 
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +18,10 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.law.business.lawcase.dto.CaseAssignmentCommand;
+import com.law.business.lawcase.dto.CaseConfirmCommand;
+import com.law.business.lawcase.dto.CaseTransferApprovalCommand;
+import com.law.business.lawcase.dto.CaseTransferCommand;
 import com.ruoyi.system.service.IBizCaseService;
 
 @RestController
@@ -58,17 +63,17 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:pending:assign')")
     @Log(title = "case-assign", businessType = BusinessType.UPDATE)
     @PostMapping("/assign")
-    public AjaxResult assign(@RequestBody Map<String, Object> body)
+    public AjaxResult assign(@Valid @RequestBody CaseAssignmentCommand command)
     {
-        return toAjax(caseService.assignCase(body));
+        return toAjax(caseService.assignCase(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('case:pending:batchAssign')")
     @Log(title = "case-batch-assign", businessType = BusinessType.UPDATE)
     @PostMapping("/assign/batch")
-    public AjaxResult batchAssign(@RequestBody Map<String, Object> body)
+    public AjaxResult batchAssign(@Valid @RequestBody CaseAssignmentCommand command)
     {
-        return toAjax(caseService.batchAssignCases(body));
+        return toAjax(caseService.batchAssignCases(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('case:assign:list')")
@@ -144,19 +149,18 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:transfer:add')")
     @Log(title = "case-transfer", businessType = BusinessType.INSERT)
     @PostMapping("/transfer")
-    public AjaxResult requestTransfer(@RequestBody Map<String, Object> body)
+    public AjaxResult requestTransfer(@Valid @RequestBody CaseTransferCommand command)
     {
-        body.put("applicantId", getUserId());
-        body.put("applicantName", getLoginUser().getUser().getNickName());
-        return toAjax(caseService.requestTransfer(body));
+        return toAjax(caseService.requestTransfer(command.toPersistenceMap(
+                getUserId(), getLoginUser().getUser().getNickName())));
     }
 
     @PreAuthorize("@ss.hasPermi('case:transfer:approve')")
     @Log(title = "case-transfer-approve", businessType = BusinessType.UPDATE)
     @PostMapping("/transfer/approve")
-    public AjaxResult approveTransfer(@RequestBody Map<String, Object> body)
+    public AjaxResult approveTransfer(@Valid @RequestBody CaseTransferApprovalCommand command)
     {
-        return toAjax(caseService.approveTransfer(body));
+        return toAjax(caseService.approveTransfer(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('case:confirm:list')")
@@ -170,9 +174,9 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:confirm:handle')")
     @Log(title = "case-confirm", businessType = BusinessType.UPDATE)
     @PutMapping("/confirm")
-    public AjaxResult handleConfirm(@RequestBody Map<String, Object> body)
+    public AjaxResult handleConfirm(@Valid @RequestBody CaseConfirmCommand command)
     {
-        return toAjax(caseService.handleConfirm(body));
+        return toAjax(caseService.handleConfirm(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('case:status:list')")
