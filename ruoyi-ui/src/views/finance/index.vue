@@ -88,67 +88,19 @@
         </article>
       </section>
 
-      <section class="finance-overview-tables">
-        <biz-table-card :toolbar="false" :pagination="false">
-          <template slot="header">
-            <div class="section-heading">
-              <h3>待确认回款列表</h3>
-              <el-button :size="controlSize" type="text" @click="switchMode('payment')">更多</el-button>
-            </div>
-          </template>
-          <el-table :data="pendingPayments" :size="controlSize" class="overview-mini-table">
-            <el-table-column label="客户名称" min-width="118" show-overflow-tooltip>
-              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
-            </el-table-column>
-            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.receivableAmount) }}</template></el-table-column>
-            <el-table-column label="到账日" width="76"><template slot-scope="{ row }">{{ shortDate(row.planReceiveDate) }}</template></el-table-column>
-          </el-table>
-        </biz-table-card>
-
-        <biz-table-card :toolbar="false" :pagination="false">
-          <template slot="header">
-            <div class="section-heading">
-              <h3>逾期应收客户</h3>
-              <el-button :size="controlSize" type="text" @click="switchMode('receivable', { overdueOnly: '1' })">更多</el-button>
-            </div>
-          </template>
-          <el-table :data="overdueReceivables" :size="controlSize" class="overview-mini-table">
-            <el-table-column label="客户名称" min-width="118" show-overflow-tooltip>
-              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
-            </el-table-column>
-            <el-table-column label="天数" width="62" align="center"><template slot-scope="{ row }">{{ row.agingDays || 0 }}天</template></el-table-column>
-            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.pendingAmount) }}</template></el-table-column>
-          </el-table>
-        </biz-table-card>
-
-        <biz-table-card :toolbar="false" :pagination="false">
-          <template slot="header">
-            <div class="section-heading">
-              <h3>近期发票动态</h3>
-              <el-button :size="controlSize" type="text" @click="switchMode('invoice')">更多</el-button>
-            </div>
-          </template>
-          <el-table :data="invoiceActivities" :size="controlSize" class="overview-mini-table">
-            <el-table-column label="客户名称" prop="customerName" min-width="122" show-overflow-tooltip />
-            <el-table-column label="金额" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.amount) }}</template></el-table-column>
-            <el-table-column label="状态" width="68" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
-          </el-table>
-        </biz-table-card>
-
-        <biz-table-card :toolbar="false" :pagination="false">
-          <template slot="header">
-            <div class="section-heading">
-              <h3>费用 / 回款概览表</h3>
-              <el-button :size="controlSize" type="text" @click="switchMode('report')">查看报表</el-button>
-            </div>
-          </template>
-          <el-table :data="financeSummaryRows" :size="controlSize" class="overview-mini-table">
-            <el-table-column label="项目" prop="itemName" min-width="76" />
-            <el-table-column label="本月" width="76" align="right"><template slot-scope="{ row }">{{ formatSummaryValue(row) }}</template></el-table-column>
-            <el-table-column label="本年" width="82" align="right"><template slot-scope="{ row }">{{ formatSummaryYearValue(row) }}</template></el-table-column>
-          </el-table>
-        </biz-table-card>
-      </section>
+      <finance-overview-tables
+        :size="controlSize"
+        :pending-payments="pendingPayments"
+        :overdue-receivables="overdueReceivables"
+        :invoice-activities="invoiceActivities"
+        :summary-rows="financeSummaryRows"
+        :invoice-status-options="dict.type.law_contract_invoice_status"
+        :compact-money="formatCompactMoney"
+        :short-date="shortDate"
+        :summary-value="formatSummaryValue"
+        :summary-year-value="formatSummaryYearValue"
+        @navigate="switchMode"
+      />
     </template>
 
     <template v-else-if="false && mode === 'overview'">
@@ -572,6 +524,7 @@ import BizMetrics from '@/views/business/components/BizMetrics'
 import BizTableCard from '@/views/business/components/BizTableCard'
 import CaseFinanceDrawer from './components/CaseFinanceDrawer'
 import FinanceFlowOverview from './components/FinanceFlowOverview'
+import FinanceOverviewTables from './components/FinanceOverviewTables'
 import businessUi from '@/views/business/mixins/businessUi'
 import {
   getFinanceDashboard,
@@ -590,7 +543,7 @@ import '@/views/business/business-dialog.scss'
 
 export default {
   name: 'FinanceCenter',
-  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer, FinanceFlowOverview },
+  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer, FinanceFlowOverview, FinanceOverviewTables },
   mixins: [businessUi],
   dicts: [
     'law_finance_receivable_status',
