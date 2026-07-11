@@ -27,6 +27,7 @@ import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.law.business.security.CasePermissions;
+import com.ruoyi.system.service.casecenter.CaseQueryService;
 
 @Service
 public class BizCaseServiceImpl implements IBizCaseService
@@ -63,64 +64,49 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Autowired
     private BusinessEventPublisher eventPublisher;
 
+    @Autowired
+    private CaseQueryService queryService;
+
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
     {
-        applyDataScope(params);
-        return caseMapper.selectCaseList(params);
+        return queryService.cases(params);
     }
 
     @Override
     public Map<String, Object> selectCaseById(Long caseId)
     {
-        assertCaseAccess(caseId);
-        Map<String, Object> entity = caseMapper.selectCaseById(caseId);
-        if (entity == null)
-        {
-            throw new ServiceException("案件不存在或已删除");
-        }
-        return entity;
+        return queryService.caseDetail(caseId);
     }
 
     @Override
     public Map<String, Object> selectDashboard()
     {
-        Map<String, Object> params = new HashMap<>();
-        applyDataScope(params);
-        Map<String, Object> result = new HashMap<>();
-        result.put("cards", caseMapper.selectDashboardCards(params));
-        result.put("lawyers", caseMapper.selectLawyerLoads(params));
-        result.put("specialties", caseMapper.selectLawyerSpecialtyStats(params));
-        return result;
+        return queryService.dashboard();
     }
 
     @Override
     public List<Map<String, Object>> selectLawyerLoads(Map<String, Object> params)
     {
-        return caseMapper.selectLawyerLoads(params);
+        return queryService.lawyerLoads(params);
     }
 
     @Override
     public List<Map<String, Object>> selectLawyerSpecialtyStats(Map<String, Object> params)
     {
-        return caseMapper.selectLawyerSpecialtyStats(params);
+        return queryService.lawyerSpecialties(params);
     }
 
     @Override
     public List<Map<String, Object>> selectLawyerProfiles(Map<String, Object> params)
     {
-        return caseMapper.selectLawyerProfiles(params);
+        return queryService.lawyerProfiles(params);
     }
 
     @Override
     public Map<String, Object> selectLawyerProfileByUserId(Long userId)
     {
-        Map<String, Object> profile = caseMapper.selectLawyerProfileByUserId(userId);
-        if (profile == null)
-        {
-            throw new ServiceException("律师不存在或已停用");
-        }
-        return profile;
+        return queryService.lawyerProfile(userId);
     }
 
     @Override
@@ -303,8 +289,7 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Override
     public List<Map<String, Object>> selectAssignments(Map<String, Object> params)
     {
-        applyDataScope(params);
-        return caseMapper.selectAssignments(params);
+        return queryService.assignments(params);
     }
 
     @Override
@@ -407,15 +392,13 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Override
     public List<Map<String, Object>> selectTransfers(Map<String, Object> params)
     {
-        applyDataScope(params);
-        return caseMapper.selectTransfers(params);
+        return queryService.transfers(params);
     }
 
     @Override
     public List<Map<String, Object>> selectConfirms(Map<String, Object> params)
     {
-        applyDataScope(params);
-        return caseMapper.selectConfirms(params);
+        return queryService.confirms(params);
     }
 
     @Override
@@ -460,8 +443,7 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Override
     public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params)
     {
-        applyDataScope(params);
-        return caseMapper.selectStatusLogs(params);
+        return queryService.statusLogs(params);
     }
 
     private void createConfirm(Long caseId, Long userId, String userName, String type, String content)
