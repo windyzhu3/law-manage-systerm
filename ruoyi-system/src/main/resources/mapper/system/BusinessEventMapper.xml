@@ -18,10 +18,20 @@
                create_by createBy
         from business_event
         where event_status in ('PENDING', 'FAILED')
+          and retry_count &lt; 10
           and (next_retry_time is null or next_retry_time &lt;= sysdate())
         order by event_id
         limit #{limit}
     </select>
+
+    <update id="claimEvent">
+        update business_event
+        set event_status='PROCESSING', update_time=sysdate()
+        where event_id=#{eventId}
+          and event_status in ('PENDING','FAILED')
+          and retry_count &lt; 10
+          and (next_retry_time is null or next_retry_time &lt;= sysdate())
+    </update>
 
     <update id="markProcessed">
         update business_event
@@ -31,9 +41,11 @@
 
     <update id="markFailed">
         update business_event
-        set event_status='FAILED', retry_count=retry_count+1,
-            next_retry_time=date_add(sysdate(), interval least(retry_count+1, 10) minute),
+        set event_status=case when retry_count+1 &gt;= 10 then 'DEAD' else 'FAILED' end,
+            retry_count=retry_count+1,
+            next_retry_time=case when retry_count+1 &gt;= 10 then null
+                else date_add(sysdate(), interval least(retry_count+1, 10) minute) end,
             error_message=#{errorMessage}, update_time=sysdate()
-        where event_id=#{eventId}
+        where event_id=#{eventId} and event_status='PROCESSING'
     </update>
 </mapper>
