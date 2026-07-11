@@ -24,6 +24,7 @@ import com.ruoyi.system.service.IBizCaseService;
 import com.ruoyi.system.service.IBizContractService;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.contract.ContractAttachmentService;
+import com.ruoyi.system.service.contract.ContractLifecycleService;
 import com.ruoyi.system.service.contract.ContractNumberService;
 import com.ruoyi.system.service.contract.ContractQueryService;
 import com.ruoyi.system.service.contract.ContractTemplateService;
@@ -89,6 +90,7 @@ public class BizContractServiceImpl implements IBizContractService
     private BusinessEventPublisher eventPublisher;
 
     @Autowired private ContractAttachmentService attachmentService;
+    @Autowired private ContractLifecycleService lifecycleService;
     @Autowired private ContractNumberService numberService;
     @Autowired private ContractQueryService queryService;
     @Autowired private ContractTemplateService templateService;
@@ -205,164 +207,22 @@ public class BizContractServiceImpl implements IBizContractService
     }
 
     @Override
-    @Transactional
-    public int submitContract(Long contractId)
-    {
-        BizContract contract = selectContractById(contractId);
-        if (!AUDIT_PENDING.equals(contract.getAuditStatus()) && !AUDIT_REJECTED.equals(contract.getAuditStatus()) && !AUDIT_BACK.equals(contract.getAuditStatus()))
-        {
-            throw new ServiceException("当前审核状态不允许提交");
-        }
-        if (!CONTRACT_DRAFT.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("只有草稿状态合同可以提交审批");
-        }
-        int rows = contractMapper.updateAuditStatus(contractId, AUDIT_REVIEWING, contract.getContractStatus(), contract.getAuditStatus(), CONTRACT_DRAFT, SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        insertStatusLog(contractId, contract.getAuditStatus(), AUDIT_REVIEWING, "submit", "提交审批");
-        publish(BusinessEventType.CONTRACT_SUBMITTED, contract, eventPayload("auditStatus", AUDIT_REVIEWING));
-        return rows;
-    }
+    public int submitContract(Long contractId) { return lifecycleService.submit(contractId); }
 
     @Override
-    @Transactional
-    public int approveContract(Long contractId, String action, String opinion)
-    {
-        if (StringUtils.isEmpty(opinion))
-        {
-            throw new ServiceException("审批意见必填");
-        }
-        assertDictValue("law_contract_approval_action", action, "审批动作不合法");
-        if (!"pass".equals(action) && !"reject".equals(action) && !"back".equals(action))
-        {
-            throw new ServiceException("审批动作不合法");
-        }
-        BizContract contract = selectContractById(contractId);
-        if (!AUDIT_REVIEWING.equals(contract.getAuditStatus()))
-        {
-            throw new ServiceException("只有审核中的合同可以审批");
-        }
-
-        String auditStatus = "pass".equals(action) ? AUDIT_PASSED : ("back".equals(action) ? AUDIT_BACK : AUDIT_REJECTED);
-        String contractStatus = AUDIT_PASSED.equals(auditStatus) && (SIGN_SIGNED.equals(contract.getSignStatus()) || SIGN_PARTIAL.equals(contract.getSignStatus())) ? CONTRACT_PERFORMING : contract.getContractStatus();
-
-        Map<String, Object> approval = new HashMap<>();
-        approval.put("contractId", contractId);
-        approval.put("approvalAction", action);
-        approval.put("approvalOpinion", opinion);
-        approval.put("approverId", SecurityUtils.getUserId());
-        approval.put("approverName", SecurityUtils.getLoginUser().getUser().getNickName());
-        approval.put("createBy", SecurityUtils.getUsername());
-        int rows = contractMapper.updateAuditStatus(contractId, auditStatus, contractStatus, AUDIT_REVIEWING, contract.getContractStatus(), SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        assertRowsChanged(contractMapper.insertApproval(approval), "Approval record was not created");
-        insertStatusLog(contractId, contract.getAuditStatus(), auditStatus, "approval", opinion);
-        publish(BusinessEventType.CONTRACT_APPROVED, contract,
-                eventPayload("action", action, "auditStatus", auditStatus, "opinion", opinion));
-        return rows;
-    }
+    public int approveContract(Long contractId, String action, String opinion) { return lifecycleService.approve(contractId, action, opinion); }
 
     @Override
-    @Transactional
-    public int signContract(Long contractId, String signStatus)
-    {
-        BizContract contract = selectContractById(contractId);
-        if (!AUDIT_PASSED.equals(contract.getAuditStatus()))
-        {
-            throw new ServiceException("只有审批通过的合同可以签署");
-        }
-        if (CONTRACT_ARCHIVED.equals(contract.getContractStatus()) || CONTRACT_VOID.equals(contract.getContractStatus()) || CONTRACT_TERMINATED.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("归档、作废或终止的合同不允许签署");
-        }
-        assertDictValue("law_contract_sign_status", signStatus, "签署状态不合法");
-        if (!SIGN_SIGNED.equals(signStatus) && !SIGN_PARTIAL.equals(signStatus))
-        {
-            throw new ServiceException("签署状态不合法");
-        }
-        if (SIGN_SIGNED.equals(contract.getSignStatus()))
-        {
-            throw new ServiceException("合同已签订，不能重复签署");
-        }
-        String expectedContractStatus = CONTRACT_DRAFT;
-        String content = SIGN_PARTIAL.equals(signStatus) ? "合同部分签署" : "合同签署";
-        if (SIGN_PARTIAL.equals(contract.getSignStatus()))
-        {
-            if (!CONTRACT_PERFORMING.equals(contract.getContractStatus()) || !SIGN_SIGNED.equals(signStatus))
-            {
-                throw new ServiceException("部分签订的合同只能补齐为已签订");
-            }
-            expectedContractStatus = CONTRACT_PERFORMING;
-            content = "合同补齐签署";
-        }
-        else if (!CONTRACT_DRAFT.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("只有草稿或部分签订的履约中合同可以签署");
-        }
-        String toContractStatus = CONTRACT_PERFORMING;
-        int rows = contractMapper.updateLifecycleStatus(contractId, signStatus, toContractStatus, AUDIT_PASSED, expectedContractStatus, SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        insertStatusLog(contractId, contract.getContractStatus(), toContractStatus, "sign", content);
-        if (SIGN_SIGNED.equals(signStatus))
-        {
-            BizContract signedContract = selectContractById(contractId);
-            caseService.createCaseFromContract(signedContract);
-        }
-        publish(BusinessEventType.CONTRACT_SIGNED, contract, eventPayload("signStatus", signStatus));
-        return rows;
-    }
+    public int signContract(Long contractId, String signStatus) { return lifecycleService.sign(contractId, signStatus); }
 
     @Override
-    @Transactional
-    public int archiveContract(Long contractId, String reason)
-    {
-        String archiveReason = requiredReason(reason, "归档说明必填");
-        BizContract contract = selectContractById(contractId);
-        if (!CONTRACT_PERFORMING.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("只有履约中的合同可以归档");
-        }
-        int rows = contractMapper.updateLifecycleStatus(contractId, null, CONTRACT_ARCHIVED, contract.getAuditStatus(), CONTRACT_PERFORMING, SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        insertStatusLog(contractId, contract.getContractStatus(), CONTRACT_ARCHIVED, "archive", archiveReason);
-        return rows;
-    }
+    public int archiveContract(Long contractId, String reason) { return lifecycleService.archive(contractId, reason); }
 
     @Override
-    @Transactional
-    public int voidContract(Long contractId, String reason)
-    {
-        String voidReason = requiredReason(reason, "作废原因必填");
-        BizContract contract = selectContractById(contractId);
-        if (AUDIT_REVIEWING.equals(contract.getAuditStatus()))
-        {
-            throw new ServiceException("审核中的合同不允许作废");
-        }
-        if (!CONTRACT_DRAFT.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("只有草稿状态合同可以作废");
-        }
-        int rows = contractMapper.updateLifecycleStatus(contractId, null, CONTRACT_VOID, contract.getAuditStatus(), CONTRACT_DRAFT, SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        insertStatusLog(contractId, contract.getContractStatus(), CONTRACT_VOID, "void", voidReason);
-        return rows;
-    }
+    public int voidContract(Long contractId, String reason) { return lifecycleService.voidContract(contractId, reason); }
 
     @Override
-    @Transactional
-    public int terminateContract(Long contractId, String reason)
-    {
-        String terminateReason = requiredReason(reason, "终止原因必填");
-        BizContract contract = selectContractById(contractId);
-        if (!CONTRACT_PERFORMING.equals(contract.getContractStatus()))
-        {
-            throw new ServiceException("只有履约中的合同可以终止");
-        }
-        int rows = contractMapper.updateLifecycleStatus(contractId, null, CONTRACT_TERMINATED, contract.getAuditStatus(), CONTRACT_PERFORMING, SecurityUtils.getUsername());
-        assertStateChanged(rows);
-        insertStatusLog(contractId, contract.getContractStatus(), CONTRACT_TERMINATED, "terminate", terminateReason);
-        return rows;
-    }
+    public int terminateContract(Long contractId, String reason) { return lifecycleService.terminate(contractId, reason); }
 
     @Override
     public Map<String, Object> selectDashboard()
