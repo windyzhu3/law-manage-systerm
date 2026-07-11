@@ -30,6 +30,7 @@ import com.law.business.security.CasePermissions;
 import com.ruoyi.system.service.casecenter.CaseQueryService;
 import com.ruoyi.system.service.casecenter.CaseCreationService;
 import com.ruoyi.system.service.casecenter.CaseAssignmentService;
+import com.ruoyi.system.service.casecenter.CaseTransferService;
 import com.ruoyi.system.service.casecenter.LawyerProfileService;
 
 @Service
@@ -79,6 +80,9 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Autowired
     private CaseAssignmentService caseAssignmentService;
 
+    @Autowired
+    private CaseTransferService caseTransferService;
+
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
     {
@@ -122,12 +126,14 @@ public class BizCaseServiceImpl implements IBizCaseService
     }
 
     @Override
+    @Transactional
     public int saveLawyerProfile(Map<String, Object> profile)
     {
         return lawyerProfileService.save(profile);
     }
 
     @Override
+    @Transactional
     public int updateLawyerProfileStatus(Map<String, Object> profile)
     {
         return lawyerProfileService.updateStatus(profile);
@@ -164,97 +170,14 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int requestTransfer(Map<String, Object> transfer)
     {
-        Long caseId = toLong(transfer.get("caseId"), "请选择案件");
-        Map<String, Object> existed = selectCaseById(caseId);
-        if (!CASE_PROCESSING.equals(text(existed.get("case_status"))))
-        {
-            throw new ServiceException("只有办理中的案件可以发起转案");
-        }
-        Long toLawyerId = toLong(transfer.get("toLawyerId"), "请选择拟转入律师");
-        Long currentMainLawyerId = toNullableLong(existed.get("main_lawyer_id"));
-        if (currentMainLawyerId != null && currentMainLawyerId.equals(toLawyerId))
-        {
-            throw new ServiceException("拟转入律师不能与当前主办律师相同");
-        }
-        SysUser toLawyer = assertMainLawyerEligible(toLawyerId);
-        assertDictValue("law_case_transfer_reason", transfer.get("transferReason"), "转案原因不合法");
-        assertDictValue("law_case_risk_level", transfer.get("riskLevel"), "风险等级不合法");
-        requiredText(transfer.get("detail"), "转案详情不能为空");
-        transfer.put("transferNo", "TR" + System.currentTimeMillis());
-        transfer.put("fromLawyerId", existed.get("main_lawyer_id"));
-        transfer.put("fromLawyerName", existed.get("main_lawyer_name"));
-        transfer.put("toLawyerName", toLawyer.getNickName());
-        transfer.put("transferStatus", TRANSFER_PENDING);
-        transfer.put("currentNode", "法务经理审批");
-        transfer.put("createBy", SecurityUtils.getUsername());
-        int rows = caseMapper.insertTransfer(transfer);
-        assertRowsChanged(rows, "转案申请创建失败");
-
-        Map<String, Object> update = new HashMap<>();
-        update.put("caseId", caseId);
-        update.put("caseStatus", CASE_TRANSFERING);
-        update.put("expectedStatus", CASE_PROCESSING);
-        update.put("currentNode", "转案审批中");
-        update.put("updateBy", SecurityUtils.getUsername());
-        assertRowsChanged(caseMapper.updateCaseStatus(update), "案件状态已变化，请刷新后重试");
-        insertStatusLog(caseId, CASE_PROCESSING, CASE_TRANSFERING, "transfer_request", "发起转案申请：" + safeText(transfer.get("transferReason"), "转案申请"));
-        createNotice("转案申请待审批", "案件 " + existed.get("case_no") + " 发起转案申请：" + existed.get("main_lawyer_name") + " -> " + toLawyer.getNickName());
-        publish(BusinessEventType.CASE_TRANSFER_REQUESTED, caseId, text(existed.get("case_no")),
-                eventPayload("transferId", transfer.get("transferId"), "toLawyerId", toLawyerId));
-        return rows;
+        return caseTransferService.request(transfer);
     }
 
     @Override
     @Transactional
     public int approveTransfer(Map<String, Object> approval)
     {
-        Long transferId = toLong(approval.get("transferId"), "请选择转案申请");
-        String action = safeText(approval.get("action"), "");
-        String opinion = safeText(approval.get("opinion"), "");
-        if (!TRANSFER_PASSED.equals(action) && !TRANSFER_REJECTED.equals(action) && !TRANSFER_SUPPLEMENT.equals(action))
-        {
-            throw new ServiceException("审批动作不合法");
-        }
-        if (StringUtils.isEmpty(opinion))
-        {
-            throw new ServiceException("审批意见必填");
-        }
-        Map<String, Object> transfer = caseMapper.selectTransferById(transferId);
-        if (transfer == null)
-        {
-            throw new ServiceException("转案申请不存在");
-        }
-        assertCaseAccess(toLong(transfer.get("case_id"), "请选择案件"));
-        if (!TRANSFER_PENDING.equals(text(transfer.get("transfer_status"))))
-        {
-            throw new ServiceException("只有待审批转案可以处理");
-        }
-        approval.put("transferStatus", action);
-        approval.put("expectedStatus", TRANSFER_PENDING);
-        approval.put("currentNode", TRANSFER_PASSED.equals(action) ? "已通过" : (TRANSFER_SUPPLEMENT.equals(action) ? "补充材料" : "已驳回"));
-        approval.put("approverId", SecurityUtils.getUserId());
-        approval.put("approverName", SecurityUtils.getLoginUser().getUser().getNickName());
-        approval.put("updateBy", SecurityUtils.getUsername());
-        int rows = caseMapper.updateTransferApproval(approval);
-        assertRowsChanged(rows, "转案状态已变化，请刷新后重试");
-
-        Map<String, Object> caseUpdate = new HashMap<>();
-        caseUpdate.put("caseId", transfer.get("case_id"));
-        caseUpdate.put("expectedStatus", CASE_TRANSFERING);
-        caseUpdate.put("caseStatus", CASE_PROCESSING);
-        caseUpdate.put("currentNode", "案件办理中");
-        caseUpdate.put("updateBy", SecurityUtils.getUsername());
-        if (TRANSFER_PASSED.equals(action))
-        {
-            caseUpdate.put("mainLawyerId", transfer.get("to_lawyer_id"));
-            caseUpdate.put("mainLawyerName", transfer.get("to_lawyer_name"));
-        }
-        assertRowsChanged(caseMapper.updateCaseStatus(caseUpdate), "案件状态已变化，请刷新后重试");
-        insertStatusLog(toLong(transfer.get("case_id"), "请选择案件"), CASE_TRANSFERING, CASE_PROCESSING, "transfer_approve", "转案审批：" + action + "，" + opinion);
-        createNotice("转案审批已处理", "转案单 " + transfer.get("transfer_no") + " 审批结果：" + transferActionLabel(action) + "，案件已回到办理流程。");
-        publish(BusinessEventType.CASE_TRANSFER_APPROVED, toLong(transfer.get("case_id"), "请选择案件"),
-                text(transfer.get("case_no")), eventPayload("transferId", transferId, "action", action));
-        return rows;
+        return caseTransferService.approve(approval);
     }
 
     @Override
