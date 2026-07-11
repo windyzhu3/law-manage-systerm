@@ -29,6 +29,7 @@ import com.ruoyi.common.utils.uuid.IdUtils;
 import com.law.business.security.CasePermissions;
 import com.ruoyi.system.service.casecenter.CaseQueryService;
 import com.ruoyi.system.service.casecenter.CaseCreationService;
+import com.ruoyi.system.service.casecenter.CaseAssignmentService;
 import com.ruoyi.system.service.casecenter.LawyerProfileService;
 
 @Service
@@ -74,6 +75,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Autowired
     private CaseCreationService caseCreationService;
+
+    @Autowired
+    private CaseAssignmentService caseAssignmentService;
 
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
@@ -140,67 +144,14 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int assignCase(Map<String, Object> assignment)
     {
-        return assignSingleCase(assignment);
+        return caseAssignmentService.assign(assignment);
     }
 
     @Override
     @Transactional
     public int batchAssignCases(Map<String, Object> assignment)
     {
-        List<Long> caseIds = parseIds(assignment.get("caseIds"));
-        if (caseIds.isEmpty())
-        {
-            throw new ServiceException("请选择案件");
-        }
-        int rows = 0;
-        for (Long caseId : caseIds)
-        {
-            Map<String, Object> item = new HashMap<>(assignment);
-            item.put("caseId", caseId);
-            rows += assignSingleCase(item);
-        }
-        return rows;
-    }
-
-    private int assignSingleCase(Map<String, Object> assignment)
-    {
-        Long caseId = toLong(assignment.get("caseId"), "请选择案件");
-        Map<String, Object> existed = selectCaseById(caseId);
-        String status = text(existed.get("case_status"));
-        if (!CASE_PENDING.equals(status))
-        {
-            throw new ServiceException("只有待分案案件可以分配，办理中案件请走转案审批");
-        }
-        Long mainLawyerId = toLong(assignment.get("mainLawyerId"), "请选择主办律师");
-        SysUser mainLawyer = assertMainLawyerEligible(mainLawyerId);
-        normalizeAssistantLawyers(assignment);
-        assertDictValue("law_case_assign_method", assignment.get("assignMethod"), "分配方式不合法");
-        assertDictValue("law_case_priority", assignment.get("priority"), "优先级不合法");
-        assertDictValue("law_case_assign_reason", assignment.get("assignReason"), "分配原因不合法");
-
-        boolean needConfirm = "Y".equals(String.valueOf(assignment.get("notifyFlag")));
-        String targetStatus = needConfirm ? CASE_CONFIRMING : CASE_PROCESSING;
-        assignment.put("mainLawyerName", mainLawyer.getNickName());
-        assignment.put("caseStatus", targetStatus);
-        assignment.put("currentNode", needConfirm ? "待律师确认" : "案件办理中");
-        assignment.put("updateBy", SecurityUtils.getUsername());
-        int rows = caseMapper.updateCaseAssignment(assignment);
-        assertRowsChanged(rows, "案件状态已变化，请刷新后重试");
-        assignment.put("createBy", SecurityUtils.getUsername());
-        assertRowsChanged(caseMapper.insertAssignment(assignment), "分案记录创建失败");
-        insertStatusLog(caseId, status, targetStatus, "assign", "分配主办律师：" + mainLawyer.getNickName());
-        if (needConfirm)
-        {
-            createConfirm(caseId, mainLawyerId, mainLawyer.getNickName(), "accept", "请确认接收案件");
-            createNotice("案件分配待确认", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，请及时确认接收。");
-        }
-        else
-        {
-            createNotice("案件已分配", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，当前进入办理中。");
-        }
-        publish(BusinessEventType.CASE_ASSIGNED, caseId, text(existed.get("case_no")),
-                eventPayload("mainLawyerId", mainLawyerId, "needConfirm", needConfirm));
-        return rows;
+        return caseAssignmentService.batchAssign(assignment);
     }
 
     @Override
