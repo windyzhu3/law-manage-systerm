@@ -22,7 +22,7 @@ import com.ruoyi.system.service.ISysDictTypeService;
 @Service
 public class ContractPaymentService
 {
-    private static final String PERFORMING="3", PENDING="pending", CONFIRMED="confirmed", REJECTED="rejected";
+    private static final String PERFORMING="3", PENDING="0", CONFIRMED="1", REJECTED="2";
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;
     @Autowired private ISysDictTypeService dictionaries;

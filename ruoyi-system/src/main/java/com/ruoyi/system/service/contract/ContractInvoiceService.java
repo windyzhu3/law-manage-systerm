@@ -22,10 +22,10 @@ import com.ruoyi.system.service.ISysDictTypeService;
 public class ContractInvoiceService
 {
     private static final String CONTRACT_PERFORMING = "3";
-    private static final String RECEIVE_CONFIRMED = "confirmed";
-    private static final String INVOICE_NONE = "none";
-    private static final String INVOICE_PARTIAL = "partial";
-    private static final String INVOICE_DONE = "invoiced";
+    private static final String RECEIVE_CONFIRMED = "1";
+    private static final String INVOICE_NONE = "0";
+    private static final String INVOICE_DONE = "1";
+    private static final String INVOICE_PARTIAL = "2";
 
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;

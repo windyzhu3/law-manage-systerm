@@ -25,16 +25,16 @@ class ContractInvoiceServiceTest
 
     @Test void rejectsInvoiceBeforePaymentConfirmation()
     {
-        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","pending","invoice_status","none"));
-        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"invoiced",null,null));
+        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","0","invoice_status","0"));
+        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"1",null,null));
         assertEquals("STATE_CONFLICT",e.getBusinessCode()); verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());
     }
 
     @Test void partialInvoiceCanOnlyAdvanceToCompleted()
     {
-        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","confirmed","invoice_status","partial"));
-        when(dictionaries.selectDictDataByType("law_contract_invoice_status")).thenReturn(java.util.List.of(dict("partial")));
-        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"partial",null,null));
+        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","1","invoice_status","2"));
+        when(dictionaries.selectDictDataByType("law_contract_invoice_status")).thenReturn(java.util.List.of(dict("2")));
+        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"2",null,null));
         assertEquals("STATE_CONFLICT",e.getBusinessCode()); verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());
     }
 
