@@ -23,6 +23,10 @@ import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.service.IBizCaseService;
 import com.ruoyi.system.service.IBizContractService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.contract.ContractAttachmentService;
+import com.ruoyi.system.service.contract.ContractNumberService;
+import com.ruoyi.system.service.contract.ContractQueryService;
+import com.ruoyi.system.service.contract.ContractTemplateService;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
@@ -84,11 +88,15 @@ public class BizContractServiceImpl implements IBizContractService
     @Autowired
     private BusinessEventPublisher eventPublisher;
 
+    @Autowired private ContractAttachmentService attachmentService;
+    @Autowired private ContractNumberService numberService;
+    @Autowired private ContractQueryService queryService;
+    @Autowired private ContractTemplateService templateService;
+
     @Override
-    @DataScope(deptAlias = "c", userAlias = "c", userField = "owner_id")
     public List<BizContract> selectContractList(BizContract contract)
     {
-        return contractMapper.selectContractList(contract);
+        return queryService.contracts(contract);
     }
 
     @Override
@@ -110,7 +118,7 @@ public class BizContractServiceImpl implements IBizContractService
         normalizeNewContract(contract);
         validateNewContract(contract);
         validateCustomer(contract);
-        contract.setContractNo(nextContractNo());
+        contract.setContractNo(numberService.nextNumber());
         contract.setCreateBy(SecurityUtils.getUsername());
         if (contract.getOwnerId() == null)
         {
@@ -359,30 +367,13 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     public Map<String, Object> selectDashboard()
     {
-        Map<String, Object> data = new HashMap<>();
-        Boolean dataScope = !SecurityUtils.isAdmin();
-        data.put("cards", contractMapper.selectDashboardCards(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), dataScope, CONTRACT_MODULE_PERMISSIONS, Collections.emptyMap()));
-        data.put("cases", contractMapper.selectCaseStats(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), dataScope, CONTRACT_MODULE_PERMISSIONS, Collections.emptyMap()));
-        return data;
+        return queryService.dashboard();
     }
 
-    @Override public List<Map<String, Object>> selectRules() { return contractMapper.selectRules(); }
+    @Override public List<Map<String, Object>> selectRules() { return numberService.selectRules(); }
     @Override
-    @Transactional
-    public int updateRule(Map<String, Object> rule) {
-        validateNoRule(rule);
-        rule.put("updateBy", SecurityUtils.getUsername());
-        int rows = contractMapper.updateRule(rule);
-        assertRowsChanged(rows, "编号规则不存在或已变化，请刷新后重试");
-        if ("0".equals(String.valueOf(rule.get("status")))) {
-            contractMapper.disableOtherNoRules(toLong(rule.get("ruleId")), SecurityUtils.getUsername());
-        }
-        else if (contractMapper.countOtherEnabledNoRules(toLong(rule.get("ruleId"))) == 0) {
-            throw new ServiceException("至少需要保留一个启用的合同编号规则");
-        }
-        return rows;
-    }
-    @Override public List<Map<String, Object>> selectTemplates(Map<String, Object> params) { return contractMapper.selectTemplates(params); }
+    public int updateRule(Map<String, Object> rule) { return numberService.updateRule(rule); }
+    @Override public List<Map<String, Object>> selectTemplates(Map<String, Object> params) { return templateService.select(params); }
     @Override public int insertTemplate(Map<String, Object> template) { validateTemplate(template); template.put("createBy", SecurityUtils.getUsername()); int rows = contractMapper.insertTemplate(template); assertRowsChanged(rows, "Contract template was not created"); return rows; }
     @Override public int updateTemplate(Map<String, Object> template) { toLong(template.get("templateId")); validateTemplate(template); template.put("updateBy", SecurityUtils.getUsername()); int rows = contractMapper.updateTemplate(template); assertRowsChanged(rows, "Contract template was changed, please refresh and try again"); return rows; }
     @Override public int deleteTemplate(Long templateId) {
@@ -399,8 +390,8 @@ public class BizContractServiceImpl implements IBizContractService
         assertRowsChanged(rows, "Contract template was changed, please refresh and try again");
         return rows;
     }
-    @Override public List<Map<String, Object>> selectApprovals(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectApprovals(params); }
-    @Override public List<Map<String, Object>> selectFeePlans(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectFeePlans(params); }
+    @Override public List<Map<String, Object>> selectApprovals(Map<String, Object> params) { return queryService.approvals(params); }
+    @Override public List<Map<String, Object>> selectFeePlans(Map<String, Object> params) { return queryService.feePlans(params); }
     @Override
     @Transactional
     public int insertFeePlan(Map<String, Object> plan) {
@@ -626,35 +617,12 @@ public class BizContractServiceImpl implements IBizContractService
                 eventPayload("planId", planId, "invoiceStatus", invoiceStatus, "invoiceType", cleanInvoiceType));
         return rows;
     }
-    @Override public List<Map<String, Object>> selectAttachments(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectAttachments(params); }
+    @Override public List<Map<String, Object>> selectAttachments(Map<String, Object> params) { return queryService.attachments(params); }
     @Override
-    @Transactional
-    public int insertAttachment(Map<String, Object> attachment) {
-        Long contractId = toLong(attachment.get("contractId"));
-        assertContractAccess(contractId);
-        requireAttachmentEditableContract(contractId);
-        validateAttachment(attachment);
-        attachment.put("createBy", SecurityUtils.getUsername());
-        int rows = contractMapper.insertAttachment(attachment);
-        assertRowsChanged(rows, "Attachment was not created");
-        insertStatusLog(contractId, null, null, "attachment_add", "新增附件: " + requiredText(attachment, "fileName", "请填写附件名称"));
-        return rows;
-    }
+    public int insertAttachment(Map<String, Object> attachment) { return attachmentService.create(attachment); }
     @Override
-    @Transactional
-    public int deleteAttachment(Long attachmentId) {
-        Long contractId = contractMapper.selectAttachmentContractId(attachmentId);
-        if (contractId == null) {
-            throw new ServiceException("Attachment does not exist");
-        }
-        assertContractAccess(contractId);
-        requireAttachmentEditableContract(contractId);
-        int rows = contractMapper.deleteAttachment(attachmentId, contractId);
-        assertRowsChanged(rows, "Attachment was changed, please refresh and try again");
-        insertStatusLog(contractId, null, null, "attachment_delete", "删除附件");
-        return rows;
-    }
-    @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { applyDataScope(params); return contractMapper.selectStatusLogs(params); }
+    public int deleteAttachment(Long attachmentId) { return attachmentService.delete(attachmentId); }
+    @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { return queryService.statusLogs(params); }
 
     private void validateTemplate(Map<String, Object> template)
     {
