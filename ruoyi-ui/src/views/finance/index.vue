@@ -5,6 +5,31 @@
       <el-button v-if="mode === 'overview'" :size="controlSize" plain icon="el-icon-wallet" @click="switchMode('payment')">å¾…ç¡®è®¤å›æ¬¾</el-button>
       <el-button v-if="mode === 'overview'" :size="controlSize" type="primary" icon="el-icon-document-checked" @click="switchMode('invoice')">å¼€ç¥¨ç®¡ç†</el-button>
     </biz-page-header>
+    <finance-action-dialogs
+      ref="actionDialogs"
+      :payment-visible.sync="paymentOpen"
+      :reject-visible.sync="rejectOpen"
+      :invoice-visible.sync="invoiceOpen"
+      :expense-visible.sync="expenseOpen"
+      :payment-form="paymentForm"
+      :reject-form="rejectForm"
+      :invoice-form="invoiceForm"
+      :expense-form="expenseForm"
+      :payment-rules="paymentRules"
+      :reject-rules="rejectRules"
+      :invoice-rules="invoiceRules"
+      :expense-rules="expenseRules"
+      :options="dict.type"
+      :control-size="controlSize"
+      :dialog-class="dialogClass"
+      :format-money="formatMoney"
+      @submit-payment="submitPayment"
+      @submit-reject="submitReject"
+      @submit-invoice="submitInvoice"
+      @submit-expense="submitExpense"
+      @sync-expense-file="syncExpenseFile"
+    />
+
 
     <biz-hero :eyebrow="heroMeta.eyebrow" :title="heroMeta.title" :description="heroMeta.description" />
     <biz-metrics :metrics="metrics" :config="metricConfig" />
@@ -101,1648 +126,176 @@
         :summary-year-value="formatSummaryYearValue"
         @navigate="switchMode"
       />
-    </template>
-
-    <biz-table-card
-      v-else-if="tableModes.includes(mode)"
-      :show-search.sync="showSearch"
-      :total="total"
-      :page.sync="query.pageNum"
-      :limit.sync="query.pageSize"
-      @query="search"
-      @pagination="loadPage"
-    >
-      <template slot="filters">
-        <div class="biz-filter-main">
-          <el-input v-model="query.keyword" :size="controlSize" prefix-icon="el-icon-search" :placeholder="searchPlaceholder" clearable @clear="search" @keyup.enter.native="search" />
-          <el-select v-if="mode === 'receivable'" v-model="query.ageBucket" :size="controlSize" placeholder="è´¦é¾„åŒºé—´" clearable @change="search">
-            <el-option v-for="item in dict.type.law_finance_age_bucket" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'receivable' || mode === 'payment'" v-model="query.confirmStatus" :size="controlSize" placeholder="å›æ¬¾çŠ¶æ€" clearable @change="search">
-            <el-option v-for="item in dict.type.law_contract_receive_status" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'receivable' || mode === 'invoice'" v-model="query.invoiceStatus" :size="controlSize" placeholder="å¼€ç¥¨çŠ¶æ€" clearable @change="search">
-            <el-option v-for="item in dict.type.law_contract_invoice_status" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'expense'" v-model="query.expenseType" :size="controlSize" placeholder="è´¹ç”¨ç±»å‹" clearable @change="search">
-            <el-option v-for="item in dict.type.law_case_expense_type" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'expense'" v-model="query.payStatus" :size="controlSize" placeholder="ä»˜æ¬¾çŠ¶æ€" clearable @change="search">
-            <el-option v-for="item in dict.type.law_case_pay_status" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'expense'" v-model="query.reimburseStatus" :size="controlSize" placeholder="æŠ¥é”€çŠ¶æ€" clearable @change="search">
-            <el-option v-for="item in dict.type.law_case_reimburse_status" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-select v-if="mode === 'expense'" v-model="query.voucherStatus" :size="controlSize" placeholder="å‡­è¯çŠ¶æ€" clearable @change="search">
-            <el-option v-for="item in dict.type.law_case_voucher_status" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-date-picker
-            v-model="listDateRange"
-            :size="controlSize"
-            type="daterange"
-            value-format="yyyy-MM-dd"
-            range-separator="è‡³"
-            :start-placeholder="listDatePlaceholder[0]"
-            :end-placeholder="listDatePlaceholder[1]"
-            clearable
-            @change="handleListDateChange"
-          />
-        </div>
-        <div class="biz-filter-actions">
-          <el-button :size="controlSize" plain icon="el-icon-refresh" @click="reset">é‡ç½®</el-button>
-        </div>
-      </template>
-
-      <el-table v-if="mode === 'receivable'" v-loading="loading" :data="list" :size="controlSize">
-        <el-table-column label="åº”æ”¶ç¼–å·" prop="receivableNo" min-width="150" show-overflow-tooltip />
-        <el-table-column label="å®¢æˆ·/åˆåŒ" min-width="210" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link">{{ row.customerName }}</span><small class="sub-text">{{ row.contractNo }} / {{ row.contractName }}</small></template></el-table-column>
-        <el-table-column label="æ¡ˆä»¶ç¼–å·" prop="caseNo" width="140" show-overflow-tooltip />
-        <el-table-column label="åº”æ”¶é‡‘é¢" width="112" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivableAmount) }}</template></el-table-column>
-        <el-table-column label="å·²æ”¶é‡‘é¢" width="112" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount) }}</template></el-table-column>
-        <el-table-column label="å¾…æ”¶é‡‘é¢" width="112" align="right"><template slot-scope="{ row }">{{ formatMoney(row.pendingAmount) }}</template></el-table-column>
-        <el-table-column label="è®¡åˆ’å›æ¬¾æ—¥" prop="planReceiveDate" width="120" />
-        <el-table-column label="è´¦é¾„" width="90" align="center"><template slot-scope="{ row }"><span :class="{ overdue: row.receivableStatus === 'overdue' }">{{ row.agingDays || 0 }} å¤©</span></template></el-table-column>
-        <el-table-column label="å›æ¬¾çŠ¶æ€" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_receivable_status" :value="row.receivableStatus" /></template></el-table-column>
-        <el-table-column label="å¼€ç¥¨çŠ¶æ€" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
-        <el-table-column label="æ“ä½œ" width="220" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
-          <template slot-scope="{ row }">
-            <span class="action-buttons">
-              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">è´¢åŠ¡è§†å›¾</el-button>
-              <el-button v-if="canCollect(row)" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">{{ row.confirmStatus === '1' ? 'è¡¥é½å›æ¬¾' : 'ç¡®è®¤å›æ¬¾' }}</el-button>
-              <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">å¼€ç¥¨</el-button>
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-table v-else-if="mode === 'payment'" v-loading="loading" :data="list" :size="controlSize">
-        <el-table-column label="å›æ¬¾å•å·" prop="paymentNo" min-width="150" show-overflow-tooltip />
-        <el-table-column label="å®¢æˆ·/åˆåŒ" min-width="220" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link">{{ row.customerName }}</span><small class="sub-text">{{ row.contractNo }} / {{ row.caseNo || '-' }}</small></template></el-table-column>
-        <el-table-column label="æœ¬æ¬¡é‡‘é¢" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount || row.receivableAmount) }}</template></el-table-column>
-        <el-table-column label="è®¡åˆ’æ—¥æœŸ" prop="planReceiveDate" width="120" />
-        <el-table-column label="æäº¤çŠ¶æ€" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
-        <el-table-column label="ä»˜æ¬¾æ–¹å¼" width="112" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_payment_method" :value="row.paymentMethod" /></template></el-table-column>
-        <el-table-column label="è´Ÿè´£äºº" prop="ownerName" width="110" />
-        <el-table-column label="æ“ä½œ" width="230" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
-          <template slot-scope="{ row }">
-            <span class="action-buttons">
-              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">è´¢åŠ¡è§†å›¾</el-button>
-              <el-button v-if="canCollect(row)" v-hasPermi="['finance:payment:confirm']" :size="controlSize" type="text" @click="openPayment(row)">{{ row.confirmStatus === '1' ? 'è¡¥é½' : 'ç¡®è®¤' }}</el-button>
-              <el-button v-if="row.confirmStatus === '0'" v-hasPermi="['finance:payment:reject']" :size="controlSize" type="text" class="danger-text" @click="openReject(row)">é©³å›</el-button>
-              <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">å¼€ç¥¨</el-button>
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-table v-else-if="mode === 'invoice'" v-loading="loading" :data="list" :size="controlSize">
-        <el-table-column label="å¼€ç¥¨ç”³è¯·å•" prop="invoiceApplyNo" min-width="150" show-overflow-tooltip />
-        <el-table-column label="å‘ç¥¨å·ç " prop="invoiceNo" min-width="140" show-overflow-tooltip><template slot-scope="{ row }">{{ row.invoiceNo || '-' }}</template></el-table-column>
-        <el-table-column label="å®¢æˆ·/åˆåŒ" min-width="220" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link">{{ row.customerName }}</span><small class="sub-text">{{ row.contractNo }} / {{ row.caseNo || '-' }}</small></template></el-table-column>
-        <el-table-column label="å¼€ç¥¨é‡‘é¢" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.receivedAmount || row.receivableAmount) }}</template></el-table-column>
-        <el-table-column label="å›æ¬¾çŠ¶æ€" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_receive_status" :value="row.confirmStatus" /></template></el-table-column>
-        <el-table-column label="å¼€ç¥¨çŠ¶æ€" width="108" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
-        <el-table-column label="å‘ç¥¨ç±»å‹" width="132" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_invoice_type" :value="row.invoiceType" /></template></el-table-column>
-        <el-table-column label="æ“ä½œ" width="190" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
-          <template slot-scope="{ row }">
-            <span class="action-buttons">
-              <el-button v-if="row.caseId" :size="controlSize" type="text" @click="openCaseFinance(row)">è´¢åŠ¡è§†å›¾</el-button>
-              <el-button v-if="canInvoice(row)" v-hasPermi="['finance:invoice:handle']" :size="controlSize" type="text" @click="openInvoice(row)">{{ row.invoiceStatus === '2' ? 'è¡¥é½å¼€ç¥¨' : 'å¼€ç¥¨' }}</el-button>
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <el-table v-else v-loading="loading" :data="list" :size="controlSize">
-        <el-table-column label="è´¹ç”¨ç¼–å·" width="150" show-overflow-tooltip><template slot-scope="{ row }">{{ field(row, 'expenseNo', 'expense_no') }}</template></el-table-column>
-        <el-table-column label="æ¡ˆä»¶/å®¢æˆ·" min-width="220" show-overflow-tooltip><template slot-scope="{ row }"><span class="biz-link">{{ row.caseName || row.case_name }}</span><small class="sub-text">{{ row.customerName || row.customer_name || '-' }}</small></template></el-table-column>
-        <el-table-column label="åˆåŒç¼–å·" prop="contractNo" width="140" show-overflow-tooltip />
-        <el-table-column label="è´¹ç”¨ç±»å‹" width="112" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_expense_type" :value="field(row, 'expenseType', 'expense_type')" /></template></el-table-column>
-        <el-table-column label="é‡‘é¢" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.amount) }}</template></el-table-column>
-        <el-table-column label="å‘ç”Ÿæ—¥æœŸ" width="120"><template slot-scope="{ row }">{{ field(row, 'occurDate', 'occur_date') || '-' }}</template></el-table-column>
-        <el-table-column label="ä»˜æ¬¾" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_pay_status" :value="field(row, 'payStatus', 'pay_status')" /></template></el-table-column>
-        <el-table-column label="æŠ¥é”€" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_reimburse_status" :value="field(row, 'reimburseStatus', 'reimburse_status')" /></template></el-table-column>
-        <el-table-column label="å‡­è¯" width="96" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_voucher_status" :value="field(row, 'voucherStatus', 'voucher_status')" /></template></el-table-column>
-        <el-table-column label="è´Ÿè´£äºº" width="110"><template slot-scope="{ row }">{{ field(row, 'handlerName', 'handler_name') || '-' }}</template></el-table-column>
-        <el-table-column label="æ“ä½œ" width="170" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
-          <template slot-scope="{ row }">
-            <span class="action-buttons">
-              <el-button :size="controlSize" type="text" @click="openCaseFinance(row)">è´¢åŠ¡è§†å›¾</el-button>
-              <el-button v-hasPermi="['finance:expense:edit']" :size="controlSize" type="text" @click="openExpense(row)">å¤„ç†</el-button>
-            </span>
-          </template>
-        </el-table-column>
-      </el-table>
-    </biz-table-card>
-
-    <template v-else>
-      <div class="finance-report-toolbar finance-card">
-        <div>
-          <h3>æŠ¥è¡¨å‘¨æœŸ</h3>
-          <p>æŒ‰å›æ¬¾ã€è´¹ç”¨å‘ç”Ÿã€çº¿ç´¢è½¬åŒ–å’Œç­¾çº¦æ—¥æœŸæ±‡æ€»è´¢åŠ¡æ•°æ®</p>
-        </div>
-        <div class="report-toolbar-actions">
-          <el-date-picker
-            v-model="reportDateRange"
-            :size="controlSize"
-            type="daterange"
-            value-format="yyyy-MM-dd"
-            range-separator="è‡³"
-            start-placeholder="å¼€å§‹æ—¥æœŸ"
-            end-placeholder="ç»“æŸæ—¥æœŸ"
-            clearable
-            @change="handleReportDateChange"
-          />
-          <el-button :size="controlSize" plain icon="el-icon-refresh" @click="resetReportRange">é‡ç½®</el-button>
-        </div>
-      </div>
-
-      <section class="report-grid">
-        <article class="finance-card report-main">
-          <div class="finance-card-title"><div><h3>æ”¶å…¥è¶‹åŠ¿è¡¨</h3><p>{{ reportRangeText }}ç¡®è®¤å›æ¬¾çš„æœˆåº¦è¶‹åŠ¿</p></div></div>
-          <template v-if="(report.trend || []).length">
-            <svg class="trend-chart report-trend" viewBox="0 0 700 180" preserveAspectRatio="none">
-              <polyline class="trend-grid" points="0,150 700,150" />
-              <polyline class="trend-grid" points="0,90 700,90" />
-              <polyline class="trend-line" :points="reportTrendPoints" />
-              <circle v-for="(point, index) in reportTrendPointList" :key="index" :cx="point.x" :cy="point.y" r="4" />
-            </svg>
-            <div class="trend-labels">
-              <span v-for="item in report.trend" :key="item.itemName">{{ item.itemName }}</span>
+      <section v-if="false" class="finance-overview-tables">
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>å¾…ç¡®è®¤å›æ¬¾åˆ—è¡¨</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('payment')">æ›´å¤š</el-button>
             </div>
           </template>
-          <el-empty v-else :image-size="80" description="æš‚æ— æ”¶å…¥è¶‹åŠ¿æ•°æ®" />
-        </article>
-        <article class="finance-card" v-for="card in reportCards" :key="card.key">
-          <div class="report-stat">
-            <span>{{ card.title }}</span>
-            <strong>{{ formatMoney(card.value) }}</strong>
-            <small>{{ card.desc }}</small>
-          </div>
-        </article>
-        <article class="finance-card">
-          <div class="finance-card-title"><div><h3>å¾‹å¸ˆåˆ›æ”¶ç»Ÿè®¡</h3><p>æŒ‰åˆåŒæ‰¿åŠå¾‹å¸ˆç»Ÿè®¡ç¡®è®¤å›æ¬¾</p></div></div>
-          <div v-if="(report.lawyerRevenue || []).length" class="bar-list"><div v-for="item in report.lawyerRevenue || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.lawyerRevenue) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
-          <el-empty v-else :image-size="72" description="æš‚æ— å¾‹å¸ˆåˆ›æ”¶æ•°æ®" />
-        </article>
-        <article class="finance-card">
-          <div class="finance-card-title"><div><h3>æ¡ˆä»¶æˆæœ¬åˆ†æ</h3><p>æŒ‰æ¡ˆä»¶ç±»å‹æ±‡æ€»åŠæ¡ˆè´¹ç”¨</p></div></div>
-          <div v-if="(report.caseCost || []).length" class="bar-list"><div v-for="item in report.caseCost || []" :key="item.itemName"><span>{{ dictLabel('law_case_type', item.itemName) }}</span><i><em :style="{ width: barWidth(item.itemValue, report.caseCost) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
-          <el-empty v-else :image-size="72" description="æš‚æ— æ¡ˆä»¶æˆæœ¬æ•°æ®" />
-        </article>
-        <article class="finance-card">
-          <div class="finance-card-title"><div><h3>é”€å”®å›æ¬¾ç»Ÿè®¡</h3><p>æŒ‰åˆåŒè´Ÿè´£äººç»Ÿè®¡ç¡®è®¤å›æ¬¾</p></div></div>
-          <div v-if="(report.salesCollection || []).length" class="bar-list"><div v-for="item in report.salesCollection || []" :key="item.itemName"><span>{{ item.itemName }}</span><i><em :style="{ width: barWidth(item.itemValue, report.salesCollection) }" /></i><strong>{{ formatMoney(item.itemValue) }}</strong></div></div>
-          <el-empty v-else :image-size="72" description="æš‚æ— é”€å”®å›æ¬¾æ•°æ®" />
-        </article>
-        <article class="finance-card report-main">
-          <div class="finance-card-title"><div><h3>çº¿ç´¢æ¥æºè½¬åŒ–</h3><p>æŒ‰çº¿ç´¢æ¥æºç»Ÿè®¡è½¬åŒ–ç‡å’Œé¢„è®¡è½¬åŒ–é‡‘é¢</p></div></div>
-          <div class="source-conversion-list">
-            <div v-for="item in leadSourceConversion" :key="item.itemName">
-              <span>{{ item.itemName }}</span>
-              <i><em :style="{ width: conversionBarWidth(item) }" /></i>
-              <strong>{{ Number(item.conversionRate || 0).toFixed(2) }}%</strong>
-              <small>{{ item.convertedCount || 0 }}/{{ item.leadCount || 0 }} Â· {{ formatMoney(item.estimatedAmount) }}</small>
+          <el-table :data="pendingPayments" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="å®¢æˆ·åç§°" min-width="118" show-overflow-tooltip>
+              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="é‡‘é¢" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.receivableAmount) }}</template></el-table-column>
+            <el-table-column label="åˆ°è´¦æ—¥" width="76"><template slot-scope="{ row }">{{ shortDate(row.planReceiveDate) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>é€¾æœŸåº”æ”¶å®¢æˆ·</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('receivable', { overdueOnly: '1' })">æ›´å¤š</el-button>
             </div>
-            <el-empty v-if="!leadSourceConversion.length" :image-size="80" description="æš‚æ— çº¿ç´¢è½¬åŒ–æ•°æ®" />
-          </div>
-        </article>
+          </template>
+          <el-table :data="overdueReceivables" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="å®¢æˆ·åç§°" min-width="118" show-overflow-tooltip>
+              <template slot-scope="{ row }"><span class="biz-link">{{ row.customerName || '-' }}</span></template>
+            </el-table-column>
+            <el-table-column label="å¤©æ•°" width="62" align="center"><template slot-scope="{ row }">{{ row.agingDays || 0 }}å¤©</template></el-table-column>
+            <el-table-column label="é‡‘é¢" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.pendingAmount) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>è¿‘æœŸå‘ç¥¨åŠ¨æ€</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('invoice')">æ›´å¤š</el-button>
+            </div>
+          </template>
+          <el-table :data="invoiceActivities" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="å®¢æˆ·åç§°" prop="customerName" min-width="122" show-overflow-tooltip />
+            <el-table-column label="é‡‘é¢" width="82" align="right"><template slot-scope="{ row }">{{ formatCompactMoney(row.amount) }}</template></el-table-column>
+            <el-table-column label="çŠ¶æ€" width="68" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_contract_invoice_status" :value="row.invoiceStatus" /></template></el-table-column>
+          </el-table>
+        </biz-table-card>
+
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>è´¹ç”¨ / å›æ¬¾æ¦‚è§ˆè¡¨</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('report')">æŸ¥çœ‹æŠ¥è¡¨</el-button>
+            </div>
+          </template>
+          <el-table :data="financeSummaryRows" :size="controlSize" class="overview-mini-table">
+            <el-table-column label="é¡¹ç›®" prop="itemName" min-width="76" />
+            <el-table-column label="æœ¬æœˆ" width="76" align="right"><template slot-scope="{ row }">{{ formatSummaryValue(row) }}</template></el-table-column>
+            <el-table-column label="æœ¬å¹´" width="82" align="right"><template slot-scope="{ row }">{{ formatSummaryYearValue(row) }}</template></el-table-column>
+          </el-table>
+        </biz-table-card>
       </section>
     </template>
 
-    <el-dialog title="ç¡®è®¤å›æ¬¾" :visible.sync="paymentOpen" width="520px" :custom-class="dialogClass" append-to-body>
-      <el-form ref="paymentFormRef" :model="paymentForm" :rules="paymentRules" label-width="110px">
-        <el-form-item label="å®¢æˆ·åç§°"><span>{{ paymentForm.customerName || '-' }}</span></el-form-item>
-        <el-form-item label="åº”æ”¶é‡‘é¢"><span>{{ formatMoney(paymentForm.receivableAmount) }}</span></el-form-item>
-        <el-form-item label="æœ¬æ¬¡å›æ¬¾" prop="receivedAmount"><el-input-number v-model="paymentForm.receivedAmount" :size="controlSize" :min="0" :precision="2" /></el-form-item>
-        <el-form-item label="ä»˜æ¬¾æ–¹å¼" prop="paymentMethod">
-          <el-select v-model="paymentForm.paymentMethod" :size="controlSize" placeholder="è¯·é€‰æ‹©ä»˜æ¬¾æ–¹å¼">
-            <el-option v-for="item in dict.type.law_finance_payment_method" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="å¤„ç†å¤‡æ³¨"><el-input v-model="paymentForm.reason" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
-      </el-form>
-      <div slot="footer"><el-button :size="controlSize" @click="paymentOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="submitPayment">ç¡®è®¤å…¥è´¦</el-button></div>
-    </el-dialog>
-
-    <el-dialog title="é©³å›å›æ¬¾" :visible.sync="rejectOpen" width="520px" :custom-class="dialogClass" append-to-body>
-      <el-form ref="rejectFormRef" :model="rejectForm" :rules="rejectRules" label-width="100px">
-        <el-form-item label="å®¢æˆ·åç§°"><span>{{ rejectForm.customerName || '-' }}</span></el-form-item>
-        <el-form-item label="é©³å›åŸå› " prop="reason"><el-input v-model="rejectForm.reason" :size="controlSize" type="textarea" :rows="4" /></el-form-item>
-      </el-form>
-      <div slot="footer"><el-button :size="controlSize" @click="rejectOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="danger" @click="submitReject">ç¡®è®¤é©³å›</el-button></div>
-    </el-dialog>
-
-    <el-dialog title="å¼€ç¥¨å¤„ç†" :visible.sync="invoiceOpen" width="520px" :custom-class="dialogClass" append-to-body>
-      <el-form ref="invoiceFormRef" :model="invoiceForm" :rules="invoiceRules" label-width="110px">
-        <el-form-item label="å®¢æˆ·åç§°"><span>{{ invoiceForm.customerName || '-' }}</span></el-form-item>
-        <el-form-item label="å¯å¼€ç¥¨é‡‘é¢"><span>{{ formatMoney(invoiceForm.receivedAmount || invoiceForm.receivableAmount) }}</span></el-form-item>
-        <el-form-item label="å¼€ç¥¨åŠ¨ä½œ" prop="invoiceStatus">
-          <el-radio-group v-model="invoiceForm.invoiceStatus">
-            <el-radio v-if="invoiceForm.currentInvoiceStatus !== '2'" label="2">éƒ¨åˆ†å¼€ç¥¨</el-radio>
-            <el-radio label="1">{{ invoiceForm.currentInvoiceStatus === '2' ? 'è¡¥é½å¼€ç¥¨' : 'å·²å¼€ç¥¨' }}</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="å‘ç¥¨ç±»å‹" prop="invoiceType">
-          <el-select v-model="invoiceForm.invoiceType" :size="controlSize" placeholder="è¯·é€‰æ‹©å‘ç¥¨ç±»å‹">
-            <el-option v-for="item in dict.type.law_finance_invoice_type" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="å¤„ç†å¤‡æ³¨"><el-input v-model="invoiceForm.reason" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
-      </el-form>
-      <div slot="footer"><el-button :size="controlSize" @click="invoiceOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="submitInvoice">ä¿å­˜</el-button></div>
-    </el-dialog>
-
-    <el-dialog title="è´¹ç”¨å¤„ç†" :visible.sync="expenseOpen" width="640px" :custom-class="dialogClass" append-to-body>
-      <el-form ref="expenseFormRef" :model="expenseForm" :rules="expenseRules" label-width="100px">
-        <el-row :gutter="12">
-          <el-col :span="12"><el-form-item label="è´¹ç”¨ç±»å‹" prop="expenseType"><el-select v-model="expenseForm.expenseType" :size="controlSize"><el-option v-for="item in dict.type.law_case_expense_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="è´¹ç”¨é‡‘é¢" prop="amount"><el-input-number v-model="expenseForm.amount" :size="controlSize" :min="0" :precision="2" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="å‘ç”Ÿæ—¥æœŸ" prop="occurDate"><el-date-picker v-model="expenseForm.occurDate" :size="controlSize" value-format="yyyy-MM-dd" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="ä»˜æ¬¾çŠ¶æ€" prop="payStatus"><el-select v-model="expenseForm.payStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_pay_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="æŠ¥é”€çŠ¶æ€" prop="reimburseStatus"><el-select v-model="expenseForm.reimburseStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_reimburse_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="å‡­è¯çŠ¶æ€" prop="voucherStatus"><el-select v-model="expenseForm.voucherStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_voucher_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="è´¹ç”¨å‡­è¯"><file-upload v-model="expenseForm.voucherUrl" :limit="1" @input="syncExpenseFile" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="å¤‡æ³¨"><el-input v-model="expenseForm.remark" :size="controlSize" type="textarea" :rows="3" /></el-form-item></el-col>
-        </el-row>
-      </el-form>
-      <div slot="footer"><el-button :size="controlSize" @click="expenseOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="submitExpense">ä¿å­˜</el-button></div>
-    </el-dialog>
-
-    <case-finance-drawer
-      ref="caseFinanceDrawer"
-      :visible.sync="caseFinanceOpen"
-      :case-id="caseFinanceCaseId"
-      :control-size="controlSize"
-      :size-class="'biz-size-' + appSize"
-      :dict-options="dict.type"
-    />
-  </div>
-</template>
-
-<script>
-import BizPageHeader from '@/views/business/components/BizPageHeader'
-import BizHero from '@/views/business/components/BizHero'
-import BizMetrics from '@/views/business/components/BizMetrics'
-import BizTableCard from '@/views/business/components/BizTableCard'
-import CaseFinanceDrawer from './components/CaseFinanceDrawer'
-import FinanceFlowOverview from './components/FinanceFlowOverview'
-import FinanceOverviewTables from './components/FinanceOverviewTables'
-import businessUi from '@/views/business/mixins/businessUi'
-import {
-  getFinanceDashboard,
-  listReceivable,
-  listPayment,
-  listInvoice,
-  listFinanceExpense,
-  getFinanceReport,
-  confirmPayment,
-  rejectPayment,
-  handleInvoice,
-  updateFinanceExpense
-} from '@/api/finance'
-import '@/views/business/business.scss'
-import '@/views/business/business-dialog.scss'
-
-export default {
-  name: 'FinanceCenter',
-  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer, FinanceFlowOverview, FinanceOverviewTables },
-  mixins: [businessUi],
-  dicts: [
-    'law_finance_receivable_status',
-    'law_finance_age_bucket',
-    'law_finance_payment_method',
-    'law_finance_invoice_type',
-    'law_contract_receive_status',
-    'law_contract_invoice_status',
-    'law_contract_risk_level',
-    'law_case_type',
-    'law_case_expense_type',
-    'law_case_pay_status',
-    'law_case_reimburse_status',
-    'law_case_voucher_status'
-  ],
-  data() {
-    return {
-      mode: this.$route.query.module || 'overview',
-      businessPageMeta: {
-        defaultTitle: 'è´¢åŠ¡æ€»è§ˆ',
-        titles: {
-          overview: 'è´¢åŠ¡æ€»è§ˆ',
-          receivable: 'åº”æ”¶ç®¡ç†',
-          payment: 'å›æ¬¾ç¡®è®¤',
-          invoice: 'å‘ç¥¨ç®¡ç†',
-          expense: 'è´¹ç”¨æŠ¥é”€',
-          report: 'è´¢åŠ¡æŠ¥è¡¨'
-        },
-        descriptions: {
-          overview: 'è”åŠ¨åˆåŒã€æ¡ˆä»¶ä¸å›æ¬¾ï¼Œæ„å»ºé—­ç¯è´¢åŠ¡ç®¡ç†',
-          receivable: 'ç»Ÿä¸€ç®¡ç†åˆåŒæ”¶è´¹è®¡åˆ’ã€è´¦é¾„é£é™©ä¸å¾…æ”¶é‡‘é¢',
-          payment: 'å¤„ç†å›æ¬¾ç¡®è®¤ã€é©³å›å’Œå¼‚å¸¸æ¬¾é¡¹ï¼Œä¿éšœç°é‡‘æµå‡†ç¡®å…¥è´¦',
-          invoice: 'è·Ÿè¸ªå·²å›æ¬¾è®¡åˆ’çš„å¼€ç¥¨çŠ¶æ€ï¼Œæ”¯æŒéƒ¨åˆ†å¼€ç¥¨å’Œè¡¥é½å¼€ç¥¨',
-          expense: 'å½’é›†å¾‹å¸ˆåŠæ¡ˆè´¹ç”¨ï¼Œè”åŠ¨æ¡ˆä»¶ä¸åˆåŒæˆæœ¬æ§åˆ¶',
-          report: 'ä»¥å›¾è¡¨å‘ˆç°æ”¶å…¥ã€æ¬ è´¹ã€è´¦é¾„ã€å¾‹å¸ˆåˆ›æ”¶å’Œæ¡ˆä»¶æˆæœ¬'
-        }
-      },
-      loading: false,
-      showSearch: true,
-      total: 0,
-      list: [],
-      dashboard: {},
-      report: {},
-      trend: [],
-      aging: [],
-      links: [],
-      reminders: [],
-      flow: [],
-      receiveTrend: [],
-      invoiceExpenseTrend: [],
-      invoiceActivities: [],
-      financeSummaryRows: [],
-      leadFunnel: [],
-      leadSourceConversion: [],
-      pendingPayments: [],
-      dueReceivables: [],
-      query: { pageNum: 1, pageSize: 10 },
-      reportDateRange: [],
-      listDateRange: [],
-      paymentOpen: false,
-      rejectOpen: false,
-      invoiceOpen: false,
-      expenseOpen: false,
-      caseFinanceOpen: false,
-      caseFinanceCaseId: null,
-      paymentForm: {},
-      rejectForm: {},
-      invoiceForm: {},
-      expenseForm: {},
-      paymentRules: {
-        receivedAmount: [{ required: true, message: 'è¯·è¾“å…¥æœ¬æ¬¡å›æ¬¾é‡‘é¢', trigger: 'blur' }],
-        paymentMethod: [{ required: true, message: 'è¯·é€‰æ‹©ä»˜æ¬¾æ–¹å¼', trigger: 'change' }]
-      },
-      rejectRules: { reason: [{ required: true, message: 'è¯·å¡«å†™é©³å›åŸå› ', trigger: 'blur' }] },
-      invoiceRules: {
-        invoiceStatus: [{ required: true, message: 'è¯·é€‰æ‹©å¼€ç¥¨åŠ¨ä½œ', trigger: 'change' }],
-        invoiceType: [{ required: true, message: 'è¯·é€‰æ‹©å‘ç¥¨ç±»å‹', trigger: 'change' }]
-      },
-      expenseRules: {
-        expenseType: [{ required: true, message: 'è¯·é€‰æ‹©è´¹ç”¨ç±»å‹', trigger: 'change' }],
-        amount: [{ required: true, message: 'è¯·è¾“å…¥è´¹ç”¨é‡‘é¢', trigger: 'blur' }],
-        occurDate: [{ required: true, message: 'è¯·é€‰æ‹©å‘ç”Ÿæ—¥æœŸ', trigger: 'change' }],
-        payStatus: [{ required: true, message: 'è¯·é€‰æ‹©ä»˜æ¬¾çŠ¶æ€', trigger: 'change' }],
-        reimburseStatus: [{ required: true, message: 'è¯·é€‰æ‹©æŠ¥é”€çŠ¶æ€', trigger: 'change' }],
-        voucherStatus: [{ required: true, message: 'è¯·é€‰æ‹©å‡­è¯çŠ¶æ€', trigger: 'change' }]
-      }
-    }
-  },
-  computed: {
-    tableModes() {
-      return ['receivable', 'payment', 'invoice', 'expense']
-    },
-    heroMeta() {
-      const metas = {
-        overview: ['FINANCE CONTROL', 'è´¯ç©¿åˆåŒã€æ¡ˆä»¶ä¸å›æ¬¾çš„è´¢åŠ¡é©¾é©¶èˆ±', 'å›´ç»•åº”æ”¶ã€å›æ¬¾ã€å¼€ç¥¨ã€è´¹ç”¨ä¸æŠ¥è¡¨å½¢æˆé—­ç¯ç®¡æ§ã€‚'],
-        receivable: ['ACCOUNTS RECEIVABLE', 'æŒæ§åº”æ”¶è®¡åˆ’ä¸è´¦é¾„é£é™©', 'ä»åˆåŒæ”¶è´¹è®¡åˆ’æ²‰æ·€åº”æ”¶æ•°æ®ï¼ŒåŠæ—¶å‘ç°é€¾æœŸä¸é«˜é£é™©æ¬¾é¡¹ã€‚'],
-        payment: ['PAYMENT CONFIRM', 'è®©æ¯ä¸€ç¬”å›æ¬¾éƒ½æœ‰æ®å¯å¾ª', 'è´¢åŠ¡ç¡®è®¤ã€é©³å›å’Œå¼€ç¥¨åŠ¨ä½œå¤ç”¨åˆåŒæ”¶è´¹è®¡åˆ’çŠ¶æ€æœºã€‚'],
-        invoice: ['INVOICE MANAGEMENT', 'å›æ¬¾ä¸å¼€ç¥¨çŠ¶æ€åŒæ­¥æ¨è¿›', 'å·²ç¡®è®¤å›æ¬¾åè¿›å…¥å¼€ç¥¨å¤„ç†ï¼Œæ”¯æŒéƒ¨åˆ†å¼€ç¥¨ä¸è¡¥é½å¼€ç¥¨ã€‚'],
-        expense: ['CASE EXPENSE', 'æ¡ˆä»¶è´¹ç”¨ä¸åˆåŒæ”¶ç›Šè”åŠ¨ç®¡æ§', 'æ±‡æ€»å¾‹å¸ˆåŠæ¡ˆè´¹ç”¨ã€å‡­è¯ã€ä»˜æ¬¾ä¸æŠ¥é”€çŠ¶æ€ã€‚'],
-        report: ['FINANCE REPORTS', 'ç”¨å›¾è¡¨çœ‹æ¸…æ”¶å…¥ã€æˆæœ¬ä¸æ¬ è´¹', 'æä¾›å›æ¬¾è¶‹åŠ¿ã€è´¦é¾„ã€å¾‹å¸ˆåˆ›æ”¶å’Œæ¡ˆä»¶æˆæœ¬åˆ†æã€‚']
-      }
-      const item = metas[this.mode] || metas.overview
-      return { eyebrow: item[0], title: item[1], description: item[2] }
-    },
-    metrics() {
-      if (this.mode === 'receivable') {
-        return [
-          { metricKey: 'receivableTotal', metricValue: this.formatMoney(this.dashboardValue('receivableTotal')) },
-          { metricKey: 'pendingTotal', metricValue: this.formatMoney(this.dashboardValue('pendingTotal')) },
-          { metricKey: 'overdueTotal', metricValue: this.formatMoney(this.dashboardValue('overdueTotal')) },
-          { metricKey: 'receivedTotal', metricValue: this.formatMoney(this.dashboardValue('receivedTotal')) },
-          { metricKey: 'pendingCount', metricValue: this.listCount(row => row.confirmStatus === '0') },
-          { metricKey: 'overdueCount', metricValue: this.listCount(row => row.receivableStatus === 'overdue') }
-        ]
-      }
-      if (this.mode === 'payment') {
-        return [
-          { metricKey: 'pendingPaymentAmount', metricValue: this.formatMoney(this.dashboardValue('pendingPaymentAmount')) },
-          { metricKey: 'pendingPaymentCount', metricValue: this.listCount(row => row.confirmStatus === '0') },
-          { metricKey: 'confirmedAmount', metricValue: this.formatMoney(this.listSum(row => row.confirmStatus === '1' ? row.receivedAmount || row.receivableAmount : 0)) },
-          { metricKey: 'rejectedCount', metricValue: this.listCount(row => row.confirmStatus === '2') },
-          { metricKey: 'partialCount', metricValue: this.listCount(row => row.receivableStatus === 'partial') },
-          { metricKey: 'invoiceReadyAmount', metricValue: this.formatMoney(this.dashboardValue('pendingInvoiceTotal')) }
-        ]
-      }
-      if (this.mode === 'invoice') {
-        const reminderMap = this.keyed(this.reminders || [])
-        return [
-          { metricKey: 'pendingInvoiceTotal', metricValue: this.formatMoney(this.dashboardValue('pendingInvoiceTotal')) },
-          { metricKey: 'invoicedTotal', metricValue: this.formatMoney(this.dashboardValue('invoicedTotal')) },
-          { metricKey: 'pendingInvoiceCount', metricValue: this.num(reminderMap.pendingInvoice) },
-          { metricKey: 'partialInvoiceCount', metricValue: this.listCount(row => row.invoiceStatus === '2') },
-          { metricKey: 'invoicedCount', metricValue: this.listCount(row => row.invoiceStatus === '1') },
-          { metricKey: 'unInvoiceCount', metricValue: this.listCount(row => row.invoiceStatus === '0') }
-        ]
-      }
-      if (this.mode === 'expense') {
-        return [
-          { metricKey: 'monthExpense', metricValue: this.formatMoney(this.dashboardValue('monthExpense')) },
-          { metricKey: 'pageExpenseAmount', metricValue: this.formatMoney(this.listSum(row => this.field(row, 'amount', 'amount'))) },
-          { metricKey: 'unpaidCount', metricValue: this.listCount(row => this.field(row, 'payStatus', 'pay_status') !== 'paid') },
-          { metricKey: 'paidAmount', metricValue: this.formatMoney(this.listSum(row => this.field(row, 'payStatus', 'pay_status') === 'paid' ? this.field(row, 'amount', 'amount') : 0)) },
-          { metricKey: 'unReimburseCount', metricValue: this.listCount(row => !['reimbursed', 'done', 'paid'].includes(this.field(row, 'reimburseStatus', 'reimburse_status'))) },
-          { metricKey: 'voucherMissingCount', metricValue: this.listCount(row => this.field(row, 'voucherStatus', 'voucher_status') !== 'uploaded') }
-        ]
-      }
-      const map = this.keyed(this.dashboard.cards || [])
-      const keys = ['monthReceived', 'receivableTotal', 'invoicedTotal', 'monthExpense', 'pendingPaymentAmount', 'overdueTotal']
-      return keys.map(key => ({ metricKey: key, metricValue: this.formatMoney(map[key] ? map[key].metricValue : 0) }))
-    },
-    metricConfig() {
-      if (this.mode === 'receivable') {
-        return [
-          { key: 'receivableTotal', label: 'åº”æ”¶æ€»é¢', icon: 'money', color: 'blue', hint: 'åˆåŒæ”¶è´¹è®¡åˆ’ç´¯è®¡' },
-          { key: 'pendingTotal', label: 'å¾…æ”¶é‡‘é¢', icon: 'time', color: 'orange', hint: 'æœªå®Œæˆå›æ¬¾é‡‘é¢' },
-          { key: 'overdueTotal', label: 'é€¾æœŸåº”æ”¶', icon: 'time-range', color: 'orange', hint: 'è¶…è¿‡è®¡åˆ’å›æ¬¾æ—¥' },
-          { key: 'receivedTotal', label: 'å·²æ”¶é‡‘é¢', icon: 'money', color: 'green', hint: 'å·²ç¡®è®¤å…¥è´¦' },
-          { key: 'pendingCount', label: 'å¾…ç¡®è®¤è®¡åˆ’', icon: 'documentation', color: 'cyan', hint: 'å½“å‰ç­›é€‰å¾…ç¡®è®¤' },
-          { key: 'overdueCount', label: 'é€¾æœŸç¬”æ•°', icon: 'chart', color: 'violet', hint: 'å½“å‰ç­›é€‰é€¾æœŸé¡¹' }
-        ]
-      }
-      if (this.mode === 'payment') {
-        return [
-          { key: 'pendingPaymentAmount', label: 'å¾…ç¡®è®¤å›æ¬¾', icon: 'time', color: 'orange', hint: 'å¾…è´¢åŠ¡ç¡®è®¤å…¥è´¦' },
-          { key: 'pendingPaymentCount', label: 'å¾…å¤„ç†ç¬”æ•°', icon: 'documentation', color: 'cyan', hint: 'å½“å‰ç­›é€‰å¾…ç¡®è®¤' },
-          { key: 'confirmedAmount', label: 'å·²ç¡®è®¤é‡‘é¢', icon: 'money', color: 'green', hint: 'å½“å‰ç­›é€‰å·²å…¥è´¦' },
-          { key: 'rejectedCount', label: 'é©³å›ç¬”æ•°', icon: 'time-range', color: 'orange', hint: 'å½“å‰ç­›é€‰å¼‚å¸¸å›æ¬¾' },
-          { key: 'partialCount', label: 'éƒ¨åˆ†å›æ¬¾', icon: 'chart', color: 'violet', hint: 'ä»éœ€è¡¥é½å›æ¬¾' },
-          { key: 'invoiceReadyAmount', label: 'å¯å¼€ç¥¨é‡‘é¢', icon: 'documentation', color: 'blue', hint: 'å·²æ”¶æœªå®Œå…¨å¼€ç¥¨' }
-        ]
-      }
-      if (this.mode === 'invoice') {
-        return [
-          { key: 'pendingInvoiceTotal', label: 'å¾…å¼€ç¥¨é‡‘é¢', icon: 'time', color: 'orange', hint: 'å·²æ”¶æœªå®Œå…¨å¼€ç¥¨' },
-          { key: 'invoicedTotal', label: 'å·²å¼€ç¥¨é‡‘é¢', icon: 'documentation', color: 'green', hint: 'å·²å®Œæˆå¼€ç¥¨' },
-          { key: 'pendingInvoiceCount', label: 'å¾…å¼€ç¥¨ç¬”æ•°', icon: 'date', color: 'blue', hint: 'å…¨å±€å¾…å¤„ç†æ•°é‡' },
-          { key: 'partialInvoiceCount', label: 'éƒ¨åˆ†å¼€ç¥¨', icon: 'chart', color: 'violet', hint: 'å½“å‰ç­›é€‰éœ€è¡¥é½' },
-          { key: 'invoicedCount', label: 'å·²å¼€ç¥¨ç¬”æ•°', icon: 'documentation', color: 'cyan', hint: 'å½“å‰ç­›é€‰å·²å®Œæˆ' },
-          { key: 'unInvoiceCount', label: 'æœªå¼€ç¥¨ç¬”æ•°', icon: 'time-range', color: 'orange', hint: 'å½“å‰ç­›é€‰æœªå¤„ç†' }
-        ]
-      }
-      if (this.mode === 'expense') {
-        return [
-          { key: 'monthExpense', label: 'æœ¬æœˆè´¹ç”¨æ”¯å‡º', icon: 'money', color: 'orange', hint: 'æ¡ˆä»¶è´¹ç”¨æœ¬æœˆå‘ç”Ÿ' },
-          { key: 'pageExpenseAmount', label: 'ç­›é€‰è´¹ç”¨åˆè®¡', icon: 'chart', color: 'blue', hint: 'å½“å‰ç­›é€‰é¡µé‡‘é¢' },
-          { key: 'unpaidCount', label: 'å¾…ä»˜æ¬¾è´¹ç”¨', icon: 'time', color: 'orange', hint: 'ä»˜æ¬¾çŠ¶æ€æœªå®Œæˆ' },
-          { key: 'paidAmount', label: 'å·²ä»˜æ¬¾é‡‘é¢', icon: 'money', color: 'green', hint: 'å½“å‰ç­›é€‰å·²ä»˜æ¬¾' },
-          { key: 'unReimburseCount', label: 'å¾…æŠ¥é”€è´¹ç”¨', icon: 'documentation', color: 'violet', hint: 'æŠ¥é”€çŠ¶æ€æœªå®Œæˆ' },
-          { key: 'voucherMissingCount', label: 'å‡­è¯ç¼ºå¤±', icon: 'date-range', color: 'cyan', hint: 'éœ€è¡¥å……è´¹ç”¨å‡­è¯' }
-        ]
-      }
-      return [
-        { key: 'monthReceived', label: 'æœ¬æœˆå›æ¬¾æ€»é¢', icon: 'money', color: 'blue', hint: 'è¾ƒä¸ŠæœˆåŠ¨æ€ç»Ÿè®¡' },
-        { key: 'receivableTotal', label: 'åº”æ”¶æ€»é¢', icon: 'money', color: 'violet', hint: 'åˆåŒæ”¶è´¹è®¡åˆ’ç´¯è®¡' },
-        { key: 'invoicedTotal', label: 'å·²å¼€ç¥¨é‡‘é¢', icon: 'documentation', color: 'green', hint: 'å·²ç¡®è®¤å¼€ç¥¨é‡‘é¢' },
-        { key: 'monthExpense', label: 'æœ¬æœˆè´¹ç”¨æ”¯å‡º', icon: 'money', color: 'orange', hint: 'æ¡ˆä»¶è´¹ç”¨æœ¬æœˆå‘ç”Ÿ' },
-        { key: 'pendingPaymentAmount', label: 'å¾…ç¡®è®¤å›æ¬¾', icon: 'time', color: 'cyan', hint: 'å¾…è´¢åŠ¡ç¡®è®¤å…¥è´¦' },
-        { key: 'overdueTotal', label: 'é€¾æœŸåº”æ”¶é‡‘é¢', icon: 'time', color: 'orange', hint: 'è¶…è¿‡è®¡åˆ’å›æ¬¾æ—¥' }
-      ]
-    },
-    searchPlaceholder() {
-      return this.mode === 'expense' ? 'æœç´¢è´¹ç”¨ç¼–å·ã€æ¡ˆä»¶ã€å®¢æˆ·' : 'æœç´¢åˆåŒç¼–å·ã€æ¡ˆä»¶ç¼–å·ã€å®¢æˆ·åç§°'
-    },
-    agingStats() {
-      const labels = { current: 'æœªé€¾æœŸ', d30: '1-30å¤©', d60: '31-60å¤©', d90: '61-90å¤©', d90plus: '90å¤©ä»¥ä¸Š' }
-      const colors = ['#2563eb', '#06b6d4', '#22c55e', '#f97316', '#ef4444']
-      return ['current', 'd30', 'd60', 'd90', 'd90plus'].map((key, index) => {
-        const row = (this.aging || []).find(item => item.itemName === key) || {}
-        return { itemName: key, label: labels[key], itemValue: Number(row.itemValue || 0), color: colors[index] }
-      })
-    },
-    agingTotal() {
-      return this.agingStats.reduce((sum, item) => sum + item.itemValue, 0)
-    },
-    agingDonutStyle() {
-      if (!this.agingTotal) return { background: '#eef2ff' }
-      let start = 0
-      const parts = this.agingStats.map(item => {
-        const deg = item.itemValue / this.agingTotal * 360
-        const text = `${item.color} ${start}deg ${start + deg}deg`
-        start += deg
-        return text
-      })
-      return { background: `conic-gradient(${parts.join(',')})` }
-    },
-    agingStats() {
-      const labels = { current: '0-30å¤©', d30: '31-60å¤©', d60: '61-90å¤©', d90: '90å¤©ä»¥ä¸Š', d90plus: 'ä¸¥é‡é€¾æœŸ' }
-      const colors = ['#2563eb', '#06b6d4', '#22c55e', '#f97316', '#ef4444']
-      const rows = ['current', 'd30', 'd60', 'd90', 'd90plus'].map((key, index) => {
-        const row = (this.aging || []).find(item => item.itemName === key) || {}
-        return { itemName: key, label: labels[key], itemValue: Number(row.itemValue || 0), amountValue: Number(row.amountValue || 0), color: colors[index] }
-      })
-      const total = rows.reduce((sum, item) => sum + item.amountValue, 0)
-      return rows.map(item => ({ ...item, percent: total ? (item.amountValue * 100 / total).toFixed(1) + '%' : '0%' }))
-    },
-    agingAmountTotal() {
-      return this.agingStats.reduce((sum, item) => sum + item.amountValue, 0)
-    },
-    agingDonutStyle() {
-      if (!this.agingAmountTotal) return { background: '#eef2ff' }
-      let start = 0
-      const parts = this.agingStats.map(item => {
-        const deg = item.amountValue / this.agingAmountTotal * 360
-        const text = `${item.color} ${start}deg ${start + deg}deg`
-        start += deg
-        return text
-      })
-      return { background: `conic-gradient(${parts.join(',')})` }
-    },
-    totalTrendAmount() {
-      return (this.trend || []).reduce((sum, item) => sum + Number(item.itemValue || 0), 0)
-    },
-    trendPointList() {
-      return this.buildTrendPoints(this.trend, 520)
-    },
-    trendPoints() {
-      return this.trendPointList.map(item => `${item.x},${item.y}`).join(' ')
-    },
-    reportTrendPointList() {
-      return this.buildTrendPoints(this.report.trend || [], 700)
-    },
-    reportTrendPoints() {
-      return this.reportTrendPointList.map(item => `${item.x},${item.y}`).join(' ')
-    },
-    linkCards() {
-      const map = this.keyed(this.links || [])
-      return [
-        { key: 'contracts', title: 'å…³è”åˆåŒ', value: map.contracts ? map.contracts.metricValue : 0, desc: this.formatMoney(map.contracts && map.contracts.amountValue), icon: 'el-icon-document' },
-        { key: 'matters', title: 'å…³è”æ¡ˆä»¶', value: map.matters ? map.matters.metricValue : 0, desc: this.formatMoney(map.matters && map.matters.amountValue), icon: 'el-icon-suitcase' },
-        { key: 'expenses', title: 'æ¡ˆä»¶è´¹ç”¨', value: map.expenses ? map.expenses.metricValue : 0, desc: this.formatMoney(map.expenses && map.expenses.amountValue), icon: 'el-icon-money' }
-      ]
-    },
-    leadFunnelMap() {
-      return this.keyed(this.leadFunnel || [])
-    },
-    leadConversionRate() {
-      const total = Number(this.leadFunnelMap.leadTotal && this.leadFunnelMap.leadTotal.metricValue || 0)
-      const converted = Number(this.leadFunnelMap.convertedLeads && this.leadFunnelMap.convertedLeads.metricValue || 0)
-      return total ? (converted * 100 / total).toFixed(1) : '0.0'
-    },
-    leadFunnelCards() {
-      const map = this.leadFunnelMap
-      const total = Math.max(Number(map.leadTotal && map.leadTotal.metricValue || 0), 1)
-      const signedAmount = map.signedContracts && map.signedContracts.amountValue
-      return [
-        { key: 'leadTotal', title: 'çº¿ç´¢æ€»é‡', value: Number(map.leadTotal && map.leadTotal.metricValue || 0), desc: this.formatMoney(map.leadTotal && map.leadTotal.amountValue), width: '100%' },
-        { key: 'convertedLeads', title: 'å·²è½¬åŒ–çº¿ç´¢', value: Number(map.convertedLeads && map.convertedLeads.metricValue || 0), desc: this.formatMoney(map.convertedLeads && map.convertedLeads.amountValue), width: Math.max(8, Number(map.convertedLeads && map.convertedLeads.metricValue || 0) / total * 100) + '%' },
-        { key: 'linkedCustomers', title: 'ç”Ÿæˆå®¢æˆ·', value: Number(map.linkedCustomers && map.linkedCustomers.metricValue || 0), desc: 'å®¢æˆ·å»é‡åå…³è”', width: Math.max(8, Number(map.linkedCustomers && map.linkedCustomers.metricValue || 0) / total * 100) + '%' },
-        { key: 'signedContracts', title: 'ç­¾çº¦åˆåŒ', value: Number(map.signedContracts && map.signedContracts.metricValue || 0), desc: this.formatMoney(signedAmount), width: Math.max(8, Number(map.signedContracts && map.signedContracts.metricValue || 0) / total * 100) + '%' }
-      ]
-    },
-    reminderCards() {
-      const map = this.keyed(this.reminders || [])
-      return [
-        { key: 'overdueReceivable', title: 'é€¾æœŸåº”æ”¶', desc: 'è¶…è¿‡è®¡åˆ’å›æ¬¾æ—¥çš„æ¬¾é¡¹', value: this.num(map.overdueReceivable), mode: 'receivable', query: { overdueOnly: '1' }, icon: 'el-icon-warning-outline' },
-        { key: 'pendingInvoice', title: 'å¾…å¼€ç¥¨', desc: 'å·²å›æ¬¾ä½†æœªå®Œå…¨å¼€ç¥¨', value: this.num(map.pendingInvoice), mode: 'invoice', query: { invoicePendingOnly: '1' }, icon: 'el-icon-document-checked' },
-        { key: 'highRisk', title: 'é«˜é£é™©æ¬¾é¡¹', desc: 'é«˜é£é™©åˆåŒæœªæ”¶æ¬¾é¡¹', value: this.num(map.highRisk), mode: 'receivable', query: { riskLevel: '3', pendingOnly: '1' }, icon: 'el-icon-bell' }
-      ]
-    },
-    flowMap() {
-      return this.keyed(this.flow || [])
-    },
-    financeFlowCards() {
-      const value = key => Number(this.flowMap[key] && this.flowMap[key].metricValue || 0)
-      const rows = [
-        { key: 'contractAmount', title: 'åˆåŒé‡‘é¢', value: value('contractAmount'), icon: 'el-icon-document', color: 'blue' },
-        { key: 'receivablePlan', title: 'åº”æ”¶è®¡åˆ’', value: value('receivablePlan'), icon: 'el-icon-date', color: 'purple' },
-        { key: 'receivedAmount', title: 'å·²å›æ¬¾', value: value('receivedAmount'), icon: 'el-icon-coin', color: 'green' },
-        { key: 'invoicedAmount', title: 'å·²å¼€ç¥¨', value: value('invoicedAmount'), icon: 'el-icon-document-checked', color: 'cyan' },
-        { key: 'expenseAmount', title: 'è´¹ç”¨æ”¯å‡º', value: value('expenseAmount'), icon: 'el-icon-suitcase', color: 'orange' },
-        { key: 'netIncome', title: 'å‡€æ”¶å…¥', value: value('netIncome'), icon: 'el-icon-pie-chart', color: 'blue' }
-      ]
-      return rows.map((item, index) => {
-        const next = rows[index + 1]
-        const rate = next && item.value ? (next.value * 100 / item.value).toFixed(1) + '%' : '--'
-        return { ...item, rate }
-      })
-    },
-    receiveTrendRows() {
-      return this.completeMonthlyRows(this.receiveTrend && this.receiveTrend.length ? this.receiveTrend : this.trend, {
-        itemValue: 0,
-        itemCount: 0
-      })
-    },
-    receiveBarList() {
-      return this.buildBars(this.receiveTrendRows, 'itemValue')
-    },
-    receiveCountPointList() {
-      return this.buildLinePoints(this.receiveTrendRows, 'itemCount')
-    },
-    receiveCountPoints() {
-      return this.receiveCountPointList.map(item => `${item.x},${item.y}`).join(' ')
-    },
-    invoiceExpenseRows() {
-      return this.completeMonthlyRows(this.invoiceExpenseTrend || [], {
-        invoiceAmount: 0,
-        expenseAmount: 0
-      })
-    },
-    invoiceBarList() {
-      return this.buildBars(this.invoiceExpenseRows, 'invoiceAmount')
-    },
-    expensePointList() {
-      return this.buildLinePoints(this.invoiceExpenseRows, 'expenseAmount')
-    },
-    expenseLinePoints() {
-      return this.expensePointList.map(item => `${item.x},${item.y}`).join(' ')
-    },
-    overdueReceivables() {
-      return (this.dueReceivables || []).filter(item => Number(item.agingDays || 0) > 0 || item.receivableStatus === 'overdue').slice(0, 5)
-    },
-    reportCards() {
-      const map = this.keyed(this.report.cards || [], 'metricValue')
-      return [
-        { key: 'income', title: 'æ”¶å…¥æ˜ç»†', value: map.income || 0, desc: 'å·²ç¡®è®¤å›æ¬¾' },
-        { key: 'cost', title: 'æ¡ˆä»¶æˆæœ¬', value: map.cost || 0, desc: 'åŠæ¡ˆè´¹ç”¨åˆè®¡' },
-        { key: 'arrears', title: 'æ¬ è´¹æé†’', value: map.arrears || 0, desc: 'æœªæ”¶æ¬¾ä½™é¢' },
-        { key: 'invoicePending', title: 'å¾…å¼€ç¥¨', value: map.invoicePending || 0, desc: 'å·²æ”¶æœªå¼€ç¥¨' }
-      ]
-    },
-    reportRangeText() {
-      return this.query.beginDate && this.query.endDate ? `${this.query.beginDate} è‡³ ${this.query.endDate} ` : 'è¿‘ 6 ä¸ªæœˆ'
-    },
-    listDatePlaceholder() {
-      if (this.mode === 'expense') return ['è´¹ç”¨å¼€å§‹æ—¥æœŸ', 'è´¹ç”¨ç»“æŸæ—¥æœŸ']
-      if (this.mode === 'payment' || this.mode === 'invoice') return ['å¤„ç†å¼€å§‹æ—¥æœŸ', 'å¤„ç†ç»“æŸæ—¥æœŸ']
-      return ['è®¡åˆ’å¼€å§‹æ—¥æœŸ', 'è®¡åˆ’ç»“æŸæ—¥æœŸ']
-    },
-  },
-  watch: {
-    '$route.fullPath'() {
-      this.mode = this.$route.query.module || 'overview'
-      this.resetQuery()
-      this.load()
-    }
-  },
-  created() {
-    this.load()
-  },
-  methods: {
-    switchMode(mode, extraQuery = {}) {
-      this.$router.push({ path: '/finance/' + mode, query: { module: mode, ...extraQuery } }).catch(() => {})
-    },
-    load() {
-      if (this.mode === 'overview') return this.loadDashboard()
-      if (!this.dashboard.cards) this.loadDashboard(false)
-      if (this.mode === 'report') return this.loadReport()
-      return this.loadPage()
-    },
-    loadDashboard(useLoading = true) {
-      if (useLoading) this.loading = true
-      return getFinanceDashboard().then(res => {
-        const data = res.data || {}
-        this.dashboard = data
-        this.trend = data.trend || []
-        this.aging = data.aging || []
-        this.links = data.links || []
-        this.reminders = data.reminders || []
-        this.flow = data.flow || []
-        this.receiveTrend = data.receiveTrend || data.trend || []
-        this.invoiceExpenseTrend = data.invoiceExpenseTrend || []
-        this.invoiceActivities = (data.invoiceActivities || []).slice(0, 5)
-        this.financeSummaryRows = data.financeSummaryRows || []
-        this.leadFunnel = data.leadFunnel || []
-        this.leadSourceConversion = data.leadSourceConversion || []
-        this.pendingPayments = (data.pendingPayments || []).slice(0, 5)
-        this.dueReceivables = (data.dueReceivables || []).slice(0, 5)
-      }).finally(() => {
-        if (useLoading) this.loading = false
-      })
-    },
-    loadReport() {
-      this.loading = true
-      getFinanceReport(this.query).then(res => {
-        const data = res.data || {}
-        this.report = data
-        this.leadFunnel = data.leadFunnel || []
-        this.leadSourceConversion = data.leadSourceConversion || []
-      }).finally(() => { this.loading = false })
-    },
-    loadPage() {
-      this.loading = true
-      const api = {
-        receivable: listReceivable,
-        payment: listPayment,
-        invoice: listInvoice,
-        expense: listFinanceExpense
-      }[this.mode]
-      api(this.query).then(res => {
-        this.list = res.rows || []
-        this.total = res.total || 0
-      }).finally(() => { this.loading = false })
-    },
-    search() {
-      this.query.pageNum = 1
-      this.load()
-    },
-    reset() {
-      const routeQuery = { ...(this.$route.query || {}) }
-      delete routeQuery.module
-      if (Object.keys(routeQuery).length) {
-        this.$router.push({ path: '/finance/' + this.mode, query: { module: this.mode } }).catch(() => {})
-        return
-      }
-      this.resetQuery(false)
-      this.load()
-    },
-    resetQuery(useRouteQuery = true) {
-      const routeQuery = useRouteQuery ? { ...(this.$route.query || {}) } : {}
-      delete routeQuery.module
-      this.query = { pageNum: 1, pageSize: 10, ...routeQuery }
-      this.listDateRange = this.query.beginDate && this.query.endDate ? [this.query.beginDate, this.query.endDate] : []
-      this.reportDateRange = []
-      this.total = 0
-      this.list = []
-    },
-    handleListDateChange(value) {
-      this.query.beginDate = value && value.length ? value[0] : undefined
-      this.query.endDate = value && value.length ? value[1] : undefined
-      this.search()
-    },
-    handleReportDateChange(value) {
-      this.query.beginDate = value && value.length ? value[0] : undefined
-      this.query.endDate = value && value.length ? value[1] : undefined
-      this.loadReport()
-    },
-    resetReportRange() {
-      this.reportDateRange = []
-      this.query.beginDate = undefined
-      this.query.endDate = undefined
-      this.loadReport()
-    },
-    openPayment(row) {
-      this.paymentForm = {
-        ...row,
-        receivedAmount: Number(row.pendingAmount || row.receivableAmount || 0),
-        paymentMethod: row.paymentMethod || this.dictDefault('law_finance_payment_method')
-      }
-      this.paymentOpen = true
-    },
-    submitPayment() {
-      this.$refs.paymentFormRef.validate(valid => {
-        if (!valid) return
-        if (Number(this.paymentForm.receivedAmount) <= 0) {
-          this.$modal.msgError('æœ¬æ¬¡å›æ¬¾é‡‘é¢å¿…é¡»å¤§äº 0')
-          return
-        }
-        confirmPayment({ planId: this.paymentForm.planId, receivedAmount: this.paymentForm.receivedAmount, paymentMethod: this.paymentForm.paymentMethod, reason: this.paymentForm.reason }).then(() => {
-          this.$modal.msgSuccess('å›æ¬¾å·²ç¡®è®¤')
-          this.paymentOpen = false
-          this.load()
-          this.refreshCaseFinance()
-        })
-      })
-    },
-    openReject(row) {
-      this.rejectForm = { ...row, reason: '' }
-      this.rejectOpen = true
-    },
-    submitReject() {
-      this.$refs.rejectFormRef.validate(valid => {
-        if (!valid) return
-        rejectPayment({ planId: this.rejectForm.planId, reason: this.rejectForm.reason }).then(() => {
-          this.$modal.msgSuccess('å·²é©³å›å›æ¬¾')
-          this.rejectOpen = false
-          this.load()
-        })
-      })
-    },
-    openInvoice(row) {
-      this.invoiceForm = {
-        ...row,
-        currentInvoiceStatus: row.invoiceStatus,
-        invoiceStatus: row.invoiceStatus === '2' ? '1' : '2',
-        invoiceType: row.invoiceType || this.dictDefault('law_finance_invoice_type'),
-        reason: ''
-      }
-      this.invoiceOpen = true
-    },
-    submitInvoice() {
-      this.$refs.invoiceFormRef.validate(valid => {
-        if (!valid) return
-        handleInvoice({ planId: this.invoiceForm.planId, invoiceStatus: this.invoiceForm.invoiceStatus, invoiceType: this.invoiceForm.invoiceType, reason: this.invoiceForm.reason }).then(() => {
-          this.$modal.msgSuccess('å¼€ç¥¨çŠ¶æ€å·²æ›´æ–°')
-          this.invoiceOpen = false
-          this.load()
-          this.refreshCaseFinance()
-        })
-      })
-    },
-    openCaseFinance(row) {
-      const caseId = row.caseId || row.case_id
-      if (!caseId) {
-        this.$modal.msgError('å½“å‰è´¹ç”¨æœªå…³è”æ¡ˆä»¶')
-        return
-      }
-      this.caseFinanceCaseId = caseId
-      this.caseFinanceOpen = true
-    },
-    refreshCaseFinance() {
-      if (this.caseFinanceOpen && this.$refs.caseFinanceDrawer) {
-        this.$refs.caseFinanceDrawer.load()
-      }
-    },
-    openExpense(row) {
-      this.expenseForm = {
-        expenseId: row.expense_id || row.expenseId,
-        caseId: row.case_id || row.caseId,
-        expenseType: row.expense_type || row.expenseType,
-        amount: Number(row.amount || 0),
-        occurDate: row.occur_date || row.occurDate,
-        payStatus: row.pay_status || row.payStatus,
-        reimburseStatus: row.reimburse_status || row.reimburseStatus,
-        voucherStatus: row.voucher_status || row.voucherStatus,
-        handlerId: row.handler_id || row.handlerId,
-        handlerName: row.handler_name || row.handlerName,
-        voucherUrl: row.voucher_url || row.voucherUrl,
-        voucherName: row.voucher_name || row.voucherName,
-        remark: row.remark
-      }
-      this.expenseOpen = true
-    },
-    submitExpense() {
-      this.$refs.expenseFormRef.validate(valid => {
-        if (!valid) return
-        if (Number(this.expenseForm.amount) <= 0) {
-          this.$modal.msgError('è´¹ç”¨é‡‘é¢å¿…é¡»å¤§äº 0')
-          return
-        }
-        updateFinanceExpense(this.expenseForm).then(() => {
-          this.$modal.msgSuccess('è´¹ç”¨çŠ¶æ€å·²æ›´æ–°')
-          this.expenseOpen = false
-          this.load()
-          this.refreshCaseFinance()
-        })
-      })
-    },
-    syncExpenseFile(value) {
-      this.expenseForm.voucherName = this.fileNameFromUrl(value)
-      this.expenseForm.voucherStatus = value ? 'uploaded' : 'missing'
-    },
-    canInvoice(row) {
-      return row.confirmStatus === '1' && row.invoiceStatus !== '1'
-    },
-    canCollect(row) {
-      return row.confirmStatus === '0' || (row.confirmStatus === '1' && Number(row.pendingAmount || 0) > 0)
-    },
-    dashboardValue(key) {
-      const map = this.keyed(this.dashboard.cards || [])
-      return Number(map[key] && map[key].metricValue || 0)
-    },
-    listSum(getter) {
-      return (this.list || []).reduce((sum, row) => sum + Number(getter(row) || 0), 0)
-    },
-    listCount(predicate) {
-      return (this.list || []).filter(row => predicate(row)).length
-    },
-    completeMonthlyRows(rows, defaults) {
-      const map = (rows || []).reduce((target, item) => {
-        target[item.itemName] = item
-        return target
-      }, {})
-      return this.lastSixMonths().map(month => ({ itemName: month, ...defaults, ...(map[month] || {}) }))
-    },
-    lastSixMonths() {
-      const now = new Date()
-      const months = []
-      for (let i = 5; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        months.push(date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0'))
-      }
-      return months
-    },
-    buildBars(rows, valueKey) {
-      const list = rows && rows.length ? rows : []
-      const max = Math.max(...list.map(item => Number(item[valueKey] || 0)), 1)
-      const gap = list.length ? 520 / list.length : 520
-      const width = Math.max(18, Math.min(42, gap * 0.34))
-      return list.map((item, index) => {
-        const value = Number(item[valueKey] || 0)
-        const height = Math.max(6, value / max * 130)
-        return { key: item.itemName + '-' + index, x: Math.round(index * gap + gap / 2 - width / 2), y: Math.round(175 - height), width, height, title: `${item.itemName}ï¼š${this.formatMoney(value)}` }
-      })
-    },
-    buildLinePoints(rows, valueKey) {
-      const list = rows && rows.length ? rows : []
-      const max = Math.max(...list.map(item => Number(item[valueKey] || 0)), 1)
-      const gap = list.length <= 1 ? 520 : 520 / (list.length - 1)
-      return list.map((item, index) => {
-        const value = Number(item[valueKey] || 0)
-        return { key: item.itemName + '-' + index, x: Math.round(index * gap), y: Math.round(175 - value / max * 130), title: `${item.itemName}ï¼š${value.toLocaleString()}` }
-      })
-    },
-    buildTrendPoints(rows, width) {
-      const list = rows && rows.length ? rows : [{ itemName: '-', itemValue: 0 }]
-      const max = Math.max(...list.map(item => Number(item.itemValue || 0)), 1)
-      const gap = list.length === 1 ? width : width / (list.length - 1)
-      return list.map((item, index) => ({ x: Math.round(index * gap), y: Math.round(150 - Number(item.itemValue || 0) / max * 110) }))
-    },
-    barWidth(value, rows) {
-      const max = Math.max(...(rows || []).map(item => Number(item.itemValue || 0)), 1)
-      return Math.max(8, Number(value || 0) / max * 100) + '%'
-    },
-    conversionBarWidth(item) {
-      return Math.max(8, Number(item.conversionRate || 0)) + '%'
-    },
-    field(row, camelKey, snakeKey) {
-      if (!row) return undefined
-      return row[camelKey] !== undefined && row[camelKey] !== null ? row[camelKey] : row[snakeKey]
-    },
-    num(item) {
-      return item ? Number(item.metricValue || 0) : 0
-    },
-    keyed(rows, valueKey) {
-      return (rows || []).reduce((target, item) => {
-        target[item.metricKey] = valueKey ? item[valueKey] : item
-        return target
-      }, {})
-    },
-    formatPlainMoney(value) {
-      return Number(value || 0).toLocaleString()
-    },
-    formatShortMoney(value) {
-      const amount = Number(value || 0)
-      if (Math.abs(amount) >= 10000) return (amount / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'ä¸‡'
-      return amount.toLocaleString()
-    },
-    formatCompactMoney(value) {
-      const amount = Number(value || 0)
-      if (Math.abs(amount) >= 10000) return (amount / 10000).toLocaleString(undefined, { maximumFractionDigits: 1 }) + 'ä¸‡'
-      return amount.toLocaleString()
-    },
-    shortDate(value) {
-      return value ? String(value).slice(5, 10) : '-'
-    },
-    formatSummaryValue(row) {
-      return row.metricKey === 'receiveCount' ? Number(row.monthValue || 0).toLocaleString() : this.formatCompactMoney(row.monthValue)
-    },
-    formatSummaryYearValue(row) {
-      return row.metricKey === 'receiveCount' ? Number(row.yearValue || 0).toLocaleString() : this.formatCompactMoney(row.yearValue)
-    },
-    formatMoney(value) {
-      if (value == null || value === '') return 'Â¥ 0'
-      return 'Â¥ ' + Number(value || 0).toLocaleString()
-    }
-  }
-}
-</script>
-
-<style scoped lang="scss">
-.finance-page {
-  --biz-filter-input-width: 220px;
-  --biz-filter-select-width: 132px;
-
-  ::v-deep .biz-filter-main .el-date-editor--daterange {
-    width: 250px;
-    flex: 0 0 250px;
-  }
-}
-
-.finance-overview-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, .75fr) minmax(280px, .75fr);
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.finance-card {
-  border: 1px solid #e8edf6;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 7px 16px rgba(36, 73, 135, .045);
-  padding: 16px;
-}
-
-.trend-card {
-  grid-row: span 2;
-}
-
-.finance-card-title,
-.section-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 12px;
-
-  h3 {
-    margin: 0;
-    color: #0f172a;
-    font-size: var(--biz-font-card);
-  }
-
-  p {
-    margin: 4px 0 0;
-    color: #94a3b8;
-    font-size: var(--biz-font-mini);
-  }
-
-  strong {
-    color: #2563eb;
-    font-size: var(--biz-font-section);
-  }
-}
-
-.trend-chart {
-  width: 100%;
-  height: 180px;
-
-  .trend-grid {
-    fill: none;
-    stroke: #eef2f7;
-    stroke-width: 1;
-  }
-
-  .trend-line {
-    fill: none;
-    stroke: #2563eb;
-    stroke-width: 4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  circle {
-    fill: #fff;
-    stroke: #2563eb;
-    stroke-width: 3;
-  }
-}
-
-.trend-labels {
-  display: flex;
-  justify-content: space-between;
-  color: #94a3b8;
-  font-size: var(--biz-font-mini);
-}
-
-.donut-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.donut {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 138px;
-  height: 138px;
-  border-radius: 50%;
-  flex: 0 0 138px;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 26px;
-    border-radius: 50%;
-    background: #fff;
-  }
-
-  b,
-  span {
-    position: relative;
-    z-index: 1;
-  }
-
-  b {
-    color: #0f172a;
-    font-size: var(--biz-font-metric);
-  }
-
-  span {
-    color: #64748b;
-    font-size: var(--biz-font-mini);
-  }
-}
-
-.donut-wrap ul {
-  flex: 1;
-  padding: 0;
-  margin: 0;
-  list-style: none;
-
-  li {
-    display: grid;
-    grid-template-columns: 10px 1fr auto;
-    align-items: center;
-    gap: 8px;
-    margin: 8px 0;
-    color: #64748b;
-    font-size: var(--biz-font-small);
-  }
-
-  em {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-  }
-
-  strong {
-    color: #0f172a;
-  }
-}
-
-.link-items {
-  display: grid;
-  gap: 10px;
-
-  div {
-    display: grid;
-    grid-template-columns: 36px 1fr auto;
-    align-items: center;
-    gap: 10px;
-    padding: 11px;
-    border: 1px solid #edf2f7;
-    border-radius: 10px;
-    background: #f8fbff;
-  }
-
-  i {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    color: #2563eb;
-    background: #eaf2ff;
-  }
-
-  span {
-    color: #334155;
-    font-size: var(--biz-font-small);
-  }
-
-  strong {
-    color: #0f172a;
-    font-size: var(--biz-font-section);
-  }
-
-  small {
-    grid-column: 2 / 4;
-    color: #94a3b8;
-  }
-}
-
-.funnel-list {
-  display: grid;
-  gap: 11px;
-
-  div {
-    display: grid;
-    grid-template-columns: 86px 1fr auto;
-    align-items: center;
-    gap: 10px;
-  }
-
-  span {
-    color: #334155;
-    font-size: var(--biz-font-small);
-  }
-
-  i {
-    height: 8px;
-    border-radius: 999px;
-    background: #eef2ff;
-    overflow: hidden;
-  }
-
-  em {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #2563eb, #38bdf8);
-  }
-
-  strong {
-    color: #0f172a;
-    font-size: var(--biz-font-card);
-  }
-
-  small {
-    grid-column: 2 / 4;
-    color: #94a3b8;
-    font-size: var(--biz-font-mini);
-  }
-}
-
-.reminder-list {
-  display: grid;
-  gap: 10px;
-
-  button {
-    display: grid;
-    grid-template-columns: 40px 1fr auto 14px;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #edf2f7;
-    border-radius: 10px;
-    background: #fff;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  i:first-child {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    color: #2563eb;
-    background: #eef4ff;
-    font-size: 18px;
-  }
-
-  b,
-  small {
-    display: block;
-  }
-
-  b {
-    color: #0f172a;
-    font-size: var(--biz-font-small);
-  }
-
-  small {
-    margin-top: 3px;
-    color: #94a3b8;
-  }
-
-  strong {
-    color: #ef4444;
-    font-size: var(--biz-font-section);
-  }
-}
-
-.finance-tables-grid,
-.report-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.finance-flow-card {
-  margin-top: 16px;
-}
-
-.finance-flow {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.finance-flow-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: 42px 1fr;
-  align-items: center;
-  gap: 10px;
-  min-height: 70px;
-  padding: 10px 8px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
-
-  > div {
-    min-width: 0;
-  }
-
-  b,
-  strong {
-    display: block;
-  }
-
-  b {
-    color: #64748b;
-    font-size: var(--biz-font-small);
-  }
-
-  strong {
-    margin-top: 4px;
-    color: #0f172a;
-    font-size: var(--biz-font-card);
-    white-space: nowrap;
-  }
-
-  > em {
-    position: absolute;
-    right: -16px;
-    top: 50%;
-    z-index: 1;
-    min-width: 38px;
-    transform: translateY(-50%);
-    color: #64748b;
-    font-size: var(--biz-font-mini);
-    font-style: normal;
-    text-align: center;
-
-    &::after {
-      content: '';
-      display: block;
-      width: 24px;
-      height: 1px;
-      margin: 3px auto 0;
-      background: #cbd5e1;
-    }
-  }
-}
-
-.flow-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  color: #2563eb;
-  background: #eaf2ff;
-  font-size: 18px;
-
-  &.green { color: #16a34a; background: #eafaf1; }
-  &.purple { color: #7c3aed; background: #f3e8ff; }
-  &.orange { color: #f97316; background: #fff3e7; }
-  &.cyan { color: #0891b2; background: #e6fbff; }
-}
-
-.finance-charts-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-}
-
-.finance-chart-card {
-  min-height: 270px;
-}
-
-.combo-chart {
-  svg {
-    width: 100%;
-    height: 210px;
-  }
-
-  .trend-line {
-    fill: none;
-    stroke-width: 3;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  rect {
-    fill: url(#financeBarGradient);
-    fill: #2563eb;
-  }
-
-  circle {
-    fill: #fff;
-    stroke: #22c55e;
-    stroke-width: 3;
-  }
-
-  .chart-hover-bar,
-  .chart-hover-point {
-    cursor: pointer;
-    transition: opacity .18s ease, filter .18s ease;
-
-    &:hover {
-      opacity: .82;
-      filter: drop-shadow(0 4px 7px rgba(37, 99, 235, .22));
-    }
-  }
-}
-
-.trend-line.green {
-  stroke: #22c55e;
-}
-
-.chart-labels,
-.chart-legend {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: #64748b;
-  font-size: var(--biz-font-mini);
-}
-
-.chart-legend {
-  justify-content: flex-start;
-  margin-top: 8px;
-
-  span {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  i {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-
-    &.blue { background: #2563eb; }
-    &.green { background: #22c55e; }
-  }
-}
-
-.finance-overview-tables {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-
-  ::v-deep .biz-table-card {
-    min-width: 0;
-  }
-}
-
-.overview-mini-table {
-  ::v-deep .el-table__cell {
-    padding: 6px 0;
-    font-size: var(--biz-font-mini);
-  }
-
-  ::v-deep th.el-table__cell {
-    background: #f8fafc;
-  }
-
-  ::v-deep .cell {
-    padding-left: 6px;
-    padding-right: 6px;
-  }
-
-  ::v-deep .el-table__body-wrapper {
-    overflow-x: hidden;
-  }
-}
-
-.report-main {
-  grid-column: 1 / -1;
-}
-
-.finance-report-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-
-  h3 {
-    margin: 0 0 6px;
-    color: #0f2147;
-    font-size: var(--biz-font-lg);
-  }
-
-  p {
-    margin: 0;
-    color: #64748b;
-    font-size: var(--biz-font-sm);
-  }
-}
-
-.report-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.report-stat {
-  display: grid;
-  gap: 8px;
-
-  span {
-    color: #64748b;
-    font-size: var(--biz-font-small);
-  }
-
-  strong {
-    color: #0f172a;
-    font-size: var(--biz-font-metric);
-  }
-
-  small {
-    color: #94a3b8;
-  }
-}
-
-.bar-list {
-  display: grid;
-  gap: 10px;
-
-  div {
-    display: grid;
-    grid-template-columns: 96px 1fr 120px;
-    align-items: center;
-    gap: 10px;
-    font-size: var(--biz-font-small);
-  }
-
-  i {
-    height: 8px;
-    border-radius: 999px;
-    background: #edf2f7;
-    overflow: hidden;
-  }
-
-  em {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #2563eb, #06b6d4);
-  }
-
-  strong {
-    text-align: right;
-    color: #0f172a;
-  }
-}
-
-.source-conversion-list {
-  display: grid;
-  gap: 12px;
-
-  > div {
-    display: grid;
-    grid-template-columns: 150px minmax(160px, 1fr) 72px 180px;
-    align-items: center;
-    gap: 12px;
-  }
-
-  span {
-    color: #334155;
-    font-size: var(--biz-font-small);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  i {
-    height: 9px;
-    border-radius: 999px;
-    background: #eef2ff;
-    overflow: hidden;
-  }
-
-  em {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #7c3aed, #22d3ee);
-  }
-
-  strong {
-    color: #2563eb;
-    font-size: var(--biz-font-card);
-  }
-
-  small {
-    color: #64748b;
-    font-size: var(--biz-font-mini);
-    text-align: right;
-  }
-}
-
-.overdue {
-  color: #ef4444;
-  font-weight: 700;
-}
-
-@media (max-width: 1280px) {
-  .finance-overview-grid,
-  .finance-charts-grid,
-  .finance-overview-tables,
-  .finance-tables-grid,
-  .report-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .finance-flow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .finance-flow-item > em {
-    display: none;
-  }
-
-  .finance-report-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-}
-</style>
+    <template v-else-if="false && mode === 'overview'">
+      <section class="finance-overview-grid">
+        <article class="finance-card trend-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>å›æ¬¾è¶‹åŠ¿</h3>
+              <p>è¿‘ 6 ä¸ªæœˆç¡®è®¤å›æ¬¾èµ°åŠ¿</p>
+            </div>
+            <strong>{{ formatMoney(totalTrendAmount) }}</strong>
+          </div>
+          <svg class="trend-chart" viewBox="0 0 520 180" preserveAspectRatio="none">
+            <polyline class="trend-grid" points="0,150 520,150" />
+            <polyline class="trend-grid" points="0,105 520,105" />
+            <polyline class="trend-grid" points="0,60 520,60" />
+            <polyline class="trend-line" :points="trendPoints" />
+            <circle v-for="(point, index) in trendPointList" :key="index" :cx="point.x" :cy="point.y" r="4" />
+          </svg>
+          <div class="trend-labels">
+            <span v-for="item in trend" :key="item.itemName">{{ item.itemName }}</span>
+          </div>
+        </article>
+
+        <article class="finance-card aging-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>è´¦é¾„åˆ†å¸ƒ</h3>
+              <p>æœªæ”¶æ¬¾è®¡åˆ’æŒ‰é€¾æœŸå¤©æ•°åˆ†å¸ƒ</p>
+            </div>
+          </div>
+          <div class="donut-wrap">
+            <i class="donut" :style="agingDonutStyle"><b>{{ agingTotal }}</b><span>ç¬”åº”æ”¶</span></i>
+            <ul>
+              <li v-for="item in agingStats" :key="item.itemName">
+                <em :style="{ background: item.color }" />
+                <span>{{ item.label }}</span>
+                <strong>{{ item.itemValue || 0 }}</strong>
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="finance-card link-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>æ¨¡å—è”åŠ¨æ¦‚è§ˆ</h3>
+              <p>åˆåŒã€æ¡ˆä»¶ã€è´¹ç”¨çš„è´¢åŠ¡å…³ç³»</p>
+            </div>
+          </div>
+          <div class="link-items">
+            <div v-for="item in linkCards" :key="item.key">
+              <i :class="item.icon" />
+              <span>{{ item.title }}</span>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.desc }}</small>
+            </div>
+          </div>
+        </article>
+
+        <article class="finance-card funnel-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>çº¿ç´¢è½¬åŒ–æ¼æ–—</h3>
+              <p>ä»çº¿ç´¢é¢„è®¡é‡‘é¢åˆ°å®¢æˆ·ç­¾çº¦é‡‘é¢</p>
+            </div>
+            <strong>{{ leadConversionRate }}%</strong>
+          </div>
+          <div class="funnel-list">
+            <div v-for="item in leadFunnelCards" :key="item.key">
+              <span>{{ item.title }}</span>
+              <i><em :style="{ width: item.width }" /></i>
+              <strong>{{ item.value }}</strong>
+              <small>{{ item.desc }}</small>
+            </div>
+          </div>
+        </article>
+
+        <article class="finance-card reminder-card">
+          <div class="finance-card-title">
+            <div>
+              <h3>è´¢åŠ¡æé†’</h3>
+              <p>ä¼˜å…ˆå¤„ç†å½±å“ç°é‡‘æµçš„äº‹é¡¹</p>
+            </div>
+          </div>
+          <div class="reminder-list">
+            <button v-for="item in reminderCards" :key="item.key" @click="switchMode(item.mode, item.query)">
+              <i :class="item.icon" />
+              <span><b>{{ item.title }}</b><small>{{ item.desc }}</small></span>
+              <strong>{{ item.value }}</strong>
+              <em class="el-icon-arrow-right" />
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section class="finance-tables-grid">
+        <biz-table-card :toolbar="false" :pagination="false">
+          <template slot="header">
+            <div class="section-heading">
+              <h3>å¾…ç¡®è®¤å›æ¬¾</h3>
+              <el-button :size="controlSize" type="text" @click="switchMode('payment')">æŸ¥çœ‹å…¨éƒ¨</el-button>
+            </div>
+          </template>
+          <el-table :data="pendingPayments" :size="controlSize">
+            <el-table-column label="å®¢æˆ·/åˆåŒ" min-width="190">
+              <template slot-scope="{ row }">
+                <span class="biz-link">{{ row.customerName || '-' }}</span>
+                <small class="sub-text">{{ row.contractNo || '-' }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column labe×ÏxîÚ$z{-®éÜj×F†—2æf–ÆTæÖTg&öÕW&Â‡fÇVR¢F†—2æW‡Vç6Tf÷&Òçf÷V6†W%7FGW2ÒfÇVRòwWÆöFVBr¢vÖ—76–ærp¢ÒÀ¢6ä–çfö–6R‡&÷r’°¢&WGW&â&÷ræ6öæf—&Õ7FGW2ÓÓÒsrbb&÷ræ–çfö–6U7FGW2ÓÒsp¢ÒÀ¢6ä6öÆÆV7B‡&÷r’°¢&WGW&â&÷ræ6öæf—&Õ7FGW2ÓÓÒsrÇÂ‡&÷ræ6öæf—&Õ7FGW2ÓÓÒsrbbçVÖ&W"‡&÷rçVæF–ætÖ÷VçBÇÂ’â¢ÒÀ¢F6†&ö&EfÇVR†¶W’’°¢6öç7BÖÒF†—2æ¶W–VB‡F†—2æF6†&ö&Bæ6&G2ÇÂµÒ¢&WGW&âçVÖ&W"†Ö¶¶W•ÒbbÖ¶¶W•ÒæÖWG&–5fÇVRÇÂ¢ÒÀ¢Æ—7E7VÒ†vWGFW"’°¢&WGW&â‡F†—2æÆ—7BÇÂµÒ’ç&VGV6R‚‡7VÒÂ&÷r’Óâ7VÒ²çVÖ&W"†vWGFW"‡&÷r’ÇÂ’Â¢ÒÀ¢Æ—7D6÷VçB‡&VF–6FR’°¢&WGW&â‡F†—2æÆ—7BÇÂµÒ’æf–ÇFW"‡&÷rÓâ&VF–6FR‡&÷r’’æÆVæwF€¢ÒÀ¢6ö×ÆWFTÖöçF†Ç•&÷w2‡&÷w2ÂFVfVÇG2’°¢6öç7BÖÒ‡&÷w2ÇÂµÒ’ç&VGV6R‚‡F&vWBÂ—FVÒ’Óâ°¢F&vWE¶—FVÒæ—FVÔæÖUÒÒ—FVĞ¢&WGW&âF&vW@¢ÒÂ·Ò¢&WGW&âF†—2æÆ7E6—„ÖöçF‡2‚’æÖ†ÖöçF‚Óâ‡²—FVÔæÖS¢ÖöçF‚ÂââæFVfVÇG2Ââââ†Ö¶ÖöçF…ÒÇÂ·Ò’Ò’¢ÒÀ¢Æ7E6—„ÖöçF‡2‚’°¢6öç7Bæ÷rÒæWrFFR‚¢6öç7BÖöçF‡2ÒµĞ¢f÷"†ÆWB’ÒS²’ãÒ²’ÒÒ’°¢6öç7BFFRÒæWrFFR†æ÷rævWDgVÆÅ–V"‚’Âæ÷rævWDÖöçF‚‚’Ò’Â¢ÖöçF‡2çW6‚†FFRævWDgVÆÅ–V"‚’²rÒr²7G&–ær†FFRævWDÖöçF‚‚’²’çE7F'Bƒ"Âsr’¢Ğ¢&WGW&âÖöçF‡0¢ÒÀ¢'V–ÆD&'2‡&÷w2ÂfÇVT¶W’’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢µĞ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚òS#òÆ—7BæÆVæwF‚¢S# ¢6öç7Bv–GF‚ÒÖF‚æÖ‚ƒ‚ÂÖF‚æÖ–âƒC"Âv¢ã3B’¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ°¢6öç7BfÇVRÒçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ¢6öç7B†V–v‡BÒÖF‚æÖ‚ƒbÂfÇVRòÖ‚¢3¢&WGW&â²¶W“¢—FVÒæ—FVÔæÖR²rÒr²–æFW‚Âƒ¢ÖF‚ç&÷VæB†–æFW‚¢v²vò"Òv–GF‚ò"’Â“¢ÖF‚ç&÷VæBƒsRÒ†V–v‡B’Âv–GF‚Â†V–v‡BÂF—FÆS¢G¶—FVÒæ—FVÔæÖWŞûÉ¢G·F†—2æf÷&ÖDÖöæW’‡fÇVR—ÖĞ¢Ò¢ÒÀ¢'V–ÆDÆ–æUö–çG2‡&÷w2ÂfÇVT¶W’’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢µĞ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚ÃÒòS#¢S#ò†Æ—7BæÆVæwF‚Ò¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ°¢6öç7BfÇVRÒçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ¢&WGW&â²¶W“¢—FVÒæ—FVÔæÖR²rÒr²–æFW‚Âƒ¢ÖF‚ç&÷VæB†–æFW‚¢v’Â“¢ÖF‚ç&÷VæBƒsRÒfÇVRòÖ‚¢3’ÂF—FÆS¢G¶—FVÒæ—FVÔæÖWŞûÉ¢G·fÇVRçFôÆö6ÆU7G&–ær‚—ÖĞ¢Ò¢ÒÀ¢'V–ÆEG&VæEö–çG2‡&÷w2Âv–GF‚’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢·²—FVÔæÖS¢rÒrÂ—FVÕfÇVS¢ÕĞ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚ÓÓÒòv–GF‚¢v–GF‚ò†Æ—7BæÆVæwF‚Ò¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ‡²ƒ¢ÖF‚ç&÷VæB†–æFW‚¢v’Â“¢ÖF‚ç&÷VæBƒSÒçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’òÖ‚¢’Ò’¢ÒÀ¢&%v–GF‚‡fÇVRÂ&÷w2’°¢6öç7BÖ‚ÒÖF‚æÖ‚‚âââ‡&÷w2ÇÂµÒ’æÖ†—FVÒÓâçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’’Â¢&WGW&âÖF‚æÖ‚ƒ‚ÂçVÖ&W"‡fÇVRÇÂ’òÖ‚¢’²rRp¢ÒÀ¢6öçfW'6–öä&%v–GF‚†—FVÒ’°¢&WGW&âÖF‚æÖ‚ƒ‚ÂçVÖ&W"†—FVÒæ6öçfW'6–öå&FRÇÂ’’²rRp¢ÒÀ¢f–VÆB‡&÷rÂ6ÖVÄ¶W’Â6æ¶T¶W’’°¢–b‚&÷r’&WGW&âVæFVf–æV@¢&WGW&â&÷u¶6ÖVÄ¶W•ÒÓÒVæFVf–æVBbb&÷u¶6ÖVÄ¶W•ÒÓÒçVÆÂò&÷u¶6ÖVÄ¶W•Ò¢&÷u·6æ¶T¶W•Ğ¢ÒÀ¢çVÒ†—FVÒ’°¢&WGW&â—FVÒòçVÖ&W"†—FVÒæÖWG&–5fÇVRÇÂ’¢ ¢ÒÀ¢¶W–VB‡&÷w2ÂfÇVT¶W’’°¢&WGW&â‡&÷w2ÇÂµÒ’ç&VGV6R‚‡F&vWBÂ—FVÒ’Óâ°¢F&vWE¶—FVÒæÖWG&–4¶W•ÒÒfÇVT¶W’ò—FVÕ·fÇVT¶W•Ò¢—FVĞ¢&WGW&âF&vW@¢ÒÂ·Ò¢ÒÀ¢f÷&ÖEÆ–äÖöæW’‡fÇVR’°¢&WGW&âçVÖ&W"‡fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚¢ÒÀ¢f÷&ÖE6†÷'DÖöæW’‡fÇVR’°¢6öç7BÖ÷VçBÒçVÖ&W"‡fÇVRÇÂ¢–b„ÖF‚æ'2†Ö÷VçB’ãÒ’&WGW&â†Ö÷VçBò’çFôÆö6ÆU7G&–ær‡VæFVf–æVBÂ²Ö†–×VÔg&7F–öäF–v—G3¢Ò’²~Kˆrp¢&WGW&âÖ÷VçBçFôÆö6ÆU7G&–ær‚¢ÒÀ¢f÷&ÖD6ö×7DÖöæW’‡fÇVR’°¢6öç7BÖ÷VçBÒçVÖ&W"‡fÇVRÇÂ¢–b„ÖF‚æ'2†Ö÷VçB’ãÒ’&WGW&â†Ö÷VçBò’çFôÆö6ÆU7G&–ær‡VæFVf–æVBÂ²Ö†–×VÔg&7F–öäF–v—G3¢Ò’²~Kˆrp¢&WGW&âÖ÷VçBçFôÆö6ÆU7G&–ær‚¢ÒÀ¢6†÷'DFFR‡fÇVR’°¢&WGW&âfÇVRò7G&–ær‡fÇVR’ç6Æ–6RƒRÂ’¢rÒp¢ÒÀ¢f÷&ÖE7VÖÖ'•fÇVR‡&÷r’°¢&WGW&â&÷ræÖWG&–4¶W’ÓÓÒw&V6V—fT6÷VçBròçVÖ&W"‡&÷ræÖöçF…fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚’¢F†—2æf÷&ÖD6ö×7DÖöæW’‡&÷ræÖöçF…fÇVR¢ÒÀ¢f÷&ÖE7VÖÖ'•–V%fÇVR‡&÷r’°¢&WGW&â&÷ræÖWG&–4¶W’ÓÓÒw&V6V—fT6÷VçBròçVÖ&W"‡&÷rç–V%fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚’¢F†—2æf÷&ÖD6ö×7DÖöæW’‡&÷rç–V%fÇVR¢ÒÀ¢f÷&ÖDÖöæW’‡fÇVR’°¢–b‡fÇVRÓÒçVÆÂÇÂfÇVRÓÓÒrr’&WGW&â|*Rp¢&WGW&â|*Rr²çVÖ&W"‡fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚¢Ğ¢Ğ§Ğ£Â÷67&—Cà £Ç7G–ÆR66÷VBÆæsÒ'6772#à¢æf–ææ6R×vR°¢ÒÖ&—¢Öf–ÇFW"Ö–çWB×v–GFƒ¢##ƒ°¢ÒÖ&—¢Öf–ÇFW"×6VÆV7B×v–GFƒ¢3'ƒ° ¢£§bÖFVWæ&—¢Öf–ÇFW"ÖÖ–âæVÂÖFFRÖVF—F÷"ÒÖFFW&ævR°¢v–GFƒ¢#Sƒ°¢fÆWƒ¢#Sƒ°¢Ğ§Ğ ¢æf–ææ6RÖ÷fW'f–WrÖw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢Ö–æÖ‚ƒÂãCVg"’Ö–æÖ‚ƒ#ƒ‚ÂãsVg"’Ö–æÖ‚ƒ#ƒ‚ÂãsVg"“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ğ ¢æf–ææ6RÖ6&B°¢&÷&FW#¢‚6öÆ–B6S†VFcc°¢&÷&FW"×&F—W3¢'ƒ°¢&6¶w&÷VæC¢6ffc°¢&÷‚×6†F÷s¢w‚g‚&v&ƒ3bÂs2Â3RÂãCR“°¢FF–æs¢gƒ°§Ğ ¢çG&VæBÖ6&B°¢w&–B×&÷s¢7â#°§Ğ ¢æf–ææ6RÖ6&B×F—FÆRÀ¢ç6V7F–öâÖ†VF–ær°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢fÆW‚×7F'C°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢Ö&v–âÖ&÷GFöÓ¢'ƒ° ¢ƒ2°¢Ö&v–ã¢°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ğ ¢°¢Ö&v–ã¢G‚°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ğ ¢7G&öær°¢6öÆ÷#¢3#Sc6V#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ğ§Ğ ¢çG&VæBÖ6†'B°¢v–GFƒ¢S°¢†V–v‡C¢ƒƒ° ¢çG&VæBÖw&–B°¢f–ÆÃ¢æöæS°¢7G&ö¶S¢6VVc&cs°¢7G&ö¶R×v–GFƒ¢°¢Ğ ¢çG&VæBÖÆ–æR°¢f–ÆÃ¢æöæS°¢7G&ö¶S¢3#Sc6V#°¢7G&ö¶R×v–GFƒ¢C°¢7G&ö¶RÖÆ–æV6¢&÷VæC°¢7G&ö¶RÖÆ–æV¦ö–ã¢&÷VæC°¢Ğ ¢6—&6ÆR°¢f–ÆÃ¢6ffc°¢7G&ö¶S¢3#Sc6V#°¢7G&ö¶R×v–GFƒ¢3°¢Ğ§Ğ ¢çG&VæBÖÆ&VÇ2°¢F—7Æ“¢fÆWƒ°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°§Ğ ¢æFöçWB×w&°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢'ƒ°§Ğ ¢æFöçWB°¢÷6—F–öã¢&VÆF—fS°¢F—7Æ“¢fÆWƒ°¢fÆW‚ÖF—&V7F–öã¢6öÇVÖã°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢3‡ƒ°¢†V–v‡C¢3‡ƒ°¢&÷&FW"×&F—W3¢SS°¢fÆWƒ¢3‡ƒ° ¢c£¦gFW"°¢6öçFVçC¢rs°¢÷6—F–öã¢'6öÇWFS°¢–ç6WC¢#gƒ°¢&÷&FW"×&F—W3¢SS°¢&6¶w&÷VæC¢6ffc°¢Ğ ¢"À¢7â°¢÷6—F–öã¢&VÆF—fS°¢¢Ö–æFWƒ¢°¢Ğ ¢"°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖWG&–2“°¢Ğ ¢7â°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ğ§Ğ ¢æFöçWB×w&VÂ°¢fÆWƒ¢°¢FF–æs¢°¢Ö&v–ã¢°¢Æ—7B×7G–ÆS¢æöæS° ¢Æ’°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢‡ƒ°¢Ö&v–ã¢‡‚°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢VÒ°¢v–GFƒ¢‡ƒ°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢Ğ ¢7G&öær°¢6öÆ÷#¢3cs&°¢Ğ§Ğ ¢æÆ–æ²Ö—FV×2°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢3g‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢FF–æs¢ƒ°¢&÷&FW#¢‚6öÆ–B6VFc&cs°¢&÷&FW"×&F—W3¢ƒ°¢&6¶w&÷VæC¢6c†f&fc°¢Ğ ¢’°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢3gƒ°¢†V–v‡C¢3gƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6Vc&fc°¢Ğ ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ğ ¢6ÖÆÂ°¢w&–BÖ6öÇVÖã¢"òC°¢6öÆ÷#¢3“F6#ƒ°¢Ğ§Ğ ¢ægVææVÂÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢ƒg‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢Ğ ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢’°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VVc&fc°¢÷fW&fÆ÷s¢†–FFVã°¢Ğ ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3#Sc6V"Â33†&Fc‚“°¢Ğ ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ğ ¢6ÖÆÂ°¢w&–BÖ6öÇVÖã¢"òC°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ğ§Ğ ¢ç&VÖ–æFW"ÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢'WGFöâ°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢C‚g"WFòGƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢v–GFƒ¢S°¢FF–æs¢'ƒ°¢&÷&FW#¢‚6öÆ–B6VFc&cs°¢&÷&FW"×&F—W3¢ƒ°¢&6¶w&÷VæC¢6ffc°¢FW‡BÖÆ–vã¢ÆVgC°¢7W'6÷#¢ö–çFW#°¢Ğ ¢“¦f—'7BÖ6†–ÆB°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢Cƒ°¢†V–v‡C¢Cƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6VVcFfc°¢föçB×6—¦S¢‡ƒ°¢Ğ ¢"À¢6ÖÆÂ°¢F—7Æ“¢&Æö6³°¢Ğ ¢"°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢6ÖÆÂ°¢Ö&v–â×F÷¢7ƒ°¢6öÆ÷#¢3“F6#ƒ°¢Ğ ¢7G&öær°¢6öÆ÷#¢6VcCCCC°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ğ§Ğ ¢æf–ææ6R×F&ÆW2Öw&–BÀ¢ç&W÷'BÖw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ"ÂÖ–æÖ‚ƒÂg"’“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ğ ¢æf–ææ6RÖfÆ÷rÖ6&B°¢Ö&v–â×F÷¢gƒ°§Ğ ¢æf–ææ6RÖfÆ÷r°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒbÂÖ–æÖ‚ƒÂg"’“°¢v¢'ƒ°§Ğ ¢æf–ææ6RÖfÆ÷rÖ—FVÒ°¢÷6—F–öã¢&VÆF—fS°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢C'‚g#°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢Ö–âÖ†V–v‡C¢sƒ°¢FF–æs¢‚‡ƒ°¢&÷&FW"×&F—W3¢'ƒ°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒƒFVrÂ6c†f&fbRÂ6fffffbR“° ¢âF—b°¢Ö–â×v–GFƒ¢°¢Ğ ¢"À¢7G&öær°¢F—7Æ“¢&Æö6³°¢Ğ ¢"°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢7G&öær°¢Ö&v–â×F÷¢Gƒ°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢v†—FR×76S¢æ÷w&°¢Ğ ¢âVÒ°¢÷6—F–öã¢'6öÇWFS°¢&–v‡C¢Ógƒ°¢F÷¢SS°¢¢Ö–æFWƒ¢°¢Ö–â×v–GFƒ¢3‡ƒ°¢G&ç6f÷&Ó¢G&ç6ÆFU’‚ÓSR“°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢föçB×7G–ÆS¢æ÷&ÖÃ°¢FW‡BÖÆ–vã¢6VçFW#° ¢c£¦gFW"°¢6öçFVçC¢rs°¢F—7Æ“¢&Æö6³°¢v–GFƒ¢#Gƒ°¢†V–v‡C¢ƒ°¢Ö&v–ã¢7‚WFò°¢&6¶w&÷VæC¢66&CVS°¢Ğ¢Ğ§Ğ ¢æfÆ÷rÖ–6öâ°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢C'ƒ°¢†V–v‡C¢C'ƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6Vc&fc°¢föçB×6—¦S¢‡ƒ° ¢bæw&VVâ²6öÆ÷#¢3f3F²&6¶w&÷VæC¢6Vfc²Ğ¢bçW'ÆR²6öÆ÷#¢3v36VC²&6¶w&÷VæC¢6c6S†fc²Ğ¢bæ÷&ævR²6öÆ÷#¢6c“s3c²&6¶w&÷VæC¢6ffc6Ss²Ğ¢bæ7–â²6öÆ÷#¢3ƒ“##²&6¶w&÷VæC¢6Sff&fc²Ğ§Ğ ¢æf–ææ6RÖ6†'G2Öw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ2ÂÖ–æÖ‚ƒÂg"’“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ğ ¢æf–ææ6RÖ6†'BÖ6&B°¢Ö–âÖ†V–v‡C¢#sƒ°§Ğ ¢æ6öÖ&òÖ6†'B°¢7fr°¢v–GFƒ¢S°¢†V–v‡C¢#ƒ°¢Ğ ¢çG&VæBÖÆ–æR°¢f–ÆÃ¢æöæS°¢7G&ö¶R×v–GFƒ¢3°¢7G&ö¶RÖÆ–æV6¢&÷VæC°¢7G&ö¶RÖÆ–æV¦ö–ã¢&÷VæC°¢Ğ ¢&V7B°¢f–ÆÃ¢W&Â‚6f–ææ6T&$w&F–VçB“°¢f–ÆÃ¢3#Sc6V#°¢Ğ ¢6—&6ÆR°¢f–ÆÃ¢6ffc°¢7G&ö¶S¢3#&3SVS°¢7G&ö¶R×v–GFƒ¢3°¢Ğ ¢æ6†'BÖ†÷fW"Ö&"À¢æ6†'BÖ†÷fW"×ö–çB°¢7W'6÷#¢ö–çFW#°¢G&ç6—F–öã¢÷6—G’ã‡2V6RÂf–ÇFW"ã‡2V6S° ¢c¦†÷fW"°¢÷6—G“¢ãƒ#°¢f–ÇFW#¢G&÷×6†F÷rƒG‚w‚&v&ƒ3rÂ“’Â#3RÂã#"’“°¢Ğ¢Ğ§Ğ ¢çG&VæBÖÆ–æRæw&VVâ°¢7G&ö¶S¢3#&3SVS°§Ğ ¢æ6†'BÖÆ&VÇ2À¢æ6†'BÖÆVvVæB°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢v¢‡ƒ°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°§Ğ ¢æ6†'BÖÆVvVæB°¢§W7F–g’Ö6öçFVçC¢fÆW‚×7F'C°¢Ö&v–â×F÷¢‡ƒ° ¢7â°¢F—7Æ“¢–æÆ–æRÖfÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢gƒ°¢Ğ ¢’°¢v–GFƒ¢‡ƒ°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢SS° ¢bæ&ÇVR²&6¶w&÷VæC¢3#Sc6V#²Ğ¢bæw&VVâ²&6¶w&÷VæC¢3#&3SVS²Ğ¢Ğ§Ğ ¢æf–ææ6RÖ÷fW'f–Wr×F&ÆW2°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒBÂÖ–æÖ‚ƒÂg"’“°¢v¢'ƒ°¢Ö&v–â×F÷¢gƒ° ¢£§bÖFVWæ&—¢×F&ÆRÖ6&B°¢Ö–â×v–GFƒ¢°¢Ğ§Ğ ¢æ÷fW'f–WrÖÖ–æ’×F&ÆR°¢£§bÖFVWæVÂ×F&ÆUõö6VÆÂ°¢FF–æs¢g‚°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ğ ¢£§bÖFVWF‚æVÂ×F&ÆUõö6VÆÂ°¢&6¶w&÷VæC¢6c†ff3°¢Ğ ¢£§bÖFVWæ6VÆÂ°¢FF–ærÖÆVgC¢gƒ°¢FF–ær×&–v‡C¢gƒ°¢Ğ ¢£§bÖFVWæVÂ×F&ÆUõö&öG’×w&W"°¢÷fW&fÆ÷r×ƒ¢†–FFVã°¢Ğ§Ğ ¢ç&W÷'BÖÖ–â°¢w&–BÖ6öÇVÖã¢òÓ°§Ğ ¢æf–ææ6R×&W÷'B×FööÆ&"°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ° ¢ƒ2°¢Ö&v–ã¢gƒ°¢6öÆ÷#¢3c#Cs°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÆr“°¢Ğ ¢°¢Ö&v–ã¢°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6Ò“°¢Ğ§Ğ ¢ç&W÷'B×FööÆ&"Ö7F–öç2°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢fÆW‚×w&¢w&°¢§W7F–g’Ö6öçFVçC¢fÆW‚ÖVæC°§Ğ ¢ç&W÷'B×7FB°¢F—7Æ“¢w&–C°¢v¢‡ƒ° ¢7â°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖWG&–2“°¢Ğ ¢6ÖÆÂ°¢6öÆ÷#¢3“F6#ƒ°¢Ğ§Ğ ¢æ&"ÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢“g‚g"#ƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ğ ¢’°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VFc&cs°¢÷fW&fÆ÷s¢†–FFVã°¢Ğ ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3#Sc6V"Â3f#fCB“°¢Ğ ¢7G&öær°¢FW‡BÖÆ–vã¢&–v‡C°¢6öÆ÷#¢3cs&°¢Ğ§Ğ ¢ç6÷W&6RÖ6öçfW'6–öâÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢'ƒ° ¢âF—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢S‚Ö–æÖ‚ƒc‚Âg"’s'‚ƒƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢'ƒ°¢Ğ ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢÷fW&fÆ÷s¢†–FFVã°¢FW‡BÖ÷fW&fÆ÷s¢VÆÆ—6—3°¢v†—FR×76S¢æ÷w&°¢Ğ ¢’°¢†V–v‡C¢—ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VVc&fc°¢÷fW&fÆ÷s¢†–FFVã°¢Ğ ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3v36VBÂ3#&C6VR“°¢Ğ ¢7G&öær°¢6öÆ÷#¢3#Sc6V#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ğ ¢6ÖÆÂ°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢FW‡BÖÆ–vã¢&–v‡C°¢Ğ§Ğ ¢æ÷fW&GVR°¢6öÆ÷#¢6VcCCCC°¢föçB×vV–v‡C¢s°§Ğ ¤ÖVF–†Ö‚×v–GFƒ¢#ƒ‚’°¢æf–ææ6RÖ÷fW'f–WrÖw&–BÀ¢æf–ææ6RÖ6†'G2Öw&–BÀ¢æf–ææ6RÖ÷fW'f–Wr×F&ÆW2À¢æf–ææ6R×F&ÆW2Öw&–BÀ¢ç&W÷'BÖw&–B°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢g#°¢Ğ ¢æf–ææ6RÖfÆ÷r°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ"ÂÖ–æÖ‚ƒÂg"’“°¢Ğ ¢æf–ææ6RÖfÆ÷rÖ—FVÒâVÒ°¢F—7Æ“¢æöæS°¢Ğ ¢æf–ææ6R×&W÷'B×FööÆ&"°¢Æ–vâÖ—FV×3¢fÆW‚×7F'C°¢fÆW‚ÖF—&V7F–öã¢6öÇVÖã°¢Ğ §Ğ£Â÷7G–ÆSà
