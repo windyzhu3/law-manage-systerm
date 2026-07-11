@@ -26,6 +26,7 @@ import com.ruoyi.system.service.contract.ContractLifecycleService;
 import com.ruoyi.system.service.contract.ContractInvoiceService;
 import com.ruoyi.system.service.contract.ContractPaymentService;
 import com.ruoyi.system.service.contract.ContractFeePlanService;
+import com.ruoyi.system.service.contract.ContractCommandService;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
@@ -98,6 +99,9 @@ public class BizContractServiceImpl implements IBizContractService
     @Autowired
     private ContractFeePlanService feePlanService;
 
+    @Autowired
+    private ContractCommandService commandService;
+
     @Override
     public List<BizContract> selectContractList(BizContract contract)
     {
@@ -120,54 +124,19 @@ public class BizContractServiceImpl implements IBizContractService
     @Transactional
     public int insertContract(BizContract contract)
     {
-        normalizeNewContract(contract);
-        validateNewContract(contract);
-        validateCustomer(contract);
-        contract.setContractNo(numberService.nextNumber());
-        contract.setCreateBy(SecurityUtils.getUsername());
-        if (contract.getOwnerId() == null)
-        {
-            contract.setOwnerId(SecurityUtils.getUserId());
-            contract.setDeptId(SecurityUtils.getDeptId());
-        }
-        int rows = contractMapper.insertContract(contract);
-        assertRowsChanged(rows, "Contract was not created");
-        insertStatusLog(contract.getContractId(), null, contract.getContractStatus(), "create", "创建合同");
-        return rows;
+        return commandService.create(contract);
     }
 
     @Override
     public int updateContract(BizContract contract)
     {
-        BizContract existed = selectContractById(contract.getContractId());
-        assertEditable(existed);
-        normalizeContractUpdate(contract);
-        validateNewContract(contract);
-        validateCustomer(contract);
-        contract.setContractNo(null);
-        contract.setAuditStatus(null);
-        contract.setContractStatus(null);
-        contract.setSignStatus(null);
-        contract.setUpdateBy(SecurityUtils.getUsername());
-        int rows = contractMapper.updateContract(contract);
-        assertRowsChanged(rows, "Contract was changed, please refresh and try again");
-        return rows;
+        return commandService.update(contract);
     }
 
     @Override
     public int deleteContractByIds(Long[] contractIds)
     {
-        for (Long contractId : contractIds)
-        {
-            BizContract contract = selectContractById(contractId);
-            if (AUDIT_REVIEWING.equals(contract.getAuditStatus()) || CONTRACT_PERFORMING.equals(contract.getContractStatus()) || CONTRACT_ARCHIVED.equals(contract.getContractStatus()))
-            {
-                throw new ServiceException("当前合同状态不允许删除");
-            }
-        }
-        int rows = contractMapper.deleteContractByIds(contractIds, SecurityUtils.getUsername());
-        assertRowsChanged(rows, "Contract was changed, please refresh and try again");
-        return rows;
+        return commandService.delete(contractIds);
     }
 
     @Override
