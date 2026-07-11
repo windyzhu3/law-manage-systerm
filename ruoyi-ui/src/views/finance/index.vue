@@ -10,24 +10,7 @@
     <biz-metrics :metrics="metrics" :config="metricConfig" />
 
     <template v-if="mode === 'overview'">
-      <section class="finance-flow-card finance-card">
-        <div class="finance-card-title">
-          <div>
-            <h3>业务财务流程总览</h3>
-            <p>合同签署、应收计划、回款、开票、费用与净收入全链路概览</p>
-          </div>
-        </div>
-        <div class="finance-flow">
-          <div v-for="(item, index) in financeFlowCards" :key="item.key" class="finance-flow-item">
-            <span :class="['flow-icon', item.color]"><i :class="item.icon" /></span>
-            <div>
-              <b>{{ item.title }}</b>
-              <strong>{{ formatMoney(item.value) }}</strong>
-            </div>
-            <em v-if="index < financeFlowCards.length - 1">{{ item.rate }}</em>
-          </div>
-        </div>
-      </section>
+      <finance-flow-overview :cards="financeFlowCards" :money-formatter="formatMoney" />
 
       <section class="finance-charts-grid">
         <article class="finance-card finance-chart-card">
@@ -588,6 +571,7 @@ import BizHero from '@/views/business/components/BizHero'
 import BizMetrics from '@/views/business/components/BizMetrics'
 import BizTableCard from '@/views/business/components/BizTableCard'
 import CaseFinanceDrawer from './components/CaseFinanceDrawer'
+import FinanceFlowOverview from './components/FinanceFlowOverview'
 import businessUi from '@/views/business/mixins/businessUi'
 import {
   getFinanceDashboard,
@@ -606,7 +590,7 @@ import '@/views/business/business-dialog.scss'
 
 export default {
   name: 'FinanceCenter',
-  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer },
+  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer, FinanceFlowOverview },
   mixins: [businessUi],
   dicts: [
     'law_finance_receivable_status',
