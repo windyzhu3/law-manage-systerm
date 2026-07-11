@@ -60,7 +60,12 @@ public class GlobalExceptionHandler
     {
         log.error(e.getMessage(), e);
         Integer code = e.getCode();
-        return StringUtils.isNotNull(code) ? AjaxResult.error(code, e.getMessage()) : AjaxResult.error(e.getMessage());
+        AjaxResult result = StringUtils.isNotNull(code) ? AjaxResult.error(code, e.getMessage()) : AjaxResult.error(e.getMessage());
+        if (StringUtils.isNotEmpty(e.getBusinessCode()))
+        {
+            result.put("businessCode", e.getBusinessCode());
+        }
+        return result;
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.ruoyi.system.service.contract;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,7 +54,8 @@ class ContractLifecycleServiceTest
     @Test
     void approveRequiresOpinionBeforeLoadingContract()
     {
-        assertThrows(ServiceException.class, () -> service.approve(10L, "pass", ""));
+        ServiceException exception = assertThrows(ServiceException.class, () -> service.approve(10L, "pass", ""));
+        assertEquals("VALIDATION_FAILED", exception.getBusinessCode());
 
         verify(queryService, never()).contract(10L);
     }
