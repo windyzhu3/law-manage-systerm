@@ -40,6 +40,11 @@ public class BusinessEventOutboxProcessor
         return processed;
     }
 
+    public boolean requeueDead(Long eventId)
+    {
+        return eventId != null && mapper.requeueDead(eventId) > 0;
+    }
+
     private BusinessEventHandler handler(BusinessEventRecord event)
     {
         for (BusinessEventHandler handler : handlers)

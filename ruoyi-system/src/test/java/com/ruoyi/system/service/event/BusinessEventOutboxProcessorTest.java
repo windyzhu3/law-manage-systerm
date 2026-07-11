@@ -60,6 +60,15 @@ class BusinessEventOutboxProcessorTest
         verify(mapper).markFailed(3L, "未配置业务事件处理器：UNKNOWN");
     }
 
+    @Test
+    void requeuesOnlyDeadEventUpdatedByMapper()
+    {
+        when(mapper.requeueDead(4L)).thenReturn(1);
+
+        assertEquals(true, new BusinessEventOutboxProcessor(mapper, List.of()).requeueDead(4L));
+        assertEquals(false, new BusinessEventOutboxProcessor(mapper, List.of()).requeueDead(null));
+    }
+
     private BusinessEventRecord event(Long id, String type)
     {
         BusinessEventRecord event = new BusinessEventRecord();

@@ -48,4 +48,11 @@
             error_message=#{errorMessage}, update_time=sysdate()
         where event_id=#{eventId} and event_status='PROCESSING'
     </update>
+
+    <update id="requeueDead">
+        update business_event
+        set event_status='PENDING', retry_count=0, next_retry_time=null,
+            processed_time=null, error_message=null, update_time=sysdate()
+        where event_id=#{eventId} and event_status='DEAD'
+    </update>
 </mapper>
