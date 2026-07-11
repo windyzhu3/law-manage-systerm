@@ -31,6 +31,7 @@ import com.ruoyi.system.service.casecenter.CaseQueryService;
 import com.ruoyi.system.service.casecenter.CaseCreationService;
 import com.ruoyi.system.service.casecenter.CaseAssignmentService;
 import com.ruoyi.system.service.casecenter.CaseTransferService;
+import com.ruoyi.system.service.casecenter.CaseConfirmationService;
 import com.ruoyi.system.service.casecenter.LawyerProfileService;
 
 @Service
@@ -82,6 +83,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Autowired
     private CaseTransferService caseTransferService;
+
+    @Autowired
+    private CaseConfirmationService caseConfirmationService;
 
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
@@ -196,39 +200,7 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int handleConfirm(Map<String, Object> confirm)
     {
-        Long confirmId = toLong(confirm.get("confirmId"), "请选择确认信息");
-        String result = safeText(confirm.get("confirmResult"), "");
-        if (!"accepted".equals(result) && !"rejected".equals(result))
-        {
-            throw new ServiceException("确认结果不合法");
-        }
-        Map<String, Object> confirmEntity = caseMapper.selectConfirmById(confirmId);
-        if (confirmEntity == null)
-        {
-            throw new ServiceException("确认信息不存在");
-        }
-        Long caseId = toLong(confirmEntity.get("case_id"), "请选择案件");
-        assertCaseAccess(caseId);
-        confirm.put("expectedStatus", "pending");
-        confirm.put("handlerId", SecurityUtils.getUserId());
-        confirm.put("handlerName", SecurityUtils.getLoginUser().getUser().getNickName());
-        confirm.put("updateBy", SecurityUtils.getUsername());
-        int rows = caseMapper.updateConfirm(confirm);
-        assertRowsChanged(rows, "确认信息状态已变化，请刷新后重试");
-
-        Map<String, Object> caseUpdate = new HashMap<>();
-        caseUpdate.put("caseId", caseId);
-        caseUpdate.put("caseStatus", "accepted".equals(result) ? CASE_PROCESSING : CASE_PENDING);
-        caseUpdate.put("currentNode", "accepted".equals(result) ? "案件办理中" : "待重新分案");
-        caseUpdate.put("clearAssignment", "rejected".equals(result));
-        caseUpdate.put("updateBy", SecurityUtils.getUsername());
-        assertRowsChanged(caseMapper.updateCaseConfirmResult(caseUpdate), "案件确认状态已变化，请刷新后重试");
-        insertStatusLog(caseId, text(confirmEntity.get("caseStatus")), "accepted".equals(result) ? CASE_PROCESSING : CASE_PENDING,
-                "confirm", "律师接案确认：" + ("accepted".equals(result) ? "已接收" : "已拒绝"));
-        createNotice("律师接案确认", "案件 " + confirmEntity.get("caseNo") + " 接案确认结果：" + ("accepted".equals(result) ? "已接收" : "已拒绝"));
-        publish("accepted".equals(result) ? BusinessEventType.CASE_ACCEPTED : BusinessEventType.CASE_REJECTED,
-                caseId, text(confirmEntity.get("caseNo")), eventPayload("confirmId", confirmId));
-        return rows;
+        return caseConfirmationService.handle(confirm);
     }
 
     @Override
