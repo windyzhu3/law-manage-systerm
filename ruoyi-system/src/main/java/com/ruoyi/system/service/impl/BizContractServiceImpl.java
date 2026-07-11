@@ -25,6 +25,7 @@ import com.ruoyi.system.service.contract.ContractAttachmentService;
 import com.ruoyi.system.service.contract.ContractLifecycleService;
 import com.ruoyi.system.service.contract.ContractInvoiceService;
 import com.ruoyi.system.service.contract.ContractPaymentService;
+import com.ruoyi.system.service.contract.ContractFeePlanService;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
@@ -106,6 +107,9 @@ public class BizContractServiceImpl implements IBizContractService
 
     @Autowired
     private ContractPaymentService paymentService;
+
+    @Autowired
+    private ContractFeePlanService feePlanService;
 
     @Override
     public List<BizContract> selectContractList(BizContract contract)
@@ -281,68 +285,43 @@ public class BizContractServiceImpl implements IBizContractService
     @Override
     @Transactional
     public int insertFeePlan(Map<String, Object> plan) {
-        Long contractId = toLong(plan.get("contractId"));
-        assertContractAccess(contractId);
-        requireFeeEditableContract(contractId);
-        validateFeePlan(plan);
-        plan.put("receivedAmount", BigDecimal.ZERO);
-        plan.put("confirmStatus", RECEIVE_PENDING);
-        plan.put("invoiceStatus", INVOICE_NONE);
-        plan.put("createBy", SecurityUtils.getUsername());
-        int rows = contractMapper.insertFeePlan(plan);
-        assertRowsChanged(rows, "Fee plan was not created");
-        insertStatusLog(contractId, null, RECEIVE_PENDING, "fee_create", feeContent("新增收费计划", plan));
-        return rows;
+        return feePlanService.create(plan);
     }
+
     @Override
     @Transactional
     public int updateFeePlan(Map<String, Object> plan) {
-        Map<String, Object> existed = feePlanInScope(toLong(plan.get("planId")));
-        requireFeeEditableContractStatus(existed.get("contractStatus"));
-        if (RECEIVE_CONFIRMED.equals(String.valueOf(existed.get("confirm_status")))) {
-            throw new ServiceException("Confirmed fee plans cannot be edited by normal update");
-        }
-        if (!INVOICE_NONE.equals(String.valueOf(existed.get("invoice_status")))) {
-            throw new ServiceException("Invoiced fee plans cannot be edited by normal update");
-        }
-        plan.put("contractId", existed.get("contract_id"));
-        plan.remove("receivedAmount");
-        plan.remove("received_amount");
-        plan.remove("confirmStatus");
-        plan.remove("confirm_status");
-        plan.remove("invoiceStatus");
-        plan.remove("invoice_status");
-        validateFeePlan(plan);
-        plan.put("expectedConfirmStatus", existed.get("confirm_status"));
-        plan.put("expectedInvoiceStatus", existed.get("invoice_status"));
-        plan.put("expectedContractStatus", existed.get("contractStatus"));
-        plan.put("updateBy", SecurityUtils.getUsername());
-        int rows = contractMapper.updateFeePlan(plan);
-        assertRowsChanged(rows, "Fee plan was changed, please refresh and try again");
-        if (RECEIVE_REJECTED.equals(String.valueOf(existed.get("confirm_status")))) {
-            Map<String, Object> statusUpdate = new HashMap<>();
-            statusUpdate.put("planId", plan.get("planId"));
-            statusUpdate.put("confirmStatus", RECEIVE_PENDING);
-            statusUpdate.put("expectedConfirmStatus", existed.get("confirm_status"));
-            statusUpdate.put("expectedInvoiceStatus", existed.get("invoice_status"));
-            statusUpdate.put("expectedContractStatus", existed.get("contractStatus"));
-            statusUpdate.put("updateBy", SecurityUtils.getUsername());
-            assertStateChanged(contractMapper.updateFeePlanStatus(statusUpdate));
-        }
-        insertStatusLog(Long.valueOf(String.valueOf(existed.get("contract_id"))), null, RECEIVE_PENDING, "fee_update", feeContent("调整收费计划", plan));
-        return rows;
+        return feePlanService.update(plan);
     }
+
     @Override
     @Transactional
     public int deleteFeePlan(Long planId) {
-        Map<String, Object> existed = feePlanInScope(planId);
-        requireFeeEditableContractStatus(existed.get("contractStatus"));
-        if (RECEIVE_CONFIRMED.equals(String.valueOf(existed.get("confirm_status"))) || !INVOICE_NONE.equals(String.valueOf(existed.get("invoice_status")))) {
-            throw new ServiceException("Fee plans with received or invoiced records cannot be deleted");
-        }
-        int rows = contractMapper.deleteFeePlan(planId, existed.get("confirm_status"), existed.get("invoice_status"), existed.get("contractStatus"));
-        assertRowsChanged(rows, "Fee plan was changed, please refresh and try again");
-        insertStatusLog(Long.valueOf(String.valueOf(existed.get("contract_id"))), RECEIVE_PENDING, null, "fee_delete"ۿ-�G����ƭy�ect(planId, reason);
+        return feePlanService.delete(planId);
+    }
+
+    @Override
+    @Transactional
+    public int confirmFeePlan(Long planId, String receivedAmount) {
+        return paymentService.confirm(planId, receivedAmount, null, null);
+    }
+
+    @Override
+    @Transactional
+    public int confirmFeePlan(Long planId, String receivedAmount, String remark) {
+        return paymentService.confirm(planId, receivedAmount, remark, null);
+    }
+
+    @Override
+    @Transactional
+    public int confirmFeePlan(Long planId, String receivedAmount, String remark, String paymentMethod) {
+        return paymentService.confirm(planId, receivedAmount, remark, paymentMethod);
+    }
+
+    @Override
+    @Transactional
+    public int rejectFeePlan(Long planId, String reason) {
+        return paymentService.reject(planId, reason);
     }
 
     @Override
