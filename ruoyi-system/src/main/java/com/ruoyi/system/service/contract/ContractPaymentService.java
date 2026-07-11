@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
+import com.law.business.shared.status.FeePaymentStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -22,7 +23,7 @@ import com.ruoyi.system.service.ISysDictTypeService;
 @Service
 public class ContractPaymentService
 {
-    private static final String PERFORMING="3", PENDING="0", CONFIRMED="1", REJECTED="2";
+    private static final String PERFORMING="3", PENDING=FeePaymentStatus.PENDING.code(), CONFIRMED=FeePaymentStatus.CONFIRMED.code(), REJECTED=FeePaymentStatus.REJECTED.code();
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;
     @Autowired private ISysDictTypeService dictionaries;

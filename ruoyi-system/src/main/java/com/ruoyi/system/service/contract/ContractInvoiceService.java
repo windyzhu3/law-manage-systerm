@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
+import com.law.business.shared.status.FeeInvoiceStatus;
+import com.law.business.shared.status.FeePaymentStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -22,10 +24,10 @@ import com.ruoyi.system.service.ISysDictTypeService;
 public class ContractInvoiceService
 {
     private static final String CONTRACT_PERFORMING = "3";
-    private static final String RECEIVE_CONFIRMED = "1";
-    private static final String INVOICE_NONE = "0";
-    private static final String INVOICE_DONE = "1";
-    private static final String INVOICE_PARTIAL = "2";
+    private static final String RECEIVE_CONFIRMED = FeePaymentStatus.CONFIRMED.code();
+    private static final String INVOICE_NONE = FeeInvoiceStatus.NONE.code();
+    private static final String INVOICE_DONE = FeeInvoiceStatus.INVOICED.code();
+    private static final String INVOICE_PARTIAL = FeeInvoiceStatus.PARTIAL.code();
 
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;
@@ -71,9 +73,16 @@ public class ContractInvoiceService
 
     private void validateTransition(String current, String target)
     {
-        if (INVOICE_DONE.equals(current)) throw error("STATE_CONFLICT", "已开票的计划不能重复开票");
-        if (INVOICE_PARTIAL.equals(current) && !INVOICE_DONE.equals(target)) throw error("STATE_CONFLICT", "部分开票的计划只能补齐为已开票");
-        if (!INVOICE_NONE.equals(current) && !INVOICE_PARTIAL.equals(current)) throw error("STATE_CONFLICT", "当前开票状态不允许继续开票");
+        FeeInvoiceStatus source;
+        FeeInvoiceStatus destination;
+        try { source = FeeInvoiceStatus.fromCode(current); destination = FeeInvoiceStatus.fromCode(target); }
+        catch (IllegalArgumentException e) { throw error("STATE_CONFLICT", "当前开票状态不允许继续开票"); }
+        if (!source.canTransitionTo(destination))
+        {
+            if (source == FeeInvoiceStatus.INVOICED) throw error("STATE_CONFLICT", "已开票的计划不能重复开票");
+            if (source == FeeInvoiceStatus.PARTIAL) throw error("STATE_CONFLICT", "部分开票的计划只能补齐为已开票");
+            throw error("STATE_CONFLICT", "当前开票状态不允许继续开票");
+        }
     }
 
     private Map<String, Object> plan(Long planId)

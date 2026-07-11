@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.law.business.shared.status.ContractStatus;
+import com.law.business.shared.status.FeeInvoiceStatus;
+import com.law.business.shared.status.FeePaymentStatus;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
@@ -17,7 +19,7 @@ import com.ruoyi.system.mapper.BizContractMapper;
 @Service
 public class ContractFeePlanService
 {
-    private static final String PENDING="0", CONFIRMED="1", REJECTED="2", NOT_INVOICED="0";
+    private static final String PENDING=FeePaymentStatus.PENDING.code(), CONFIRMED=FeePaymentStatus.CONFIRMED.code(), REJECTED=FeePaymentStatus.REJECTED.code(), NOT_INVOICED=FeeInvoiceStatus.NONE.code();
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;
 
