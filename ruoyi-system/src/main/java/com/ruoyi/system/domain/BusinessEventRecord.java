@@ -14,6 +14,9 @@ public class BusinessEventRecord
     private String eventStatus;
     private Integer retryCount;
     private Date nextRetryTime;
+    private Date processedTime;
+    private String errorMessage;
+    private Date createTime;
     private String createBy;
 
     public Long getEventId() { return eventId; }
@@ -36,6 +39,12 @@ public class BusinessEventRecord
     public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
     public Date getNextRetryTime() { return nextRetryTime; }
     public void setNextRetryTime(Date nextRetryTime) { this.nextRetryTime = nextRetryTime; }
+    public Date getProcessedTime() { return processedTime; }
+    public void setProcessedTime(Date processedTime) { this.processedTime = processedTime; }
+    public String getErrorMessage() { return errorMessage; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public Date getCreateTime() { return createTime; }
+    public void setCreateTime(Date createTime) { this.createTime = createTime; }
     public String getCreateBy() { return createBy; }
     public void setCreateBy(String createBy) { this.createBy = createBy; }
 }

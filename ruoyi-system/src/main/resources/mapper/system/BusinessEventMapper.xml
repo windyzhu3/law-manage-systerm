@@ -24,6 +24,21 @@
         limit #{limit}
     </select>
 
+    <select id="selectEventList" resultType="com.ruoyi.system.domain.BusinessEventRecord">
+        select event_id eventId, event_type eventType, aggregate_type aggregateType,
+               aggregate_id aggregateId, aggregate_no aggregateNo, idempotency_key idempotencyKey,
+               payload, event_status eventStatus, retry_count retryCount, next_retry_time nextRetryTime,
+               processed_time processedTime, error_message errorMessage, create_by createBy, create_time createTime
+        from business_event
+        <where>
+            <if test="eventStatus != null and eventStatus != ''">and event_status=#{eventStatus}</if>
+            <if test="eventType != null and eventType != ''">and event_type=#{eventType}</if>
+            <if test="aggregateType != null and aggregateType != ''">and aggregate_type=#{aggregateType}</if>
+            <if test="aggregateId != null">and aggregate_id=#{aggregateId}</if>
+        </where>
+        order by event_id desc
+    </select>
+
     <update id="claimEvent">
         update business_event
         set event_status='PROCESSING', update_time=sysdate()

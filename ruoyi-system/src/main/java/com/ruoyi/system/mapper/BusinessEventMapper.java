@@ -10,6 +10,8 @@ public interface BusinessEventMapper
 
     List<BusinessEventRecord> selectPendingEvents(@Param("limit") int limit);
 
+    List<BusinessEventRecord> selectEventList(BusinessEventRecord query);
+
     int claimEvent(@Param("eventId") Long eventId);
 
     int markProcessed(@Param("eventId") Long eventId);
