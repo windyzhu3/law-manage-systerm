@@ -28,6 +28,7 @@ import com.law.business.event.BusinessEventType;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.law.business.security.CasePermissions;
 import com.ruoyi.system.service.casecenter.CaseQueryService;
+import com.ruoyi.system.service.casecenter.LawyerProfileService;
 
 @Service
 public class BizCaseServiceImpl implements IBizCaseService
@@ -66,6 +67,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Autowired
     private CaseQueryService queryService;
+
+    @Autowired
+    private LawyerProfileService lawyerProfileService;
 
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
@@ -110,77 +114,15 @@ public class BizCaseServiceImpl implements IBizCaseService
     }
 
     @Override
-    @Transactional
     public int saveLawyerProfile(Map<String, Object> profile)
     {
-        Long userId = toLong(profile.get("userId"), "请选择律师");
-        SysUser user = userService.selectUserById(userId);
-        if (user == null || "1".equals(user.getStatus()))
-        {
-            throw new ServiceException("律师不存在或已停用");
-        }
-        String lawyerRole = safeText(profile.get("lawyerRole"), LAWYER_ROLE_DEFAULT);
-        assertDictValue("law_lawyer_role", lawyerRole, "律师角色不合法");
-        String specialties = safeText(profile.get("specialties"), "business");
-        for (String specialty : specialties.split(","))
-        {
-            if (!StringUtils.isEmpty(specialty))
-            {
-                assertDictValue("law_case_type", specialty.trim(), "专业方向不合法");
-            }
-        }
-        String assignEnabled = safeText(profile.get("assignEnabled"), ASSIGN_DISABLED);
-        if (!ASSIGN_ENABLED.equals(assignEnabled) && !ASSIGN_DISABLED.equals(assignEnabled))
-        {
-            throw new ServiceException("可分案状态不合法");
-        }
-        profile.put("userId", userId);
-        profile.put("lawyerRole", lawyerRole);
-        profile.put("specialties", specialties);
-        profile.put("loadLimit", defaultNumber(profile.get("loadLimit"), 100));
-        profile.put("avgResponseHours", defaultNumber(profile.get("avgResponseHours"), 4));
-        profile.put("assignEnabled", assignEnabled);
-        profile.put("createBy", SecurityUtils.getUsername());
-        profile.put("updateBy", SecurityUtils.getUsername());
-        Map<String, Object> existed = caseMapper.selectLawyerProfileByUserId(userId);
-        if (existed == null)
-        {
-            throw new ServiceException("律师不存在或已停用");
-        }
-        Object profileId = existed.get("profileId");
-        if (profileId == null || StringUtils.isEmpty(String.valueOf(profileId)))
-        {
-            return caseMapper.insertLawyerProfile(profile);
-        }
-        return caseMapper.updateLawyerProfile(profile);
+        return lawyerProfileService.save(profile);
     }
 
     @Override
-    @Transactional
     public int updateLawyerProfileStatus(Map<String, Object> profile)
     {
-        Long userId = toLong(profile.get("userId"), "请选择律师");
-        String assignEnabled = safeText(profile.get("assignEnabled"), "");
-        if (!ASSIGN_ENABLED.equals(assignEnabled) && !ASSIGN_DISABLED.equals(assignEnabled))
-        {
-            throw new ServiceException("可分案状态不合法");
-        }
-        Map<String, Object> existed = caseMapper.selectLawyerProfileByUserId(userId);
-        if (existed == null)
-        {
-            throw new ServiceException("律师不存在或已停用");
-        }
-        Object profileId = existed.get("profileId");
-        if (profileId == null || StringUtils.isEmpty(String.valueOf(profileId)))
-        {
-            if (ASSIGN_ENABLED.equals(assignEnabled))
-            {
-                throw new ServiceException("请先编辑并保存律师档案后再启用分案");
-            }
-            return 1;
-        }
-        profile.put("updateBy", SecurityUtils.getUsername());
-        return caseMapper.updateLawyerProfileStatus(profile);
+        return lawyerProfileService.updateStatus(profile);
     }
 
     @Override
