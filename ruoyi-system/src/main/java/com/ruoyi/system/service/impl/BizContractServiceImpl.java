@@ -29,10 +29,6 @@ import com.ruoyi.system.service.contract.ContractFeePlanService;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
-import com.law.business.event.BusinessEventCommand;
-import com.law.business.event.BusinessEventPublisher;
-import com.law.business.event.BusinessEventType;
-import com.ruoyi.common.utils.uuid.IdUtils;
 import com.law.business.security.ContractPermissions;
 
 @Service
@@ -64,13 +60,6 @@ public class BizContractServiceImpl implements IBizContractService
     private static final String SIGN_SIGNED = ContractSignStatus.SIGNED.code();
     private static final String SIGN_PARTIAL = ContractSignStatus.PARTIAL.code();
 
-    private static final String RECEIVE_PENDING = "0";
-    private static final String RECEIVE_CONFIRMED = "1";
-    private static final String RECEIVE_REJECTED = "2";
-
-    private static final String INVOICE_NONE = "0";
-    private static final String INVOICE_DONE = "1";
-    private static final String INVOICE_PARTIAL = "2";
 
     @Autowired
     private BizContractMapper contractMapper;
@@ -84,8 +73,6 @@ public class BizContractServiceImpl implements IBizContractService
     @Autowired
     private ISysDictTypeService dictTypeService;
 
-    @Autowired
-    private BusinessEventPublisher eventPublisher;
 
     @Autowired
     private ContractTemplateService templateService;
@@ -355,65 +342,6 @@ public class BizContractServiceImpl implements IBizContractService
     }
     @Override public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params) { return queryService.statusLogs(params); }
 
-    private void validateFeePlan(Map<String, Object> plan)
-    {
-        Integer periodNo = parseInteger(requiredText(plan, "periodNo", "请输入期数"), "期数必须为数字");
-        if (periodNo <= 0)
-        {
-            throw new ServiceException("期数必须大于0");
-        }
-        BigDecimal receivableAmount = parseDecimal(requiredText(plan, "receivableAmount", "请输入应收金额"), "应收金额必须为数字");
-        if (receivableAmount.compareTo(BigDecimal.ZERO) <= 0)
-        {
-            throw new ServiceException("应收金额必须大于0");
-        }
-        requiredText(plan, "planReceiveDate", "请选择计划收款日");
-    }
-
-    private String requiredText(Map<String, Object> source, String key, String message)
-    {
-        Object value = source == null ? null : source.get(key);
-        if (value == null || StringUtils.isEmpty(String.valueOf(value)) || "null".equalsIgnoreCase(String.valueOf(value)))
-        {
-            throw new ServiceException(message);
-        }
-        return String.valueOf(value);
-    }
-
-    private String feeContent(String action, Map<String, Object> plan)
-    {
-        return action + ": 第 " + plan.get("periodNo") + " 期，应收 " + plan.get("receivableAmount");
-    }
-
-    private String appendRemark(String content, String remark)
-    {
-        return StringUtils.isEmpty(remark) ? content : content + "；处理备注：" + remark;
-    }
-
-    private Integer parseInteger(String value, String message)
-    {
-        try
-        {
-            return Integer.valueOf(value);
-        }
-        catch (NumberFormatException e)
-        {
-            throw new ServiceException(message);
-        }
-    }
-
-    private BigDecimal parseDecimal(String value, String message)
-    {
-        try
-        {
-            return new BigDecimal(value);
-        }
-        catch (NumberFormatException e)
-        {
-            throw new ServiceException(message);
-        }
-    }
-
     private void validateCustomer(BizContract contract)
     {
         if (contract.getCustomerId() == null)
@@ -636,59 +564,6 @@ public class BizContractServiceImpl implements IBizContractService
         contract.setDataScope(!SecurityUtils.isAdmin());
     }
 
-    private Long toLong(Object value)
-    {
-        if (value == null || StringUtils.isEmpty(String.valueOf(value)))
-        {
-            throw new ServiceException("请选择合同");
-        }
-        return Long.valueOf(String.valueOf(value));
-    }
-
-    private Map<String, Object> feePlanInScope(Long planId)
-    {
-        Map<String, Object> plan = contractMapper.selectFeePlanById(planId);
-        if (plan == null)
-        {
-            throw new ServiceException("收费计划不存在");
-        }
-        assertContractAccess(Long.valueOf(String.valueOf(plan.get("contract_id"))));
-        return plan;
-    }
-
-    private void requireFeeEditableContract(Long contractId)
-    {
-        BizContract contract = selectContractById(contractId);
-        requireFeeEditableContractStatus(contract.getContractStatus());
-    }
-
-    private void requireFeeEditableContractStatus(Object contractStatus)
-    {
-        String status = String.valueOf(contractStatus);
-        if (CONTRACT_ARCHIVED.equals(status) || CONTRACT_VOID.equals(status) || CONTRACT_TERMINATED.equals(status))
-        {
-            throw new ServiceException("归档、作废或终止的合同不允许维护收费计划");
-        }
-    }
-
-    private void requireFeeCollectableContractStatus(Object contractStatus)
-    {
-        if (!CONTRACT_PERFORMING.equals(String.valueOf(contractStatus)))
-        {
-            throw new ServiceException("只有履约中的合同可以确认收款或开票");
-        }
-    }
-
-    private BigDecimal parseAmount(String value, Object defaultValue)
-    {
-        Object source = StringUtils.isEmpty(value) || "null".equalsIgnoreCase(value) ? defaultValue : value;
-        if (source == null || StringUtils.isEmpty(String.valueOf(source)))
-        {
-            throw new ServiceException("请输入实收金额");
-        }
-        return parseDecimal(String.valueOf(source), "实收金额必须为数字");
-    }
-
     private void assertContractAccess(Long contractId)
     {
         if (contractId == null)
@@ -705,27 +580,4 @@ public class BizContractServiceImpl implements IBizContractService
         }
     }
 
-    private void publish(BusinessEventType type, BizContract contract, Map<String, Object> payload)
-    {
-        eventPublisher.publish(new BusinessEventCommand(type, "CONTRACT", contract.getContractId(),
-                contract.getContractNo(), type.name() + ":" + contract.getContractId() + ":" + IdUtils.fastUUID(), payload));
-    }
-
-    private void publishForPlan(BusinessEventType type, Map<String, Object> plan, Map<String, Object> payload)
-    {
-        Long contractId = Long.valueOf(String.valueOf(plan.get("contract_id")));
-        String contractNo = plan.get("contract_no") == null ? null : String.valueOf(plan.get("contract_no"));
-        eventPublisher.publish(new BusinessEventCommand(type, "CONTRACT", contractId, contractNo,
-                type.name() + ":" + contractId + ":" + IdUtils.fastUUID(), payload));
-    }
-
-    private Map<String, Object> eventPayload(Object... values)
-    {
-        Map<String, Object> payload = new HashMap<>();
-        for (int i = 0; i + 1 < values.length; i += 2)
-        {
-            if (values[i + 1] != null) payload.put(String.valueOf(values[i]), values[i + 1]);
-        }
-        return payload;
-    }
 }
