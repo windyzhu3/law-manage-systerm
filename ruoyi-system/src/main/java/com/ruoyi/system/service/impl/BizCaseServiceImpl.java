@@ -28,6 +28,7 @@ import com.law.business.event.BusinessEventType;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.law.business.security.CasePermissions;
 import com.ruoyi.system.service.casecenter.CaseQueryService;
+import com.ruoyi.system.service.casecenter.CaseCreationService;
 import com.ruoyi.system.service.casecenter.LawyerProfileService;
 
 @Service
@@ -70,6 +71,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Autowired
     private LawyerProfileService lawyerProfileService;
+
+    @Autowired
+    private CaseCreationService caseCreationService;
 
     @Override
     public List<Map<String, Object>> selectCaseList(Map<String, Object> params)
@@ -129,36 +133,7 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int createCaseFromContract(BizContract contract)
     {
-        if (contract == null || contract.getContractId() == null)
-        {
-            return 0;
-        }
-        if (caseMapper.selectCaseByContractId(contract.getContractId()) != null)
-        {
-            return 0;
-        }
-        Map<String, Object> entity = new HashMap<>();
-        entity.put("caseNo", "CS" + contract.getContractNo());
-        entity.put("caseName", contract.getContractName());
-        entity.put("customerId", contract.getCustomerId());
-        entity.put("customerName", contract.getCustomerName());
-        entity.put("contractId", contract.getContractId());
-        entity.put("contractNo", contract.getContractNo());
-        entity.put("caseType", dictValue("law_case_type", contract.getCaseType()));
-        entity.put("urgency", dictDefault("law_case_urgency", "normal"));
-        entity.put("caseStatus", CASE_PENDING);
-        entity.put("priority", dictDefault("law_case_priority", "medium"));
-        entity.put("estimatedWorkload", BigDecimal.valueOf(24));
-        entity.put("ownerId", contract.getOwnerId());
-        entity.put("deptId", contract.getDeptId());
-        entity.put("createBy", SecurityUtils.getUsername());
-        int rows = caseMapper.insertCase(entity);
-        assertRowsChanged(rows, "案件创建失败");
-        insertStatusLog(toLong(entity.get("caseId"), "案件创建失败"), null, CASE_PENDING, "create", "合同签署后生成待分案案件");
-        createNotice("新案件待分配", "合同 " + contract.getContractNo() + " 已签署，生成待分案案件：" + contract.getContractName());
-        publish(BusinessEventType.CASE_CREATED, toLong(entity.get("caseId"), "案件创建失败"),
-                String.valueOf(entity.get("caseNo")), eventPayload("contractId", contract.getContractId()));
-        return rows;
+        return caseCreationService.createFromContract(contract);
     }
 
     @Override
