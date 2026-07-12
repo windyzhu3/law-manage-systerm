@@ -2,6 +2,7 @@ package com.law.todo.mapper;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Param;
 import com.law.todo.domain.model.TodoInstance;
 
@@ -21,4 +22,8 @@ public interface TodoMapper
     int insertTemplateVersion(Map<String,Object> version);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
+    List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);
+    int markSlaThreshold(@Param("todoId") Long todoId,@Param("threshold") String threshold,@Param("now") LocalDateTime now);
+    int pauseSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
+    int resumeSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
 }
