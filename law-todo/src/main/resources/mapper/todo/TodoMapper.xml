@@ -14,4 +14,7 @@
   <insert id="insertCandidate">insert ignore into todo_candidate(todo_id,candidate_type,candidate_value) values(#{todoId},#{candidateType},#{candidateValue})</insert>
   <select id="selectCandidates" resultType="java.util.Map">select * from todo_candidate where todo_id=#{todoId}</select>
   <insert id="insertRelation">insert ignore into todo_relation(todo_id,business_type,business_id,business_no,relation_type) values(#{todoId},#{businessType},#{businessId},#{businessNo},#{relationType})</insert>
+  <select id="selectTemplateVersion" resultType="java.util.Map">select * from todo_template_version where template_id=#{templateId} and version_no=#{versionNo}</select>
+  <insert id="insertTemplateVersion" useGeneratedKeys="true" keyProperty="versionId">insert into todo_template_version(template_id,version_no,owner_rule_json,dod_rule_json,sla_rule_json,next_rule_json,published_by,published_time) values(#{templateId},#{versionNo},#{ownerRuleJson},#{dodRuleJson},#{slaRuleJson},#{nextRuleJson},#{publishedBy},sysdate())</insert>
+  <update id="updateTemplateCurrentVersion">update todo_template set current_version=#{versionNo},update_by=#{operator},update_time=sysdate() where template_id=#{templateId} and current_version &lt; #{versionNo}</update>
 </mapper>

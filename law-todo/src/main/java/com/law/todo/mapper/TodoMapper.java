@@ -17,4 +17,7 @@ public interface TodoMapper
     int insertCandidate(Map<String,Object> candidate);
     List<Map<String,Object>> selectCandidates(Long todoId);
     int insertRelation(Map<String,Object> relation);
+    Map<String,Object> selectTemplateVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo);
+    int insertTemplateVersion(Map<String,Object> version);
+    int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
 }
