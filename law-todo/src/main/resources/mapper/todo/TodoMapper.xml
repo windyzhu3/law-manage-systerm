@@ -17,4 +17,5 @@
   <select id="selectTemplateVersion" resultType="java.util.Map">select * from todo_template_version where template_id=#{templateId} and version_no=#{versionNo}</select>
   <insert id="insertTemplateVersion" useGeneratedKeys="true" keyProperty="versionId">insert into todo_template_version(template_id,version_no,owner_rule_json,dod_rule_json,sla_rule_json,next_rule_json,published_by,published_time) values(#{templateId},#{versionNo},#{ownerRuleJson},#{dodRuleJson},#{slaRuleJson},#{nextRuleJson},#{publishedBy},sysdate())</insert>
   <update id="updateTemplateCurrentVersion">update todo_template set current_version=#{versionNo},update_by=#{operator},update_time=sysdate() where template_id=#{templateId} and current_version &lt; #{versionNo}</update>
+  <select id="selectTriggerRules" resultType="java.util.Map">select r.*,t.template_name,v.owner_rule_json,v.dod_rule_json,v.sla_rule_json,v.next_rule_json from todo_trigger_rule r join todo_template t on t.template_id=r.template_id join todo_template_version v on v.version_id=r.template_version_id where r.event_type=#{eventType} and r.business_type=#{businessType} and r.enabled='Y' and t.status='0'</select>
 </mapper>

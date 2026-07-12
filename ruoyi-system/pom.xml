@@ -23,10 +23,15 @@
             <artifactId>ruoyi-common</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.ruoyi</groupId>
-            <artifactId>law-business</artifactId>
-        </dependency>
+          <dependency>
+              <groupId>com.ruoyi</groupId>
+              <artifactId>law-business</artifactId>
+          </dependency>
+          <dependency>
+              <groupId>com.ruoyi</groupId>
+              <artifactId>law-todo</artifactId>
+              <version>${ruoyi.version}</version>
+          </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

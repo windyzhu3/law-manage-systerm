@@ -20,4 +20,5 @@ public interface TodoMapper
     Map<String,Object> selectTemplateVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo);
     int insertTemplateVersion(Map<String,Object> version);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
+    List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
 }
