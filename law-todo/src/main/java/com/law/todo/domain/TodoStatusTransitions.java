@@ -27,7 +27,7 @@ public final class TodoStatusTransitions
 
     public static void requireAllowed(TodoStatus from, TodoStatus to)
     {
-        if (!canTransition(from, to)) throw new IllegalStateException("Illegal todo transition: " + from + " -> " + to);
+        if (!canTransition(from, to)) throw new TodoException("TODO_STATE_TRANSITION_INVALID", "待办状态不允许从 " + from + " 转换为 " + to);
     }
 
     private static void allow(TodoStatus from, TodoStatus first, TodoStatus... rest)

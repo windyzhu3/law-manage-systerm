@@ -47,6 +47,13 @@ class TodoCommandServiceTest
         verify(mapper,never()).updateStatusConditionally(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyString());
     }
 
+    @Test void rejectsActionIdReusedForAnotherTodo()
+    {
+        when(mapper.selectActionById("same")).thenReturn(Map.of("todo_id",99L));
+        TodoException error=assertThrows(TodoException.class,()->service.claim(1L,new ActionCommand("same",null,Map.of()),new Actor(7L,"alice",3L)));
+        assertEquals("TODO_ACTION_ID_CONFLICT",error.getBusinessCode());
+    }
+
     @Test void nonOwnerCannotStartTodo()
     {
         TodoInstance todo=todo(1L,"CLAIMED",8L);

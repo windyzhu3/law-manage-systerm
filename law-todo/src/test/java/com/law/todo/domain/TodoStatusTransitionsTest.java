@@ -25,7 +25,7 @@ class TodoStatusTransitionsTest
     @Test void rejectsLeavingTerminalStatus()
     {
         assertFalse(TodoStatusTransitions.canTransition(TodoStatus.COMPLETED, TodoStatus.IN_PROGRESS));
-        assertThrows(IllegalStateException.class,
+        assertThrows(TodoException.class,
                 () -> TodoStatusTransitions.requireAllowed(TodoStatus.CANCELLED, TodoStatus.CREATED));
     }
 
