@@ -37,7 +37,7 @@ public class TodoCommandService
     {
         TodoStatus from=TodoStatus.fromCode(t.getStatus());TodoStatusTransitions.requireAllowed(from,target);
         if(mapper.updateStatusConditionally(t.getTodoId(),from.code(),target.code(),owner,a.userName())<=0)throw new TodoException("TODO_CONCURRENT_MODIFICATION","待办状态已变化，请刷新后重试");
-        Map<String,Object> log=new HashMap<>();log.put("todoId",t.getTodoId());log.put("actionId",c.actionId());log.put("actionType",action);log.put("fromStatus",from.code());log.put("toStatus",target.code());log.put("operatorId",a.userId());log.put("operatorName",a.userName());log.put("opinion",c.opinion());log.put("payloadJson",c.payload().toString());
+        Map<String,Object> log=new HashMap<>();log.put("todoId",t.getTodoId());log.put("actionId",c.actionId());log.put("actionType",action);log.put("fromStatus",from.code());log.put("toStatus",target.code());log.put("operatorId",a.userId());log.put("operatorName",a.userName());log.put("opinion",c.opinion());log.put("payloadJson",JSON.toJSONString(c.payload()));
         if(mapper.insertActionIfAbsent(log)<=0&&mapper.selectActionById(c.actionId())==null)throw new TodoException("TODO_ACTION_LOG_FAILED","待办动作记录失败");
         t.setStatus(target.code());if(owner!=null)t.setOwnerId(owner);return t;
     }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.command.TodoActionCommands.ActionCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -75,6 +76,13 @@ class TodoCommandServiceTest
 
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
     @Test void terminalTodoCannotTransfer(){TodoInstance todo=todo(4L,"COMPLETED",7L);when(mapper.selectById(4L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);TodoException e=assertThrows(TodoException.class,()->service.transfer(4L,new ActionCommand("move-1",null,Map.of("targetOwnerId",9L)),new Actor(7L,"alice",3L)));assertEquals("TODO_TERMINAL",e.getBusinessCode());}
+
+    @Test void writesValidJsonPayloadToAuditLog()
+    {
+        TodoInstance todo=todo(5L,"IN_PROGRESS",7L);when(mapper.selectById(5L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);when(mapper.updateStatusConditionally(5L,"IN_PROGRESS","IN_PROGRESS",9L,"alice")).thenReturn(1);when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        service.transfer(5L,new ActionCommand("move-2",null,Map.of("targetOwnerId",9L)),new Actor(7L,"alice",3L));
+        ArgumentCaptor<Map<String,Object>> log=ArgumentCaptor.forClass(Map.class);verify(mapper).insertActionIfAbsent(log.capture());assertEquals("{\"targetOwnerId\":9}",log.getValue().get("payloadJson"));
+    }
 
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}
 }
