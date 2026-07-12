@@ -31,7 +31,8 @@ public final class TodoManagementCommands
         @NotBlank String ownerRuleJson,
         String dodRuleJson,
         String slaRuleJson,
-        String nextRuleJson) { }
+        String nextRuleJson,
+        String uiSchemaJson) { }
 
     public record CalendarCommand(
         Long calendarId,
