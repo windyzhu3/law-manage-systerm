@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
+import com.law.business.security.BusinessActor;
 import com.law.business.shared.status.FeeInvoiceStatus;
 import com.law.business.shared.status.FeePaymentStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
@@ -37,7 +38,13 @@ public class ContractInvoiceService
     @Transactional
     public int invoice(Long planId, String target, String remark, String invoiceType)
     {
-        Map<String, Object> plan = plan(planId);
+        return invoice(planId,target,remark,invoiceType,null,null,currentActor());
+    }
+
+    @Transactional
+    public int invoice(Long planId,String target,String remark,String invoiceType,String invoiceNo,String invoiceFileUrl,BusinessActor actor)
+    {
+        Map<String, Object> plan = planRaw(planId);
         if (!CONTRACT_PERFORMING.equals(text(plan.get("contractStatus")))) throw error("STATE_CONFLICT", "只有履约中的合同可以确认收款或开票");
         String type = clean(invoiceType);
         if (type != null) requireDict("law_finance_invoice_type", type, "发票类型不合法");
@@ -51,7 +58,7 @@ public class ContractInvoiceService
         update.put("planId", planId); update.put("invoiceStatus", target);
         update.put("expectedConfirmStatus", plan.get("confirm_status"));
         update.put("expectedInvoiceStatus", current); update.put("expectedContractStatus", plan.get("contractStatus"));
-        update.put("updateBy", SecurityUtils.getUsername());
+        update.put("updateBy", actor.userName());
         String cleanRemark = clean(remark);
         if (cleanRemark != null) update.put("remark", cleanRemark);
         if (type != null) update.put("invoiceType", type);
@@ -62,7 +69,8 @@ public class ContractInvoiceService
         if (type != null) content += "，发票类型 " + type;
         if (cleanRemark != null) content += "，备注：" + cleanRemark;
         requireDict("law_contract_status_action", "fee_invoice", "合同状态动作不合法");
-        if (mapper.insertStatusLog(contractId(plan), current, target, "fee_invoice", content, SecurityUtils.getUsername()) <= 0)
+        if(invoiceFileUrl!=null&&!invoiceFileUrl.isBlank()){Map<String,Object> file=new HashMap<>();file.put("contractId",contractId(plan));file.put("attachmentType","INVOICE");file.put("fileName",invoiceNo==null?"invoice-"+planId:invoiceNo);file.put("fileUrl",invoiceFileUrl);file.put("createBy",actor.userName());if(mapper.insertAttachment(file)<=0)throw error("CONCURRENT_MODIFICATION","发票附件保存失败");}
+        if (mapper.insertStatusLog(contractId(plan), current, target, "fee_invoice", content, actor.userName()) <= 0)
             throw error("CONCURRENT_MODIFICATION", "合同状态日志创建失败");
         Map<String, Object> payload = new HashMap<>(); payload.put("planId", planId); payload.put("invoiceStatus", target); if (type != null) payload.put("invoiceType", type);
         Long contractId = contractId(plan);
@@ -97,4 +105,6 @@ public class ContractInvoiceService
     private String clean(String v){return StringUtils.isEmpty(v)?null:v.trim();}
     private String text(Object v){return v==null?null:String.valueOf(v);}
     private ServiceException error(String code,String message){return new ServiceException(message,code);}
+    private Map<String,Object> planRaw(Long id){Map<String,Object> value=mapper.selectFeePlanById(id);if(value==null)throw error("DATA_NOT_FOUND","收费计划不存在");return value;}
+    private BusinessActor currentActor(){try{return new BusinessActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getLoginUser().getUser().getNickName(),SecurityUtils.getDeptId(),SecurityUtils.isAdmin());}catch(RuntimeException absent){return new BusinessActor(0L,"system","system",null,false);}}
 }

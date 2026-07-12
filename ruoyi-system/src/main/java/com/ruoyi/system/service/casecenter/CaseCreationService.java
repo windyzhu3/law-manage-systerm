@@ -11,6 +11,7 @@ import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.law.business.shared.status.CaseStatus;
+import com.law.business.security.BusinessActor;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -40,6 +41,14 @@ public class CaseCreationService
     @Transactional
     public int createFromContract(BizContract contract)
     {
+        if(contract==null||contract.getContractId()==null)return 0;
+        if(caseMapper.selectCaseByContractId(contract.getContractId())!=null)return 0;
+        return createFromContract(contract,currentActor());
+    }
+
+    @Transactional
+    public int createFromContract(BizContract contract,BusinessActor actor)
+    {
         if (contract == null || contract.getContractId() == null)
         {
             return 0;
@@ -63,17 +72,17 @@ public class CaseCreationService
         entity.put("estimatedWorkload", BigDecimal.valueOf(24));
         entity.put("ownerId", contract.getOwnerId());
         entity.put("deptId", contract.getDeptId());
-        entity.put("createBy", SecurityUtils.getUsername());
+        entity.put("createBy", actor.userName());
 
         assertRowsChanged(caseMapper.insertCase(entity), "案件创建失败");
         Long caseId = requiredLong(entity.get("caseId"), "案件创建失败");
-        insertStatusLog(caseId);
-        createNotice(contract);
+        insertStatusLog(caseId,actor);
+        createNotice(contract,actor);
         publishCreated(caseId, String.valueOf(entity.get("caseNo")), contract.getContractId());
         return 1;
     }
 
-    private void insertStatusLog(Long caseId)
+    private void insertStatusLog(Long caseId,BusinessActor actor)
     {
         Map<String, Object> log = new HashMap<>();
         log.put("caseId", caseId);
@@ -81,18 +90,18 @@ public class CaseCreationService
         log.put("toStatus", CaseStatus.PENDING.code());
         log.put("actionType", "create");
         log.put("content", "合同签署后生成待分案案件");
-        log.put("createBy", SecurityUtils.getUsername());
+        log.put("createBy", actor.userName());
         assertRowsChanged(caseMapper.insertStatusLog(log), "案件状态记录创建失败");
     }
 
-    private void createNotice(BizContract contract)
+    private void createNotice(BizContract contract,BusinessActor actor)
     {
         SysNotice notice = new SysNotice();
         notice.setNoticeTitle("新案件待分配");
         notice.setNoticeType("1");
         notice.setNoticeContent("合同 " + contract.getContractNo() + " 已签署，生成待分案案件：" + contract.getContractName());
         notice.setStatus("0");
-        notice.setCreateBy(SecurityUtils.getUsername());
+        notice.setCreateBy(actor.userName());
         notice.setRemark("案管中心");
         noticeService.insertNotice(notice);
     }
@@ -104,6 +113,7 @@ public class CaseCreationService
         eventPublisher.publish(new BusinessEventCommand(BusinessEventType.CASE_CREATED, "CASE", caseId, caseNo,
                 BusinessEventType.CASE_CREATED.name() + ":" + caseId + ":" + IdUtils.fastUUID(), payload));
     }
+    private BusinessActor currentActor(){return new BusinessActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getLoginUser().getUser().getNickName(),SecurityUtils.getDeptId(),SecurityUtils.isAdmin());}
 
     private String dictValue(String dictType, String preferredValue)
     {

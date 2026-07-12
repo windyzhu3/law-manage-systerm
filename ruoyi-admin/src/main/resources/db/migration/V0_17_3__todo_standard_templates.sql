@@ -34,9 +34,9 @@ select t.template_id,1,'PUBLISHED',
  case
   when t.template_code='CONTRACT_REVIEW' then json_object('requiredFields',json_array('auditResult'),'requiredAttachments',json_array())
   when t.template_code='CONTRACT_SIGN' then json_object('requiredFields',json_array('signDate'),'requiredAttachments',json_array('SIGNED_CONTRACT'))
-  when t.template_code='PAYMENT_CONFIRM' then json_object('requiredFields',json_array('paymentResult'),'requiredAttachments',json_array('PAYMENT_PROOF'))
-  when t.template_code='INVOICE_HANDLE' then json_object('requiredFields',json_array('invoiceResult'),'requiredAttachments',json_array())
-  when t.template_code='CASE_CREATE_CHECK' then json_object('requiredFields',json_array('createResult'),'requiredAttachments',json_array())
+  when t.template_code='PAYMENT_CONFIRM' then json_object('requiredFields',json_array('planId','receivedAmount','voucherUrl'),'requiredAttachments',json_array())
+  when t.template_code='INVOICE_HANDLE' then json_object('requiredFields',json_array('planId','action'),'requiredAttachments',json_array())
+  when t.template_code='CASE_CREATE_CHECK' then json_object('requiredFields',json_array('materialsChecked'),'requiredAttachments',json_array())
   when t.template_code='CASE_ASSIGN' then json_object('requiredFields',json_array('lawyerId'),'requiredAttachments',json_array())
   when t.template_code='CASE_ACCEPT' then json_object('requiredFields',json_array('confirmResult'),'requiredAttachments',json_array())
   when t.template_code='CASE_REASSIGN' then json_object('requiredFields',json_array('lawyerId'),'requiredAttachments',json_array())
