@@ -35,4 +35,6 @@
   <select id="selectCalendars" resultType="java.util.Map">select * from todo_work_calendar order by calendar_id</select>
   <insert id="insertCalendar" useGeneratedKeys="true" keyProperty="calendarId">insert into todo_work_calendar(calendar_code,calendar_name,timezone,work_days,work_start,work_end,exception_json,status) values(#{calendarCode},#{calendarName},#{timezone},#{workDays},#{workStart},#{workEnd},#{exceptionJson},#{status})</insert>
   <update id="updateCalendar">update todo_work_calendar set calendar_name=#{calendarName},timezone=#{timezone},work_days=#{workDays},work_start=#{workStart},work_end=#{workEnd},exception_json=#{exceptionJson},status=#{status},update_time=sysdate() where calendar_id=#{calendarId}</update>
+  <select id="selectCalendarByCode" resultType="java.util.Map">select * from todo_work_calendar where calendar_code=#{code} and status='0' limit 1</select>
+  <insert id="insertSlaRecord">insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,status) values(#{todoId},#{calendarId},#{startAt},#{dueAt},'RUNNING')</insert>
 </mapper>

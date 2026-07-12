@@ -39,6 +39,15 @@ class TodoEventServiceTest
         assertEquals("ROLE",new TodoAssignmentResolver().resolve("ROLE:5",Map.of()).candidateType());
     }
 
+    @Test void createsSlaRecordFromTemplateRule()
+    {
+        Map<String,Object> slaRule=new java.util.HashMap<>(rule());slaRule.put("sla_rule_json","{\"calendarCode\":\"DEFAULT\",\"minutes\":60}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(slaRule));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L,"work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}"));
+        new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
+        verify(mapper).insertSlaRecord(anyMap());
+    }
+
     private Map<String,Object> rule(){return Map.of("template_id",3L,"template_version_id",22L,"template_name","首联","owner_rule_json","ROLE:5");}
     private TodoEvent event(){return new TodoEvent("evt-1","LEAD_ASSIGNED","LEAD",7L,"L-7",Map.of("ownerId",8L));}
 }

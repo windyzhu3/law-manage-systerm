@@ -35,4 +35,6 @@ public interface TodoMapper
     List<Map<String,Object>> selectCalendars();
     int insertCalendar(Map<String,Object> calendar);
     int updateCalendar(Map<String,Object> calendar);
+    Map<String,Object> selectCalendarByCode(String code);
+    int insertSlaRecord(Map<String,Object> record);
 }
