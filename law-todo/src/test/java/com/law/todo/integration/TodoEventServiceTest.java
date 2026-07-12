@@ -100,6 +100,14 @@ class TodoEventServiceTest
         verify(mapper).insertSlaRecord(anyMap());
     }
 
+    @Test void snapshotsDodRuleOnCreatedTodo()
+    {
+        Map<String,Object> version=new java.util.HashMap<>(rule());version.put("dod_rule_json","{\"requiredFields\":[\"contactResult\"]}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(version));
+        TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
+        assertEquals("{\"requiredFields\":[\"contactResult\"]}",created.getDodSnapshotJson());
+    }
+
     private Map<String,Object> rule(){return Map.of("template_id",3L,"template_version_id",22L,"template_name","首联","owner_rule_json","ROLE:5");}
     private TodoEvent event(){return new TodoEvent("evt-1","LEAD_ASSIGNED","LEAD",7L,"L-7",Map.of("ownerId",8L));}
 }

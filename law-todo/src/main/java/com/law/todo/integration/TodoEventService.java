@@ -52,6 +52,7 @@ public class TodoEventService
             if(assignment.ownerId()!=null)todo.setOwnerDeptId(mapper.selectUserDeptId(assignment.ownerId()));
             todo.setStatus("CREATED");todo.setPriority("NORMAL");todo.setSlaStatus("NORMAL");
             todo.setCreatedAt(LocalDateTime.now());todo.setTriggerEventId(event.eventId());todo.setTriggerIdempotencyKey(key);
+            todo.setDodSnapshotJson(text(value(rule,"dod_rule_json","dodRuleJson")));
             applySla(todo,text(value(rule,"sla_rule_json","slaRuleJson")));
             try{mapper.insertInstance(todo);}catch(DuplicateKeyException duplicate){TodoInstance concurrent=mapper.selectByTriggerKey(key);if(concurrent!=null){result.add(concurrent);continue;}throw duplicate;}
             createRelation(todo);

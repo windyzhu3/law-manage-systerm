@@ -81,6 +81,7 @@ public class TodoRoutingService
         next.setOwnerId(assignment.ownerId());
         next.setOwnerDeptId(assignment.ownerId() == null || assignment.ownerId().equals(previous.getOwnerId()) ? previous.getOwnerDeptId() : mapper.selectUserDeptId(assignment.ownerId()));
         next.setStatus("CREATED");next.setPriority("NORMAL");next.setSlaStatus("NORMAL");next.setCreatedAt(LocalDateTime.now());
+        next.setDodSnapshotJson(text(value(version, "dod_rule_json", "dodRuleJson")));
         next.setPreviousTodoId(previous.getTodoId());next.setRootTodoId(previous.getRootTodoId() == null ? previous.getTodoId() : previous.getRootTodoId());next.setNextIdempotencyKey(key);
         return next;
     }
