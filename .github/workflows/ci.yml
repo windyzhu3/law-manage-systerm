@@ -1,10 +1,10 @@
-name: V0.16 Todo Engine quality gate
+name: v0.15 quality gate
 
 on:
   push:
-    branches: [V0.16]
+    branches: [v0.15]
   pull_request:
-    branches: [main, V0.16]
+    branches: [main, v0.15]
 
 permissions:
   contents: read
@@ -34,54 +34,5 @@ jobs:
           node-version: '16'
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
-      - name: Verify Todo UI contract
-        run: npm run test:todo
       - name: Build production bundle
         run: npm run build:prod
-
-  migration:
-    runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: law_v016
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
-      - name: Install MySQL client
-        run: sudo apt-get update -qq && sudo apt-get install -y mysql-client
-      - name: Initialize v0.15 baseline schema in empty database
-        run: |
-          for file in \
-            sql/ry_20260417.sql \
-            sql/quartz.sql \
-            sql/lead_module_20260602.sql \
-            sql/lead_menu_20260602.sql \
-            sql/customer_contract_module_20260603.sql \
-            sql/customer_contract_dict_patch_20260611.sql \
-            sql/case_module_20260611.sql \
-            sql/matter_module_20260615.sql \
-            sql/matter_menu_patch_20260617.sql \
-            sql/finance_module_20260624.sql \
-            sql/customer_tag_assign_permission_fix_20260627.sql; do
-            mysql --protocol=tcp -h127.0.0.1 -uroot -proot law_v016 < "$file"
-          done
-      - name: Execute and verify all Flyway migrations
-        env:
-          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v016?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
-          TODO_MIGRATION_DB_USER: root
-          TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
