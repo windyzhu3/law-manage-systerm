@@ -14,6 +14,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.error.BusinessErrorCode;
 
 @Service
 public class MatterExpenseService
@@ -53,14 +54,14 @@ public class MatterExpenseService
     private void validate(Map<String,Object> expense)
     {
         required(expense.get("expenseType"),"请选择费用类型"); BigDecimal amount=decimal(required(expense.get("amount"),"请输入费用金额"));
-        if(amount.compareTo(BigDecimal.ZERO)<=0) throw new ServiceException("费用金额必须大于0"); required(expense.get("occurDate"),"请选择发生日期");
+        if(amount.compareTo(BigDecimal.ZERO)<=0) throw error(BusinessErrorCode.VALIDATION_FAILED,"费用金额必须大于0"); required(expense.get("occurDate"),"请选择发生日期");
         assertDict("law_case_expense_type",expense.get("expenseType"),"费用类型不合法"); assertDict("law_case_pay_status",expense.get("payStatus"),"付款状态不合法");
         assertDict("law_case_reimburse_status",expense.get("reimburseStatus"),"报销状态不合法"); assertDict("law_case_voucher_status",expense.get("voucherStatus"),"凭证状态不合法");
     }
 
-    private Map<String,Object> requireExpense(Long id){Map<String,Object> row=mapper.selectExpenseById(id);if(row==null||"2".equals(text(row.get("del_flag"))))throw new ServiceException("费用不存在");requireAccess(toLong(row.get("case_id"),"请选择案件"));return row;}
-    private void requireEditable(Long id){Map<String,Object> matter=requireAccess(id);if(!PROCESSING.equals(text(matter.get("case_status"))))throw new ServiceException("只有办理中案件可以发起该操作");}
-    private Map<String,Object> requireAccess(Long id){Map<String,Object> matter=mapper.selectMatterById(id);if(matter==null)throw new ServiceException("案件不存在或已删除");if(!SecurityUtils.isAdmin()&&mapper.countMatterInDataScope(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0)throw new ServiceException("无权访问该案件");return matter;}
+    private Map<String,Object> requireExpense(Long id){Map<String,Object> row=mapper.selectExpenseById(id);if(row==null||"2".equals(text(row.get("del_flag"))))throw error(BusinessErrorCode.DATA_NOT_FOUND,"费用不存在");requireAccess(toLong(row.get("case_id"),"请选择案件"));return row;}
+    private void requireEditable(Long id){Map<String,Object> matter=requireAccess(id);if(!PROCESSING.equals(text(matter.get("case_status"))))throw error(BusinessErrorCode.STATE_CONFLICT,"只有办理中案件可以发起该操作");}
+    private Map<String,Object> requireAccess(Long id){Map<String,Object> matter=mapper.selectMatterById(id);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在或已删除");if(!SecurityUtils.isAdmin()&&mapper.countMatterInDataScope(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0)throw error(BusinessErrorCode.ACCESS_DENIED,"无权访问该案件");return matter;}
     private void refreshFeeStatus(Long id){Map<String,Object> value=new HashMap<>();value.put("caseId",id);int count=mapper.countExpenseByCaseId(id);value.put("feeStatus",count==0?"none":(mapper.countUnpaidExpenseByCaseId(id)==0?"settled":"partial"));value.put("updateBy",SecurityUtils.getUsername());mapper.updateMatter(value);}
     private void log(Long id,String action,String content){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("actionType",action);value.put("content",content);value.put("createBy",SecurityUtils.getUsername());assertRows(mapper.insertStatusLog(value),"案件状态记录创建失败");}
     private void assertDict(String type,Object value,String message){String target=text(value);if(StringUtils.isEmpty(target))return;List<SysDictData> options=dictService.selectDictDataByType(type);if(contains(options,target))return;dictService.resetDictCache();options=dictService.selectDictDataByType(type);if(options==null||options.isEmpty())throw new ServiceException("字典未初始化："+type);if(!contains(options,target))throw new ServiceException(message);}
@@ -70,4 +71,5 @@ public class MatterExpenseService
     private String required(Object value,String message){String result=text(value);if(StringUtils.isEmpty(result))throw new ServiceException(message);return result;}
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
+    private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
 }

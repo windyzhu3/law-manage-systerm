@@ -11,6 +11,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.error.BusinessErrorCode;
 
 @Service
 public class MatterDocumentService
@@ -46,7 +47,7 @@ public class MatterDocumentService
     public int delete(Long documentId)
     {
         Map<String,Object> existed=matterMapper.selectDocumentById(documentId);
-        if(existed==null) throw new ServiceException("文档不存在");
+        if(existed==null) throw error(BusinessErrorCode.DATA_NOT_FOUND,"文档不存在");
         Long caseId=toLong(existed.get("case_id"),"请选择案件");
         requireEditable(caseId);
         int rows=matterMapper.deleteDocument(documentId,SecurityUtils.getUsername());
@@ -58,9 +59,9 @@ public class MatterDocumentService
     private void requireEditable(Long caseId)
     {
         Map<String,Object> matter=matterMapper.selectMatterById(caseId);
-        if(matter==null) throw new ServiceException("案件不存在或已删除");
-        if(!SecurityUtils.isAdmin()&&matterMapper.countMatterInDataScope(caseId,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0) throw new ServiceException("无权访问该案件");
-        if(!PROCESSING.equals(text(matter.get("case_status")))) throw new ServiceException("只有办理中案件可以发起该操作");
+        if(matter==null) throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在或已删除");
+        if(!SecurityUtils.isAdmin()&&matterMapper.countMatterInDataScope(caseId,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0) throw error(BusinessErrorCode.ACCESS_DENIED,"无权访问该案件");
+        if(!PROCESSING.equals(text(matter.get("case_status")))) throw error(BusinessErrorCode.STATE_CONFLICT,"只有办理中案件可以发起该操作");
     }
 
     private void assertDict(String type,Object value,String message)
@@ -79,4 +80,5 @@ public class MatterDocumentService
     private String required(Object value,String message){String result=text(value);if(StringUtils.isEmpty(result))throw new ServiceException(message);return result;}
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
+    private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
 }

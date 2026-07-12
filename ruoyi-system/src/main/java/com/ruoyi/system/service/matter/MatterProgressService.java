@@ -8,6 +8,7 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
+import com.law.business.shared.error.BusinessErrorCode;
 
 @Service
 public class MatterProgressService
@@ -69,7 +70,7 @@ public class MatterProgressService
     private Map<String, Object> requireOwnedProgress(Long progressId)
     {
         Map<String, Object> row = matterMapper.selectProgressById(progressId);
-        if (row == null || "2".equals(text(row.get("del_flag")))) throw new ServiceException("进度记录不存在");
+        if (row == null || "2".equals(text(row.get("del_flag")))) throw error(BusinessErrorCode.DATA_NOT_FOUND, "进度记录不存在");
         requireMatter(toLong(row.get("case_id"), "请选择案件"));
         return row;
     }
@@ -77,15 +78,15 @@ public class MatterProgressService
     private void requireProcessEditableMatter(Long caseId)
     {
         Map<String, Object> matter = requireMatter(caseId);
-        if (!PROCESSING.equals(text(matter.get("case_status")))) throw new ServiceException("只有办理中案件可以发起该操作");
+        if (!PROCESSING.equals(text(matter.get("case_status")))) throw error(BusinessErrorCode.STATE_CONFLICT, "只有办理中案件可以发起该操作");
     }
 
     private Map<String, Object> requireMatter(Long caseId)
     {
         Map<String, Object> matter = matterMapper.selectMatterById(caseId);
-        if (matter == null) throw new ServiceException("案件不存在或已删除");
+        if (matter == null) throw error(BusinessErrorCode.DATA_NOT_FOUND, "案件不存在或已删除");
         if (!SecurityUtils.isAdmin() && matterMapper.countMatterInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), true, MATTER_PERMISSIONS) == 0)
-            throw new ServiceException("无权访问该案件");
+            throw error(BusinessErrorCode.ACCESS_DENIED, "无权访问该案件");
         return matter;
     }
 
@@ -109,4 +110,5 @@ public class MatterProgressService
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     private String limitText(String value,int max){return value==null||value.length()<=max?value:value.substring(0,max);}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
+    private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
 }
