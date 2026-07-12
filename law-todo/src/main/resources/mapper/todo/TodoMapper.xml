@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoMapper">
+  <insert id="insertInstance" useGeneratedKeys="true" keyProperty="todoId">
+    insert into todo_instance(todo_no,template_id,template_version_id,title,business_type,business_id,business_no,owner_id,owner_dept_id,status,priority,sla_status,created_at,due_at,previous_todo_id,root_todo_id,trigger_event_id,trigger_idempotency_key,next_idempotency_key,dod_snapshot_json,version)
+    values(#{todoNo},#{templateId},#{templateVersionId},#{title},#{businessType},#{businessId},#{businessNo},#{ownerId},#{ownerDeptId},#{status},#{priority},#{slaStatus},#{createdAt},#{dueAt},#{previousTodoId},#{rootTodoId},#{triggerEventId},#{triggerIdempotencyKey},#{nextIdempotencyKey},#{dodSnapshotJson},0)
+  </insert>
+  <select id="selectById" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where todo_id=#{todoId}</select>
+  <select id="selectByTriggerKey" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where trigger_idempotency_key=#{key}</select>
+  <select id="selectByNextKey" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where next_idempotency_key=#{key}</select>
+  <update id="updateStatusConditionally">update todo_instance set status=#{toStatus},owner_id=coalesce(#{ownerId},owner_id),version=version+1,update_by=#{operator},update_time=sysdate() where todo_id=#{todoId} and status=#{fromStatus}</update>
+  <insert id="insertActionIfAbsent">insert ignore into todo_action_log(todo_id,action_id,action_type,from_status,to_status,operator_id,operator_name,opinion,payload_json) values(#{todoId},#{actionId},#{actionType},#{fromStatus},#{toStatus},#{operatorId},#{operatorName},#{opinion},#{payloadJson})</insert>
+  <select id="selectActionById" resultType="java.util.Map">select * from todo_action_log where action_id=#{actionId}</select>
+  <insert id="insertCandidate">insert ignore into todo_candidate(todo_id,candidate_type,candidate_value) values(#{todoId},#{candidateType},#{candidateValue})</insert>
+  <select id="selectCandidates" resultType="java.util.Map">select * from todo_candidate where todo_id=#{todoId}</select>
+  <insert id="insertRelation">insert ignore into todo_relation(todo_id,business_type,business_id,business_no,relation_type) values(#{todoId},#{businessType},#{businessId},#{businessNo},#{relationType})</insert>
+</mapper>
