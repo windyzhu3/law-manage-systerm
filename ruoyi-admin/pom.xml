@@ -16,6 +16,11 @@
     </description>
 
     <dependencies>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
+            <artifactId>law-todo</artifactId>
+            <version>${ruoyi.version}</version>
+        </dependency>
 
         <!-- spring-boot-devtools -->
         <dependency>

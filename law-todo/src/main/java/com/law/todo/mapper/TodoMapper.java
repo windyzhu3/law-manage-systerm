@@ -26,4 +26,6 @@ public interface TodoMapper
     int markSlaThreshold(@Param("todoId") Long todoId,@Param("threshold") String threshold,@Param("now") LocalDateTime now);
     int pauseSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
     int resumeSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
+    Map<String,Object> selectDashboard(@Param("userId") Long userId,@Param("deptId") Long deptId);
+    List<Map<String,Object>> selectTodoList(Map<String,Object> query);
 }
