@@ -62,4 +62,10 @@ public interface TodoMapper
     int insertDefinitionActionIfAbsent(Map<String,Object> action);
     Map<String,Object> selectDefinitionActionById(String actionId);
     int updateDefinitionActionEntity(@Param("actionId") String actionId,@Param("entityId") Long entityId);
+    Map<String,Object> selectBusinessTodoSummary(Map<String,Object> query);
+    List<Long> selectBusinessTodoOwners(Map<String,Object> query);
+    Map<String,Object> selectBusinessRecentAction(Map<String,Object> query);
+    List<Map<String,Object>> selectBusinessTodos(Map<String,Object> query);
+    Map<String,Object> selectRootTodo(Long rootTodoId);
+    List<Map<String,Object>> selectTodoChain(Map<String,Object> query);
 }
