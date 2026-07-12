@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.mockito.ArgumentMatchers.any;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -38,6 +40,22 @@ class TodoSlaServiceTest
     {
         WorkCalendar c=new WorkCalendar(Set.of(DayOfWeek.MONDAY),LocalTime.of(9,0),LocalTime.of(18,0),Map.of(LocalDate.of(2026,7,11),true));
         assertEquals(LocalDateTime.of(2026,7,11,10,0),new WorkingTimeCalculator().addWorkingMinutes(LocalDateTime.of(2026,7,11,9,0),60,c));
+    }
+
+    @Test void calculatesOnlyWorkingMinutesAcrossWeekend()
+    {
+        WorkCalendar c=new WorkCalendar(Set.of(DayOfWeek.MONDAY,DayOfWeek.TUESDAY,DayOfWeek.WEDNESDAY,DayOfWeek.THURSDAY,DayOfWeek.FRIDAY),LocalTime.of(9,0),LocalTime.of(18,0),Map.of());
+        long minutes=new WorkingTimeCalculator().workingMinutesBetween(LocalDateTime.of(2026,7,10,17,0),LocalDateTime.of(2026,7,13,10,0),c);
+        assertEquals(120,minutes);
+    }
+
+    @Test void weekendDoesNotAdvanceSlaThreshold()
+    {
+        LocalDateTime now=LocalDateTime.of(2026,7,11,12,0);
+        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"start_at",LocalDateTime.of(2026,7,10,17,0),"due_at",LocalDateTime.of(2026,7,13,10,0),"work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}")));
+
+        assertEquals(0,new TodoSlaService(mapper,access).scanAndEscalate(now));
+        verify(mapper,never()).markSlaThreshold(any(),any(),any());
     }
 
     @Test void scanMarksReachedThresholdsOnce()
