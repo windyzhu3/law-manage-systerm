@@ -13,6 +13,12 @@ const required = [
   ,'src/views/todo/config/components/DefinitionForm.vue'
   ,'src/views/todo/config/components/TriggerRuleTable.vue'
   ,'src/views/todo/config/components/WorkCalendarTable.vue'
+  ,'src/api/todo-operations.js'
+  ,'src/views/todo/operations/index.vue'
+  ,'src/views/todo/operations/components/OperationsMetrics.vue'
+  ,'src/views/todo/operations/components/EventFailureTable.vue'
+  ,'src/views/todo/operations/components/EscalationTable.vue'
+  ,'src/views/todo/operations/components/ExceptionActionDialog.vue'
 ]
 for (const file of required) {
   if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
@@ -39,3 +45,8 @@ const definitionForm = fs.readFileSync('src/views/todo/config/components/Definit
 for (const marker of ['ownerMode','requiredFields','requiredAttachments','slaMinutes','calendarCode','nextTemplateVersionId','规则预览']) if (!definitionForm.includes(marker)) throw new Error(`missing structured definition marker ${marker}`)
 const configPage=fs.readFileSync('src/views/todo/config/index.vue','utf8')
 for(const marker of ["v-hasPermi",'copyDefinition','publishDefinition','发布后该版本不可修改']) if(!configPage.includes(marker)&&!fs.readFileSync('src/views/todo/config/components/TemplateList.vue','utf8').includes(marker)&&!fs.readFileSync('src/views/todo/config/components/VersionDrawer.vue','utf8').includes(marker)) throw new Error(`missing config marker ${marker}`)
+
+const operationsApi=fs.readFileSync('src/api/todo-operations.js','utf8')
+for(const name of ['getOperationsDashboard','listDeadEvents','replayDeadEvent','forceCompleteTodo','forceCancelTodo','regenerateTodo','batchTransferTodos','waiveTodoSla']) if(!operationsApi.includes(`export function ${name}`)) throw new Error(`missing operations api ${name}`)
+const operations=operationsApi+fs.readFileSync('src/views/todo/operations/index.vue','utf8')+fs.readFileSync('src/views/todo/operations/components/ExceptionActionDialog.vue','utf8')+fs.readFileSync('src/views/todo/operations/components/EventFailureTable.vue','utf8')
+for(const marker of ['DEAD','replayDeadEvent','force-complete','force-cancel','sla-waiver','batchTransfer','必须填写操作原因','v-hasPermi','当前状态']) if(!operations.includes(marker)) throw new Error(`missing operations marker ${marker}`)
