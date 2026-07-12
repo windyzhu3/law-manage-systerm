@@ -1,0 +1,23 @@
+@import "../business/business.scss";
+
+.contract-page {
+  --biz-filter-input-width: 220px;
+  --biz-filter-select-width: 128px;
+}
+
+.contract-page .setting-grid article i {
+  background: #2563eb;
+}
+
+.approval-action-group {
+  display: flex;
+  width: 100%;
+
+  ::v-deep .el-radio-button {
+    flex: 1;
+  }
+
+  ::v-deep .el-radio-button__inner {
+    width: 100%;
+  }
+}
