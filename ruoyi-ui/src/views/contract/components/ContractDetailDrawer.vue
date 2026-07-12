@@ -27,6 +27,8 @@
         </div>
       </section>
 
+      <business-todo-summary v-if="contract.contractId" business-type="CONTRACT" :business-id="contract.contractId" :business-no="contract.contractNo" />
+
       <div class="detail-grid">
         <section class="info-card span-2">
           <header><h4>基础信息</h4></header>
@@ -104,9 +106,11 @@
 <script>
 import businessUi from '@/views/business/mixins/businessUi'
 import contractLifecycle from '@/views/business/mixins/contractLifecycle'
+import BusinessTodoSummary from '@/views/todo/components/BusinessTodoSummary'
 
 export default {
   name: 'ContractDetailDrawer',
+  components: { BusinessTodoSummary },
   mixins: [businessUi, contractLifecycle],
   dicts: ['law_contract_case_type', 'law_contract_fee_type', 'law_contract_sign_method', 'law_contract_sign_status', 'law_contract_audit_status', 'law_contract_approval_action', 'law_contract_status', 'law_contract_status_action', 'law_contract_risk_level', 'law_contract_receive_status', 'law_contract_invoice_status'],
   props: {

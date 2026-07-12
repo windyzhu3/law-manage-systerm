@@ -41,6 +41,8 @@
         </div>
       </section>
 
+      <business-todo-summary v-if="valueOf(caseInfo,'case_id','caseId')" business-type="MATTER" :business-id="valueOf(caseInfo,'case_id','caseId')" :business-no="valueOf(caseInfo,'case_no','caseNo')" />
+
       <section class="matter-kpis">
         <article v-for="item in overviewCards" :key="item.key">
           <i :class="item.icon" />
@@ -271,10 +273,11 @@
 <script>
 import businessUi from '@/views/business/mixins/businessUi'
 import MatterMaterialList from './MatterMaterialList'
+import BusinessTodoSummary from '@/views/todo/components/BusinessTodoSummary'
 
 export default {
   name: 'MatterDetailDrawer',
-  components: { MatterMaterialList },
+  components: { MatterMaterialList, BusinessTodoSummary },
   mixins: [businessUi],
   dicts: ['law_case_status', 'law_case_stage', 'law_case_risk_level', 'law_case_type', 'law_case_cause', 'law_case_fee_status', 'law_case_archive_status', 'law_case_node_status', 'law_case_node_type', 'law_case_material_status', 'law_case_expense_type', 'law_case_pay_status', 'law_case_reimburse_status', 'law_case_voucher_status', 'law_case_close_result', 'law_case_fee_clear_status', 'law_case_status_action', 'law_case_document_type'],
   props: {

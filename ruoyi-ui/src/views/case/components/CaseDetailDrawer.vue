@@ -22,6 +22,8 @@
         </div>
       </section>
 
+      <business-todo-summary v-if="pick('case_id','caseId')" business-type="CASE" :business-id="pick('case_id','caseId')" :business-no="pick('case_no','caseNo')" />
+
       <div class="detail-grid">
         <section class="info-card span-2">
           <header><h4>基础信息</h4></header>
@@ -70,9 +72,11 @@
 
 <script>
 import businessUi from '@/views/business/mixins/businessUi'
+import BusinessTodoSummary from '@/views/todo/components/BusinessTodoSummary'
 
 export default {
   name: 'CaseDetailDrawer',
+  components: { BusinessTodoSummary },
   mixins: [businessUi],
   dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority'],
   props: {

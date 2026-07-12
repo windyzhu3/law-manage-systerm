@@ -19,6 +19,9 @@ const required = [
   ,'src/views/todo/operations/components/EventFailureTable.vue'
   ,'src/views/todo/operations/components/EscalationTable.vue'
   ,'src/views/todo/operations/components/ExceptionActionDialog.vue'
+  ,'src/views/todo/components/BusinessTodoSummary.vue'
+  ,'src/views/todo/components/BusinessTodoDrawer.vue'
+  ,'src/views/todo/components/TodoChainTimeline.vue'
 ]
 for (const file of required) {
   if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
@@ -50,3 +53,9 @@ const operationsApi=fs.readFileSync('src/api/todo-operations.js','utf8')
 for(const name of ['getOperationsDashboard','listDeadEvents','replayDeadEvent','forceCompleteTodo','forceCancelTodo','regenerateTodo','batchTransferTodos','waiveTodoSla']) if(!operationsApi.includes(`export function ${name}`)) throw new Error(`missing operations api ${name}`)
 const operations=operationsApi+fs.readFileSync('src/views/todo/operations/index.vue','utf8')+fs.readFileSync('src/views/todo/operations/components/ExceptionActionDialog.vue','utf8')+fs.readFileSync('src/views/todo/operations/components/EventFailureTable.vue','utf8')
 for(const marker of ['DEAD','replayDeadEvent','force-complete','force-cancel','sla-waiver','batchTransfer','必须填写操作原因','v-hasPermi','当前状态']) if(!operations.includes(marker)) throw new Error(`missing operations marker ${marker}`)
+
+for(const name of ['getBusinessTodoSummary','listBusinessTodos','getTodoChain']) if(!api.includes(`export function ${name}`)) throw new Error(`missing business todo api ${name}`)
+for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)
+const embedded=fs.readFileSync('src/views/todo/components/BusinessTodoSummary.vue','utf8')+fs.readFileSync('src/views/todo/components/BusinessTodoDrawer.vue','utf8')+fs.readFileSync('src/views/todo/components/TodoChainTimeline.vue','utf8')
+for(const marker of ['activeCount','overdueCount','ownerIds','nearestDueAt','listBusinessTodos','getTodoChain','独立']) if(!embedded.includes(marker)&&marker!=='独立') throw new Error(`missing business todo marker ${marker}`)
+for(const marker of ['visible','dept','cc','openChain','todo-chain-timeline']) if(!page.includes(marker)&&!fs.readFileSync('src/views/todo/index.vue','utf8').includes(marker)) throw new Error(`missing todo center expansion ${marker}`)
