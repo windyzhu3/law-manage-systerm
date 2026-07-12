@@ -33,7 +33,7 @@ public class TodoController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:transfer')") @PostMapping("/{id}/transfer") public AjaxResult transfer(@PathVariable Long id,@Valid @RequestBody ActionCommand c){return success(command.transfer(id,c,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:cancel')") @PostMapping("/{id}/cancel") public AjaxResult cancel(@PathVariable Long id,@Valid @RequestBody ActionCommand c){return success(command.cancel(id,c,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:submit')") @PostMapping("/{id}/attachment") public AjaxResult attachment(@PathVariable Long id,@RequestBody AttachmentCommand c){return toAjax(collaboration.addAttachment(id,c.actionId(),c.attachmentType(),c.fileName(),c.fileUrl(),SecurityUtils.getUserId()));}
-    @PreAuthorize("@ss.hasPermi('todo:transfer')") @PostMapping("/{id}/candidate") public AjaxResult candidate(@PathVariable Long id,@RequestBody ParticipantCommand c){return toAjax(collaboration.addCandidate(id,c.participantType(),c.participantValue()));}
-    @PreAuthorize("@ss.hasPermi('todo:query')") @PostMapping("/{id}/cc") public AjaxResult cc(@PathVariable Long id,@RequestBody ParticipantCommand c){return toAjax(collaboration.addCc(id,c.participantValue(),c.participantType()));}
+    @PreAuthorize("@ss.hasPermi('todo:transfer')") @PostMapping("/{id}/candidate") public AjaxResult candidate(@PathVariable Long id,@RequestBody ParticipantCommand c){return toAjax(collaboration.addCandidate(id,c.participantType(),c.participantValue(),SecurityUtils.getUserId()));}
+    @PreAuthorize("@ss.hasPermi('todo:query')") @PostMapping("/{id}/cc") public AjaxResult cc(@PathVariable Long id,@RequestBody ParticipantCommand c){return toAjax(collaboration.addCc(id,c.participantValue(),c.participantType(),SecurityUtils.getUserId()));}
     private Actor actor(){return new Actor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getDeptId());}
 }

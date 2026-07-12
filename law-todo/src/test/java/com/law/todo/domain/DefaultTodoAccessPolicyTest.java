@@ -14,4 +14,5 @@ class DefaultTodoAccessPolicyTest
 {
     @Mock TodoMapper mapper;
     @Test void roleDepartmentOrPostCandidateCanClaim(){TodoInstance t=new TodoInstance();t.setTodoId(1L);when(mapper.countCandidateAccess(1L,7L,3L)).thenReturn(1);assertTrue(new DefaultTodoAccessPolicy(mapper).canClaim(t,7L,3L));}
+    @Test void copiedUserCanView(){TodoInstance t=new TodoInstance();t.setTodoId(1L);when(mapper.countCcAccess(1L,7L)).thenReturn(1);assertTrue(new DefaultTodoAccessPolicy(mapper).canView(t,7L,3L));}
 }

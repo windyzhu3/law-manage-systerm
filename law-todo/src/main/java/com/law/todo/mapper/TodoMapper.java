@@ -39,6 +39,7 @@ public interface TodoMapper
     int insertSlaRecord(Map<String,Object> record);
     int insertSlaNotification(@Param("todoId") Long todoId,@Param("notificationType") String notificationType,@Param("now") LocalDateTime now);
     int countCandidateAccess(@Param("todoId") Long todoId,@Param("userId") Long userId,@Param("deptId") Long deptId);
+    int countCcAccess(@Param("todoId") Long todoId,@Param("userId") Long userId);
     List<Map<String,Object>> selectTemplates();
     int insertTemplate(Map<String,Object> value);
     int updateTemplate(Map<String,Object> value);
