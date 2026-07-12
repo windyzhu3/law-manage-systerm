@@ -55,4 +55,11 @@ public interface TodoMapper
     List<Map<String,Object>> selectRelations(Long todoId);
     List<Map<String,Object>> selectNotifications(@Param("userId") Long userId,@Param("status") String status);
     int markNotificationRead(@Param("notificationId") Long notificationId,@Param("userId") Long userId);
+    Map<String,Object> selectTemplateById(Long templateId);
+    List<Map<String,Object>> selectTemplateVersions(Long templateId);
+    int updateTemplateVersionDraft(Map<String,Object> version);
+    int publishTemplateVersionConditionally(@Param("versionId") Long versionId,@Param("operator") String operator);
+    int insertDefinitionActionIfAbsent(Map<String,Object> action);
+    Map<String,Object> selectDefinitionActionById(String actionId);
+    int updateDefinitionActionEntity(@Param("actionId") String actionId,@Param("entityId") Long entityId);
 }

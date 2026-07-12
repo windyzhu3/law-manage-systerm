@@ -34,7 +34,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.16.5", current.getVersion().getVersion());
+        assertEquals("0.17.1", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
     }
 
