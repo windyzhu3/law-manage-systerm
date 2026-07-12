@@ -1,6 +1,7 @@
 package com.ruoyi.system.service.matter;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -32,8 +33,9 @@ class MatterNodeServiceTest
         try (MockedStatic<SecurityUtils> security = mockStatic(SecurityUtils.class))
         {
             security.when(SecurityUtils::isAdmin).thenReturn(true);
-            assertThrows(ServiceException.class,
+            ServiceException error = assertThrows(ServiceException.class,
                     () -> new MatterNodeService(mapper, dictionaries).create(command));
+            assertEquals("STATE_CONFLICT", error.getBusinessCode());
         }
         verify(mapper, never()).insertNode(command);
     }

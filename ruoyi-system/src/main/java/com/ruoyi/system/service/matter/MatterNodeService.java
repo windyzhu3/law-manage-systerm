@@ -11,6 +11,7 @@ import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.error.BusinessErrorCode;
 
 @Service
 public class MatterNodeService
@@ -72,9 +73,9 @@ public class MatterNodeService
     }
 
     private String stage(String type){if("evidence".equals(type))return "evidence";if("hearing".equals(type)||"judgment".equals(type))return "hearing";if("execution".equals(type))return "execution";if("archive".equals(type))return "archive";return "opening";}
-    private Map<String,Object> requireNode(Long id){Map<String,Object> row=mapper.selectNodeById(id);if(row==null||"2".equals(text(row.get("del_flag"))))throw new ServiceException("关键节点不存在");requireAccess(toLong(row.get("case_id"),"请选择案件"));return row;}
-    private void requireEditable(Long id){Map<String,Object> matter=requireAccess(id);if(!PROCESSING.equals(text(matter.get("case_status"))))throw new ServiceException("只有办理中案件可以发起该操作");}
-    private Map<String,Object> requireAccess(Long id){Map<String,Object> matter=mapper.selectMatterById(id);if(matter==null)throw new ServiceException("案件不存在或已删除");if(!SecurityUtils.isAdmin()&&mapper.countMatterInDataScope(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0)throw new ServiceException("无权访问该案件");return matter;}
+    private Map<String,Object> requireNode(Long id){Map<String,Object> row=mapper.selectNodeById(id);if(row==null||"2".equals(text(row.get("del_flag"))))throw error(BusinessErrorCode.DATA_NOT_FOUND,"关键节点不存在");requireAccess(toLong(row.get("case_id"),"请选择案件"));return row;}
+    private void requireEditable(Long id){Map<String,Object> matter=requireAccess(id);if(!PROCESSING.equals(text(matter.get("case_status"))))throw error(BusinessErrorCode.STATE_CONFLICT,"只有办理中案件可以发起该操作");}
+    private Map<String,Object> requireAccess(Long id){Map<String,Object> matter=mapper.selectMatterById(id);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在或已删除");if(!SecurityUtils.isAdmin()&&mapper.countMatterInDataScope(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0)throw error(BusinessErrorCode.ACCESS_DENIED,"无权访问该案件");return matter;}
     private void log(Long id,String action,String content){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("actionType",action);value.put("content",content);value.put("createBy",SecurityUtils.getUsername());assertRows(mapper.insertStatusLog(value),"案件状态记录创建失败");}
     private void assertDict(String type,Object value,String message){String target=text(value);if(StringUtils.isEmpty(target))return;List<SysDictData> values=dictService.selectDictDataByType(type);if(contains(values,target))return;dictService.resetDictCache();values=dictService.selectDictDataByType(type);if(values==null||values.isEmpty())throw new ServiceException("字典未初始化："+type);if(!contains(values,target))throw new ServiceException(message);}
     private boolean contains(List<SysDictData> values,String target){if(values==null)return false;for(SysDictData item:values)if(target.equals(item.getDictValue()))return true;return false;}
@@ -84,4 +85,5 @@ public class MatterNodeService
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     @SuppressWarnings("unchecked") private List<Map<String,Object>> listValue(Object value){return value instanceof List?(List<Map<String,Object>>)value:List.of();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
+    private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
 }
