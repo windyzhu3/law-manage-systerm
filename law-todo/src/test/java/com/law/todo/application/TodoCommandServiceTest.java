@@ -66,5 +66,8 @@ class TodoCommandServiceTest
         verify(mapper,never()).updateStatusConditionally(2L,"SUBMITTED","COMPLETED",null,"alice");
     }
 
+    @Test void invisibleUserCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canView(todo,7L,3L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
+    @Test void terminalTodoCannotTransfer(){TodoInstance todo=todo(4L,"COMPLETED",7L);when(mapper.selectById(4L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);TodoException e=assertThrows(TodoException.class,()->service.transfer(4L,new ActionCommand("move-1",null,Map.of("targetOwnerId",9L)),new Actor(7L,"alice",3L)));assertEquals("TODO_TERMINAL",e.getBusinessCode());}
+
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}
 }
