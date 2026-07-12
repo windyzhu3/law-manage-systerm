@@ -102,4 +102,5 @@
     select concat('REGEN-',#{actionId},'-',todo_id),template_id,template_version_id,template_code,title,business_type,business_id,business_no,business_stage,owner_id,owner_dept_id,'CREATED',priority,'NORMAL',sysdate(),due_at,todo_id,coalesce(root_todo_id,todo_id),concat('REGENERATE:',#{actionId}),dod_snapshot_json,0,#{operator}
     from todo_instance where todo_id=#{sourceTodoId}
   </insert>
+  <update id="cancelActiveByBusiness">update todo_instance set status='CANCELLED',cancelled_at=sysdate(),version=version+1,update_by=#{operator},update_time=sysdate() where business_type=#{businessType} and business_id=#{businessId} and todo_id&lt;&gt;#{exceptTodoId} and status not in ('COMPLETED','CANCELLED')</update>
 </mapper>

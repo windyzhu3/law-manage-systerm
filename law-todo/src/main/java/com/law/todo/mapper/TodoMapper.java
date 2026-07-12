@@ -78,4 +78,5 @@ public interface TodoMapper
     int extendSlaConditionally(@Param("todoId") Long todoId,@Param("originalDueAt") LocalDateTime originalDueAt,@Param("newDueAt") LocalDateTime newDueAt);
     List<Map<String,Object>> selectOperationsDashboard();
     int insertRegeneratedTodo(Map<String,Object> value);
+    int cancelActiveByBusiness(@Param("businessType") String businessType,@Param("businessId") Long businessId,@Param("exceptTodoId") Long exceptTodoId,@Param("operator") String operator);
 }
