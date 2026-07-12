@@ -1,0 +1,1 @@
+<template><el-table :data="rows"><el-table-column prop="event_type" label="事件"/><el-table-column prop="template_name" label="模板"/><el-table-column prop="business_type" label="业务类型"/><el-table-column prop="enabled" label="启用" width="80"/></el-table></template><script>export default{name:'TriggerRuleTable',props:{rows:{type:Array,default:()=>[]}}}</script>
