@@ -10,4 +10,10 @@ public enum ContractStatus implements CodeStatus
 
     @Override
     public String code() { return code; }
+
+    public static ContractStatus fromCode(String code)
+    {
+        for (ContractStatus status : values()) if (status.code.equals(code)) return status;
+        throw new IllegalArgumentException("Unknown contract status: " + code);
+    }
 }

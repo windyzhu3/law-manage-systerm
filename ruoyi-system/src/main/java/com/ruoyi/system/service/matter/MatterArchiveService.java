@@ -14,6 +14,8 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.business.shared.status.CaseStatus;
+import com.law.business.shared.status.CaseStatusTransitions;
 
 @Service
 public class MatterArchiveService
@@ -58,7 +60,7 @@ public class MatterArchiveService
     private Map<String,Object> requireArchive(Long id){Map<String,Object> value=mapper.selectArchiveByCaseId(id);if(value==null)throw error(BusinessErrorCode.PRECONDITION_FAILED,"请先提交结案申请");return value;}
     private Map<String,Object> requireStatus(Long id,String status,String message){Map<String,Object> matter=requireMatter(id);if(!status.equals(text(matter.get("case_status"))))throw error(BusinessErrorCode.STATE_CONFLICT,message);return matter;}
     private Map<String,Object> requireMatter(Long id){Map<String,Object> matter=mapper.selectMatterById(id);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在或已删除");if(!SecurityUtils.isAdmin()&&mapper.countMatterInDataScope(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId(),true,PERMISSIONS)==0)throw error(BusinessErrorCode.ACCESS_DENIED,"无权访问该案件");return matter;}
-    private void updateStatus(Long id,String caseStatus,String archiveStatus,String node,Object expected){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("caseStatus",caseStatus);value.put("archiveStatus",archiveStatus);value.put("currentNode",node);value.put("expectedStatus",expected);value.put("updateBy",SecurityUtils.getUsername());assertRows(mapper.updateMatterStatus(value),"案件状态已变化，请刷新后重试");}
+    private void updateStatus(Long id,String caseStatus,String archiveStatus,String node,Object expected){requireTransition(text(expected),caseStatus);Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("caseStatus",caseStatus);value.put("archiveStatus",archiveStatus);value.put("currentNode",node);value.put("expectedStatus",expected);value.put("updateBy",SecurityUtils.getUsername());assertRows(mapper.updateMatterStatus(value),"案件状态已变化，请刷新后重试");}
     private void saveMaterials(Long id,List<Map<String,Object>> materials){mapper.deleteArchiveMaterials(id);if(materials==null)return;for(Map<String,Object> item:materials){if(StringUtils.isEmpty(text(item.get("materialName"))))continue;item.put("archiveId",id);item.put("materialStatus",defaultText(item.get("materialStatus"),"pending"));assertDict("law_case_material_status",item.get("materialStatus"),"材料状态不合法");item.put("createBy",SecurityUtils.getUsername());mapper.insertArchiveMaterial(item);}}
     private void log(Long id,String from,String to,String action,String content){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("fromStatus",from);value.put("toStatus",to);value.put("actionType",action);value.put("content",content);value.put("createBy",SecurityUtils.getUsername());assertRows(mapper.insertStatusLog(value),"案件状态记录创建失败");}
     private void assertDict(String type,Object value,String message){String target=text(value);if(StringUtils.isEmpty(target))return;List<SysDictData> values=dictService.selectDictDataByType(type);if(contains(values,target))return;dictService.resetDictCache();values=dictService.selectDictDataByType(type);if(values==null||values.isEmpty())throw new ServiceException("字典未初始化："+type);if(!contains(values,target))throw new ServiceException(message);}
@@ -70,4 +72,5 @@ public class MatterArchiveService
     @SuppressWarnings("unchecked") private List<Map<String,Object>> listValue(Object value){return value instanceof List?(List<Map<String,Object>>)value:List.of();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
     private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
+    private void requireTransition(String from,String to){try{CaseStatusTransitions.requireAllowed(CaseStatus.fromCode(from),CaseStatus.fromCode(to));}catch(IllegalArgumentException|IllegalStateException e){throw error(BusinessErrorCode.STATE_CONFLICT,"案件状态不允许从"+from+"变更为"+to);}}
 }

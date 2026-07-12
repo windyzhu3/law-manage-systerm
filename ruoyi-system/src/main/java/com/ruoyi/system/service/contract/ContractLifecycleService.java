@@ -12,6 +12,7 @@ import com.law.business.shared.error.BusinessErrorCode;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
+import com.law.business.shared.status.ContractStatusTransitions;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -80,6 +81,7 @@ public class ContractLifecycleService
         String auditStatus = "pass".equals(action) ? PASSED : ("back".equals(action) ? BACK : REJECTED);
         String contractStatus = PASSED.equals(auditStatus) && (SIGNED.equals(contract.getSignStatus()) || PARTIAL.equals(contract.getSignStatus()))
                 ? PERFORMING : contract.getContractStatus();
+        requireTransition(contract.getContractStatus(), contractStatus);
         Map<String, Object> approval = new HashMap<>();
         approval.put("contractId", contractId); approval.put("approvalAction", action); approval.put("approvalOpinion", opinion);
         approval.put("approverId", SecurityUtils.getUserId()); approval.put("approverName", SecurityUtils.getLoginUser().getUser().getNickName());
@@ -111,6 +113,7 @@ public class ContractLifecycleService
             expectedStatus = PERFORMING; content = "合同补齐签署";
         }
         else if (!DRAFT.equals(contract.getContractStatus())) throw new ServiceException("只有草稿或部分签订的履约中合同可以签署");
+        requireTransition(contract.getContractStatus(), PERFORMING);
         int rows = mapper.updateLifecycleStatus(contractId, signStatus, PERFORMING, PASSED, expectedStatus, SecurityUtils.getUsername());
         assertChanged(rows);
         log(contractId, contract.getContractStatus(), PERFORMING, "sign", content);
@@ -129,6 +132,7 @@ public class ContractLifecycleService
         BizContract contract = queryService.contract(id);
         if (REVIEWING.equals(contract.getAuditStatus())) throw new ServiceException("审核中的合同不允许作废");
         if (!DRAFT.equals(contract.getContractStatus())) throw new ServiceException("只有草稿状态合同可以作废");
+        requireTransition(contract.getContractStatus(), VOID);
         int rows = mapper.updateLifecycleStatus(id, null, VOID, contract.getAuditStatus(), DRAFT, SecurityUtils.getUsername());
         assertChanged(rows); log(id, contract.getContractStatus(), VOID, "void", value); return rows;
     }
@@ -137,6 +141,7 @@ public class ContractLifecycleService
     {
         BizContract contract = queryService.contract(id);
         if (!expected.equals(contract.getContractStatus())) throw new ServiceException("只有履约中的合同可以" + (ARCHIVED.equals(target) ? "归档" : "终止"));
+        requireTransition(contract.getContractStatus(), target);
         int rows = mapper.updateLifecycleStatus(id, null, target, contract.getAuditStatus(), expected, SecurityUtils.getUsername());
         assertChanged(rows); log(id, contract.getContractStatus(), target, action, reason); return rows;
     }
@@ -162,6 +167,11 @@ public class ContractLifecycleService
 
     private void assertChanged(int rows) { if (rows <= 0) throw new ServiceException("合同状态已变化，请刷新后重试"); }
     private ServiceException error(BusinessErrorCode code, String message) { return new ServiceException(message, code.name()); }
+    private void requireTransition(String from, String to)
+    {
+        try { ContractStatusTransitions.requireAllowed(ContractStatus.fromCode(from), ContractStatus.fromCode(to)); }
+        catch (IllegalArgumentException | IllegalStateException e) { throw error(BusinessErrorCode.STATE_CONFLICT, "合同状态不允许从" + from + "变更为" + to); }
+    }
     private void publish(BusinessEventType type, BizContract contract, Map<String, Object> value)
     {
         eventPublisher.publish(new BusinessEventCommand(type, "CONTRACT", contract.getContractId(), contract.getContractNo(),
