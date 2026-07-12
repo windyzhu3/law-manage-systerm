@@ -37,4 +37,5 @@ public interface TodoMapper
     int updateCalendar(Map<String,Object> calendar);
     Map<String,Object> selectCalendarByCode(String code);
     int insertSlaRecord(Map<String,Object> record);
+    int insertSlaNotification(@Param("todoId") Long todoId,@Param("notificationType") String notificationType,@Param("now") LocalDateTime now);
 }

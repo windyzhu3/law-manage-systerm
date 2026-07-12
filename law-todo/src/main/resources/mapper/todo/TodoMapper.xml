@@ -37,4 +37,5 @@
   <update id="updateCalendar">update todo_work_calendar set calendar_name=#{calendarName},timezone=#{timezone},work_days=#{workDays},work_start=#{workStart},work_end=#{workEnd},exception_json=#{exceptionJson},status=#{status},update_time=sysdate() where calendar_id=#{calendarId}</update>
   <select id="selectCalendarByCode" resultType="java.util.Map">select * from todo_work_calendar where calendar_code=#{code} and status='0' limit 1</select>
   <insert id="insertSlaRecord">insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,status) values(#{todoId},#{calendarId},#{startAt},#{dueAt},'RUNNING')</insert>
+  <insert id="insertSlaNotification">insert ignore into todo_notification(todo_id,user_id,notification_type,title,content,status,create_time) select todo_id,owner_id,#{notificationType},concat('待办SLA提醒：',title),concat('待办 ',todo_no,' 已触发 ',#{notificationType}),'UNREAD',#{now} from todo_instance where todo_id=#{todoId} and owner_id is not null</insert>
 </mapper>

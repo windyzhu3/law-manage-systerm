@@ -40,9 +40,15 @@ class TodoSlaServiceTest
     {
         LocalDateTime now=LocalDateTime.of(2026,7,12,12,0);
         when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"percent",151)));
+        when(mapper.markSlaThreshold(1L,"REMINDED_80",now)).thenReturn(1);
+        when(mapper.markSlaThreshold(1L,"OVERDUE_100",now)).thenReturn(1);
+        when(mapper.markSlaThreshold(1L,"ESCALATED_150",now)).thenReturn(1);
         new TodoSlaService(mapper).scanAndEscalate(now);
         verify(mapper).markSlaThreshold(1L,"REMINDED_80",now);
         verify(mapper).markSlaThreshold(1L,"OVERDUE_100",now);
         verify(mapper).markSlaThreshold(1L,"ESCALATED_150",now);
+        verify(mapper).insertSlaNotification(1L,"REMINDED_80",now);
+        verify(mapper).insertSlaNotification(1L,"OVERDUE_100",now);
+        verify(mapper).insertSlaNotification(1L,"ESCALATED_150",now);
     }
 }
