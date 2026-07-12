@@ -185,6 +185,7 @@
         <module>ruoyi-framework</module>
         <module>ruoyi-system</module>
         <module>law-business</module>
+        <module>law-todo</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
         <module>ruoyi-common</module>
