@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,6 +53,17 @@ class TodoCommandServiceTest
         when(mapper.selectById(1L)).thenReturn(todo);
         TodoException error=assertThrows(TodoException.class,()->service.start(1L,new ActionCommand("a-2",null,Map.of()),new Actor(7L,"alice",3L)));
         assertEquals("TODO_ACCESS_DENIED",error.getBusinessCode());
+    }
+
+    @Test void completeRejectsMissingDodField()
+    {
+        TodoInstance todo=todo(2L,"SUBMITTED",7L);todo.setTemplateVersionId(9L);todo.setBusinessType("LEAD");
+        when(mapper.selectById(2L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of("dod_rule_json","{\"requiredFields\":[\"contactResult\"]}"));
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(),null);
+        TodoException error=assertThrows(TodoException.class,()->guarded.complete(2L,new ActionCommand("done-1",null,Map.of()),new Actor(7L,"alice",3L)));
+        assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+        verify(mapper,never()).updateStatusConditionally(2L,"SUBMITTED","COMPLETED",null,"alice");
     }
 
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}

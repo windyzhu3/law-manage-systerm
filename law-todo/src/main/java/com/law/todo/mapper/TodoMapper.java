@@ -28,4 +28,6 @@ public interface TodoMapper
     int resumeSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
     Map<String,Object> selectDashboard(@Param("userId") Long userId,@Param("deptId") Long deptId);
     List<Map<String,Object>> selectTodoList(Map<String,Object> query);
+    Map<String,Object> selectTemplateVersionById(Long versionId);
+    List<String> selectAttachmentTypes(Long todoId);
 }
