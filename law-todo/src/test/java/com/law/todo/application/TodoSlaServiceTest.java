@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.time.DayOfWeek;
@@ -17,11 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.domain.service.WorkingTimeCalculator;
 import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.domain.TodoAccessPolicy;
+import com.law.todo.domain.TodoException;
+import com.law.todo.domain.model.TodoInstance;
 
 @ExtendWith(MockitoExtension.class)
 class TodoSlaServiceTest
 {
-    @Mock TodoMapper mapper;
+    @Mock TodoMapper mapper; @Mock TodoAccessPolicy access;
 
     @Test void addsWorkingTimeAcrossWeekend()
     {
@@ -43,7 +47,7 @@ class TodoSlaServiceTest
         when(mapper.markSlaThreshold(1L,"REMINDED_80",now)).thenReturn(1);
         when(mapper.markSlaThreshold(1L,"OVERDUE_100",now)).thenReturn(1);
         when(mapper.markSlaThreshold(1L,"ESCALATED_150",now)).thenReturn(1);
-        new TodoSlaService(mapper).scanAndEscalate(now);
+        new TodoSlaService(mapper,access).scanAndEscalate(now);
         verify(mapper).markSlaThreshold(1L,"REMINDED_80",now);
         verify(mapper).markSlaThreshold(1L,"OVERDUE_100",now);
         verify(mapper).markSlaThreshold(1L,"ESCALATED_150",now);
@@ -51,5 +55,17 @@ class TodoSlaServiceTest
         verify(mapper).insertSlaNotification(1L,"OVERDUE_100",now);
         verify(mapper).insertSlaNotification(1L,"ESCALATED_150",now);
         verify(mapper).insertSupervisorEscalationNotification(1L,now);
+    }
+
+    @Test void ownerCanPauseSla()
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(1L);when(mapper.selectById(1L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);when(mapper.pauseSla(1L,LocalDateTime.MIN)).thenReturn(1);
+        assertEquals(true,new TodoSlaService(mapper,access).pause(1L,7L,LocalDateTime.MIN));
+    }
+
+    @Test void nonOwnerCannotPauseSla()
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(1L);when(mapper.selectById(1L)).thenReturn(todo);when(access.canOperate(todo,9L)).thenReturn(false);
+        assertThrows(TodoException.class,()->new TodoSlaService(mapper,access).pause(1L,9L,LocalDateTime.MIN));
     }
 }
