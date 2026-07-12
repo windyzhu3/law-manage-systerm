@@ -30,4 +30,9 @@ public interface TodoMapper
     List<Map<String,Object>> selectTodoList(Map<String,Object> query);
     Map<String,Object> selectTemplateVersionById(Long versionId);
     List<String> selectAttachmentTypes(Long todoId);
+    int insertAttachment(Map<String,Object> attachment);
+    int insertCc(@Param("todoId") Long todoId,@Param("userId") Long userId,@Param("ccType") String ccType);
+    List<Map<String,Object>> selectCalendars();
+    int insertCalendar(Map<String,Object> calendar);
+    int updateCalendar(Map<String,Object> calendar);
 }
