@@ -45,4 +45,10 @@
   <select id="selectAllTriggerRules" resultType="java.util.Map">select r.*,t.template_name from todo_trigger_rule r join todo_template t on t.template_id=r.template_id order by r.trigger_rule_id</select>
   <insert id="insertTriggerRule" useGeneratedKeys="true" keyProperty="triggerRuleId">insert into todo_trigger_rule(event_type,template_id,template_version_id,business_type,enabled,condition_json) values(#{eventType},#{templateId},#{templateVersionId},#{businessType},coalesce(#{enabled},'Y'),#{conditionJson})</insert>
   <update id="updateTriggerRule">update todo_trigger_rule set event_type=#{eventType},template_id=#{templateId},template_version_id=#{templateVersionId},business_type=#{businessType},enabled=#{enabled},condition_json=#{conditionJson} where trigger_rule_id=#{triggerRuleId}</update>
+  <select id="selectActionTimeline" resultType="java.util.Map">select * from todo_action_log where todo_id=#{todoId} order by create_time,action_log_id</select>
+  <select id="selectAttachments" resultType="java.util.Map">select * from todo_attachment where todo_id=#{todoId} order by create_time,attachment_id</select>
+  <select id="selectCc" resultType="java.util.Map">select * from todo_cc where todo_id=#{todoId}</select>
+  <select id="selectRelations" resultType="java.util.Map">select * from todo_relation where todo_id=#{todoId}</select>
+  <select id="selectNotifications" resultType="java.util.Map">select * from todo_notification where user_id=#{userId}<if test="status != null and status != ''"> and status=#{status}</if> order by create_time desc,notification_id desc</select>
+  <update id="markNotificationRead">update todo_notification set status='READ',read_time=sysdate() where notification_id=#{notificationId} and user_id=#{userId} and status='UNREAD'</update>
 </mapper>

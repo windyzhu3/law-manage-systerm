@@ -2,6 +2,7 @@ package com.law.todo.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import org.springframework.stereotype.Service;
 import com.law.todo.domain.TodoAccessPolicy;
 import com.law.todo.domain.TodoException;
@@ -16,4 +17,5 @@ public class TodoQueryService
     public Map<String,Object> dashboard(Long userId,Long deptId){return mapper.selectDashboard(userId,deptId);}
     public List<Map<String,Object>> list(Map<String,Object> query,Long userId,Long deptId){query.put("currentUserId",userId);query.put("currentDeptId",deptId);return mapper.selectTodoList(query);}
     public TodoInstance detail(Long id,Long userId,Long deptId){TodoInstance t=mapper.selectById(id);if(t==null)throw new TodoException("TODO_NOT_FOUND","待办不存在");if(!access.canView(t,userId,deptId))throw new TodoException("TODO_ACCESS_DENIED","无权查看该待办");return t;}
+    public Map<String,Object> detailView(Long id,Long userId,Long deptId){TodoInstance t=detail(id,userId,deptId);Map<String,Object> view=new HashMap<>();view.put("todo",t);view.put("actions",mapper.selectActionTimeline(id));view.put("attachments",mapper.selectAttachments(id));view.put("candidates",mapper.selectCandidates(id));view.put("cc",mapper.selectCc(id));view.put("relations",mapper.selectRelations(id));return view;}
 }
