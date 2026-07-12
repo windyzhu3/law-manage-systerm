@@ -8,4 +8,5 @@ public interface TodoAccessPolicy
     default boolean canClaim(TodoInstance todo,Long userId){return canClaim(todo,userId,null);}
     boolean canOperate(TodoInstance todo,Long userId);
     boolean canView(TodoInstance todo,Long userId,Long deptId);
+    boolean canReview(TodoInstance todo,Long userId);
 }
