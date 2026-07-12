@@ -18,4 +18,10 @@ const page = fs.readFileSync('src/views/todo/index.vue', 'utf8')
 for (const marker of ['todo-detail-drawer', 'todo-action-dialogs', "v-hasPermi", 'candidate', 'overdue']) {
   if (!page.includes(marker)) throw new Error(`missing page marker ${marker}`)
 }
+const detail = fs.readFileSync('src/views/todo/components/TodoDetailDrawer.vue', 'utf8')
+for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'detail.relations']) {
+  if (!detail.includes(marker)) throw new Error(`missing detail aggregate marker ${marker}`)
+}
+const actions = fs.readFileSync('src/views/todo/components/TodoActionDialogs.vue', 'utf8')
+if (!actions.includes('<file-upload')) throw new Error('todo completion must use FileUpload')
 console.log('todo ui contract ok')
