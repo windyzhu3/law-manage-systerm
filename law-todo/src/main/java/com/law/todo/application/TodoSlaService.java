@@ -16,5 +16,5 @@ public class TodoSlaService
     @Transactional public boolean pause(Long todoId,LocalDateTime now){return mapper.pauseSla(todoId,now)>0;}
     @Transactional public boolean resume(Long todoId,LocalDateTime now){return mapper.resumeSla(todoId,now)>0;}
     private Object value(Map<String,Object> m,String a,String b){return m.containsKey(a)?m.get(a):m.get(b);}
-    private int mark(Long id,String threshold,LocalDateTime now){int changed=mapper.markSlaThreshold(id,threshold,now);if(changed>0)mapper.insertSlaNotification(id,threshold,now);return changed;}
+    private int mark(Long id,String threshold,LocalDateTime now){int changed=mapper.markSlaThreshold(id,threshold,now);if(changed>0){mapper.insertSlaNotification(id,threshold,now);if("ESCALATED_150".equals(threshold))mapper.insertSupervisorEscalationNotification(id,now);}return changed;}
 }

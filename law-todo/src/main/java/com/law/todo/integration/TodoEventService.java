@@ -48,6 +48,7 @@ public class TodoEventService
             todo.setBusinessId(event.aggregateId());
             todo.setBusinessNo(event.aggregateNo());
             todo.setOwnerId(assignment.ownerId());
+            if(assignment.ownerId()!=null)todo.setOwnerDeptId(mapper.selectUserDeptId(assignment.ownerId()));
             todo.setStatus("CREATED");todo.setPriority("NORMAL");todo.setSlaStatus("NORMAL");
             todo.setCreatedAt(LocalDateTime.now());todo.setTriggerEventId(event.eventId());todo.setTriggerIdempotencyKey(key);
             applySla(todo,text(value(rule,"sla_rule_json","slaRuleJson")));

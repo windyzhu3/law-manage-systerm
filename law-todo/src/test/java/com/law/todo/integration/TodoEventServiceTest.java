@@ -41,6 +41,17 @@ class TodoEventServiceTest
         assertEquals("ROLE",new TodoAssignmentResolver().resolve("ROLE:5",Map.of()).candidateType());
     }
 
+    @Test void resolvesOwnersDepartmentForSupervisorVisibility()
+    {
+        Map<String,Object> ownerRule=new java.util.HashMap<>(rule());ownerRule.put("owner_rule_json","PAYLOAD:ownerId");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(ownerRule));
+        when(mapper.selectUserDeptId(8L)).thenReturn(3L);
+
+        TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
+
+        assertEquals(3L,created.getOwnerDeptId());
+    }
+
     @Test void skipsRuleWhenPayloadDoesNotMatchCondition()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());

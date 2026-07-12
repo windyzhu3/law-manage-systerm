@@ -50,5 +50,6 @@ class TodoSlaServiceTest
         verify(mapper).insertSlaNotification(1L,"REMINDED_80",now);
         verify(mapper).insertSlaNotification(1L,"OVERDUE_100",now);
         verify(mapper).insertSlaNotification(1L,"ESCALATED_150",now);
+        verify(mapper).insertSupervisorEscalationNotification(1L,now);
     }
 }
