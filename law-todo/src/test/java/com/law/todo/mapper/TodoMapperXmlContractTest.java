@@ -20,6 +20,7 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("submitted_at=case when #{toStatus}='SUBMITTED'"));
             assertTrue(xml.contains("completed_at=case when #{toStatus}='COMPLETED'"));
             assertTrue(xml.contains("cancelled_at=case when #{toStatus}='CANCELLED'"));
+            assertTrue(xml.contains("owner_dept_id=case when #{ownerId} is not null"));
         }
     }
 

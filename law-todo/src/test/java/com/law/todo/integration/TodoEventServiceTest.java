@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
+import org.springframework.dao.DuplicateKeyException;
 
 @ExtendWith(MockitoExtension.class)
 class TodoEventServiceTest
@@ -30,6 +32,18 @@ class TodoEventServiceTest
         when(mapper.selectByTriggerKey("evt-1:22:7")).thenReturn(existing);
         TodoInstance result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
         assertSame(existing,result);verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void concurrentDuplicateCreationReturnsCommittedWinner()
+    {
+        TodoInstance winner=new TodoInstance();winner.setTodoId(5L);
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(rule()));
+        when(mapper.selectByTriggerKey("evt-1:22:7")).thenReturn(null,winner);
+        doThrow(new DuplicateKeyException("duplicate")).when(mapper).insertInstance(any());
+
+        TodoInstance result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
+
+        assertSame(winner,result);verify(mapper,never()).insertRelation(anyMap());
     }
 
     @Test void createsCandidateWhenRuleTargetsRole()

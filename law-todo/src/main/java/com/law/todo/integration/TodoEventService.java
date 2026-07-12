@@ -15,6 +15,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.application.TodoAssignmentResolver.Assignment;
 import com.law.todo.domain.model.TodoInstance;
@@ -52,7 +53,7 @@ public class TodoEventService
             todo.setStatus("CREATED");todo.setPriority("NORMAL");todo.setSlaStatus("NORMAL");
             todo.setCreatedAt(LocalDateTime.now());todo.setTriggerEventId(event.eventId());todo.setTriggerIdempotencyKey(key);
             applySla(todo,text(value(rule,"sla_rule_json","slaRuleJson")));
-            mapper.insertInstance(todo);
+            try{mapper.insertInstance(todo);}catch(DuplicateKeyException duplicate){TodoInstance concurrent=mapper.selectByTriggerKey(key);if(concurrent!=null){result.add(concurrent);continue;}throw duplicate;}
             createRelation(todo);
             createSla(todo,rule);
             if(assignment.candidateType()!=null){Map<String,Object> c=new HashMap<>();c.put("todoId",todo.getTodoId());c.put("candidateType",assignment.candidateType());c.put("candidateValue",assignment.candidateValue());mapper.insertCandidate(c);}
