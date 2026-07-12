@@ -37,6 +37,7 @@ class CaseAssignmentServiceTest
         ServiceException error = assertThrows(ServiceException.class, () -> service.batchAssign(new HashMap<>()));
 
         assertEquals("请选择案件", error.getMessage());
+        assertEquals("VALIDATION_FAILED", error.getBusinessCode());
         verify(mapper, never()).updateCaseAssignment(org.mockito.ArgumentMatchers.anyMap());
     }
 
@@ -50,6 +51,7 @@ class CaseAssignmentServiceTest
         ServiceException error = assertThrows(ServiceException.class, () -> service.assign(command));
 
         assertEquals("只有待分案案件可以分配，办理中案件请走转案审批", error.getMessage());
+        assertEquals("STATE_CONFLICT", error.getBusinessCode());
         verify(userService, never()).selectUserById(org.mockito.ArgumentMatchers.anyLong());
         verify(mapper, never()).updateCaseAssignment(command);
     }

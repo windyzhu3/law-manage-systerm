@@ -11,6 +11,8 @@ import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.law.business.shared.status.CaseStatus;
+import com.law.business.shared.status.CaseStatusTransitions;
+import com.law.business.shared.error.BusinessErrorCode;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.exception.ServiceException;
@@ -47,7 +49,7 @@ public class CaseAssignmentService
     public int batchAssign(Map<String, Object> assignment)
     {
         List<Long> caseIds = parseIds(assignment.get("caseIds"));
-        if (caseIds.isEmpty()) throw new ServiceException("请选择案件");
+        if (caseIds.isEmpty()) throw error(BusinessErrorCode.VALIDATION_FAILED, "请选择案件");
         int rows = 0;
         for (Long caseId : caseIds)
         {
@@ -65,7 +67,7 @@ public class CaseAssignmentService
         String status = text(existed.get("case_status"));
         if (!CaseStatus.PENDING.code().equals(status))
         {
-            throw new ServiceException("只有待分案案件可以分配，办理中案件请走转案审批");
+            throw error(BusinessErrorCode.STATE_CONFLICT, "只有待分案案件可以分配，办理中案件请走转案审批");
         }
         Long mainLawyerId = requiredLong(assignment.get("mainLawyerId"), "请选择主办律师");
         SysUser mainLawyer = requireEligibleMainLawyer(mainLawyerId);
@@ -76,6 +78,7 @@ public class CaseAssignmentService
 
         boolean needConfirm = "Y".equals(String.valueOf(assignment.get("notifyFlag")));
         String targetStatus = needConfirm ? CaseStatus.CONFIRMING.code() : CaseStatus.PROCESSING.code();
+        CaseStatusTransitions.requireAllowed(CaseStatus.PENDING, CaseStatus.fromCode(targetStatus));
         assignment.put("mainLawyerName", mainLawyer.getNickName());
         assignment.put("caseStatus", targetStatus);
         assignment.put("currentNode", needConfirm ? "待律师确认" : "案件办理中");
@@ -103,11 +106,11 @@ public class CaseAssignmentService
         SysUser user = requireActiveUser(userId);
         Map<String, Object> profile = caseMapper.selectLawyerProfileByUserId(userId);
         if (profile == null || profile.get("profileId") == null || StringUtils.isEmpty(String.valueOf(profile.get("profileId"))))
-            throw new ServiceException("请先维护律师档案");
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "请先维护律师档案");
         if (!ASSIGN_ENABLED.equals(safeText(profile.get("assignEnabled"), ASSIGN_DISABLED)))
-            throw new ServiceException("律师已禁用分案");
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "律师已禁用分案");
         if ("assistant".equals(safeText(profile.get("lawyerRole"), "lawyer")))
-            throw new ServiceException("实习律师不能作为主办律师");
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "实习律师不能作为主办律师");
         return user;
     }
 
@@ -127,9 +130,9 @@ public class CaseAssignmentService
             SysUser user = requireActiveUser(id);
             Map<String, Object> profile = caseMapper.selectLawyerProfileByUserId(id);
             if (profile == null || profile.get("profileId") == null || StringUtils.isEmpty(String.valueOf(profile.get("profileId"))))
-                throw new ServiceException("请先维护协办律师档案");
+                throw error(BusinessErrorCode.PRECONDITION_FAILED, "请先维护协办律师档案");
             if (!ASSIGN_ENABLED.equals(safeText(profile.get("assignEnabled"), ASSIGN_DISABLED)))
-                throw new ServiceException("协办律师已禁用分案");
+                throw error(BusinessErrorCode.PRECONDITION_FAILED, "协办律师已禁用分案");
             if (idText.length() > 0) { idText.append(','); names.append(','); }
             idText.append(id); names.append(user.getNickName());
         }
@@ -140,7 +143,7 @@ public class CaseAssignmentService
     private SysUser requireActiveUser(Long id)
     {
         SysUser user = userService.selectUserById(id);
-        if (user == null || "1".equals(user.getStatus())) throw new ServiceException("律师不存在或已停用");
+        if (user == null || "1".equals(user.getStatus())) throw error(BusinessErrorCode.DATA_NOT_FOUND, "律师不存在或已停用");
         return user;
     }
 
@@ -182,13 +185,13 @@ public class CaseAssignmentService
     private void requireDict(String type, Object value, String message)
     {
         String v = value == null ? null : String.valueOf(value).trim();
-        if (StringUtils.isEmpty(v)) throw new ServiceException(message);
+        if (StringUtils.isEmpty(v)) throw error(BusinessErrorCode.VALIDATION_FAILED, message);
         List<SysDictData> options = dictTypeService.selectDictDataByType(type);
         if (contains(options, v)) return;
         dictTypeService.resetDictCache();
         options = dictTypeService.selectDictDataByType(type);
-        if (options == null || options.isEmpty()) throw new ServiceException("字典未初始化：" + type);
-        if (!contains(options, v)) throw new ServiceException(message);
+        if (options == null || options.isEmpty()) throw error(BusinessErrorCode.PRECONDITION_FAILED, "字典未初始化：" + type);
+        if (!contains(options, v)) throw error(BusinessErrorCode.VALIDATION_FAILED, message);
     }
 
     private boolean contains(List<SysDictData> options, String value)
@@ -215,11 +218,12 @@ public class CaseAssignmentService
     private Long requiredLong(Object value, String message)
     {
         if (value == null || StringUtils.isEmpty(String.valueOf(value)) || "null".equalsIgnoreCase(String.valueOf(value)))
-            throw new ServiceException(message);
+            throw error(BusinessErrorCode.VALIDATION_FAILED, message);
         return Long.valueOf(String.valueOf(value));
     }
 
     private String text(Object value) { return value == null ? null : String.valueOf(value); }
     private String safeText(Object value, String fallback) { return value == null || StringUtils.isEmpty(String.valueOf(value)) ? fallback : String.valueOf(value); }
-    private void assertChanged(int rows, String message) { if (rows <= 0) throw new ServiceException(message); }
+    private void assertChanged(int rows, String message) { if (rows <= 0) throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, message); }
+    private ServiceException error(BusinessErrorCode code, String message) { return new ServiceException(message, code.name()); }
 }
