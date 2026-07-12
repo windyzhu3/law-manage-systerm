@@ -19,4 +19,9 @@ public class TodoDodService
         for(String type:attachmentTypes)if(!files.contains(type))throw new TodoException("TODO_DOD_ATTACHMENT_MISSING","缺少完成材料："+type);
         for(TodoBusinessValidator validator:validators)if(validator.supports(todo.getBusinessType()))validator.validate(todo,values);
     }
+    public void validateBusiness(TodoInstance todo,Map<String,Object> payload)
+    {
+        Map<String,Object> values=payload==null?Map.of():payload;
+        for(TodoBusinessValidator validator:validators)if(validator.supports(todo.getBusinessType()))validator.validate(todo,values);
+    }
 }

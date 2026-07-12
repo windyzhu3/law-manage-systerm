@@ -68,4 +68,14 @@ public interface TodoMapper
     List<Map<String,Object>> selectBusinessTodos(Map<String,Object> query);
     Map<String,Object> selectRootTodo(Long rootTodoId);
     List<Map<String,Object>> selectTodoChain(Map<String,Object> query);
+    int insertExceptionLogIfAbsent(Map<String,Object> value);
+    Map<String,Object> selectExceptionLogByActionId(String actionId);
+    int forceTerminalConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("toStatus") String toStatus,@Param("operator") String operator);
+    int transferOwnerConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("ownerId") Long ownerId,@Param("ownerDeptId") Long ownerDeptId,@Param("operator") String operator);
+    Map<String,Object> selectSlaRecord(Long todoId);
+    int insertSlaWaiverIfAbsent(Map<String,Object> value);
+    Map<String,Object> selectSlaWaiverByActionId(String actionId);
+    int extendSlaConditionally(@Param("todoId") Long todoId,@Param("originalDueAt") LocalDateTime originalDueAt,@Param("newDueAt") LocalDateTime newDueAt);
+    List<Map<String,Object>> selectOperationsDashboard();
+    int insertRegeneratedTodo(Map<String,Object> value);
 }
