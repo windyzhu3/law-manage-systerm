@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.List;
@@ -36,7 +37,33 @@ class TodoEventServiceTest
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(rule()));
         new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
         verify(mapper).insertCandidate(anyMap());
+        verify(mapper).insertRelation(anyMap());
         assertEquals("ROLE",new TodoAssignmentResolver().resolve("ROLE:5",Map.of()).candidateType());
+    }
+
+    @Test void skipsRuleWhenPayloadDoesNotMatchCondition()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","{\"source\":\"ONLINE\",\"priority\":2}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
+
+        assertEquals(0,result.size());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void createsTodoWhenAllPayloadConditionsMatch()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","{\"source\":\"ONLINE\",\"priority\":2}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        TodoEvent matching=new TodoEvent("evt-2","LEAD_ASSIGNED","LEAD",8L,"L-8",Map.of("source","ONLINE","priority",2));
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(matching);
+
+        assertEquals(1,result.size());
+        verify(mapper,times(1)).insertInstance(any());
     }
 
     @Test void createsSlaRecordFromTemplateRule()
