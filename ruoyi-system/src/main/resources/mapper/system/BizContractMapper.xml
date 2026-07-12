@@ -180,6 +180,7 @@
         and audit_status=#{expectedAuditStatus}
         and contract_status=#{expectedContractStatus}
     </update>
+    <update id="updateSignMetadata">update biz_contract set sign_method=#{signMethod},sign_date=#{signDate},update_by=#{updateBy},update_time=sysdate() where contract_id=#{contractId} and del_flag='0' and audit_status='2'</update>
     <select id="selectFeePlans" resultType="java.util.Map">
         select p.*, c.contract_no contractNo,c.contract_name contractName,c.customer_name customerName,c.contract_status contractStatus from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id
         <where>

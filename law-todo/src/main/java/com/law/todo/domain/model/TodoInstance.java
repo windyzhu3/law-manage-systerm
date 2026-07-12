@@ -4,7 +4,7 @@ import java.time.LocalDateTime;
 
 public class TodoInstance
 {
-    private Long todoId; private String todoNo; private Long templateId; private Long templateVersionId;
+    private Long todoId; private String todoNo; private Long templateId; private Long templateVersionId;private String templateCode;
     private String title; private String businessType; private Long businessId; private String businessNo;
     private Long ownerId; private Long ownerDeptId; private String status; private String priority; private String slaStatus;
     private LocalDateTime createdAt; private LocalDateTime dueAt; private LocalDateTime completedAt;
@@ -14,6 +14,7 @@ public class TodoInstance
     public String getTodoNo(){return todoNo;} public void setTodoNo(String v){todoNo=v;}
     public Long getTemplateId(){return templateId;} public void setTemplateId(Long v){templateId=v;}
     public Long getTemplateVersionId(){return templateVersionId;} public void setTemplateVersionId(Long v){templateVersionId=v;}
+    public String getTemplateCode(){return templateCode;} public void setTemplateCode(String v){templateCode=v;}
     public String getTitle(){return title;} public void setTitle(String v){title=v;}
     public String getBusinessType(){return businessType;} public void setBusinessType(String v){businessType=v;}
     public Long getBusinessId(){return businessId;} public void setBusinessId(Long v){businessId=v;}

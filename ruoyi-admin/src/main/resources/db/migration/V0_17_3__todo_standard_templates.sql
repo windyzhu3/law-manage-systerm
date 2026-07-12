@@ -2,6 +2,9 @@ set @case_manager_role_id=(select role_id from sys_role where role_key='case_man
 set @finance_role_id=(select role_id from sys_role where role_key='finance_manager' and del_flag='0' limit 1);
 set @partner_role_id=(select role_id from sys_role where role_key='law_partner_manager' and del_flag='0' limit 1);
 
+alter table todo_instance add column template_code varchar(64) null after template_version_id;
+alter table todo_instance add key idx_todo_template_code(template_code,status,todo_id);
+
 insert into todo_template(template_code,template_name,business_type,current_version,status,create_by)
 select x.code,x.name,x.business_type,1,'0','admin' from (
  select 'CONTRACT_REVIEW' code,'合同审核' name,'CONTRACT' business_type union all

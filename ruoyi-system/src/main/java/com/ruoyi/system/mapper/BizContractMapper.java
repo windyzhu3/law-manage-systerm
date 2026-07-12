@@ -31,6 +31,7 @@ public interface BizContractMapper
     int insertApproval(Map<String, Object> approval);
     int updateAuditStatus(@Param("contractId") Long contractId, @Param("auditStatus") String auditStatus, @Param("contractStatus") String contractStatus, @Param("expectedAuditStatus") String expectedAuditStatus, @Param("expectedContractStatus") String expectedContractStatus, @Param("updateBy") String updateBy);
     int updateLifecycleStatus(@Param("contractId") Long contractId, @Param("signStatus") String signStatus, @Param("contractStatus") String contractStatus, @Param("expectedAuditStatus") String expectedAuditStatus, @Param("expectedContractStatus") String expectedContractStatus, @Param("updateBy") String updateBy);
+    int updateSignMetadata(@Param("contractId") Long contractId,@Param("signMethod") String signMethod,@Param("signDate") java.time.LocalDate signDate,@Param("updateBy") String updateBy);
     List<Map<String, Object>> selectFeePlans(Map<String, Object> params);
     Map<String, Object> selectFeePlanById(Long planId);
     Long selectFeePlanContractId(Long planId);

@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
+import com.law.business.security.BusinessActor;
+import com.law.business.contract.dto.ContractTodoSignCommand;
 import com.law.business.shared.error.BusinessErrorCode;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
@@ -74,9 +76,16 @@ public class ContractLifecycleService
     public int approve(Long contractId, String action, String opinion)
     {
         if (StringUtils.isEmpty(opinion)) throw error(BusinessErrorCode.VALIDATION_FAILED, "审批意见必填");
+        return approve(contractId,action,opinion,currentActor());
+    }
+
+    @Transactional
+    public int approve(Long contractId,String action,String opinion,BusinessActor actor)
+    {
+        if (StringUtils.isEmpty(opinion)) throw error(BusinessErrorCode.VALIDATION_FAILED, "审批意见必填");
         assertDict("law_contract_approval_action", action, "审批动作不合法");
         if (!"pass".equals(action) && !"reject".equals(action) && !"back".equals(action)) throw new ServiceException("审批动作不合法");
-        BizContract contract = queryService.contract(contractId);
+        BizContract contract = requireContract(contractId);
         if (!REVIEWING.equals(contract.getAuditStatus())) throw error(BusinessErrorCode.STATE_CONFLICT, "只有审核中的合同可以审批");
         String auditStatus = "pass".equals(action) ? PASSED : ("back".equals(action) ? BACK : REJECTED);
         String contractStatus = PASSED.equals(auditStatus) && (SIGNED.equals(contract.getSignStatus()) || PARTIAL.equals(contract.getSignStatus()))
@@ -84,21 +93,29 @@ public class ContractLifecycleService
         requireTransition(contract.getContractStatus(), contractStatus);
         Map<String, Object> approval = new HashMap<>();
         approval.put("contractId", contractId); approval.put("approvalAction", action); approval.put("approvalOpinion", opinion);
-        approval.put("approverId", SecurityUtils.getUserId()); approval.put("approverName", SecurityUtils.getLoginUser().getUser().getNickName());
-        approval.put("createBy", SecurityUtils.getUsername());
+        approval.put("approverId", actor.userId()); approval.put("approverName", actor.displayName());
+        approval.put("createBy", actor.userName());
         int rows = mapper.updateAuditStatus(contractId, auditStatus, contractStatus, REVIEWING,
-                contract.getContractStatus(), SecurityUtils.getUsername());
+                contract.getContractStatus(), actor.userName());
         assertChanged(rows);
         if (mapper.insertApproval(approval) <= 0) throw new ServiceException("审批记录创建失败");
-        log(contractId, contract.getAuditStatus(), auditStatus, "approval", opinion);
-        publish(BusinessEventType.CONTRACT_APPROVED, contract, payload("action", action, "auditStatus", auditStatus, "opinion", opinion));
+        log(contractId, contract.getAuditStatus(), auditStatus, "approval", opinion,actor.userName());
+        if("pass".equals(action))publish(BusinessEventType.CONTRACT_APPROVED, contract, payload("action", action, "auditStatus", auditStatus, "opinion", opinion,"ownerId",contract.getOwnerId()));
         return rows;
     }
 
     @Transactional
     public int sign(Long contractId, String signStatus)
     {
-        BizContract contract = queryService.contract(contractId);
+        BizContract current=queryService.contract(contractId);
+        if (!PASSED.equals(current.getAuditStatus())) throw error(BusinessErrorCode.PRECONDITION_FAILED, "只有审核通过的合同可以签署");
+        return sign(new ContractTodoSignCommand(contractId,signStatus,null,null,null),currentActor());
+    }
+
+    @Transactional
+    public int sign(ContractTodoSignCommand command,BusinessActor actor)
+    {
+        Long contractId=command.contractId();String signStatus=command.signStatus();BizContract contract = requireContract(contractId);
         if (!PASSED.equals(contract.getAuditStatus())) throw error(BusinessErrorCode.PRECONDITION_FAILED, "只有审批通过的合同可以签署");
         if (ARCHIVED.equals(contract.getContractStatus()) || VOID.equals(contract.getContractStatus()) || TERMINATED.equals(contract.getContractStatus()))
             throw new ServiceException("归档、作废或终止的合同不允许签署");
@@ -114,11 +131,12 @@ public class ContractLifecycleService
         }
         else if (!DRAFT.equals(contract.getContractStatus())) throw new ServiceException("只有草稿或部分签订的履约中合同可以签署");
         requireTransition(contract.getContractStatus(), PERFORMING);
-        int rows = mapper.updateLifecycleStatus(contractId, signStatus, PERFORMING, PASSED, expectedStatus, SecurityUtils.getUsername());
+        int rows = mapper.updateLifecycleStatus(contractId, signStatus, PERFORMING, PASSED, expectedStatus, actor.userName());
         assertChanged(rows);
-        log(contractId, contract.getContractStatus(), PERFORMING, "sign", content);
-        if (SIGNED.equals(signStatus)) caseService.createCaseFromContract(queryService.contract(contractId));
-        publish(BusinessEventType.CONTRACT_SIGNED, contract, payload("signStatus", signStatus));
+        if(command.signMethod()!=null||command.signDate()!=null)assertChanged(mapper.updateSignMetadata(contractId,command.signMethod(),command.signDate(),actor.userName()));
+        if(command.signFileUrl()!=null&&!command.signFileUrl().isBlank()){Map<String,Object> file=new HashMap<>();file.put("contractId",contractId);file.put("attachmentType","SIGNED_CONTRACT");file.put("fileName","signed-contract");file.put("fileUrl",command.signFileUrl());file.put("createBy",actor.userName());assertChanged(mapper.insertAttachment(file));}
+        log(contractId, contract.getContractStatus(), PERFORMING, "sign", content,actor.userName());
+        publish(BusinessEventType.CONTRACT_SIGNED, contract, payload("signStatus", signStatus,"ownerId",contract.getOwnerId()));
         return rows;
     }
 
@@ -148,8 +166,12 @@ public class ContractLifecycleService
 
     private void log(Long id, String from, String to, String action, String content)
     {
+        log(id,from,to,action,content,SecurityUtils.getUsername());
+    }
+    private void log(Long id,String from,String to,String action,String content,String operator)
+    {
         assertDict("law_contract_status_action", action, "合同状态动作不合法");
-        if (mapper.insertStatusLog(id, from, to, action, content, SecurityUtils.getUsername()) <= 0) throw new ServiceException("合同状态记录创建失败");
+        if (mapper.insertStatusLog(id, from, to, action, content, operator) <= 0) throw new ServiceException("合同状态记录创建失败");
     }
 
     private void assertDict(String type, Object value, String message)
@@ -183,4 +205,6 @@ public class ContractLifecycleService
         for (int i = 0; i + 1 < values.length; i += 2) result.put(String.valueOf(values[i]), values[i + 1]);
         return result;
     }
+    private BizContract requireContract(Long id){BizContract value=mapper.selectContractById(id);if(value==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"合同不存在或已删除");return value;}
+    private BusinessActor currentActor(){return new BusinessActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getLoginUser().getUser().getNickName(),SecurityUtils.getDeptId(),SecurityUtils.isAdmin());}
 }

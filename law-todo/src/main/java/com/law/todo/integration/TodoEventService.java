@@ -44,6 +44,7 @@ public class TodoEventService
             todo.setTodoNo("TD"+UUID.randomUUID().toString().replace("-","").substring(0,20).toUpperCase());
             todo.setTemplateId(longValue(value(rule,"template_id","templateId")));
             todo.setTemplateVersionId(version);
+            todo.setTemplateCode(text(value(rule,"template_code","templateCode")));
             todo.setTitle(text(value(rule,"template_name","templateName")));
             todo.setBusinessType(event.aggregateType());
             todo.setBusinessId(event.aggregateId());

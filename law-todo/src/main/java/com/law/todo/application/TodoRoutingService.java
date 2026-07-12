@@ -75,6 +75,7 @@ public class TodoRoutingService
         next.setTodoNo("TD" + UUID.randomUUID().toString().replace("-", "").substring(0, 20).toUpperCase());
         next.setTemplateId(longValue(value(version, "template_id", "templateId")));
         next.setTemplateVersionId(versionId);
+        next.setTemplateCode(text(value(version,"template_code","templateCode")));
         String templateName = text(value(version, "template_name", "templateName"));
         next.setTitle(title == null || title.isBlank() ? templateName : title);
         next.setBusinessType(businessType);next.setBusinessId(businessId);next.setBusinessNo(previous.getBusinessNo());
