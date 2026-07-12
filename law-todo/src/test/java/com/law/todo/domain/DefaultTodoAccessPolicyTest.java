@@ -1,0 +1,17 @@
+package com.law.todo.domain;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.mapper.TodoMapper;
+
+@ExtendWith(MockitoExtension.class)
+class DefaultTodoAccessPolicyTest
+{
+    @Mock TodoMapper mapper;
+    @Test void roleDepartmentOrPostCandidateCanClaim(){TodoInstance t=new TodoInstance();t.setTodoId(1L);when(mapper.countCandidateAccess(1L,7L,3L)).thenReturn(1);assertTrue(new DefaultTodoAccessPolicy(mapper).canClaim(t,7L,3L));}
+}

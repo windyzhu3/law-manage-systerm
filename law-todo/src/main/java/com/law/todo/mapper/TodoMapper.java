@@ -38,4 +38,5 @@ public interface TodoMapper
     Map<String,Object> selectCalendarByCode(String code);
     int insertSlaRecord(Map<String,Object> record);
     int insertSlaNotification(@Param("todoId") Long todoId,@Param("notificationType") String notificationType,@Param("now") LocalDateTime now);
+    int countCandidateAccess(@Param("todoId") Long todoId,@Param("userId") Long userId,@Param("deptId") Long deptId);
 }

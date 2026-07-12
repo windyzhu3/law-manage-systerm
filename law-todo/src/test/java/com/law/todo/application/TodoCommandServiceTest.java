@@ -33,7 +33,7 @@ class TodoCommandServiceTest
     {
         TodoInstance todo=todo(1L,"CREATED",null);
         when(mapper.selectById(1L)).thenReturn(todo);
-        when(access.canClaim(todo,7L)).thenReturn(true);
+        when(access.canClaim(todo,7L,3L)).thenReturn(true);
         when(mapper.updateStatusConditionally(1L,"CREATED","CLAIMED",7L,"alice")).thenReturn(1);
         when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
         service.claim(1L,new ActionCommand("a-1",null,Map.of()),new Actor(7L,"alice",3L));
