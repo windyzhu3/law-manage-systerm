@@ -70,4 +70,12 @@
             processed_time=null, error_message=null, update_time=sysdate()
         where event_id=#{eventId} and event_status='DEAD'
     </update>
+
+    <update id="requeueStaleProcessing">
+        update business_event
+        set event_status='FAILED', next_retry_time=sysdate(),
+            error_message='处理进程中断，事件已自动回收', update_time=sysdate()
+        where event_status='PROCESSING'
+          and update_time &lt; date_sub(sysdate(), interval #{staleMinutes} minute)
+    </update>
 </mapper>

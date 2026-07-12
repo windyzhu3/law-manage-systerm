@@ -33,6 +33,17 @@ class BusinessEventOutboxProcessorTest
         assertEquals(1, count);
         verify(handler).handle(event);
         verify(mapper).markProcessed(1L);
+        verify(mapper).requeueStaleProcessing(10);
+    }
+
+    @Test
+    void recoversEventsLeftProcessingByCrashedWorker()
+    {
+        when(mapper.selectPendingEvents(20)).thenReturn(List.of());
+
+        new BusinessEventOutboxProcessor(mapper, List.of()).processBatch(20);
+
+        verify(mapper).requeueStaleProcessing(10);
     }
 
     @Test

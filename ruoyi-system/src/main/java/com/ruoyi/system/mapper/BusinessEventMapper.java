@@ -19,4 +19,5 @@ public interface BusinessEventMapper
     int markFailed(@Param("eventId") Long eventId, @Param("errorMessage") String errorMessage);
 
     int requeueDead(@Param("eventId") Long eventId);
+    int requeueStaleProcessing(@Param("staleMinutes") int staleMinutes);
 }

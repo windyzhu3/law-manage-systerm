@@ -21,6 +21,7 @@ public class BusinessEventOutboxProcessor
     public int processBatch(int requestedLimit)
     {
         int limit = Math.max(1, Math.min(requestedLimit, 200));
+        mapper.requeueStaleProcessing(10);
         List<BusinessEventRecord> events = mapper.selectPendingEvents(limit);
         if (events == null || events.isEmpty()) return 0;
         int processed = 0;
