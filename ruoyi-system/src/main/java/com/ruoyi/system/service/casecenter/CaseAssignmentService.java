@@ -13,6 +13,7 @@ import com.law.business.event.BusinessEventType;
 import com.law.business.shared.status.CaseStatus;
 import com.law.business.shared.status.CaseStatusTransitions;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.business.security.BusinessActor;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.common.exception.ServiceException;
@@ -44,6 +45,7 @@ public class CaseAssignmentService
     {
         return assignSingle(assignment);
     }
+    @Transactional public int assign(Map<String,Object> assignment,BusinessActor actor){Map<String,Object> value=new HashMap<>(assignment);value.put("_actor",actor);return assignSingle(value);}
 
     @Transactional
     public int batchAssign(Map<String, Object> assignment)
@@ -63,7 +65,8 @@ public class CaseAssignmentService
     private int assignSingle(Map<String, Object> assignment)
     {
         Long caseId = requiredLong(assignment.get("caseId"), "请选择案件");
-        Map<String, Object> existed = queryService.caseDetail(caseId);
+        Map<String, Object> existed = assignment.containsKey("_actor")?caseMapper.selectCaseById(caseId):queryService.caseDetail(caseId);
+        if(existed==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在");BusinessActor actor=actor(assignment);
         String status = text(existed.get("case_status"));
         if (!CaseStatus.PENDING.code().equals(status))
         {
@@ -82,20 +85,20 @@ public class CaseAssignmentService
         assignment.put("mainLawyerName", mainLawyer.getNickName());
         assignment.put("caseStatus", targetStatus);
         assignment.put("currentNode", needConfirm ? "待律师确认" : "案件办理中");
-        assignment.put("updateBy", SecurityUtils.getUsername());
+        assignment.put("updateBy", actor.userName());
         int rows = caseMapper.updateCaseAssignment(assignment);
         assertChanged(rows, "案件状态已变化，请刷新后重试");
-        assignment.put("createBy", SecurityUtils.getUsername());
+        assignment.put("createBy", actor.userName());
         assertChanged(caseMapper.insertAssignment(assignment), "分案记录创建失败");
-        insertStatusLog(caseId, status, targetStatus, mainLawyer.getNickName());
+        insertStatusLog(caseId, status, targetStatus, mainLawyer.getNickName(),actor);
         if (needConfirm)
         {
-            createConfirm(caseId, mainLawyerId, mainLawyer.getNickName());
-            createNotice("案件分配待确认", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，请及时确认接收。");
+            createConfirm(caseId, mainLawyerId, mainLawyer.getNickName(),actor);
+            createNotice("案件分配待确认", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，请及时确认接收。",actor);
         }
         else
         {
-            createNotice("案件已分配", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，当前进入办理中。");
+            createNotice("案件已分配", "案件 " + existed.get("case_no") + " 已分配给 " + mainLawyer.getNickName() + "，当前进入办理中。",actor);
         }
         publish(caseId, text(existed.get("case_no")), mainLawyerId, needConfirm);
         return rows;
@@ -147,30 +150,30 @@ public class CaseAssignmentService
         return user;
     }
 
-    private void createConfirm(Long caseId, Long userId, String userName)
+    private void createConfirm(Long caseId, Long userId, String userName,BusinessActor actor)
     {
         Map<String, Object> confirm = new HashMap<>();
         confirm.put("caseId", caseId); confirm.put("confirmType", "accept"); confirm.put("confirmStatus", "pending");
         confirm.put("confirmUserId", userId); confirm.put("confirmUserName", userName);
-        confirm.put("content", "请确认接收案件"); confirm.put("createBy", SecurityUtils.getUsername());
+        confirm.put("content", "请确认接收案件"); confirm.put("createBy", actor.userName());
         assertChanged(caseMapper.insertConfirm(confirm), "接案确认记录创建失败");
     }
 
-    private void insertStatusLog(Long caseId, String from, String to, String lawyerName)
+    private void insertStatusLog(Long caseId, String from, String to, String lawyerName,BusinessActor actor)
     {
         requireDict("law_case_status_action", "assign", "案件状态动作不合法");
         Map<String, Object> log = new HashMap<>();
         log.put("caseId", caseId); log.put("fromStatus", from); log.put("toStatus", to);
         log.put("actionType", "assign"); log.put("content", "分配主办律师：" + lawyerName);
-        log.put("createBy", SecurityUtils.getUsername());
+        log.put("createBy", actor.userName());
         assertChanged(caseMapper.insertStatusLog(log), "案件状态记录创建失败");
     }
 
-    private void createNotice(String title, String content)
+    private void createNotice(String title, String content,BusinessActor actor)
     {
         SysNotice notice = new SysNotice();
         notice.setNoticeTitle(title); notice.setNoticeType("1"); notice.setNoticeContent(content);
-        notice.setStatus("0"); notice.setCreateBy(SecurityUtils.getUsername()); notice.setRemark("案管中心");
+        notice.setStatus("0"); notice.setCreateBy(actor.userName()); notice.setRemark("案管中心");
         noticeService.insertNotice(notice);
     }
 
@@ -226,4 +229,5 @@ public class CaseAssignmentService
     private String safeText(Object value, String fallback) { return value == null || StringUtils.isEmpty(String.valueOf(value)) ? fallback : String.valueOf(value); }
     private void assertChanged(int rows, String message) { if (rows <= 0) throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, message); }
     private ServiceException error(BusinessErrorCode code, String message) { return new ServiceException(message, code.name()); }
+    private BusinessActor actor(Map<String,Object> command){Object value=command.get("_actor");if(value instanceof BusinessActor actor)return actor;try{return new BusinessActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getLoginUser().getUser().getNickName(),SecurityUtils.getDeptId(),SecurityUtils.isAdmin());}catch(RuntimeException absent){return new BusinessActor(0L,"system","system",null,false);}}
 }

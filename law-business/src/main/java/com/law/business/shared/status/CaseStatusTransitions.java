@@ -14,7 +14,7 @@ public final class CaseStatusTransitions
         allow(CaseStatus.PENDING, CaseStatus.CONFIRMING, CaseStatus.TERMINATED);
         allow(CaseStatus.CONFIRMING, CaseStatus.PENDING, CaseStatus.PROCESSING, CaseStatus.TERMINATED);
         allow(CaseStatus.PROCESSING, CaseStatus.TRANSFERRING, CaseStatus.CLOSING, CaseStatus.TERMINATED);
-        allow(CaseStatus.TRANSFERRING, CaseStatus.PROCESSING, CaseStatus.TERMINATED);
+        allow(CaseStatus.TRANSFERRING, CaseStatus.PROCESSING, CaseStatus.CONFIRMING, CaseStatus.TERMINATED);
         allow(CaseStatus.CLOSING, CaseStatus.PROCESSING, CaseStatus.CLOSED);
         allow(CaseStatus.CLOSED, CaseStatus.ARCHIVED);
     }

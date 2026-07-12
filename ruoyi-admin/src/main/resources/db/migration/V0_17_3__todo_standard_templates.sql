@@ -29,7 +29,7 @@ select t.template_id,1,'PUBLISHED',
   when t.template_code in ('CONTRACT_REVIEW','CASE_TRANSFER_REVIEW') then json_quote(concat('ROLE:',@partner_role_id))
   when t.template_code in ('PAYMENT_CONFIRM','INVOICE_HANDLE','MATTER_EXPENSE_REVIEW') then json_quote(concat('ROLE:',@finance_role_id))
   when t.template_code in ('CASE_CREATE_CHECK','CASE_ASSIGN','CASE_REASSIGN','CASE_CLOSE_CONFIRM','CASE_ARCHIVE_CONFIRM') then json_quote(concat('ROLE:',@case_manager_role_id))
-  when t.template_code='CASE_ACCEPT' then json_quote('PAYLOAD:lawyerId')
+  when t.template_code='CASE_ACCEPT' then json_quote('PAYLOAD:mainLawyerId')
   else json_quote('PAYLOAD:ownerId') end,
  case
   when t.template_code='CONTRACT_REVIEW' then json_object('requiredFields',json_array('auditResult'),'requiredAttachments',json_array())
@@ -38,7 +38,7 @@ select t.template_id,1,'PUBLISHED',
   when t.template_code='INVOICE_HANDLE' then json_object('requiredFields',json_array('planId','action'),'requiredAttachments',json_array())
   when t.template_code='CASE_CREATE_CHECK' then json_object('requiredFields',json_array('materialsChecked'),'requiredAttachments',json_array())
   when t.template_code='CASE_ASSIGN' then json_object('requiredFields',json_array('lawyerId'),'requiredAttachments',json_array())
-  when t.template_code='CASE_ACCEPT' then json_object('requiredFields',json_array('confirmResult'),'requiredAttachments',json_array())
+  when t.template_code='CASE_ACCEPT' then json_object('requiredFields',json_array('confirmId','accepted'),'requiredAttachments',json_array())
   when t.template_code='CASE_REASSIGN' then json_object('requiredFields',json_array('lawyerId'),'requiredAttachments',json_array())
   when t.template_code='CASE_TRANSFER_REVIEW' then json_object('requiredFields',json_array('approvalResult'),'requiredAttachments',json_array())
   when t.template_code='MATTER_NODE_HANDLE' then json_object('requiredFields',json_array('nodeResult'),'requiredAttachments',json_array())

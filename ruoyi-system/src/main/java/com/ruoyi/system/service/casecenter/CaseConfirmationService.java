@@ -9,6 +9,7 @@ import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.law.business.shared.status.CaseStatus;
+import com.law.business.security.BusinessActor;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
@@ -26,7 +27,12 @@ public class CaseConfirmationService
 
     @Transactional
     public int handle(Map<String, Object> command)
+    {return handle(command,currentActor());}
+
+    @Transactional
+    public int handle(Map<String,Object> source,BusinessActor actor)
     {
+        Map<String,Object> command=new HashMap<>(source);
         Long confirmId = id(command.get("confirmId"), "请选择确认信息");
         String result = text(command.get("confirmResult"));
         if (!"accepted".equals(result) && !"rejected".equals(result))
@@ -34,12 +40,12 @@ public class CaseConfirmationService
         Map<String, Object> entity = mapper.selectConfirmById(confirmId);
         if (entity == null) throw error("DATA_NOT_FOUND", "确认信息不存在");
         Long caseId = id(entity.get("case_id"), "请选择案件");
-        queryService.caseDetail(caseId);
+        if(mapper.selectCaseById(caseId)==null)throw error("DATA_NOT_FOUND","案件不存在");
 
         command.put("expectedStatus", "pending");
-        command.put("handlerId", SecurityUtils.getUserId());
-        command.put("handlerName", SecurityUtils.getLoginUser().getUser().getNickName());
-        command.put("updateBy", SecurityUtils.getUsername());
+        command.put("handlerId", actor.userId());
+        command.put("handlerName", actor.displayName());
+        command.put("updateBy", actor.userName());
         int rows = mapper.updateConfirm(command);
         changed(rows, "确认信息状态已变化，请刷新后重试");
 
@@ -48,10 +54,10 @@ public class CaseConfirmationService
         Map<String, Object> update = new HashMap<>();
         update.put("caseId", caseId); update.put("caseStatus", target);
         update.put("currentNode", accepted ? "案件办理中" : "待重新分案");
-        update.put("clearAssignment", !accepted); update.put("updateBy", SecurityUtils.getUsername());
+        update.put("clearAssignment", !accepted); update.put("updateBy", actor.userName());
         changed(mapper.updateCaseConfirmResult(update), "案件确认状态已变化，请刷新后重试");
-        support.statusLog(caseId, CaseStatus.CONFIRMING.code(), target, "confirm", "律师接案确认：" + (accepted ? "已接收" : "已拒绝"));
-        support.notice("律师接案确认", "案件 " + entity.get("caseNo") + " 接案确认结果：" + (accepted ? "已接收" : "已拒绝"));
+        support.statusLog(caseId, CaseStatus.CONFIRMING.code(), target, "confirm", "律师接案确认：" + (accepted ? "已接收" : "已拒绝"),actor);
+        support.notice("律师接案确认", "案件 " + entity.get("caseNo") + " 接案确认结果：" + (accepted ? "已接收" : "已拒绝"),actor);
         BusinessEventType type = accepted ? BusinessEventType.CASE_ACCEPTED : BusinessEventType.CASE_REJECTED;
         Map<String, Object> payload = new HashMap<>(); payload.put("confirmId", confirmId);
         publisher.publish(new BusinessEventCommand(type, "CASE", caseId, text(entity.get("caseNo")),
@@ -67,4 +73,5 @@ public class CaseConfirmationService
     private String text(Object value) { return value == null ? null : String.valueOf(value); }
     private void changed(int rows, String message) { if (rows <= 0) throw error("CONCURRENT_MODIFICATION", message); }
     private ServiceException error(String code, String message) { ServiceException e = new ServiceException(message); e.setBusinessCode(code); return e; }
+    private BusinessActor currentActor(){try{return new BusinessActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getLoginUser().getUser().getNickName(),SecurityUtils.getDeptId(),SecurityUtils.isAdmin());}catch(RuntimeException absent){return new BusinessActor(0L,"system","system",null,false);}}
 }
