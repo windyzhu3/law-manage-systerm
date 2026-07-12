@@ -1,6 +1,7 @@
 package com.ruoyi.system.service.matter;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,7 +42,8 @@ class MatterCommandServiceTest
         command.put("contractId", 10L);
         when(matterMapper.selectMatterByContractId(10L)).thenReturn(Map.of("case_id", 99L));
 
-        assertThrows(ServiceException.class, () -> service.create(command));
+        ServiceException error = assertThrows(ServiceException.class, () -> service.create(command));
+        assertEquals("DUPLICATE_OPERATION", error.getBusinessCode());
 
         verify(contractMapper, never()).selectContractById(10L);
     }
@@ -52,7 +54,8 @@ class MatterCommandServiceTest
         Map<String, Object> command = new HashMap<>();
         command.put("contractId", 10L);
         when(matterMapper.selectMatterByContractId(10L)).thenReturn(null);
-        assertThrows(ServiceException.class, () -> service.create(command));
+        ServiceException error = assertThrows(ServiceException.class, () -> service.create(command));
+        assertEquals("DATA_NOT_FOUND", error.getBusinessCode());
         verify(contractMapper).selectContractById(10L);
     }
 
@@ -69,7 +72,8 @@ class MatterCommandServiceTest
         when(matterMapper.selectMatterByContractId(10L)).thenReturn(null);
         when(contractMapper.selectContractById(10L)).thenReturn(contract);
 
-        assertThrows(ServiceException.class, () -> service.create(command));
+        ServiceException error = assertThrows(ServiceException.class, () -> service.create(command));
+        assertEquals("PRECONDITION_FAILED", error.getBusinessCode());
 
         verify(contractMapper).selectContractById(10L);
         verify(customerMapper, never()).selectCustomerById(20L);

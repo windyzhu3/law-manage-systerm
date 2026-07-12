@@ -20,6 +20,7 @@ import com.ruoyi.system.mapper.BizContractMapper;
 import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.error.BusinessErrorCode;
 
 @Service
 public class MatterCommandService
@@ -44,14 +45,14 @@ public class MatterCommandService
     public int create(Map<String, Object> matter)
     {
         Long contractId = toLong(matter.get("contractId"), "请选择来源合同");
-        if (mapper.selectMatterByContractId(contractId) != null) throw new ServiceException("该合同已生成案件");
+        if (mapper.selectMatterByContractId(contractId) != null) throw error(BusinessErrorCode.DUPLICATE_OPERATION, "该合同已生成案件");
         BizContract contract = contractMapper.selectContractById(contractId);
-        if (contract == null) throw new ServiceException("来源合同不存在");
-        if (contract.getCustomerId() == null) throw new ServiceException("合同未关联客户，不能创建案件");
+        if (contract == null) throw error(BusinessErrorCode.DATA_NOT_FOUND, "来源合同不存在");
+        if (contract.getCustomerId() == null) throw error(BusinessErrorCode.PRECONDITION_FAILED, "合同未关联客户，不能创建案件");
         if (!"2".equals(contract.getAuditStatus()) || !"1".equals(contract.getSignStatus()) || !"1".equals(contract.getContractStatus()))
-            throw new ServiceException("只有审核通过、已签订且履约中的合同可以创建案件");
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "只有审核通过、已签订且履约中的合同可以创建案件");
         BizCustomer customer = customerMapper.selectCustomerById(contract.getCustomerId());
-        if (customer == null || "2".equals(customer.getDelFlag())) throw new ServiceException("客户不存在或已删除");
+        if (customer == null || "2".equals(customer.getDelFlag())) throw error(BusinessErrorCode.DATA_NOT_FOUND, "客户不存在或已删除");
         matter.put("caseNo", "AJ" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
         matter.put("caseName", defaultText(matter.get("caseName"), contract.getContractName()));
         matter.put("customerId", contract.getCustomerId()); matter.put("customerName", contract.getCustomerName());
@@ -92,10 +93,10 @@ public class MatterCommandService
     private Map<String, Object> requireEditable(Long caseId)
     {
         Map<String, Object> matter = mapper.selectMatterById(caseId);
-        if (matter == null) throw new ServiceException("案件不存在或已删除");
+        if (matter == null) throw error(BusinessErrorCode.DATA_NOT_FOUND, "案件不存在或已删除");
         if (!SecurityUtils.isAdmin() && mapper.countMatterInDataScope(caseId, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), true, MATTER_PERMISSIONS) == 0)
-            throw new ServiceException("无权访问该案件");
-        if (!PROCESSING.equals(text(matter.get("case_status")))) throw new ServiceException("只有办理中案件允许编辑办案信息");
+            throw error(BusinessErrorCode.ACCESS_DENIED, "无权访问该案件");
+        if (!PROCESSING.equals(text(matter.get("case_status")))) throw error(BusinessErrorCode.STATE_CONFLICT, "只有办理中案件允许编辑办案信息");
         return matter;
     }
 
@@ -113,7 +114,7 @@ public class MatterCommandService
         {
             String value = values.get(text(config.get("field_code")));
             if ("Y".equals(text(config.get("required_flag"))) && StringUtils.isEmpty(value))
-                throw new ServiceException("请填写案件专属信息：" + config.get("field_name"));
+                throw error(BusinessErrorCode.VALIDATION_FAILED, "请填写案件专属信息：" + config.get("field_name"));
             validateFieldType(config, value);
         }
     }
@@ -128,7 +129,7 @@ public class MatterCommandService
             else if ("date".equals(type)) LocalDate.parse(value);
             else if ("switch".equals(type) && !"Y".equals(value) && !"N".equals(value)) throw new IllegalArgumentException();
         }
-        catch (RuntimeException e) { throw new ServiceException("案件专属信息格式不正确：" + config.get("field_name")); }
+        catch (RuntimeException e) { throw error(BusinessErrorCode.VALIDATION_FAILED, "案件专属信息格式不正确：" + config.get("field_name")); }
     }
 
     private void saveFields(Long caseId, Object raw)
@@ -162,8 +163,8 @@ public class MatterCommandService
         String expected = text(value); if (StringUtils.isEmpty(expected)) return;
         List<SysDictData> values = dictService.selectDictDataByType(type); if (contains(values, expected)) return;
         dictService.resetDictCache(); values = dictService.selectDictDataByType(type);
-        if (values == null || values.isEmpty()) throw new ServiceException("字典未初始化：" + type);
-        if (!contains(values, expected)) throw new ServiceException(message);
+        if (values == null || values.isEmpty()) throw error(BusinessErrorCode.PRECONDITION_FAILED, "字典未初始化：" + type);
+        if (!contains(values, expected)) throw error(BusinessErrorCode.VALIDATION_FAILED, message);
     }
 
     private boolean contains(List<SysDictData> values, String expected) { if (values != null) for (SysDictData item : values) if (expected.equals(item.getDictValue())) return true; return false; }
@@ -173,4 +174,5 @@ public class MatterCommandService
     private String text(Object value) { return value == null || "null".equalsIgnoreCase(String.valueOf(value)) ? null : String.valueOf(value).trim(); }
     @SuppressWarnings("unchecked") private List<Map<String, Object>> list(Object value) { return value instanceof List ? (List<Map<String, Object>>) value : List.of(); }
     private void assertRows(int rows, String message) { if (rows <= 0) throw new ServiceException(message); }
+    private ServiceException error(BusinessErrorCode code, String message) { return new ServiceException(message, code.name()); }
 }
