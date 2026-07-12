@@ -1,0 +1,29 @@
+@import "../business/business-dialog.scss";
+
+.profile-filter-popover {
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(36, 73, 135, .16);
+}
+
+.case-profile-drawer {
+  .el-drawer__header {
+    margin-bottom: 14px;
+  }
+
+  .el-table {
+    font-size: var(--biz-font-small, 12px);
+  }
+
+  .el-table th,
+  .el-table td {
+    padding: 8px 0;
+  }
+
+  .el-table .cell {
+    line-height: 1.45;
+  }
+
+  .el-switch {
+    vertical-align: middle;
+  }
+}

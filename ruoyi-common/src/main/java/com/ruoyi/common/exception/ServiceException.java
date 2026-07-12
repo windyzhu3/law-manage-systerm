@@ -26,6 +26,8 @@ public final class ServiceException extends RuntimeException
      */
     private String detailMessage;
 
+    private String businessCode;
+
     /**
      * 空构造方法，避免反序列化问题
      */
@@ -44,6 +46,12 @@ public final class ServiceException extends RuntimeException
         this.code = code;
     }
 
+    public ServiceException(String message, String businessCode)
+    {
+        this.message = message;
+        this.businessCode = businessCode;
+    }
+
     public String getDetailMessage()
     {
         return detailMessage;
@@ -58,6 +66,17 @@ public final class ServiceException extends RuntimeException
     public Integer getCode()
     {
         return code;
+    }
+
+    public String getBusinessCode()
+    {
+        return businessCode;
+    }
+
+    public ServiceException setBusinessCode(String businessCode)
+    {
+        this.businessCode = businessCode;
+        return this;
     }
 
     public ServiceException setMessage(String message)

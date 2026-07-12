@@ -2,6 +2,10 @@ package com.ruoyi.system.service;
 
 import java.util.List;
 import java.util.Map;
+import com.law.business.finance.dto.ExpenseUpdateCommand;
+import com.law.business.finance.dto.InvoiceHandleCommand;
+import com.law.business.finance.dto.PaymentConfirmCommand;
+import com.law.business.finance.dto.PaymentRejectCommand;
 
 public interface IBizFinanceService
 {
@@ -19,11 +23,11 @@ public interface IBizFinanceService
 
     Map<String, Object> selectReports(Map<String, Object> params);
 
-    int confirmPayment(Map<String, Object> body);
+    int confirmPayment(PaymentConfirmCommand command);
 
-    int rejectPayment(Map<String, Object> body);
+    int rejectPayment(PaymentRejectCommand command);
 
-    int handleInvoice(Map<String, Object> body);
+    int handleInvoice(InvoiceHandleCommand command);
 
-    int updateExpense(Map<String, Object> expense);
+    int updateExpense(ExpenseUpdateCommand command);
 }

@@ -19,16 +19,22 @@ import com.ruoyi.system.mapper.BizLeadMapper;
 import com.ruoyi.system.service.IBizCustomerService;
 import com.ruoyi.system.service.IBizLeadService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.law.business.shared.status.LeadStatus;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.law.business.security.LeadPermissions;
+import com.ruoyi.common.utils.uuid.IdUtils;
 
 @Service
 public class BizLeadServiceImpl implements IBizLeadService
 {
-    private static final String STATUS_UNASSIGNED = "0";
-    private static final String STATUS_WAIT_FOLLOW = "1";
-    private static final String STATUS_FOLLOWING = "2";
-    private static final String STATUS_CONVERTED = "3";
-    private static final String STATUS_INVALID = "4";
-    private static final String STATUS_CLOSED = "5";
+    private static final String STATUS_UNASSIGNED = LeadStatus.UNASSIGNED.code();
+    private static final String STATUS_WAIT_FOLLOW = LeadStatus.WAIT_FOLLOW.code();
+    private static final String STATUS_FOLLOWING = LeadStatus.FOLLOWING.code();
+    private static final String STATUS_CONVERTED = LeadStatus.CONVERTED.code();
+    private static final String STATUS_INVALID = LeadStatus.INVALID.code();
+    private static final String STATUS_CLOSED = LeadStatus.CLOSED.code();
     private static final String POOL_NO = "0";
     private static final String POOL_YES = "1";
 
@@ -40,6 +46,9 @@ public class BizLeadServiceImpl implements IBizLeadService
 
     @Autowired
     private ISysDictTypeService dictTypeService;
+
+    @Autowired
+    private BusinessEventPublisher eventPublisher;
 
     @Override
     public List<BizLead> selectLeadList(BizLead lead)
@@ -68,6 +77,7 @@ public class BizLeadServiceImpl implements IBizLeadService
     }
 
     @Override
+    @Transactional
     public int insertLead(BizLead lead)
     {
         validateLead(lead);
@@ -84,7 +94,9 @@ public class BizLeadServiceImpl implements IBizLeadService
             lead.setStatus(STATUS_WAIT_FOLLOW);
             lead.setPoolStatus(POOL_NO);
         }
-        return leadMapper.insertLead(lead);
+        int rows = leadMapper.insertLead(lead);
+        publish(BusinessEventType.LEAD_CREATED, lead, Map.of("ownerId", valueOrEmpty(lead.getOwnerId())));
+        return rows;
     }
 
     @Override
@@ -162,6 +174,8 @@ public class BizLeadServiceImpl implements IBizLeadService
             throw new ServiceException("Lead assignment failed, please refresh and try again");
         }
         leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), ownerId, "assign", reason, username);
+        publish(BusinessEventType.LEAD_ASSIGNED, lead,
+                Map.of("fromOwnerId", valueOrEmpty(lead.getOwnerId()), "toOwnerId", ownerId));
         return rows;
     }
 
@@ -170,7 +184,7 @@ public class BizLeadServiceImpl implements IBizLeadService
     public int moveToPool(Long leadId, String reason)
     {
         BizLead lead = requiredAccessibleLead(leadId, false, false);
-        if (!SecurityUtils.hasPermi("lead:pool:move") && SecurityUtils.hasPermi("lead:mine:pool:move"))
+        if (!SecurityUtils.hasPermi(LeadPermissions.MOVE_POOL) && SecurityUtils.hasPermi(LeadPermissions.MOVE_MINE_POOL))
         {
             assertMineLead(lead, "move to pool");
         }
@@ -186,6 +200,7 @@ public class BizLeadServiceImpl implements IBizLeadService
             throw new ServiceException("Move to public pool failed, please refresh and try again");
         }
         leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), null, "pool", reason, username);
+        publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead, Map.of("reason", valueOrEmpty(reason)));
         return rows;
     }
 
@@ -206,6 +221,7 @@ public class BizLeadServiceImpl implements IBizLeadService
             throw new ServiceException("Lead has already been claimed, please refresh the list");
         }
         leadMapper.insertAssignmentLog(leadId, null, userId, "claim", "claim from public pool", SecurityUtils.getUsername());
+        publish(BusinessEventType.LEAD_CLAIMED, lead, Map.of("ownerId", userId));
         return rows;
     }
 
@@ -214,7 +230,7 @@ public class BizLeadServiceImpl implements IBizLeadService
     public int convertLead(Long leadId)
     {
         BizLead lead = requiredAccessibleLead(leadId, false, false);
-        if (!SecurityUtils.hasPermi("lead:convert") && SecurityUtils.hasPermi("lead:mine:convert"))
+        if (!SecurityUtils.hasPermi(LeadPermissions.CONVERT) && SecurityUtils.hasPermi(LeadPermissions.CONVERT_MINE))
         {
             assertMineLead(lead, "convert");
         }
@@ -229,7 +245,8 @@ public class BizLeadServiceImpl implements IBizLeadService
         {
             throw new ServiceException("Lead conversion failed, please refresh and try again");
         }
-        customerService.convertLeadToCustomer(lead);
+        Long customerId = customerService.convertLeadToCustomer(lead).getCustomerId();
+        publish(BusinessEventType.LEAD_CONVERTED, lead, Map.of("customerId", customerId));
         return rows;
     }
 
@@ -249,7 +266,7 @@ public class BizLeadServiceImpl implements IBizLeadService
     {
         validateFollowup(followup);
         BizLead lead = requiredAccessibleLead(followup.getLeadId(), false, false);
-        if (!SecurityUtils.hasPermi("lead:followup:add") && SecurityUtils.hasPermi("lead:mine:followup"))
+        if (!SecurityUtils.hasPermi(LeadPermissions.FOLLOW) && SecurityUtils.hasPermi(LeadPermissions.FOLLOW_MINE))
         {
             assertMineLead(lead, "follow up");
         }
@@ -439,12 +456,12 @@ public class BizLeadServiceImpl implements IBizLeadService
             return true;
         }
         Long currentUserId = SecurityUtils.getUserId();
-        if (SecurityUtils.hasPermi("lead:query")
+        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_ALL)
                 && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0)
         {
             return true;
         }
-        if (SecurityUtils.hasPermi("lead:mine:query")
+        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_MINE)
                 && !"2".equals(lead.getDelFlag())
                 && POOL_NO.equals(lead.getPoolStatus())
                 && currentUserId != null
@@ -452,13 +469,13 @@ public class BizLeadServiceImpl implements IBizLeadService
         {
             return true;
         }
-        if (SecurityUtils.hasPermi("lead:pool:query")
+        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_POOL)
                 && !"2".equals(lead.getDelFlag())
                 && POOL_YES.equals(lead.getPoolStatus()))
         {
             return true;
         }
-        if (SecurityUtils.hasPermi("lead:recycle:query")
+        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_RECYCLE)
                 && "2".equals(lead.getDelFlag())
                 && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), true) > 0)
         {
@@ -513,5 +530,17 @@ public class BizLeadServiceImpl implements IBizLeadService
         {
             throw new ServiceException("Only assigned owner can " + action + " this lead");
         }
+    }
+
+    private void publish(BusinessEventType eventType, BizLead lead, Map<String, Object> payload)
+    {
+        String eventKey = eventType.name() + ":" + lead.getLeadId() + ":" + IdUtils.fastUUID();
+        eventPublisher.publish(new BusinessEventCommand(eventType, "LEAD", lead.getLeadId(),
+                lead.getLeadNo(), eventKey, payload));
+    }
+
+    private Object valueOrEmpty(Object value)
+    {
+        return value == null ? "" : value;
     }
 }

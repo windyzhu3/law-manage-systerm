@@ -11,6 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
+import com.law.business.finance.dto.ExpenseUpdateCommand;
+import com.law.business.finance.dto.InvoiceHandleCommand;
+import com.law.business.finance.dto.PaymentConfirmCommand;
+import com.law.business.finance.dto.PaymentRejectCommand;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -81,32 +86,32 @@ public class BizFinanceController extends BaseController
     @PreAuthorize("@ss.hasPermi('finance:payment:confirm')")
     @Log(title = "finance-payment-confirm", businessType = BusinessType.UPDATE)
     @PostMapping("/payment/confirm")
-    public AjaxResult confirmPayment(@RequestBody Map<String, Object> body)
+    public AjaxResult confirmPayment(@Valid @RequestBody PaymentConfirmCommand command)
     {
-        return toAjax(financeService.confirmPayment(body));
+        return toAjax(financeService.confirmPayment(command));
     }
 
     @PreAuthorize("@ss.hasPermi('finance:payment:reject')")
     @Log(title = "finance-payment-reject", businessType = BusinessType.UPDATE)
     @PostMapping("/payment/reject")
-    public AjaxResult rejectPayment(@RequestBody Map<String, Object> body)
+    public AjaxResult rejectPayment(@Valid @RequestBody PaymentRejectCommand command)
     {
-        return toAjax(financeService.rejectPayment(body));
+        return toAjax(financeService.rejectPayment(command));
     }
 
     @PreAuthorize("@ss.hasPermi('finance:invoice:handle')")
     @Log(title = "finance-invoice", businessType = BusinessType.UPDATE)
     @PostMapping("/invoice/handle")
-    public AjaxResult handleInvoice(@RequestBody Map<String, Object> body)
+    public AjaxResult handleInvoice(@Valid @RequestBody InvoiceHandleCommand command)
     {
-        return toAjax(financeService.handleInvoice(body));
+        return toAjax(financeService.handleInvoice(command));
     }
 
     @PreAuthorize("@ss.hasPermi('finance:expense:edit')")
     @Log(title = "finance-expense", businessType = BusinessType.UPDATE)
     @PutMapping("/expense")
-    public AjaxResult updateExpense(@RequestBody Map<String, Object> body)
+    public AjaxResult updateExpense(@Valid @RequestBody ExpenseUpdateCommand command)
     {
-        return toAjax(financeService.updateExpense(body));
+        return toAjax(financeService.updateExpense(command));
     }
 }

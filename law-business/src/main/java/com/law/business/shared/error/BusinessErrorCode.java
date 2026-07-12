@@ -1,0 +1,14 @@
+package com.law.business.shared.error;
+
+public enum BusinessErrorCode
+{
+    DATA_NOT_FOUND,
+    ACCESS_DENIED,
+    STATE_CONFLICT,
+    DUPLICATE_OPERATION,
+    PRECONDITION_FAILED,
+    VALIDATION_FAILED,
+    CONCURRENT_MODIFICATION,
+    EVENT_HANDLER_MISSING,
+    EVENT_REPLAY_NOT_ALLOWED
+}

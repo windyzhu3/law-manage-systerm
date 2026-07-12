@@ -1,0 +1,21 @@
+create table if not exists business_event (
+    event_id bigint not null auto_increment comment '事件ID',
+    event_type varchar(100) not null comment '事件类型',
+    aggregate_type varchar(50) not null comment '聚合类型',
+    aggregate_id bigint not null comment '聚合ID',
+    aggregate_no varchar(100) default null comment '业务编号',
+    idempotency_key varchar(200) not null comment '幂等键',
+    payload json not null comment '事件载荷',
+    event_status varchar(20) not null default 'PENDING' comment '处理状态',
+    retry_count int not null default 0 comment '重试次数',
+    next_retry_time datetime default null comment '下次重试时间',
+    processed_time datetime default null comment '处理时间',
+    error_message varchar(1000) default null comment '失败信息',
+    create_by varchar(64) default null,
+    create_time datetime not null,
+    update_time datetime default null,
+    primary key (event_id),
+    unique key uk_business_event_idempotency (idempotency_key),
+    key idx_business_event_pending (event_status, next_retry_time, event_id),
+    key idx_business_event_aggregate (aggregate_type, aggregate_id)
+) engine=InnoDB default charset=utf8mb4 comment='业务事件Outbox';

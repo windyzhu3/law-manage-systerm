@@ -2,6 +2,8 @@ package com.ruoyi.web.controller.matter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +20,7 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
+import com.law.business.matter.dto.MatterCommands;
 import com.ruoyi.system.service.IBizMatterService;
 
 @RestController
@@ -59,17 +62,17 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:add')")
     @Log(title = "matter", businessType = BusinessType.INSERT)
     @PostMapping
-    public AjaxResult add(@RequestBody Map<String, Object> body)
+    public AjaxResult add(@Valid @RequestBody MatterCommands.Matter command)
     {
-        return toAjax(matterService.insertMatter(body));
+        return toAjax(matterService.insertMatter(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:edit')")
     @Log(title = "matter", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody Map<String, Object> body)
+    public AjaxResult edit(@Valid @RequestBody MatterCommands.Matter command)
     {
-        return toAjax(matterService.updateMatter(body));
+        return toAjax(matterService.updateMatter(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:progress:list')")
@@ -83,17 +86,17 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:progress:add')")
     @Log(title = "matter-progress", businessType = BusinessType.INSERT)
     @PostMapping("/progress")
-    public AjaxResult addProgress(@RequestBody Map<String, Object> body)
+    public AjaxResult addProgress(@Valid @RequestBody MatterCommands.Progress command)
     {
-        return toAjax(matterService.insertProgress(body));
+        return toAjax(matterService.insertProgress(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:progress:edit')")
     @Log(title = "matter-progress", businessType = BusinessType.UPDATE)
     @PutMapping("/progress")
-    public AjaxResult editProgress(@RequestBody Map<String, Object> body)
+    public AjaxResult editProgress(@Valid @RequestBody MatterCommands.Progress command)
     {
-        return toAjax(matterService.updateProgress(body));
+        return toAjax(matterService.updateProgress(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:progress:remove')")
@@ -115,17 +118,17 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:node:add')")
     @Log(title = "matter-node", businessType = BusinessType.INSERT)
     @PostMapping("/node")
-    public AjaxResult addNode(@RequestBody Map<String, Object> body)
+    public AjaxResult addNode(@Valid @RequestBody MatterCommands.Node command)
     {
-        return toAjax(matterService.insertNode(body));
+        return toAjax(matterService.insertNode(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:node:edit')")
     @Log(title = "matter-node", businessType = BusinessType.UPDATE)
     @PutMapping("/node")
-    public AjaxResult editNode(@RequestBody Map<String, Object> body)
+    public AjaxResult editNode(@Valid @RequestBody MatterCommands.Node command)
     {
-        return toAjax(matterService.updateNode(body));
+        return toAjax(matterService.updateNode(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:node:remove')")
@@ -139,9 +142,9 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:node:edit')")
     @Log(title = "matter-node-material", businessType = BusinessType.UPDATE)
     @PutMapping("/node/{nodeId}/materials")
-    public AjaxResult saveNodeMaterials(@PathVariable Long nodeId, @RequestBody List<Map<String, Object>> materials)
+    public AjaxResult saveNodeMaterials(@PathVariable Long nodeId, @Valid @RequestBody List<MatterCommands.Material> materials)
     {
-        return toAjax(matterService.saveNodeMaterials(nodeId, materials));
+        return toAjax(matterService.saveNodeMaterials(nodeId, materials.stream().map(MatterCommands.Material::toPersistenceMap).collect(Collectors.toList())));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:expense:list')")
@@ -155,17 +158,17 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:expense:add')")
     @Log(title = "matter-expense", businessType = BusinessType.INSERT)
     @PostMapping("/expense")
-    public AjaxResult addExpense(@RequestBody Map<String, Object> body)
+    public AjaxResult addExpense(@Valid @RequestBody MatterCommands.Expense command)
     {
-        return toAjax(matterService.insertExpense(body));
+        return toAjax(matterService.insertExpense(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:expense:edit')")
     @Log(title = "matter-expense", businessType = BusinessType.UPDATE)
     @PutMapping("/expense")
-    public AjaxResult editExpense(@RequestBody Map<String, Object> body)
+    public AjaxResult editExpense(@Valid @RequestBody MatterCommands.Expense command)
     {
-        return toAjax(matterService.updateExpense(body));
+        return toAjax(matterService.updateExpense(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:expense:remove')")
@@ -187,9 +190,9 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:document:add')")
     @Log(title = "matter-document", businessType = BusinessType.INSERT)
     @PostMapping("/document")
-    public AjaxResult addDocument(@RequestBody Map<String, Object> body)
+    public AjaxResult addDocument(@Valid @RequestBody MatterCommands.Document command)
     {
-        return toAjax(matterService.insertDocument(body));
+        return toAjax(matterService.insertDocument(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:document:remove')")
@@ -210,25 +213,25 @@ public class BizMatterController extends BaseController
     @PreAuthorize("@ss.hasPermi('matter:archive:apply')")
     @Log(title = "matter-archive", businessType = BusinessType.INSERT)
     @PostMapping("/archive/apply")
-    public AjaxResult applyArchive(@RequestBody Map<String, Object> body)
+    public AjaxResult applyArchive(@Valid @RequestBody MatterCommands.Archive command)
     {
-        return toAjax(matterService.applyArchive(body));
+        return toAjax(matterService.applyArchive(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:archive:confirm')")
     @Log(title = "matter-close", businessType = BusinessType.UPDATE)
     @PostMapping("/archive/close")
-    public AjaxResult confirmClose(@RequestBody Map<String, Object> body)
+    public AjaxResult confirmClose(@Valid @RequestBody MatterCommands.Archive command)
     {
-        return toAjax(matterService.confirmClose(body));
+        return toAjax(matterService.confirmClose(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:archive:confirm')")
     @Log(title = "matter-archive", businessType = BusinessType.UPDATE)
     @PostMapping("/archive/confirm")
-    public AjaxResult confirmArchive(@RequestBody Map<String, Object> body)
+    public AjaxResult confirmArchive(@Valid @RequestBody MatterCommands.Archive command)
     {
-        return toAjax(matterService.confirmArchive(body));
+        return toAjax(matterService.confirmArchive(command.toPersistenceMap()));
     }
 
     @PreAuthorize("@ss.hasPermi('matter:status:list')")

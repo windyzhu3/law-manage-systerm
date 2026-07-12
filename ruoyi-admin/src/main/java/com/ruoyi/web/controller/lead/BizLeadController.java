@@ -1,6 +1,6 @@
 package com.ruoyi.web.controller.lead;
 
-import java.util.Map;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,6 +17,8 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.exception.ServiceException;
+import com.law.business.lead.dto.LeadAssignCommand;
+import com.law.business.lead.dto.LeadPoolCommand;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizLead;
@@ -80,18 +82,16 @@ public class BizLeadController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('lead:assign')")
     @PostMapping("/assign")
-    public AjaxResult assign(@RequestBody Map<String, Object> body)
+    public AjaxResult assign(@Valid @RequestBody LeadAssignCommand command)
     {
-        Long leadId = Long.valueOf(String.valueOf(body.get("leadId")));
-        Long ownerId = Long.valueOf(String.valueOf(body.get("ownerId")));
-        return toAjax(leadService.assignLead(leadId, ownerId, (String) body.get("reason")));
+        return toAjax(leadService.assignLead(command.getLeadId(), command.getOwnerId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasAnyPermi('lead:pool:move,lead:mine:pool:move')")
     @PostMapping("/pool")
-    public AjaxResult pool(@RequestBody Map<String, Object> body)
+    public AjaxResult pool(@Valid @RequestBody LeadPoolCommand command)
     {
-        return toAjax(leadService.moveToPool(Long.valueOf(String.valueOf(body.get("leadId"))), (String) body.get("reason")));
+        return toAjax(leadService.moveToPool(command.getLeadId(), command.getReason()));
     }
 
     @PreAuthorize("@ss.hasPermi('lead:pool:claim')")
