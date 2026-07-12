@@ -282,4 +282,264 @@
           <template slot="header">
             <div class="section-heading">
               <h3>å³å°†åˆ°æœŸåº”æ”¶</h3>
-              <el-button :size="controlSize" type="text" @click="switchMode('receivable')">æ×n9ÚÚ$z{-®éÜj×F†—2æf–ÆTæÖTg&öÕW&Â‡fÇVR¢F†—2æW‡Vç6Tf÷&Òçf÷V6†W%7FGW2ÒfÇVRòwWÆöFVBr¢vÖ—76–ærp¢ÒÀ¢6ä–çfö–6R‡&÷r’°¢&WGW&â&÷ræ6öæf—&Õ7FGW2ÓÓÒsrbb&÷ræ–çfö–6U7FGW2ÓÒsp¢ÒÀ¢6ä6öÆÆV7B‡&÷r’°¢&WGW&â&÷ræ6öæf—&Õ7FGW2ÓÓÒsrÇÂ‡&÷ræ6öæf—&Õ7FGW2ÓÓÒsrbbçVÖ&W"‡&÷rçVæF–ætÖ÷VçBÇÂ’â¢ÒÀ¢F6†&ö&EfÇVR†¶W’’°¢6öç7BÖÒF†—2æ¶W–VB‡F†—2æF6†&ö&Bæ6&G2ÇÂµÒ¢&WGW&âçVÖ&W"†Ö¶¶W•ÒbbÖ¶¶W•ÒæÖWG&–5fÇVRÇÂ¢ÒÀ¢Æ—7E7VÒ†vWGFW"’°¢&WGW&â‡F†—2æÆ—7BÇÂµÒ’ç&VGV6R‚‡7VÒÂ&÷r’Óâ7VÒ²çVÖ&W"†vWGFW"‡&÷r’ÇÂ’Â¢ÒÀ¢Æ—7D6÷VçB‡&VF–6FR’°¢&WGW&â‡F†—2æÆ—7BÇÂµÒ’æf–ÇFW"‡&÷rÓâ&VF–6FR‡&÷r’’æÆVæwF€¢ÒÀ¢6ö×ÆWFTÖöçF†Ç•&÷w2‡&÷w2ÂFVfVÇG2’°¢6öç7BÖÒ‡&÷w2ÇÂµÒ’ç&VGV6R‚‡F&vWBÂ—FVÒ’Óâ°¢F&vWE¶—FVÒæ—FVÔæÖUÒÒ—FVÐ¢&WGW&âF&vW@¢ÒÂ·Ò¢&WGW&âF†—2æÆ7E6—„ÖöçF‡2‚’æÖ†ÖöçF‚Óâ‡²—FVÔæÖS¢ÖöçF‚ÂââæFVfVÇG2Ââââ†Ö¶ÖöçF…ÒÇÂ·Ò’Ò’¢ÒÀ¢Æ7E6—„ÖöçF‡2‚’°¢6öç7Bæ÷rÒæWrFFR‚¢6öç7BÖöçF‡2ÒµÐ¢f÷"†ÆWB’ÒS²’ãÒ²’ÒÒ’°¢6öç7BFFRÒæWrFFR†æ÷rævWDgVÆÅ–V"‚’Âæ÷rævWDÖöçF‚‚’Ò’Â¢ÖöçF‡2çW6‚†FFRævWDgVÆÅ–V"‚’²rÒr²7G&–ær†FFRævWDÖöçF‚‚’²’çE7F'Bƒ"Âsr’¢Ð¢&WGW&âÖöçF‡0¢ÒÀ¢'V–ÆD&'2‡&÷w2ÂfÇVT¶W’’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢µÐ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚òS#òÆ—7BæÆVæwF‚¢S# ¢6öç7Bv–GF‚ÒÖF‚æÖ‚ƒ‚ÂÖF‚æÖ–âƒC"Âv¢ã3B’¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ°¢6öç7BfÇVRÒçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ¢6öç7B†V–v‡BÒÖF‚æÖ‚ƒbÂfÇVRòÖ‚¢3¢&WGW&â²¶W“¢—FVÒæ—FVÔæÖR²rÒr²–æFW‚Âƒ¢ÖF‚ç&÷VæB†–æFW‚¢v²vò"Òv–GF‚ò"’Â“¢ÖF‚ç&÷VæBƒsRÒ†V–v‡B’Âv–GF‚Â†V–v‡BÂF—FÆS¢G¶—FVÒæ—FVÔæÖWÞûÉ¢G·F†—2æf÷&ÖDÖöæW’‡fÇVR—ÖÐ¢Ò¢ÒÀ¢'V–ÆDÆ–æUö–çG2‡&÷w2ÂfÇVT¶W’’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢µÐ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚ÃÒòS#¢S#ò†Æ—7BæÆVæwF‚Ò¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ°¢6öç7BfÇVRÒçVÖ&W"†—FVÕ·fÇVT¶W•ÒÇÂ¢&WGW&â²¶W“¢—FVÒæ—FVÔæÖR²rÒr²–æFW‚Âƒ¢ÖF‚ç&÷VæB†–æFW‚¢v’Â“¢ÖF‚ç&÷VæBƒsRÒfÇVRòÖ‚¢3’ÂF—FÆS¢G¶—FVÒæ—FVÔæÖWÞûÉ¢G·fÇVRçFôÆö6ÆU7G&–ær‚—ÖÐ¢Ò¢ÒÀ¢'V–ÆEG&VæEö–çG2‡&÷w2Âv–GF‚’°¢6öç7BÆ—7BÒ&÷w2bb&÷w2æÆVæwF‚ò&÷w2¢·²—FVÔæÖS¢rÒrÂ—FVÕfÇVS¢ÕÐ¢6öç7BÖ‚ÒÖF‚æÖ‚‚ââæÆ—7BæÖ†—FVÒÓâçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’’Â¢6öç7BvÒÆ—7BæÆVæwF‚ÓÓÒòv–GF‚¢v–GF‚ò†Æ—7BæÆVæwF‚Ò¢&WGW&âÆ—7BæÖ‚†—FVÒÂ–æFW‚’Óâ‡²ƒ¢ÖF‚ç&÷VæB†–æFW‚¢v’Â“¢ÖF‚ç&÷VæBƒSÒçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’òÖ‚¢’Ò’¢ÒÀ¢&%v–GF‚‡fÇVRÂ&÷w2’°¢6öç7BÖ‚ÒÖF‚æÖ‚‚âââ‡&÷w2ÇÂµÒ’æÖ†—FVÒÓâçVÖ&W"†—FVÒæ—FVÕfÇVRÇÂ’’Â¢&WGW&âÖF‚æÖ‚ƒ‚ÂçVÖ&W"‡fÇVRÇÂ’òÖ‚¢’²rRp¢ÒÀ¢6öçfW'6–öä&%v–GF‚†—FVÒ’°¢&WGW&âÖF‚æÖ‚ƒ‚ÂçVÖ&W"†—FVÒæ6öçfW'6–öå&FRÇÂ’’²rRp¢ÒÀ¢f–VÆB‡&÷rÂ6ÖVÄ¶W’Â6æ¶T¶W’’°¢–b‚&÷r’&WGW&âVæFVf–æV@¢&WGW&â&÷u¶6ÖVÄ¶W•ÒÓÒVæFVf–æVBbb&÷u¶6ÖVÄ¶W•ÒÓÒçVÆÂò&÷u¶6ÖVÄ¶W•Ò¢&÷u·6æ¶T¶W•Ð¢ÒÀ¢çVÒ†—FVÒ’°¢&WGW&â—FVÒòçVÖ&W"†—FVÒæÖWG&–5fÇVRÇÂ’¢ ¢ÒÀ¢¶W–VB‡&÷w2ÂfÇVT¶W’’°¢&WGW&â‡&÷w2ÇÂµÒ’ç&VGV6R‚‡F&vWBÂ—FVÒ’Óâ°¢F&vWE¶—FVÒæÖWG&–4¶W•ÒÒfÇVT¶W’ò—FVÕ·fÇVT¶W•Ò¢—FVÐ¢&WGW&âF&vW@¢ÒÂ·Ò¢ÒÀ¢f÷&ÖEÆ–äÖöæW’‡fÇVR’°¢&WGW&âçVÖ&W"‡fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚¢ÒÀ¢f÷&ÖE6†÷'DÖöæW’‡fÇVR’°¢6öç7BÖ÷VçBÒçVÖ&W"‡fÇVRÇÂ¢–b„ÖF‚æ'2†Ö÷VçB’ãÒ’&WGW&â†Ö÷VçBò’çFôÆö6ÆU7G&–ær‡VæFVf–æVBÂ²Ö†–×VÔg&7F–öäF–v—G3¢Ò’²~Kˆrp¢&WGW&âÖ÷VçBçFôÆö6ÆU7G&–ær‚¢ÒÀ¢f÷&ÖD6ö×7DÖöæW’‡fÇVR’°¢6öç7BÖ÷VçBÒçVÖ&W"‡fÇVRÇÂ¢–b„ÖF‚æ'2†Ö÷VçB’ãÒ’&WGW&â†Ö÷VçBò’çFôÆö6ÆU7G&–ær‡VæFVf–æVBÂ²Ö†–×VÔg&7F–öäF–v—G3¢Ò’²~Kˆrp¢&WGW&âÖ÷VçBçFôÆö6ÆU7G&–ær‚¢ÒÀ¢6†÷'DFFR‡fÇVR’°¢&WGW&âfÇVRò7G&–ær‡fÇVR’ç6Æ–6RƒRÂ’¢rÒp¢ÒÀ¢f÷&ÖE7VÖÖ'•fÇVR‡&÷r’°¢&WGW&â&÷ræÖWG&–4¶W’ÓÓÒw&V6V—fT6÷VçBròçVÖ&W"‡&÷ræÖöçF…fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚’¢F†—2æf÷&ÖD6ö×7DÖöæW’‡&÷ræÖöçF…fÇVR¢ÒÀ¢f÷&ÖE7VÖÖ'•–V%fÇVR‡&÷r’°¢&WGW&â&÷ræÖWG&–4¶W’ÓÓÒw&V6V—fT6÷VçBròçVÖ&W"‡&÷rç–V%fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚’¢F†—2æf÷&ÖD6ö×7DÖöæW’‡&÷rç–V%fÇVR¢ÒÀ¢f÷&ÖDÖöæW’‡fÇVR’°¢–b‡fÇVRÓÒçVÆÂÇÂfÇVRÓÓÒrr’&WGW&â|*Rp¢&WGW&â|*Rr²çVÖ&W"‡fÇVRÇÂ’çFôÆö6ÆU7G&–ær‚¢Ð¢Ð§Ð£Â÷67&—Cà £Ç7G–ÆR66÷VBÆæsÒ'6772#à¢æf–ææ6R×vR°¢ÒÖ&—¢Öf–ÇFW"Ö–çWB×v–GFƒ¢##ƒ°¢ÒÖ&—¢Öf–ÇFW"×6VÆV7B×v–GFƒ¢3'ƒ° ¢£§bÖFVWæ&—¢Öf–ÇFW"ÖÖ–âæVÂÖFFRÖVF—F÷"ÒÖFFW&ævR°¢v–GFƒ¢#Sƒ°¢fÆWƒ¢#Sƒ°¢Ð§Ð ¢æf–ææ6RÖ÷fW'f–WrÖw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢Ö–æÖ‚ƒÂãCVg"’Ö–æÖ‚ƒ#ƒ‚ÂãsVg"’Ö–æÖ‚ƒ#ƒ‚ÂãsVg"“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ð ¢æf–ææ6RÖ6&B°¢&÷&FW#¢‚6öÆ–B6S†VFcc°¢&÷&FW"×&F—W3¢'ƒ°¢&6¶w&÷VæC¢6ffc°¢&÷‚×6†F÷s¢w‚g‚&v&ƒ3bÂs2Â3RÂãCR“°¢FF–æs¢gƒ°§Ð ¢çG&VæBÖ6&B°¢w&–B×&÷s¢7â#°§Ð ¢æf–ææ6RÖ6&B×F—FÆRÀ¢ç6V7F–öâÖ†VF–ær°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢fÆW‚×7F'C°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢Ö&v–âÖ&÷GFöÓ¢'ƒ° ¢ƒ2°¢Ö&v–ã¢°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ð ¢°¢Ö&v–ã¢G‚°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ð ¢7G&öær°¢6öÆ÷#¢3#Sc6V#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ð§Ð ¢çG&VæBÖ6†'B°¢v–GFƒ¢S°¢†V–v‡C¢ƒƒ° ¢çG&VæBÖw&–B°¢f–ÆÃ¢æöæS°¢7G&ö¶S¢6VVc&cs°¢7G&ö¶R×v–GFƒ¢°¢Ð ¢çG&VæBÖÆ–æR°¢f–ÆÃ¢æöæS°¢7G&ö¶S¢3#Sc6V#°¢7G&ö¶R×v–GFƒ¢C°¢7G&ö¶RÖÆ–æV6¢&÷VæC°¢7G&ö¶RÖÆ–æV¦ö–ã¢&÷VæC°¢Ð ¢6—&6ÆR°¢f–ÆÃ¢6ffc°¢7G&ö¶S¢3#Sc6V#°¢7G&ö¶R×v–GFƒ¢3°¢Ð§Ð ¢çG&VæBÖÆ&VÇ2°¢F—7Æ“¢fÆWƒ°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°§Ð ¢æFöçWB×w&°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢'ƒ°§Ð ¢æFöçWB°¢÷6—F–öã¢&VÆF—fS°¢F—7Æ“¢fÆWƒ°¢fÆW‚ÖF—&V7F–öã¢6öÇVÖã°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢3‡ƒ°¢†V–v‡C¢3‡ƒ°¢&÷&FW"×&F—W3¢SS°¢fÆWƒ¢3‡ƒ° ¢c£¦gFW"°¢6öçFVçC¢rs°¢÷6—F–öã¢'6öÇWFS°¢–ç6WC¢#gƒ°¢&÷&FW"×&F—W3¢SS°¢&6¶w&÷VæC¢6ffc°¢Ð ¢"À¢7â°¢÷6—F–öã¢&VÆF—fS°¢¢Ö–æFWƒ¢°¢Ð ¢"°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖWG&–2“°¢Ð ¢7â°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ð§Ð ¢æFöçWB×w&VÂ°¢fÆWƒ¢°¢FF–æs¢°¢Ö&v–ã¢°¢Æ—7B×7G–ÆS¢æöæS° ¢Æ’°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢‡ƒ°¢Ö&v–ã¢‡‚°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢VÒ°¢v–GFƒ¢‡ƒ°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢Ð ¢7G&öær°¢6öÆ÷#¢3cs&°¢Ð§Ð ¢æÆ–æ²Ö—FV×2°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢3g‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢FF–æs¢ƒ°¢&÷&FW#¢‚6öÆ–B6VFc&cs°¢&÷&FW"×&F—W3¢ƒ°¢&6¶w&÷VæC¢6c†f&fc°¢Ð ¢’°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢3gƒ°¢†V–v‡C¢3gƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6Vc&fc°¢Ð ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ð ¢6ÖÆÂ°¢w&–BÖ6öÇVÖã¢"òC°¢6öÆ÷#¢3“F6#ƒ°¢Ð§Ð ¢ægVææVÂÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢ƒg‚g"WFó°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢Ð ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢’°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VVc&fc°¢÷fW&fÆ÷s¢†–FFVã°¢Ð ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3#Sc6V"Â33†&Fc‚“°¢Ð ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ð ¢6ÖÆÂ°¢w&–BÖ6öÇVÖã¢"òC°¢6öÆ÷#¢3“F6#ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ð§Ð ¢ç&VÖ–æFW"ÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢'WGFöâ°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢C‚g"WFòGƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢v–GFƒ¢S°¢FF–æs¢'ƒ°¢&÷&FW#¢‚6öÆ–B6VFc&cs°¢&÷&FW"×&F—W3¢ƒ°¢&6¶w&÷VæC¢6ffc°¢FW‡BÖÆ–vã¢ÆVgC°¢7W'6÷#¢ö–çFW#°¢Ð ¢“¦f—'7BÖ6†–ÆB°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢Cƒ°¢†V–v‡C¢Cƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6VVcFfc°¢föçB×6—¦S¢‡ƒ°¢Ð ¢"À¢6ÖÆÂ°¢F—7Æ“¢&Æö6³°¢Ð ¢"°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢6ÖÆÂ°¢Ö&v–â×F÷¢7ƒ°¢6öÆ÷#¢3“F6#ƒ°¢Ð ¢7G&öær°¢6öÆ÷#¢6VcCCCC°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6V7F–öâ“°¢Ð§Ð ¢æf–ææ6R×F&ÆW2Öw&–BÀ¢ç&W÷'BÖw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ"ÂÖ–æÖ‚ƒÂg"’“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ð ¢æf–ææ6RÖfÆ÷rÖ6&B°¢Ö&v–â×F÷¢gƒ°§Ð ¢æf–ææ6RÖfÆ÷r°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒbÂÖ–æÖ‚ƒÂg"’“°¢v¢'ƒ°§Ð ¢æf–ææ6RÖfÆ÷rÖ—FVÒ°¢÷6—F–öã¢&VÆF—fS°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢C'‚g#°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢Ö–âÖ†V–v‡C¢sƒ°¢FF–æs¢‚‡ƒ°¢&÷&FW"×&F—W3¢'ƒ°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒƒFVrÂ6c†f&fbRÂ6fffffbR“° ¢âF—b°¢Ö–â×v–GFƒ¢°¢Ð ¢"À¢7G&öær°¢F—7Æ“¢&Æö6³°¢Ð ¢"°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢7G&öær°¢Ö&v–â×F÷¢Gƒ°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢v†—FR×76S¢æ÷w&°¢Ð ¢âVÒ°¢÷6—F–öã¢'6öÇWFS°¢&–v‡C¢Ógƒ°¢F÷¢SS°¢¢Ö–æFWƒ¢°¢Ö–â×v–GFƒ¢3‡ƒ°¢G&ç6f÷&Ó¢G&ç6ÆFU’‚ÓSR“°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢föçB×7G–ÆS¢æ÷&ÖÃ°¢FW‡BÖÆ–vã¢6VçFW#° ¢c£¦gFW"°¢6öçFVçC¢rs°¢F—7Æ“¢&Æö6³°¢v–GFƒ¢#Gƒ°¢†V–v‡C¢ƒ°¢Ö&v–ã¢7‚WFò°¢&6¶w&÷VæC¢66&CVS°¢Ð¢Ð§Ð ¢æfÆ÷rÖ–6öâ°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢6VçFW#°¢v–GFƒ¢C'ƒ°¢†V–v‡C¢C'ƒ°¢&÷&FW"×&F—W3¢SS°¢6öÆ÷#¢3#Sc6V#°¢&6¶w&÷VæC¢6Vc&fc°¢föçB×6—¦S¢‡ƒ° ¢bæw&VVâ²6öÆ÷#¢3f3F²&6¶w&÷VæC¢6Vfc²Ð¢bçW'ÆR²6öÆ÷#¢3v36VC²&6¶w&÷VæC¢6c6S†fc²Ð¢bæ÷&ævR²6öÆ÷#¢6c“s3c²&6¶w&÷VæC¢6ffc6Ss²Ð¢bæ7–â²6öÆ÷#¢3ƒ“##²&6¶w&÷VæC¢6Sff&fc²Ð§Ð ¢æf–ææ6RÖ6†'G2Öw&–B°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ2ÂÖ–æÖ‚ƒÂg"’“°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ°§Ð ¢æf–ææ6RÖ6†'BÖ6&B°¢Ö–âÖ†V–v‡C¢#sƒ°§Ð ¢æ6öÖ&òÖ6†'B°¢7fr°¢v–GFƒ¢S°¢†V–v‡C¢#ƒ°¢Ð ¢çG&VæBÖÆ–æR°¢f–ÆÃ¢æöæS°¢7G&ö¶R×v–GFƒ¢3°¢7G&ö¶RÖÆ–æV6¢&÷VæC°¢7G&ö¶RÖÆ–æV¦ö–ã¢&÷VæC°¢Ð ¢&V7B°¢f–ÆÃ¢W&Â‚6f–ææ6T&$w&F–VçB“°¢f–ÆÃ¢3#Sc6V#°¢Ð ¢6—&6ÆR°¢f–ÆÃ¢6ffc°¢7G&ö¶S¢3#&3SVS°¢7G&ö¶R×v–GFƒ¢3°¢Ð ¢æ6†'BÖ†÷fW"Ö&"À¢æ6†'BÖ†÷fW"×ö–çB°¢7W'6÷#¢ö–çFW#°¢G&ç6—F–öã¢÷6—G’ã‡2V6RÂf–ÇFW"ã‡2V6S° ¢c¦†÷fW"°¢÷6—G“¢ãƒ#°¢f–ÇFW#¢G&÷×6†F÷rƒG‚w‚&v&ƒ3rÂ“’Â#3RÂã#"’“°¢Ð¢Ð§Ð ¢çG&VæBÖÆ–æRæw&VVâ°¢7G&ö¶S¢3#&3SVS°§Ð ¢æ6†'BÖÆ&VÇ2À¢æ6†'BÖÆVvVæB°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢v¢‡ƒ°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°§Ð ¢æ6†'BÖÆVvVæB°¢§W7F–g’Ö6öçFVçC¢fÆW‚×7F'C°¢Ö&v–â×F÷¢‡ƒ° ¢7â°¢F—7Æ“¢–æÆ–æRÖfÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢gƒ°¢Ð ¢’°¢v–GFƒ¢‡ƒ°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢SS° ¢bæ&ÇVR²&6¶w&÷VæC¢3#Sc6V#²Ð¢bæw&VVâ²&6¶w&÷VæC¢3#&3SVS²Ð¢Ð§Ð ¢æf–ææ6RÖ÷fW'f–Wr×F&ÆW2°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒBÂÖ–æÖ‚ƒÂg"’“°¢v¢'ƒ°¢Ö&v–â×F÷¢gƒ° ¢£§bÖFVWæ&—¢×F&ÆRÖ6&B°¢Ö–â×v–GFƒ¢°¢Ð§Ð ¢æ÷fW'f–WrÖÖ–æ’×F&ÆR°¢£§bÖFVWæVÂ×F&ÆUõö6VÆÂ°¢FF–æs¢g‚°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢Ð ¢£§bÖFVWF‚æVÂ×F&ÆUõö6VÆÂ°¢&6¶w&÷VæC¢6c†ff3°¢Ð ¢£§bÖFVWæ6VÆÂ°¢FF–ærÖÆVgC¢gƒ°¢FF–ær×&–v‡C¢gƒ°¢Ð ¢£§bÖFVWæVÂ×F&ÆUõö&öG’×w&W"°¢÷fW&fÆ÷r×ƒ¢†–FFVã°¢Ð§Ð ¢ç&W÷'BÖÖ–â°¢w&–BÖ6öÇVÖã¢òÓ°§Ð ¢æf–ææ6R×&W÷'B×FööÆ&"°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢§W7F–g’Ö6öçFVçC¢76RÖ&WGvVVã°¢v¢gƒ°¢Ö&v–â×F÷¢gƒ° ¢ƒ2°¢Ö&v–ã¢gƒ°¢6öÆ÷#¢3c#Cs°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÆr“°¢Ð ¢°¢Ö&v–ã¢°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6Ò“°¢Ð§Ð ¢ç&W÷'B×FööÆ&"Ö7F–öç2°¢F—7Æ“¢fÆWƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢fÆW‚×w&¢w&°¢§W7F–g’Ö6öçFVçC¢fÆW‚ÖVæC°§Ð ¢ç&W÷'B×7FB°¢F—7Æ“¢w&–C°¢v¢‡ƒ° ¢7â°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢7G&öær°¢6öÆ÷#¢3cs&°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖWG&–2“°¢Ð ¢6ÖÆÂ°¢6öÆ÷#¢3“F6#ƒ°¢Ð§Ð ¢æ&"ÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢ƒ° ¢F—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢“g‚g"#ƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢ƒ°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢Ð ¢’°¢†V–v‡C¢‡ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VFc&cs°¢÷fW&fÆ÷s¢†–FFVã°¢Ð ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3#Sc6V"Â3f#fCB“°¢Ð ¢7G&öær°¢FW‡BÖÆ–vã¢&–v‡C°¢6öÆ÷#¢3cs&°¢Ð§Ð ¢ç6÷W&6RÖ6öçfW'6–öâÖÆ—7B°¢F—7Æ“¢w&–C°¢v¢'ƒ° ¢âF—b°¢F—7Æ“¢w&–C°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢S‚Ö–æÖ‚ƒc‚Âg"’s'‚ƒƒ°¢Æ–vâÖ—FV×3¢6VçFW#°¢v¢'ƒ°¢Ð ¢7â°¢6öÆ÷#¢333CSS°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçB×6ÖÆÂ“°¢÷fW&fÆ÷s¢†–FFVã°¢FW‡BÖ÷fW&fÆ÷s¢VÆÆ—6—3°¢v†—FR×76S¢æ÷w&°¢Ð ¢’°¢†V–v‡C¢—ƒ°¢&÷&FW"×&F—W3¢““—ƒ°¢&6¶w&÷VæC¢6VVc&fc°¢÷fW&fÆ÷s¢†–FFVã°¢Ð ¢VÒ°¢F—7Æ“¢&Æö6³°¢†V–v‡C¢S°¢&÷&FW"×&F—W3¢–æ†W&—C°¢&6¶w&÷VæC¢Æ–æV"Öw&F–VçBƒ“FVrÂ3v36VBÂ3#&C6VR“°¢Ð ¢7G&öær°¢6öÆ÷#¢3#Sc6V#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖ6&B“°¢Ð ¢6ÖÆÂ°¢6öÆ÷#¢3cCsC†#°¢föçB×6—¦S¢f"‚ÒÖ&—¢ÖföçBÖÖ–æ’“°¢FW‡BÖÆ–vã¢&–v‡C°¢Ð§Ð ¢æ÷fW&GVR°¢6öÆ÷#¢6VcCCCC°¢föçB×vV–v‡C¢s°§Ð ¤ÖVF–†Ö‚×v–GFƒ¢#ƒ‚’°¢æf–ææ6RÖ÷fW'f–WrÖw&–BÀ¢æf–ææ6RÖ6†'G2Öw&–BÀ¢æf–ææ6RÖ÷fW'f–Wr×F&ÆW2À¢æf–ææ6R×F&ÆW2Öw&–BÀ¢ç&W÷'BÖw&–B°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢g#°¢Ð ¢æf–ææ6RÖfÆ÷r°¢w&–B×FV×ÆFRÖ6öÇVÖç3¢&WVBƒ"ÂÖ–æÖ‚ƒÂg"’“°¢Ð ¢æf–ææ6RÖfÆ÷rÖ—FVÒâVÒ°¢F—7Æ“¢æöæS°¢Ð ¢æf–ææ6R×&W÷'B×FööÆ&"°¢Æ–vâÖ—FV×3¢fÆW‚×7F'C°¢fÆW‚ÖF—&V7F–öã¢6öÇVÖã°¢Ð §Ð£Â÷7G–ÆSà 
+              <el-button :size="controlSize" type="text" @click="switchMode('receivable')">æŸ¥çœ‹å…¨éƒ¨</el-button>
+            </div>
+          </template>
+          <el-table :data="dueReceivables" :size="controlSize">
+            <el-table-column label="å®¢æˆ·/æ¡ˆä»¶" min-width="190">
+              <template slot-scope="{ row }">
+                <span class="biz-link">{{ row.customerName || '-' }}</span>
+                <small class="sub-text">{{ row.caseNo || row.contractNo || '-' }}</small>
+              </template>
+            </el-table-column>
+            <el-table-column label="å¾…æ”¶é‡‘é¢" width="120" align="right"><template slot-scope="{ row }">{{ formatMoney(row.pendingAmount) }}</template></el-table-column>
+            <el-table-column label="è´¦é¾„" width="90" align="center"><template slot-scope="{ row }">{{ row.agingDays || 0 }} å¤©</template></el-table-column>
+            <el-table-column label="çŠ¶æ€" width="110" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_finance_receivable_status" :value="row.receivableStatus" /></template></el-table-column>
+          </el-table>
+        </biz-table-card>
+      </section>
+    </template>
+
+    <biz-table-card
+      v-else-if="tableModes.includes(mode)"
+      :show-search.sync="showSearch"
+      :total="total"
+      :page.sync="query.pageNum"
+      :limit.sync="query.pageSize"
+      @query="search"
+      @pagination="loadPage"
+    >
+      <template slot="filters">
+        <div class="biz-filter-main">
+          <el-input v-model="query.keyword" :size="controlSize" prefix-icon="el-icon-search" :placeholder="searchPlaceholder" clearable @clear="search" @keyup.enter.native="search" />
+          <el-select v-if="mode === 'receivable'" v-model="query.ageBucket" :size="controlSize" placeholder="è´¦é¾„åŒºé—´" clearable @change="search">
+            <el-option v-for="item in dict.type.law_finance_age_bucket" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'receivable' || mode === 'payment'" v-model="query.confirmStatus" :size="controlSize" placeholder="å›žæ¬¾çŠ¶æ€" clearable @change="search">
+            <el-option v-for="item in dict.type.law_contract_receive_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'receivable' || mode === 'invoice'" v-model="query.invoiceStatus" :size="controlSize" placeholder="å¼€ç¥¨çŠ¶æ€" clearable @change="search">
+            <el-option v-for="item in dict.type.law_contract_invoice_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.expenseType" :size="controlSize" placeholder="è´¹ç”¨ç±»åž‹" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_expense_type" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.payStatus" :size="controlSize" placeholder="ä»˜æ¬¾çŠ¶æ€" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_pay_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.reimburseStatus" :size="controlSize" placeholder="æŠ¥é”€çŠ¶æ€" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_reimburse_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select v-if="mode === 'expense'" v-model="query.voucherStatus" :size="controlSize" placeholder="å‡­è¯çŠ¶æ€" clearable @change="search">
+            <el-option v-for="item in dict.type.law_case_voucher_status" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-date-picker
+            v-model="listDateRange"
+            :size="controlSize"
+            type="daterange"
+            value-format="yyyy-MM-dd"
+            range-separator="è‡³"
+            :start-placeholder="listDatePlaceholder[0]"
+            :end-placeholder="listDatePlaceholder[1]"
+            clearable
+            @change="handleListDateChange"
+          />
+        </div>
+        <div class="biz-filter-actions">
+          <el-button :size="controlSize" plain icon="el-icon-refresh" @click="reset">é‡ç½®</el-button>
+        </div>
+      </template>
+
+      <finance-data-tables
+        :mode="mode"
+        :loading="loading"
+        :list="list"
+        :control-size="controlSize"
+        :dict-options="dict.type"
+        :format-money="formatMoney"
+        :field="field"
+        :can-collect="canCollect"
+        :can-invoice="canInvoice"
+        :open-case-finance="openCaseFinance"
+        :open-payment="openPayment"
+        :open-reject="openReject"
+        :open-invoice="openInvoice"
+        :open-expense="openExpense"
+      />
+    </biz-table-card>
+
+    <finance-report-panel
+      v-else
+      :report-date-range.sync="reportDateRange"
+      :control-size="controlSize"
+      :report="report"
+      :report-cards="reportCards"
+      :report-range-text="reportRangeText"
+      :report-trend-points="reportTrendPoints"
+      :report-trend-point-list="reportTrendPointList"
+      :lead-source-conversion="leadSourceConversion"
+      :handle-report-date-change="handleReportDateChange"
+      :reset-report-range="resetReportRange"
+      :format-money="formatMoney"
+      :bar-width="barWidth"
+      :dict-label="dictLabel"
+      :conversion-bar-width="conversionBarWidth"
+    />
+
+    <finance-action-dialogs
+      ref="actionDialogs"
+      :payment-visible.sync="paymentOpen"
+      :reject-visible.sync="rejectOpen"
+      :invoice-visible.sync="invoiceOpen"
+      :expense-visible.sync="expenseOpen"
+      :payment-form="paymentForm"
+      :reject-form="rejectForm"
+      :invoice-form="invoiceForm"
+      :expense-form="expenseForm"
+      :payment-rules="paymentRules"
+      :reject-rules="rejectRules"
+      :invoice-rules="invoiceRules"
+      :expense-rules="expenseRules"
+      :options="dict.type"
+      :control-size="controlSize"
+      :dialog-class="dialogClass"
+      :format-money="formatMoney"
+      @submit-payment="submitPayment"
+      @submit-reject="submitReject"
+      @submit-invoice="submitInvoice"
+      @submit-expense="submitExpense"
+      @sync-expense-file="syncExpenseFile"
+    />
+
+    <case-finance-drawer
+      ref="caseFinanceDrawer"
+      :visible.sync="caseFinanceOpen"
+      :case-id="caseFinanceCaseId"
+      :control-size="controlSize"
+      :size-class="'biz-size-' + appSize"
+      :dict-options="dict.type"
+    />
+  </div>
+</template>
+
+<script>
+import BizPageHeader from '@/views/business/components/BizPageHeader'
+import BizHero from '@/views/business/components/BizHero'
+import BizMetrics from '@/views/business/components/BizMetrics'
+import BizTableCard from '@/views/business/components/BizTableCard'
+import CaseFinanceDrawer from './components/CaseFinanceDrawer'
+import FinanceFlowOverview from './components/FinanceFlowOverview'
+import FinanceOverviewTables from './components/FinanceOverviewTables'
+import FinanceActionDialogs from './components/FinanceActionDialogs'
+import FinanceDataTables from './components/FinanceDataTables'
+import FinanceReportPanel from './components/FinanceReportPanel'
+import businessUi from '@/views/business/mixins/businessUi'
+import financePageModel from './finance-page-model'
+import '@/views/business/business.scss'
+import '@/views/business/business-dialog.scss'
+
+export default {
+  name: 'FinanceCenter',
+  components: { BizPageHeader, BizHero, BizMetrics, BizTableCard, CaseFinanceDrawer, FinanceFlowOverview, FinanceOverviewTables, FinanceActionDialogs, FinanceDataTables, FinanceReportPanel },
+  mixins: [businessUi, financePageModel],
+  dicts: [
+    'law_finance_receivable_status',
+    'law_finance_age_bucket',
+    'law_finance_payment_method',
+    'law_finance_invoice_type',
+    'law_contract_receive_status',
+    'law_contract_invoice_status',
+    'law_contract_risk_level',
+    'law_case_type',
+    'law_case_expense_type',
+    'law_case_pay_status',
+    'law_case_reimburse_status',
+    'law_case_voucher_status'
+  ],
+  data() {
+    return {
+      mode: this.$route.query.module || 'overview',
+      businessPageMeta: {
+        defaultTitle: 'è´¢åŠ¡æ€»è§ˆ',
+        titles: {
+          overview: 'è´¢åŠ¡æ€»è§ˆ',
+          receivable: 'åº”æ”¶ç®¡ç†',
+          payment: 'å›žæ¬¾ç¡®è®¤',
+          invoice: 'å‘ç¥¨ç®¡ç†',
+          expense: 'è´¹ç”¨æŠ¥é”€',
+          report: 'è´¢åŠ¡æŠ¥è¡¨'
+        },
+        descriptions: {
+          overview: 'è”åŠ¨åˆåŒã€æ¡ˆä»¶ä¸Žå›žæ¬¾ï¼Œæž„å»ºé—­çŽ¯è´¢åŠ¡ç®¡ç†',
+          receivable: 'ç»Ÿä¸€ç®¡ç†åˆåŒæ”¶è´¹è®¡åˆ’ã€è´¦é¾„é£Žé™©ä¸Žå¾…æ”¶é‡‘é¢',
+          payment: 'å¤„ç†å›žæ¬¾ç¡®è®¤ã€é©³å›žå’Œå¼‚å¸¸æ¬¾é¡¹ï¼Œä¿éšœçŽ°é‡‘æµå‡†ç¡®å…¥è´¦',
+          invoice: 'è·Ÿè¸ªå·²å›žæ¬¾è®¡åˆ’çš„å¼€ç¥¨çŠ¶æ€ï¼Œæ”¯æŒéƒ¨åˆ†å¼€ç¥¨å’Œè¡¥é½å¼€ç¥¨',
+          expense: 'å½’é›†å¾‹å¸ˆåŠžæ¡ˆè´¹ç”¨ï¼Œè”åŠ¨æ¡ˆä»¶ä¸ŽåˆåŒæˆæœ¬æŽ§åˆ¶',
+          report: 'ä»¥å›¾è¡¨å‘ˆçŽ°æ”¶å…¥ã€æ¬ è´¹ã€è´¦é¾„ã€å¾‹å¸ˆåˆ›æ”¶å’Œæ¡ˆä»¶æˆæœ¬'
+        }
+      },
+      loading: false,
+      showSearch: true,
+      total: 0,
+      list: [],
+      dashboard: {},
+      report: {},
+      trend: [],
+      aging: [],
+      links: [],
+      reminders: [],
+      flow: [],
+      receiveTrend: [],
+      invoiceExpenseTrend: [],
+      invoiceActivities: [],
+      financeSummaryRows: [],
+      leadFunnel: [],
+      leadSourceConversion: [],
+      pendingPayments: [],
+      dueReceivables: [],
+      query: { pageNum: 1, pageSize: 10 },
+      reportDateRange: [],
+      listDateRange: [],
+      paymentOpen: false,
+      rejectOpen: false,
+      invoiceOpen: false,
+      expenseOpen: false,
+      caseFinanceOpen: false,
+      caseFinanceCaseId: null,
+      paymentForm: {},
+      rejectForm: {},
+      invoiceForm: {},
+      expenseForm: {},
+      paymentRules: {
+        receivedAmount: [{ required: true, message: 'è¯·è¾“å…¥æœ¬æ¬¡å›žæ¬¾é‡‘é¢', trigger: 'blur' }],
+        paymentMethod: [{ required: true, message: 'è¯·é€‰æ‹©ä»˜æ¬¾æ–¹å¼', trigger: 'change' }]
+      },
+      rejectRules: { reason: [{ required: true, message: 'è¯·å¡«å†™é©³å›žåŽŸå› ', trigger: 'blur' }] },
+      invoiceRules: {
+        invoiceStatus: [{ required: true, message: 'è¯·é€‰æ‹©å¼€ç¥¨åŠ¨ä½œ', trigger: 'change' }],
+        invoiceType: [{ required: true, message: 'è¯·é€‰æ‹©å‘ç¥¨ç±»åž‹', trigger: 'change' }]
+      },
+      expenseRules: {
+        expenseType: [{ required: true, message: 'è¯·é€‰æ‹©è´¹ç”¨ç±»åž‹', trigger: 'change' }],
+        amount: [{ required: true, message: 'è¯·è¾“å…¥è´¹ç”¨é‡‘é¢', trigger: 'blur' }],
+        occurDate: [{ required: true, message: 'è¯·é€‰æ‹©å‘ç”Ÿæ—¥æœŸ', trigger: 'change' }],
+        payStatus: [{ required: true, message: 'è¯·é€‰æ‹©ä»˜æ¬¾çŠ¶æ€', trigger: 'change' }],
+        reimburseStatus: [{ required: true, message: 'è¯·é€‰æ‹©æŠ¥é”€çŠ¶æ€', trigger: 'change' }],
+        voucherStatus: [{ required: true, message: 'è¯·é€‰æ‹©å‡­è¯çŠ¶æ€', trigger: 'change' }]
+      }
+    }
+  },
+  watch: {
+    '$route.fullPath'() {
+      this.mode = this.$route.query.module || 'overview'
+      this.resetQuery()
+      this.load()
+    }
+  },
+  created() {
+    this.load()
+  }
+}
+</script>
+
+<style scoped lang="scss" src="./finance-page.scss"></style>
