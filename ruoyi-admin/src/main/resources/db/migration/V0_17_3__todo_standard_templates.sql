@@ -41,9 +41,9 @@ select t.template_id,1,'PUBLISHED',
   when t.template_code='CASE_ACCEPT' then json_object('requiredFields',json_array('confirmId','accepted'),'requiredAttachments',json_array())
   when t.template_code='CASE_REASSIGN' then json_object('requiredFields',json_array('lawyerId'),'requiredAttachments',json_array())
   when t.template_code='CASE_TRANSFER_REVIEW' then json_object('requiredFields',json_array('approvalResult'),'requiredAttachments',json_array())
-  when t.template_code='MATTER_NODE_HANDLE' then json_object('requiredFields',json_array('nodeResult'),'requiredAttachments',json_array())
-  when t.template_code='MATTER_EXPENSE_REVIEW' then json_object('requiredFields',json_array('expenseResult'),'requiredAttachments',json_array())
-  when t.template_code='MATTER_DOCUMENT_SUPPLY' then json_object('requiredFields',json_array('documentResult'),'requiredAttachments',json_array('CASE_DOCUMENT'))
+  when t.template_code='MATTER_NODE_HANDLE' then json_object('requiredFields',json_array('nodeId','actualDate'),'requiredAttachments',json_array())
+  when t.template_code='MATTER_EXPENSE_REVIEW' then json_object('requiredFields',json_array('expenseId','result'),'requiredAttachments',json_array())
+  when t.template_code='MATTER_DOCUMENT_SUPPLY' then json_object('requiredFields',json_array('documentType','fileName','fileUrl'),'requiredAttachments',json_array())
   when t.template_code='CASE_CLOSE_CONFIRM' then json_object('requiredFields',json_array('closeResult'),'requiredAttachments',json_array())
   else json_object('requiredFields',json_array('archiveResult'),'requiredAttachments',json_array('ARCHIVE_PACKAGE')) end,
  json_object('calendarCode','DEFAULT','minutes',case when t.template_code in ('CONTRACT_REVIEW','CASE_ACCEPT') then 240 when t.template_code in ('CASE_ASSIGN','PAYMENT_CONFIRM') then 480 else 960 end),

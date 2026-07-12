@@ -12,6 +12,12 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.business.security.BusinessActor;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.ruoyi.common.utils.uuid.IdUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class MatterNodeService
@@ -20,6 +26,7 @@ public class MatterNodeService
     private static final String PERMISSIONS="matter:list,matter:query,matter:mine:list,matter:mine:query,matter:node:list,matter:node:add,matter:node:edit,matter:node:remove,matter:node:remind";
     private final BizMatterMapper mapper;
     private final ISysDictTypeService dictService;
+    @Autowired private BusinessEventPublisher publisher;
 
     public MatterNodeService(BizMatterMapper mapper,ISysDictTypeService dictService){this.mapper=mapper;this.dictService=dictService;}
 
@@ -51,6 +58,16 @@ public class MatterNodeService
     public int saveMaterials(Long nodeId,List<Map<String,Object>> materials)
     {
         Map<String,Object> node=requireNode(nodeId); requireEditable(toLong(node.get("case_id"),"请选择案件")); saveMaterialsInternal(nodeId,materials); return 1;
+    }
+
+    @Transactional
+    public int completeFromTodo(Long nodeId,Object actualDate,Map<String,Object> dynamicFields,List<Map<String,Object>> materials,BusinessActor actor)
+    {
+        Map<String,Object> existed=mapper.selectNodeById(nodeId);if(existed==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"关键节点不存在");Long caseId=toLong(existed.get("case_id"),"请选择案件");Map<String,Object> matter=mapper.selectMatterById(caseId);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在");if(!PROCESSING.equals(text(matter.get("case_status"))))throw error(BusinessErrorCode.STATE_CONFLICT,"案件已不处于办理中");
+        Map<String,Object> update=nodeCopy(existed);update.put("nodeId",nodeId);update.put("nodeStatus","done");update.put("actualDate",actualDate);update.put("updateBy",actor.userName());if(dynamicFields!=null)update.putAll(dynamicFields);validate(update);assertRows(mapper.updateNode(update),"关键节点已变化，请刷新后重试");
+        mapper.deleteNodeMaterials(nodeId);if(materials!=null)for(Map<String,Object> material:materials){if(StringUtils.isEmpty(text(material.get("materialName"))))continue;material.put("nodeId",nodeId);material.put("materialStatus",defaultText(material.get("materialStatus"),"ready"));material.put("createBy",actor.userName());assertRows(mapper.insertNodeMaterial(material),"节点材料保存失败");}
+        Map<String,Object> matterUpdate=new HashMap<>();matterUpdate.put("caseId",caseId);matterUpdate.put("updateBy",actor.userName());matterUpdate.put("refreshNextDate",true);mapper.updateMatter(matterUpdate);logTyped(caseId,"node_complete","完成关键节点："+update.get("nodeName"),actor.userName());
+        publish(BusinessEventType.MATTER_NODE_COMPLETED,caseId,text(matter.get("case_no")),Map.of("nodeId",nodeId));Map<String,Object> next=mapper.selectCurrentOpenNode(caseId);if(next!=null){Map<String,Object> data=new HashMap<>();data.put("nodeId",next.get("node_id"));data.put("ownerId",next.get("owner_id"));publish(BusinessEventType.MATTER_NODE_READY,caseId,text(matter.get("case_no")),data);}return 1;
     }
 
     private void saveMaterialsInternal(Long nodeId,List<Map<String,Object>> materials)
@@ -86,4 +103,7 @@ public class MatterNodeService
     @SuppressWarnings("unchecked") private List<Map<String,Object>> listValue(Object value){return value instanceof List?(List<Map<String,Object>>)value:List.of();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
     private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
+    private Map<String,Object> nodeCopy(Map<String,Object> x){Map<String,Object> m=new HashMap<>();copy(x,m,"node_name","nodeName");copy(x,m,"node_type","nodeType");copy(x,m,"plan_date","planDate");copy(x,m,"court_place","courtPlace");copy(x,m,"court_room","courtRoom");copy(x,m,"owner_id","ownerId");copy(x,m,"owner_name","ownerName");copy(x,m,"remind_time","remindTime");copy(x,m,"remind_targets","remindTargets");copy(x,m,"remark","remark");return m;}private void copy(Map<String,Object>x,Map<String,Object>m,String a,String b){m.put(b,x.get(a));}
+    private void logTyped(Long id,String action,String content,String operator){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("actionType",action);value.put("content",content);value.put("createBy",operator);assertRows(mapper.insertStatusLog(value),"案件状态记录创建失败");}
+    private void publish(BusinessEventType type,Long id,String no,Map<String,Object> payload){publisher.publish(new BusinessEventCommand(type,"MATTER",id,no,type.name()+":"+id+":"+IdUtils.fastUUID(),payload));}
 }

@@ -15,6 +15,12 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.business.security.BusinessActor;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.ruoyi.common.utils.uuid.IdUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class MatterExpenseService
@@ -23,6 +29,7 @@ public class MatterExpenseService
     private static final String PERMISSIONS="matter:list,matter:query,matter:mine:list,matter:mine:query,matter:expense:list,matter:expense:add,matter:expense:edit,matter:expense:remove";
     private final BizMatterMapper mapper;
     private final ISysDictTypeService dictService;
+    @Autowired private BusinessEventPublisher publisher;
 
     public MatterExpenseService(BizMatterMapper mapper,ISysDictTypeService dictService){this.mapper=mapper;this.dictService=dictService;}
 
@@ -32,7 +39,7 @@ public class MatterExpenseService
         Long caseId=toLong(expense.get("caseId"),"请选择案件"); requireEditable(caseId); validate(expense);
         expense.put("expenseNo","FY"+LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
         expense.put("createBy",SecurityUtils.getUsername()); int rows=mapper.insertExpense(expense); assertRows(rows,"费用创建失败");
-        refreshFeeStatus(caseId); log(caseId,"expense_add","新增案件费用："+expense.get("amount")); return rows;
+        refreshFeeStatus(caseId); log(caseId,"expense_add","新增案件费用："+expense.get("amount"));Map<String,Object> event=new HashMap<>();event.put("expenseId",expense.get("expenseId"));publish(caseId,BusinessEventType.MATTER_EXPENSE_SUBMITTED,event); return rows;
     }
 
     @Transactional
@@ -49,6 +56,12 @@ public class MatterExpenseService
         Map<String,Object> existed=requireExpense(expenseId); Long caseId=toLong(existed.get("case_id"),"请选择案件"); requireEditable(caseId);
         int rows=mapper.deleteExpense(expenseId,SecurityUtils.getUsername()); assertRows(rows,"费用已变化，请刷新后重试");
         refreshFeeStatus(caseId); log(caseId,"expense_remove","删除案件费用"); return rows;
+    }
+
+    @Transactional
+    public int reviewFromTodo(Long expenseId,String result,String voucherUrl,String remark,BusinessActor actor)
+    {
+        Map<String,Object> existed=mapper.selectExpenseById(expenseId);if(existed==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"费用不存在");Long caseId=toLong(existed.get("case_id"),"请选择案件");Map<String,Object> update=expenseCopy(existed);update.put("expenseId",expenseId);boolean approved="approved".equals(result);if(approved&&(voucherUrl==null||voucherUrl.isBlank()))throw error(BusinessErrorCode.VALIDATION_FAILED,"审核通过必须上传凭证");update.put("reimburseStatus",approved?"approved":"rejected");update.put("voucherStatus",approved?"ready":"pending");if(voucherUrl!=null)update.put("voucherUrl",voucherUrl);if(remark!=null)update.put("remark",remark);update.put("handlerId",actor.userId());update.put("handlerName",actor.displayName());update.put("updateBy",actor.userName());assertRows(mapper.updateExpense(update),"费用已变化，请刷新后重试");refreshFeeStatusTyped(caseId,actor.userName());logTyped(caseId,"expense_review","费用审核："+result,actor.userName());return 1;
     }
 
     private void validate(Map<String,Object> expense)
@@ -72,4 +85,8 @@ public class MatterExpenseService
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
     private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
+    private Map<String,Object> expenseCopy(Map<String,Object>x){Map<String,Object>m=new HashMap<>();copy(x,m,"expense_type","expenseType");copy(x,m,"amount","amount");copy(x,m,"occur_date","occurDate");copy(x,m,"pay_status","payStatus");copy(x,m,"reimburse_status","reimburseStatus");copy(x,m,"voucher_status","voucherStatus");copy(x,m,"voucher_url","voucherUrl");copy(x,m,"voucher_name","voucherName");copy(x,m,"remark","remark");return m;}private void copy(Map<String,Object>x,Map<String,Object>m,String a,String b){m.put(b,x.get(a));}
+    private void refreshFeeStatusTyped(Long id,String operator){Map<String,Object> value=new HashMap<>();value.put("caseId",id);int count=mapper.countExpenseByCaseId(id);value.put("feeStatus",count==0?"none":(mapper.countUnpaidExpenseByCaseId(id)==0?"settled":"partial"));value.put("updateBy",operator);mapper.updateMatter(value);}
+    private void logTyped(Long id,String action,String content,String operator){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("actionType",action);value.put("content",content);value.put("createBy",operator);assertRows(mapper.insertStatusLog(value),"案件状态记录创建失败");}
+    private void publish(Long id,BusinessEventType type,Map<String,Object> payload){Map<String,Object> matter=mapper.selectMatterById(id);publisher.publish(new BusinessEventCommand(type,"MATTER",id,matter==null?null:text(matter.get("case_no")),type.name()+":"+id+":"+IdUtils.fastUUID(),payload));}
 }

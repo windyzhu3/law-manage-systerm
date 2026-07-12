@@ -12,6 +12,12 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.mapper.BizMatterMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.business.security.BusinessActor;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.ruoyi.common.utils.uuid.IdUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class MatterDocumentService
@@ -20,6 +26,7 @@ public class MatterDocumentService
     private static final String PERMISSIONS = "matter:list,matter:query,matter:mine:list,matter:mine:query,matter:document:list,matter:document:add,matter:document:remove";
     private final BizMatterMapper matterMapper;
     private final ISysDictTypeService dictService;
+    @Autowired private BusinessEventPublisher publisher;
 
     public MatterDocumentService(BizMatterMapper matterMapper, ISysDictTypeService dictService)
     {
@@ -56,6 +63,15 @@ public class MatterDocumentService
         return rows;
     }
 
+    @Transactional
+    public int supplyFromTodo(Long caseId,String documentType,String fileName,String fileUrl,String remark,BusinessActor actor)
+    {
+        Map<String,Object> matter=matterMapper.selectMatterById(caseId);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在");if(!PROCESSING.equals(text(matter.get("case_status"))))throw error(BusinessErrorCode.STATE_CONFLICT,"案件已不处于办理中");required(documentType,"请选择文档类型");required(fileName,"请填写文件名称");required(fileUrl,"请上传文件");Map<String,Object> document=new HashMap<>();document.put("caseId",caseId);document.put("documentType",documentType);document.put("fileName",fileName);document.put("fileUrl",fileUrl);document.put("remark",remark);document.put("createBy",actor.userName());assertRows(matterMapper.insertDocument(document),"文档创建失败");logTyped(caseId,"document_supply","补充案件文档："+fileName,actor.userName());Map<String,Object> payload=new HashMap<>();payload.put("documentId",document.get("documentId"));payload.put("documentType",documentType);publish(BusinessEventType.MATTER_DOCUMENT_SUPPLIED,caseId,text(matter.get("case_no")),payload);return 1;
+    }
+
+    public void requireDocument(Long caseId,String documentType,Long ownerId,String reason,BusinessActor actor)
+    {Map<String,Object> matter=matterMapper.selectMatterById(caseId);if(matter==null)throw error(BusinessErrorCode.DATA_NOT_FOUND,"案件不存在");Map<String,Object> payload=new HashMap<>();payload.put("documentType",documentType);payload.put("ownerId",ownerId);payload.put("reason",reason);publish(BusinessEventType.MATTER_DOCUMENT_REQUIRED,caseId,text(matter.get("case_no")),payload);}
+
     private void requireEditable(Long caseId)
     {
         Map<String,Object> matter=matterMapper.selectMatterById(caseId);
@@ -81,4 +97,6 @@ public class MatterDocumentService
     private String text(Object value){return value==null||"null".equalsIgnoreCase(String.valueOf(value))?null:String.valueOf(value).trim();}
     private void assertRows(int rows,String message){if(rows<=0)throw new ServiceException(message);}
     private ServiceException error(BusinessErrorCode code,String message){return new ServiceException(message,code.name());}
+    private void logTyped(Long id,String action,String content,String operator){Map<String,Object> value=new HashMap<>();value.put("caseId",id);value.put("actionType",action);value.put("content",content);value.put("createBy",operator);assertRows(matterMapper.insertStatusLog(value),"案件状态记录创建失败");}
+    private void publish(BusinessEventType type,Long id,String no,Map<String,Object> payload){publisher.publish(new BusinessEventCommand(type,"MATTER",id,no,type.name()+":"+id+":"+IdUtils.fastUUID(),payload));}
 }
