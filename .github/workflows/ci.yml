@@ -39,6 +39,25 @@ jobs:
       - name: Build production bundle
         run: npm run build:prod
 
+  frontend-e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ruoyi-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production bundle
+        run: npm run build:prod
+      - name: Verify phase two business journeys
+        run: npm run test:e2e
+
   migration:
     runs-on: ubuntu-latest
     services:

@@ -6,6 +6,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.mapper.TodoMapper;
 import com.ruoyi.system.mapper.BizCaseMapper;
 import com.ruoyi.system.service.casecenter.*;
 import com.ruoyi.system.service.event.*;
@@ -15,7 +16,7 @@ class CaseManagementTodoFlowTest
     @Test void assignmentAndAcceptanceHandlersMapStablePayloads()
     {
         CaseAssignmentService assignments=mock(CaseAssignmentService.class);CaseAssignmentTodoHandler assign=new CaseAssignmentTodoHandler(assignments);assign.complete(todo("CASE_ASSIGN"),Map.of("lawyerId",12L),1L,"admin");verify(assignments).assign(argThat(row->Long.valueOf(12L).equals(row.get("mainLawyerId"))&&"Y".equals(row.get("notifyFlag"))),any());
-        CaseConfirmationService confirmations=mock(CaseConfirmationService.class);new CaseAcceptanceTodoHandler(confirmations).complete(todo("CASE_ACCEPT"),Map.of("confirmId",33L,"accepted",false,"reason","冲突"),12L,"lawyer");verify(confirmations).handle(argThat(row->"rejected".equals(row.get("confirmResult"))),any());
+        CaseConfirmationService confirmations=mock(CaseConfirmationService.class);TodoMapper todos=mock(TodoMapper.class);TodoInstance accept=todo("CASE_ACCEPT");accept.setTodoId(9L);new CaseAcceptanceTodoHandler(confirmations,todos).complete(accept,Map.of("confirmId",33L,"accepted",true,"reason","同意"),12L,"lawyer");verify(confirmations).handle(argThat(row->"accepted".equals(row.get("confirmResult"))),any());verify(todos).cancelActiveByBusiness("CASE",8L,9L,"lawyer");
     }
     @Test void validatorRejectsStaleAssignment()
     {

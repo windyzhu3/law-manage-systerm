@@ -40,6 +40,7 @@ for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'de
 }
 const actions = fs.readFileSync('src/views/todo/components/TodoActionDialogs.vue', 'utf8')
 if (!actions.includes('<file-upload')) throw new Error('todo completion must use FileUpload')
+for(const code of ['CONTRACT_REVIEW','CONTRACT_SIGN','PAYMENT_CONFIRM','INVOICE_HANDLE','CASE_CREATE_CHECK','CASE_ASSIGN','CASE_ACCEPT','CASE_TRANSFER_REVIEW','MATTER_NODE_HANDLE','MATTER_EXPENSE_REVIEW','MATTER_DOCUMENT_SUPPLY','CASE_CLOSE_CONFIRM','CASE_ARCHIVE_CONFIRM']) if(!actions.includes(code)) throw new Error(`missing structured completion form ${code}`)
 console.log('todo ui contract ok')
 
 const definitionApi = fs.readFileSync('src/api/todo-definition.js', 'utf8')
