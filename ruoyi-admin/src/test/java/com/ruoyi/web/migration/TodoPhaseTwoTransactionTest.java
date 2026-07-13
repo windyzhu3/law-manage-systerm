@@ -1,7 +1,6 @@
 package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.sql.*;
 import org.junit.jupiter.api.Test;
 
@@ -9,8 +8,8 @@ class TodoPhaseTwoTransactionTest
 {
     @Test void todoAndOutboxFactsCommitOrRollbackTogether() throws Exception
     {
-        String url=System.getenv("TODO_MIGRATION_DB_URL");assumeTrue(url!=null&&!url.isBlank());
-        try(Connection c=DriverManager.getConnection(url,System.getenv("TODO_MIGRATION_DB_USER"),System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        String url=MigrationTestDatabase.migrate();
+        try(Connection c=DriverManager.getConnection(url,MigrationTestDatabase.user(),MigrationTestDatabase.password()))
         {
             try(Statement cleanup=c.createStatement()){cleanup.executeUpdate("delete from business_event where idempotency_key in ('tx-rollback','tx-commit')");}
             long template=id(c,"select template_id from todo_template where template_code='CONTRACT_REVIEW'");
