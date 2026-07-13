@@ -44,6 +44,7 @@ class FlywayMigrationTest
         {
             long templateId;long versionId;
             try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("select t.template_id,v.version_id from todo_template t join todo_template_version v on v.template_id=t.template_id where t.template_code='LEAD_FIRST_CONTACT' and v.version_no=1")){assertTrue(rows.next());templateId=rows.getLong(1);versionId=rows.getLong(2);}
+            try(Statement cleanup=connection.createStatement()){cleanup.executeUpdate("delete from todo_instance where trigger_idempotency_key='migration-invariant-key'");}
             long todoId=insertTodo(connection,templateId,versionId,"migration-invariant-key");
             assertThrows(SQLException.class,()->insertTodo(connection,templateId,versionId,"migration-invariant-key"));
             try(PreparedStatement update=connection.prepareStatement("update todo_instance set status='CLAIMED' where todo_id=? and status='CREATED'")){update.setLong(1,todoId);assertEquals(1,update.executeUpdate());assertEquals(0,update.executeUpdate());}

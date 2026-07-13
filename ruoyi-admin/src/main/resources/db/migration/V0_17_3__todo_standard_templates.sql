@@ -86,3 +86,10 @@ select x.name,@todo_menu,x.ord,'#','',null,null,1,0,'F','0','0',x.perm,'#','admi
  select '模板定义编辑',38,'todo:definition:edit' union all
  select '模板定义发布',39,'todo:definition:publish'
 ) x where not exists(select 1 from sys_menu m where m.perms=x.perm);
+
+insert into sys_menu(menu_name,parent_id,order_num,path,component,`query`,route_name,is_frame,is_cache,menu_type,visible,status,perms,icon,create_by,create_time)
+select '流程配置中心',0,41,'todo-config','todo/config/index','',null,1,0,'C','0','0','todo:definition:list','tree-table','admin',sysdate()
+where not exists(select 1 from sys_menu where component='todo/config/index');
+insert into sys_menu(menu_name,parent_id,order_num,path,component,`query`,route_name,is_frame,is_cache,menu_type,visible,status,perms,icon,create_by,create_time)
+select '待办运营中心',0,42,'todo-operations','todo/operations/index','',null,1,0,'C','0','0','todo:operations:list','monitor','admin',sysdate()
+where not exists(select 1 from sys_menu where component='todo/operations/index');
