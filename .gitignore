@@ -11,6 +11,7 @@ target/
 # Repository-local JDK installed by bin/setup-jdk17.ps1
 .jdk/
 .run/
+.worktrees/
 
 ######################################################################
 # IDE
