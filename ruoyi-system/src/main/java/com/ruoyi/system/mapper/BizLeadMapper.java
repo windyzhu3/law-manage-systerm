@@ -21,14 +21,18 @@ public interface BizLeadMapper
     public int assignLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
     public int moveToPool(@Param("leadId") Long leadId, @Param("reason") String reason, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
     public int claimLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("deptId") Long deptId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
-    public int convertLead(@Param("leadId") Long leadId, @Param("updateBy") String updateBy);
-    public int bindCustomer(@Param("leadId") Long leadId, @Param("customerId") Long customerId, @Param("updateBy") String updateBy);
+    public int bindCustomerConditionally(@Param("leadId") Long leadId, @Param("customerId") Long customerId,
+            @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
     public int insertAssignmentLog(Map<String, Object> assignmentLog);
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup);
+    public BizLeadFollowup selectFollowupById(Long followupId);
     public int insertFollowup(BizLeadFollowup followup);
     public int updateFollowup(BizLeadFollowup followup);
-    public int deleteFollowup(Long followupId);
+    public int deleteFollowup(@Param("followupId") Long followupId, @Param("leadId") Long leadId);
     public int touchLeadFollowTime(@Param("leadId") Long leadId, @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy);
+    public int touchLeadFollowTimeConditionally(@Param("leadId") Long leadId,
+            @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy,
+            @Param("expectedStatus") String expectedStatus);
     public int countLeadInDataScope(@Param("leadId") Long leadId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("includeDeleted") Boolean includeDeleted);
     public List<BizLeadSetting> selectSettingList(BizLeadSetting setting);
     public int insertSetting(BizLeadSetting setting);

@@ -157,13 +157,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and pool_status = '1' and owner_id is null and del_flag = '0' and status = #{expectedStatus}
     </update>
-    <update id="convertLead">
-        update biz_lead set status = '3', converted_time = sysdate(), update_by = #{updateBy}, update_time = sysdate()
-        where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and owner_id is not null and status in ('1','2')
-    </update>
-    <update id="bindCustomer">
-        update biz_lead set customer_id = #{customerId}, update_by = #{updateBy}, update_time = sysdate()
-        where lead_id = #{leadId}
+    <update id="bindCustomerConditionally">
+        update biz_lead set customer_id = #{customerId}, status = '3', converted_time = sysdate(),
+        update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and del_flag = '0' and customer_id is null and status = #{expectedStatus}
     </update>
     <insert id="insertAssignmentLog" parameterType="map" useGeneratedKeys="true" keyProperty="logId">
         insert into biz_lead_assignment_log(lead_id, from_owner_id, to_owner_id, action_type, reason, create_by, create_time)
@@ -185,6 +182,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </where>
         order by f.create_time desc
     </select>
+    <select id="selectFollowupById" resultType="BizLeadFollowup">
+        select followup_id as followupId, lead_id as leadId, follow_type as followType,
+        follow_result as followResult, content, next_follow_time as nextFollowTime,
+        follow_user_id as followUserId, task_status as taskStatus, create_by as createBy,
+        create_time as createTime, update_by as updateBy, update_time as updateTime
+        from biz_lead_followup where followup_id = #{followupId}
+    </select>
     <insert id="insertFollowup" parameterType="BizLeadFollowup" useGeneratedKeys="true" keyProperty="followupId">
         insert into biz_lead_followup(lead_id, follow_type, follow_result, content, next_follow_time, follow_user_id, task_status, create_by, create_time)
         values(#{leadId}, #{followType}, #{followResult}, #{content}, #{nextFollowTime}, #{followUserId}, '1', #{createBy}, sysdate())
@@ -192,13 +196,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="updateFollowup" parameterType="BizLeadFollowup">
         update biz_lead_followup set follow_type=#{followType}, follow_result=#{followResult}, content=#{content},
         next_follow_time=#{nextFollowTime}, task_status=#{taskStatus}, update_by=#{updateBy}, update_time=sysdate()
-        where followup_id=#{followupId}
+        where followup_id=#{followupId} and lead_id=#{leadId}
     </update>
-    <delete id="deleteFollowup">delete from biz_lead_followup where followup_id = #{followupId}</delete>
+    <delete id="deleteFollowup">delete from biz_lead_followup where followup_id = #{followupId} and lead_id = #{leadId}</delete>
     <update id="touchLeadFollowTime">
         update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime},
         status=case when status in ('0','1') then '2' else status end, update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null and status in ('1','2')
+    </update>
+    <update id="touchLeadFollowTimeConditionally">
+        update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime}, status='2',
+        update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null
+        and status=#{expectedStatus}
     </update>
 
     <select id="countLeadInDataScope" resultType="int">

@@ -1,59 +1,27 @@
 package com.ruoyi.system.service.impl;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.ruoyi.common.core.domain.entity.SysDictData;
-import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
-import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BizLeadSetting;
-import com.ruoyi.system.mapper.BizLeadMapper;
-import com.ruoyi.system.service.IBizCustomerService;
 import com.ruoyi.system.service.IBizLeadService;
-import com.ruoyi.system.service.ISysDictTypeService;
-import com.law.business.shared.status.LeadStatus;
-import com.law.business.event.BusinessEventCommand;
-import com.law.business.event.BusinessEventPublisher;
-import com.law.business.event.BusinessEventType;
 import com.law.business.security.LeadPermissions;
-import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.system.service.lead.LeadCommandService;
 import com.ruoyi.system.service.lead.LeadQueryService;
 import com.ruoyi.system.service.lead.LeadAssignmentService;
 import com.ruoyi.system.service.lead.LeadPoolService;
+import com.ruoyi.system.service.lead.LeadConversionService;
+import com.ruoyi.system.service.lead.LeadFollowupService;
+import com.law.business.lead.dto.LeadFollowupCommand;
 
 @Service
 public class BizLeadServiceImpl implements IBizLeadService
 {
-    private static final String STATUS_UNASSIGNED = LeadStatus.UNASSIGNED.code();
-    private static final String STATUS_WAIT_FOLLOW = LeadStatus.WAIT_FOLLOW.code();
-    private static final String STATUS_FOLLOWING = LeadStatus.FOLLOWING.code();
-    private static final String STATUS_CONVERTED = LeadStatus.CONVERTED.code();
-    private static final String STATUS_INVALID = LeadStatus.INVALID.code();
-    private static final String STATUS_CLOSED = LeadStatus.CLOSED.code();
-    private static final String POOL_NO = "0";
-    private static final String POOL_YES = "1";
-
-    @Autowired
-    private BizLeadMapper leadMapper;
-
-    @Autowired
-    private IBizCustomerService customerService;
-
-    @Autowired
-    private ISysDictTypeService dictTypeService;
-
-    @Autowired
-    private BusinessEventPublisher eventPublisher;
-
     @Autowired
     private LeadQueryService leadQueryService;
 
@@ -65,6 +33,12 @@ public class BizLeadServiceImpl implements IBizLeadService
 
     @Autowired
     private LeadPoolService leadPoolService;
+
+    @Autowired
+    private LeadConversionService leadConversionService;
+
+    @Autowired
+    private LeadFollowupService leadFollowupService;
 
     @Override
     public List<BizLead> selectLeadList(BizLead lead)
@@ -135,71 +109,37 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Transactional
     public int convertLead(Long leadId)
     {
-        BizLead lead = requiredAccessibleLead(leadId, false, false);
-        if (!SecurityUtils.hasPermi(LeadPermissions.CONVERT) && SecurityUtils.hasPermi(LeadPermissions.CONVERT_MINE))
-        {
-            assertMineLead(lead, "convert");
-        }
-        assertActiveLead(lead, "convert");
-        assertOwnedLead(lead, "convert");
-        if (!STATUS_WAIT_FOLLOW.equals(lead.getStatus()) && !STATUS_FOLLOWING.equals(lead.getStatus()))
-        {
-            throw new ServiceException("Only assigned leads in follow-up status can be converted");
-        }
-        int rows = leadMapper.convertLead(leadId, SecurityUtils.getUsername());
-        if (rows == 0)
-        {
-            throw new ServiceException("Lead conversion failed, please refresh and try again");
-        }
-        Long customerId = customerService.convertLeadToCustomer(lead).getCustomerId();
-        publish(BusinessEventType.LEAD_CONVERTED, lead, Map.of("customerId", customerId));
-        return rows;
+        boolean ownerOnly = !SecurityUtils.hasPermi(LeadPermissions.CONVERT)
+                && SecurityUtils.hasPermi(LeadPermissions.CONVERT_MINE);
+        leadConversionService.convert(leadId, ownerOnly);
+        return 1;
     }
 
     @Override
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup)
     {
-        if ("mine".equals(followup.getListMode()))
-        {
-            followup.setCurrentUserId(SecurityUtils.getUserId());
-        }
-        return leadMapper.selectFollowupList(followup);
+        return leadFollowupService.list(followup);
     }
 
     @Override
     @Transactional
-    public int insertFollowup(BizLeadFollowup followup)
+    public int insertFollowup(LeadFollowupCommand followup)
     {
-        validateFollowup(followup);
-        BizLead lead = requiredAccessibleLead(followup.getLeadId(), false, false);
-        if (!SecurityUtils.hasPermi(LeadPermissions.FOLLOW) && SecurityUtils.hasPermi(LeadPermissions.FOLLOW_MINE))
-        {
-            assertMineLead(lead, "follow up");
-        }
-        assertActiveLead(lead, "follow up");
-        assertOwnedLead(lead, "follow up");
-        followup.setFollowUserId(SecurityUtils.getUserId());
-        followup.setCreateBy(SecurityUtils.getUsername());
-        int rows = leadMapper.insertFollowup(followup);
-        int touched = leadMapper.touchLeadFollowTime(followup.getLeadId(), followup.getNextFollowTime(), SecurityUtils.getUsername());
-        if (touched == 0)
-        {
-            throw new ServiceException("Lead follow-up failed, please refresh and try again");
-        }
-        return rows;
+        boolean ownerOnly = !SecurityUtils.hasPermi(LeadPermissions.FOLLOW)
+                && SecurityUtils.hasPermi(LeadPermissions.FOLLOW_MINE);
+        return leadFollowupService.add(followup, ownerOnly);
     }
 
     @Override
-    public int updateFollowup(BizLeadFollowup followup)
+    public int updateFollowup(LeadFollowupCommand followup)
     {
-        followup.setUpdateBy(SecurityUtils.getUsername());
-        return leadMapper.updateFollowup(followup);
+        return leadFollowupService.update(followup, false);
     }
 
     @Override
     public int deleteFollowup(Long followupId)
     {
-        return leadMapper.deleteFollowup(followupId);
+        return leadFollowupService.remove(followupId, false);
     }
 
     @Override
@@ -230,212 +170,5 @@ public class BizLeadServiceImpl implements IBizLeadService
     public Map<String, Object> selectDashboard()
     {
         return leadQueryService.dashboard();
-    }
-
-    private void validateLead(BizLead lead)
-    {
-        if (lead == null)
-        {
-            throw new ServiceException("Lead is required");
-        }
-        requiredText(lead.getLeadName(), "Lead name is required");
-        requiredText(lead.getContactName(), "Contact name is required");
-        requiredText(lead.getMobile(), "Mobile is required");
-        requiredText(lead.getSourceCode(), "Lead source is required");
-        requiredText(lead.getPriority(), "Lead priority is required");
-        requiredText(lead.getLegalDemand(), "Legal demand is required");
-        assertEnabledSetting("source", lead.getSourceCode(), "Lead source does not exist or has been disabled");
-        assertDictValue("law_lead_priority", lead.getPriority(), "Lead priority is invalid");
-    }
-
-    private void validateFollowup(BizLeadFollowup followup)
-    {
-        if (followup == null)
-        {
-            throw new ServiceException("Follow-up record is required");
-        }
-        requiredText(followup.getFollowType(), "Follow-up type is required");
-        requiredText(followup.getContent(), "Follow-up content is required");
-        assertDictValue("law_lead_follow_type", followup.getFollowType(), "Follow-up type is invalid");
-    }
-
-    private void validateSetting(BizLeadSetting setting)
-    {
-        if (setting == null)
-        {
-            throw new ServiceException("Lead setting is required");
-        }
-        requiredText(setting.getSettingType(), "Setting type is required");
-        requiredText(setting.getSettingCode(), "Setting code is required");
-        requiredText(setting.getSettingName(), "Setting name is required");
-        assertDictValue("law_lead_setting_type", setting.getSettingType(), "Setting type is invalid");
-    }
-
-    private String requiredText(Object value, String message)
-    {
-        String text = value == null ? null : String.valueOf(value).trim();
-        if (StringUtils.isEmpty(text))
-        {
-            throw new ServiceException(message);
-        }
-        return text;
-    }
-
-    private void assertDictValue(String dictType, Object value, String message)
-    {
-        String valueText = requiredText(value, message);
-        List<SysDictData> options = dictTypeService.selectDictDataByType(dictType);
-        if (options == null || options.isEmpty())
-        {
-            throw new ServiceException("Dictionary is not initialized: " + dictType);
-        }
-        for (SysDictData item : options)
-        {
-            if (valueText.equals(item.getDictValue()))
-            {
-                return;
-            }
-        }
-        throw new ServiceException(message);
-    }
-
-    private void assertEnabledSetting(String settingType, Object value, String message)
-    {
-        String valueText = requiredText(value, message);
-        BizLeadSetting query = new BizLeadSetting();
-        query.setSettingType(settingType);
-        query.setSettingCode(valueText);
-        query.setStatus("0");
-        List<BizLeadSetting> settings = leadMapper.selectSettingList(query);
-        if (settings == null || settings.isEmpty())
-        {
-            throw new ServiceException(message);
-        }
-    }
-
-    private void applyListScope(BizLead lead)
-    {
-        lead.setCurrentUserId(SecurityUtils.getUserId());
-        lead.setCurrentDeptId(SecurityUtils.getDeptId());
-        lead.setDataScope(!SecurityUtils.isAdmin() && !"pool".equals(lead.getListMode()));
-    }
-
-    private BizLead requiredLead(Long leadId)
-    {
-        BizLead lead = leadMapper.selectLeadById(leadId);
-        if (lead == null || "2".equals(lead.getDelFlag()))
-        {
-            throw new ServiceException("Lead does not exist or has been deleted");
-        }
-        return lead;
-    }
-
-    private BizLead requiredAccessibleLead(Long leadId, boolean includeDeleted, boolean allowPool)
-    {
-        BizLead lead = leadMapper.selectLeadById(leadId);
-        if (lead == null || (!includeDeleted && "2".equals(lead.getDelFlag())))
-        {
-            throw new ServiceException("Lead does not exist or has been deleted");
-        }
-        if (!canAccessLead(lead, allowPool))
-        {
-            throw new ServiceException("No permission to operate this lead");
-        }
-        return lead;
-    }
-
-    private boolean canAccessLead(BizLead lead, boolean allowPool)
-    {
-        if (SecurityUtils.isAdmin())
-        {
-            return true;
-        }
-        Long currentUserId = SecurityUtils.getUserId();
-        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_ALL)
-                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0)
-        {
-            return true;
-        }
-        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_MINE)
-                && !"2".equals(lead.getDelFlag())
-                && POOL_NO.equals(lead.getPoolStatus())
-                && currentUserId != null
-                && currentUserId.equals(lead.getOwnerId()))
-        {
-            return true;
-        }
-        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_POOL)
-                && !"2".equals(lead.getDelFlag())
-                && POOL_YES.equals(lead.getPoolStatus()))
-        {
-            return true;
-        }
-        if (SecurityUtils.hasPermi(LeadPermissions.QUERY_RECYCLE)
-                && "2".equals(lead.getDelFlag())
-                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), true) > 0)
-        {
-            return true;
-        }
-        if (allowPool && POOL_YES.equals(lead.getPoolStatus()) && SecurityUtils.hasPermi("lead:pool:list"))
-        {
-            return true;
-        }
-        return hasLeadOperationPerm()
-                && leadMapper.countLeadInDataScope(lead.getLeadId(), currentUserId, SecurityUtils.getDeptId(), "2".equals(lead.getDelFlag())) > 0;
-    }
-
-    private boolean hasLeadOperationPerm()
-    {
-        return SecurityUtils.hasPermi("lead:edit")
-                || SecurityUtils.hasPermi("lead:remove")
-                || SecurityUtils.hasPermi("lead:assign")
-                || SecurityUtils.hasPermi("lead:pool:move")
-                || SecurityUtils.hasPermi("lead:mine:pool:move")
-                || SecurityUtils.hasPermi("lead:convert")
-                || SecurityUtils.hasPermi("lead:mine:convert")
-                || SecurityUtils.hasPermi("lead:followup:add")
-                || SecurityUtils.hasPermi("lead:mine:followup")
-                || SecurityUtils.hasPermi("lead:recycle:restore")
-                || SecurityUtils.hasPermi("lead:recycle:purge");
-    }
-
-    private void assertActiveLead(BizLead lead, String action)
-    {
-        if (STATUS_CONVERTED.equals(lead.getStatus()) || STATUS_INVALID.equals(lead.getStatus()) || STATUS_CLOSED.equals(lead.getStatus()))
-        {
-            throw new ServiceException("Converted, invalid, or closed leads cannot " + action);
-        }
-    }
-
-    private void assertOwnedLead(BizLead lead, String action)
-    {
-        if (POOL_YES.equals(lead.getPoolStatus()) || lead.getOwnerId() == null)
-        {
-            throw new ServiceException("Public pool or unassigned leads must be claimed or assigned before " + action);
-        }
-    }
-
-    private void assertMineLead(BizLead lead, String action)
-    {
-        if (lead == null
-                || "2".equals(lead.getDelFlag())
-                || POOL_YES.equals(lead.getPoolStatus())
-                || lead.getOwnerId() == null
-                || !lead.getOwnerId().equals(SecurityUtils.getUserId()))
-        {
-            throw new ServiceException("Only assigned owner can " + action + " this lead");
-        }
-    }
-
-    private void publish(BusinessEventType eventType, BizLead lead, Map<String, Object> payload)
-    {
-        String eventKey = eventType.name() + ":" + lead.getLeadId() + ":" + IdUtils.fastUUID();
-        eventPublisher.publish(new BusinessEventCommand(eventType, "LEAD", lead.getLeadId(),
-                lead.getLeadNo(), eventKey, payload));
-    }
-
-    private Object valueOrEmpty(Object value)
-    {
-        return value == null ? "" : value;
     }
 }

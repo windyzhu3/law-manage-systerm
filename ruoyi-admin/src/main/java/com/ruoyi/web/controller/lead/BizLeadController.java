@@ -18,6 +18,7 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.exception.ServiceException;
 import com.law.business.lead.dto.LeadAssignCommand;
+import com.law.business.lead.dto.LeadFollowupCommand;
 import com.law.business.lead.dto.LeadPoolCommand;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
@@ -112,11 +113,11 @@ public class BizLeadController extends BaseController
 
     @PreAuthorize("@ss.hasAnyPermi('lead:followup:add,lead:mine:followup')")
     @PostMapping("/followup")
-    public AjaxResult addFollowup(@RequestBody BizLeadFollowup followup) { return toAjax(leadService.insertFollowup(followup)); }
+    public AjaxResult addFollowup(@Valid @RequestBody LeadFollowupCommand followup) { return toAjax(leadService.insertFollowup(followup)); }
 
     @PreAuthorize("@ss.hasPermi('lead:followup:edit')")
     @PutMapping("/followup")
-    public AjaxResult editFollowup(@RequestBody BizLeadFollowup followup) { return toAjax(leadService.updateFollowup(followup)); }
+    public AjaxResult editFollowup(@Valid @RequestBody LeadFollowupCommand followup) { return toAjax(leadService.updateFollowup(followup)); }
 
     @PreAuthorize("@ss.hasPermi('lead:followup:remove')")
     @DeleteMapping("/followup/{followupId}")

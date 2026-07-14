@@ -75,7 +75,6 @@ public class BizCustomerServiceImpl implements IBizCustomerService
         BizCustomer duplicate = customerMapper.selectDuplicateCustomerInScope(lead.getMobile(), null, name, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), !SecurityUtils.isAdmin(), CUSTOMER_MODULE_PERMISSIONS);
         if (duplicate != null)
         {
-            leadMapper.bindCustomer(lead.getLeadId(), duplicate.getCustomerId(), SecurityUtils.getUsername());
             insertLeadContactIfAbsent(duplicate.getCustomerId(), lead, name);
             return duplicate;
         }
@@ -98,7 +97,6 @@ public class BizCustomerServiceImpl implements IBizCustomerService
         int rows = customerMapper.insertCustomer(customer);
         assertRowsChanged(rows, "Customer was not created");
         insertLeadContactIfAbsent(customer.getCustomerId(), lead, name);
-        leadMapper.bindCustomer(lead.getLeadId(), customer.getCustomerId(), SecurityUtils.getUsername());
         return customer;
     }
 

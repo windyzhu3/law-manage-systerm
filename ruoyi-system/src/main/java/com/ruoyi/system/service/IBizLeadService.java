@@ -2,6 +2,7 @@ package com.ruoyi.system.service;
 
 import java.util.List;
 import java.util.Map;
+import com.law.business.lead.dto.LeadFollowupCommand;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BizLeadSetting;
@@ -20,8 +21,8 @@ public interface IBizLeadService
     public int claimLead(Long leadId);
     public int convertLead(Long leadId);
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup);
-    public int insertFollowup(BizLeadFollowup followup);
-    public int updateFollowup(BizLeadFollowup followup);
+    public int insertFollowup(LeadFollowupCommand followup);
+    public int updateFollowup(LeadFollowupCommand followup);
     public int deleteFollowup(Long followupId);
     public List<BizLeadSetting> selectSettingList(BizLeadSetting setting);
     public int insertSetting(BizLeadSetting setting);
