@@ -1,5 +1,21 @@
 import request from '@/utils/request'
 
+/**
+ * @typedef {Object} LeadAssignCommand
+ * @property {number} leadId
+ * @property {number} ownerId
+ * @property {string=} reason
+ */
+
+/**
+ * @typedef {Object} LeadFollowupCommand
+ * @property {number} leadId
+ * @property {string} followType
+ * @property {string} followResult
+ * @property {string} content
+ * @property {string=} nextFollowTime
+ */
+
 export function getDashboard() {
   return request({ url: '/lead/dashboard', method: 'get' })
 }
@@ -36,6 +52,7 @@ export function purgeLead(leadIds) {
   return request({ url: '/lead/purge/' + leadIds, method: 'delete' })
 }
 
+/** @param {LeadAssignCommand} data */
 export function assignLead(data) {
   return request({ url: '/lead/assign', method: 'post', data })
 }
@@ -56,6 +73,7 @@ export function listFollowup(query) {
   return request({ url: '/lead/followup/list', method: 'get', params: query })
 }
 
+/** @param {LeadFollowupCommand} data */
 export function addFollowup(data) {
   return request({ url: '/lead/followup', method: 'post', data })
 }
