@@ -25,6 +25,8 @@ import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.law.business.security.LeadPermissions;
 import com.ruoyi.common.utils.uuid.IdUtils;
+import com.ruoyi.system.service.lead.LeadCommandService;
+import com.ruoyi.system.service.lead.LeadQueryService;
 
 @Service
 public class BizLeadServiceImpl implements IBizLeadService
@@ -50,111 +52,54 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Autowired
     private BusinessEventPublisher eventPublisher;
 
+    @Autowired
+    private LeadQueryService leadQueryService;
+
+    @Autowired
+    private LeadCommandService leadCommandService;
+
     @Override
     public List<BizLead> selectLeadList(BizLead lead)
     {
-        applyListScope(lead);
-        if ("mine".equals(lead.getListMode()))
-        {
-            lead.setCurrentUserId(SecurityUtils.getUserId());
-        }
-        return leadMapper.selectLeadList(lead);
+        return leadQueryService.list(lead);
     }
 
     @Override
     public BizLead selectLeadById(Long leadId)
     {
-        BizLead lead = leadMapper.selectLeadById(leadId);
-        if (lead == null || "2".equals(lead.getDelFlag()))
-        {
-            throw new ServiceException("Lead does not exist or has been deleted");
-        }
-        if (!canAccessLead(lead, false))
-        {
-            throw new ServiceException("No permission to access this lead");
-        }
-        return lead;
+        return leadQueryService.detail(leadId);
     }
 
     @Override
     @Transactional
     public int insertLead(BizLead lead)
     {
-        validateLead(lead);
-        lead.setCreateBy(SecurityUtils.getUsername());
-        lead.setLeadNo("XS" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
-        if (lead.getOwnerId() == null)
-        {
-            lead.setStatus(STATUS_UNASSIGNED);
-            lead.setPoolStatus(POOL_YES);
-            lead.setDeptId(null);
-        }
-        else
-        {
-            lead.setStatus(STATUS_WAIT_FOLLOW);
-            lead.setPoolStatus(POOL_NO);
-        }
-        int rows = leadMapper.insertLead(lead);
-        publish(BusinessEventType.LEAD_CREATED, lead, Map.of("ownerId", valueOrEmpty(lead.getOwnerId())));
-        return rows;
+        return leadCommandService.create(lead);
     }
 
     @Override
     public int updateLead(BizLead lead)
     {
-        if (lead.getLeadId() == null)
-        {
-            throw new ServiceException("Lead ID is required");
-        }
-        requiredAccessibleLead(lead.getLeadId(), false, false);
-        validateLead(lead);
-        lead.setStatus(null);
-        lead.setPoolStatus(null);
-        lead.setOwnerId(null);
-        lead.setDeptId(null);
-        lead.setConvertedTime(null);
-        lead.setLastFollowTime(null);
-        lead.setInvalidReason(null);
-        lead.setPoolReason(null);
-        lead.setUpdateBy(SecurityUtils.getUsername());
-        return leadMapper.updateLead(lead);
+        return leadCommandService.update(lead);
     }
 
     @Override
     public int softDeleteLead(Long[] leadIds)
     {
-        for (Long leadId : leadIds)
-        {
-            requiredAccessibleLead(leadId, false, false);
-        }
-        return leadMapper.softDeleteLead(leadIds, SecurityUtils.getUsername());
+        return leadCommandService.softDelete(leadIds);
     }
 
     @Override
     public int restoreLead(Long[] leadIds)
     {
-        for (Long leadId : leadIds)
-        {
-            requiredAccessibleLead(leadId, true, false);
-        }
-        return leadMapper.restoreLead(leadIds, SecurityUtils.getUsername());
+        return leadCommandService.restore(leadIds);
     }
 
     @Override
     @Transactional
     public int purgeLead(Long[] leadIds)
     {
-        for (Long leadId : leadIds)
-        {
-            BizLead lead = requiredAccessibleLead(leadId, true, false);
-            if (!"2".equals(lead.getDelFlag()))
-            {
-                throw new ServiceException("Only recycle-bin leads can be permanently deleted");
-            }
-        }
-        leadMapper.purgeLeadFollowups(leadIds);
-        leadMapper.purgeLeadAssignmentLogs(leadIds);
-        return leadMapper.purgeLead(leadIds);
+        return leadCommandService.purge(leadIds);
     }
 
     @Override
@@ -299,42 +244,31 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Override
     public List<BizLeadSetting> selectSettingList(BizLeadSetting setting)
     {
-        return leadMapper.selectSettingList(setting);
+        return leadQueryService.settings(setting);
     }
 
     @Override
     public int insertSetting(BizLeadSetting setting)
     {
-        validateSetting(setting);
-        setting.setCreateBy(SecurityUtils.getUsername());
-        return leadMapper.insertSetting(setting);
+        return leadCommandService.createSetting(setting);
     }
 
     @Override
     public int updateSetting(BizLeadSetting setting)
     {
-        validateSetting(setting);
-        setting.setUpdateBy(SecurityUtils.getUsername());
-        return leadMapper.updateSetting(setting);
+        return leadCommandService.updateSetting(setting);
     }
 
     @Override
     public int deleteSetting(Long settingId)
     {
-        return leadMapper.deleteSetting(settingId);
+        return leadCommandService.deleteSetting(settingId);
     }
 
     @Override
     public Map<String, Object> selectDashboard()
     {
-        Long currentUserId = SecurityUtils.getUserId();
-        Long currentDeptId = SecurityUtils.getDeptId();
-        Boolean dataScope = !SecurityUtils.isAdmin();
-        Map<String, Object> data = new HashMap<>();
-        data.put("cards", leadMapper.selectDashboardCards(currentUserId, currentDeptId, dataScope));
-        data.put("sources", leadMapper.selectSourceStats(currentUserId, currentDeptId, dataScope));
-        data.put("statuses", leadMapper.selectStatusStats(currentUserId, currentDeptId, dataScope));
-        return data;
+        return leadQueryService.dashboard();
     }
 
     private void validateLead(BizLead lead)
