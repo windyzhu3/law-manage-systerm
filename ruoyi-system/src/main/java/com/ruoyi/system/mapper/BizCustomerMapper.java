@@ -25,6 +25,8 @@ public interface BizCustomerMapper
     int countContactByCustomerAndMobileOrName(@Param("customerId") Long customerId, @Param("mobile") String mobile, @Param("contactName") String contactName);
     int insertContact(Map<String, Object> contact);
     int updateContact(Map<String, Object> contact);
+    int clearOtherKeyContacts(@Param("customerId") Long customerId, @Param("contactId") Long contactId,
+            @Param("normalValue") String normalValue, @Param("updateBy") String updateBy);
     int deleteContact(@Param("contactId") Long contactId, @Param("updateBy") String updateBy);
     List<Map<String, Object>> selectFollowups(Map<String, Object> params);
     Long selectFollowupCustomerId(Long followupId);

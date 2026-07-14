@@ -252,6 +252,11 @@
     </select>
     <insert id="insertContact" parameterType="map" useGeneratedKeys="true" keyProperty="contactId">insert into biz_customer_contact(customer_id,contact_name,position_name,mobile,wechat,email,relation_type,key_contact,owner_id,remark,create_by,create_time) values(#{customerId},#{contactName},#{positionName},#{mobile},#{wechat},#{email},#{relationType},#{keyContact},#{ownerId},#{remark},#{createBy},sysdate())</insert>
     <update id="updateContact" parameterType="map">update biz_customer_contact set contact_name=#{contactName},position_name=#{positionName},mobile=#{mobile},wechat=#{wechat},email=#{email},relation_type=#{relationType},key_contact=#{keyContact},owner_id=#{ownerId},remark=#{remark},update_by=#{updateBy},update_time=sysdate() where contact_id=#{contactId} and del_flag='0'</update>
+    <update id="clearOtherKeyContacts">
+        update biz_customer_contact set key_contact=#{normalValue}, update_by=#{updateBy}, update_time=sysdate()
+        where customer_id=#{customerId} and del_flag='0' and key_contact='1'
+        <if test="contactId != null">and contact_id != #{contactId}</if>
+    </update>
     <update id="deleteContact">update biz_customer_contact set del_flag='2', update_by=#{updateBy}, update_time=sysdate() where contact_id=#{contactId} and del_flag='0'</update>
 
     <select id="selectFollowups" resultType="java.util.Map">

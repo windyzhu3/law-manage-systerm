@@ -2,6 +2,7 @@ package com.ruoyi.web.controller.customer;
 
 import java.util.List;
 import java.util.Map;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +28,12 @@ import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizCustomer;
 import com.ruoyi.system.service.IBizCustomerService;
 import com.ruoyi.system.service.ISysUserService;
+import com.law.business.customer.dto.CustomerContactCreateCommand;
+import com.law.business.customer.dto.CustomerContactUpdateCommand;
+import com.law.business.customer.dto.CustomerFollowupCreateCommand;
+import com.law.business.customer.dto.CustomerTagAssignCommand;
+import com.law.business.customer.dto.CustomerTagCreateCommand;
+import com.law.business.customer.dto.CustomerTagUpdateCommand;
 
 @RestController
 @RequestMapping("/customer")
@@ -129,7 +136,7 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:contact:add')")
     @Log(title = "customer-contact", businessType = BusinessType.INSERT)
     @PostMapping("/contact")
-    public AjaxResult addContact(@RequestBody Map<String, Object> contact)
+    public AjaxResult addContact(@Valid @RequestBody CustomerContactCreateCommand contact)
     {
         return toAjax(customerService.insertContact(contact));
     }
@@ -137,7 +144,7 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:contact:edit')")
     @Log(title = "customer-contact", businessType = BusinessType.UPDATE)
     @PutMapping("/contact")
-    public AjaxResult editContact(@RequestBody Map<String, Object> contact)
+    public AjaxResult editContact(@Valid @RequestBody CustomerContactUpdateCommand contact)
     {
         return toAjax(customerService.updateContact(contact));
     }
@@ -161,7 +168,7 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:followup:add')")
     @Log(title = "customer-followup", businessType = BusinessType.INSERT)
     @PostMapping("/followup")
-    public AjaxResult addFollowup(@RequestBody Map<String, Object> followup)
+    public AjaxResult addFollowup(@Valid @RequestBody CustomerFollowupCreateCommand followup)
     {
         return toAjax(customerService.insertFollowup(followup));
     }
@@ -184,7 +191,7 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:tag:add')")
     @Log(title = "customer-tag", businessType = BusinessType.INSERT)
     @PostMapping("/tag")
-    public AjaxResult addTag(@RequestBody Map<String, Object> tag)
+    public AjaxResult addTag(@Valid @RequestBody CustomerTagCreateCommand tag)
     {
         return toAjax(customerService.insertTag(tag));
     }
@@ -192,7 +199,7 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:tag:edit')")
     @Log(title = "customer-tag", businessType = BusinessType.UPDATE)
     @PutMapping("/tag")
-    public AjaxResult editTag(@RequestBody Map<String, Object> tag)
+    public AjaxResult editTag(@Valid @RequestBody CustomerTagUpdateCommand tag)
     {
         return toAjax(customerService.updateTag(tag));
     }
@@ -217,7 +224,10 @@ public class BizCustomerController extends BaseController
     @PostMapping("/{customerId}/tags")
     public AjaxResult setTags(@PathVariable Long customerId, @RequestBody Long[] tagIds)
     {
-        return toAjax(customerService.setCustomerTags(customerId, tagIds));
+        CustomerTagAssignCommand command = new CustomerTagAssignCommand();
+        command.setCustomerId(customerId);
+        command.setTagIds(tagIds == null ? new Long[0] : tagIds);
+        return toAjax(customerService.setCustomerTags(command));
     }
 
     @PreAuthorize("@ss.hasPermi('customer:merge:list')")
