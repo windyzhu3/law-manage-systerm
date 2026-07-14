@@ -21,8 +21,6 @@ import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
-import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizCustomer;
@@ -31,6 +29,7 @@ import com.ruoyi.system.service.ISysUserService;
 import com.law.business.customer.dto.CustomerContactCreateCommand;
 import com.law.business.customer.dto.CustomerContactUpdateCommand;
 import com.law.business.customer.dto.CustomerFollowupCreateCommand;
+import com.law.business.customer.dto.CustomerMergeCommand;
 import com.law.business.customer.dto.CustomerTagAssignCommand;
 import com.law.business.customer.dto.CustomerTagCreateCommand;
 import com.law.business.customer.dto.CustomerTagUpdateCommand;
@@ -248,27 +247,8 @@ public class BizCustomerController extends BaseController
     @PreAuthorize("@ss.hasPermi('customer:merge:merge')")
     @Log(title = "customer-merge", businessType = BusinessType.UPDATE)
     @PostMapping("/merge")
-    public AjaxResult merge(@RequestBody Map<String, Object> body)
+    public AjaxResult merge(@Valid @RequestBody CustomerMergeCommand command)
     {
-        Long mainCustomerId = requiredLong(body, "mainCustomerId", "请选择主客户");
-        Long mergedCustomerId = requiredLong(body, "mergedCustomerId", "请选择待合并客户");
-        String content = text(body, "content");
-        return toAjax(customerService.mergeCustomer(mainCustomerId, mergedCustomerId, content));
-    }
-
-    private Long requiredLong(Map<String, Object> body, String key, String message)
-    {
-        Object value = body == null ? null : body.get(key);
-        if (value == null || StringUtils.isEmpty(String.valueOf(value)) || "null".equalsIgnoreCase(String.valueOf(value)))
-        {
-            throw new ServiceException(message);
-        }
-        return Long.valueOf(String.valueOf(value));
-    }
-
-    private String text(Map<String, Object> body, String key)
-    {
-        Object value = body == null ? null : body.get(key);
-        return value == null || "null".equalsIgnoreCase(String.valueOf(value)) ? null : String.valueOf(value);
+        return toAjax(customerService.mergeCustomer(command));
     }
 }

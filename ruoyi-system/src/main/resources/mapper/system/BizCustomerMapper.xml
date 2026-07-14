@@ -333,6 +333,6 @@
         where c.customer_id=#{fromId}
         and c.del_flag='0'
     </update>
-    <update id="markMerged">update biz_customer set status='2', del_flag='2', update_by=#{updateBy}, update_time=sysdate() where customer_id=#{fromId} and del_flag='0' and status != '2'</update>
+    <update id="markMergedConditionally">update biz_customer set status='2', del_flag='2', update_by=#{updateBy}, update_time=sysdate() where customer_id=#{fromId} and del_flag='0' and status=#{expectedStatus}</update>
     <insert id="insertMergeLog">insert into biz_customer_merge_log(main_customer_id,merged_customer_id,merge_content,create_by,create_time) values(#{mainId},#{mergedId},#{content},#{createBy},sysdate())</insert>
 </mapper>

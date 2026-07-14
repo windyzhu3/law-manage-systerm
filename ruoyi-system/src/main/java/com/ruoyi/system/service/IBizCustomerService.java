@@ -5,6 +5,7 @@ import java.util.Map;
 import com.law.business.customer.dto.CustomerContactCreateCommand;
 import com.law.business.customer.dto.CustomerContactUpdateCommand;
 import com.law.business.customer.dto.CustomerFollowupCreateCommand;
+import com.law.business.customer.dto.CustomerMergeCommand;
 import com.law.business.customer.dto.CustomerTagAssignCommand;
 import com.law.business.customer.dto.CustomerTagCreateCommand;
 import com.law.business.customer.dto.CustomerTagUpdateCommand;
@@ -34,5 +35,5 @@ public interface IBizCustomerService
     int setCustomerTags(CustomerTagAssignCommand command);
     List<Map<String, Object>> selectMergeCandidates(BizCustomer customer);
     List<Map<String, Object>> selectMergeLogs(Map<String, Object> params);
-    int mergeCustomer(Long mainCustomerId, Long mergedCustomerId, String content);
+    int mergeCustomer(CustomerMergeCommand command);
 }

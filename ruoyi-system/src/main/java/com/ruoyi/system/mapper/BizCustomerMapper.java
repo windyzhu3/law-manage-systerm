@@ -49,6 +49,7 @@ public interface BizCustomerMapper
     int moveFollowups(@Param("fromId") Long fromId, @Param("toId") Long toId, @Param("updateBy") String updateBy);
     int moveTagRelations(@Param("fromId") Long fromId, @Param("toId") Long toId);
     int moveContracts(@Param("fromId") Long fromId, @Param("toId") Long toId, @Param("updateBy") String updateBy);
-    int markMerged(@Param("fromId") Long fromId, @Param("updateBy") String updateBy);
+    int markMergedConditionally(@Param("fromId") Long fromId, @Param("updateBy") String updateBy,
+            @Param("expectedStatus") String expectedStatus);
     int insertMergeLog(@Param("mainId") Long mainId, @Param("mergedId") Long mergedId, @Param("content") String content, @Param("createBy") String createBy);
 }
