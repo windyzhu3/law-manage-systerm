@@ -27,6 +27,8 @@ import com.law.business.security.LeadPermissions;
 import com.ruoyi.common.utils.uuid.IdUtils;
 import com.ruoyi.system.service.lead.LeadCommandService;
 import com.ruoyi.system.service.lead.LeadQueryService;
+import com.ruoyi.system.service.lead.LeadAssignmentService;
+import com.ruoyi.system.service.lead.LeadPoolService;
 
 @Service
 public class BizLeadServiceImpl implements IBizLeadService
@@ -57,6 +59,12 @@ public class BizLeadServiceImpl implements IBizLeadService
 
     @Autowired
     private LeadCommandService leadCommandService;
+
+    @Autowired
+    private LeadAssignmentService leadAssignmentService;
+
+    @Autowired
+    private LeadPoolService leadPoolService;
 
     @Override
     public List<BizLead> selectLeadList(BizLead lead)
@@ -106,68 +114,21 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Transactional
     public int assignLead(Long leadId, Long ownerId, String reason)
     {
-        if (ownerId == null)
-        {
-            throw new ServiceException("Owner is required");
-        }
-        BizLead lead = requiredAccessibleLead(leadId, false, true);
-        assertActiveLead(lead, "assign");
-        String username = SecurityUtils.getUsername();
-        int rows = leadMapper.assignLead(leadId, ownerId, null, username);
-        if (rows == 0)
-        {
-            throw new ServiceException("Lead assignment failed, please refresh and try again");
-        }
-        leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), ownerId, "assign", reason, username);
-        publish(BusinessEventType.LEAD_ASSIGNED, lead,
-                Map.of("fromOwnerId", valueOrEmpty(lead.getOwnerId()), "toOwnerId", ownerId));
-        return rows;
+        return leadAssignmentService.assign(leadId, ownerId, reason);
     }
 
     @Override
     @Transactional
     public int moveToPool(Long leadId, String reason)
     {
-        BizLead lead = requiredAccessibleLead(leadId, false, false);
-        if (!SecurityUtils.hasPermi(LeadPermissions.MOVE_POOL) && SecurityUtils.hasPermi(LeadPermissions.MOVE_MINE_POOL))
-        {
-            assertMineLead(lead, "move to pool");
-        }
-        assertActiveLead(lead, "move to pool");
-        if (POOL_YES.equals(lead.getPoolStatus()))
-        {
-            throw new ServiceException("Lead is already in public pool");
-        }
-        String username = SecurityUtils.getUsername();
-        int rows = leadMapper.moveToPool(leadId, reason, username);
-        if (rows == 0)
-        {
-            throw new ServiceException("Move to public pool failed, please refresh and try again");
-        }
-        leadMapper.insertAssignmentLog(leadId, lead.getOwnerId(), null, "pool", reason, username);
-        publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead, Map.of("reason", valueOrEmpty(reason)));
-        return rows;
+        return leadPoolService.moveToPool(leadId, reason);
     }
 
     @Override
     @Transactional
     public int claimLead(Long leadId)
     {
-        BizLead lead = requiredLead(leadId);
-        assertActiveLead(lead, "claim");
-        if (!POOL_YES.equals(lead.getPoolStatus()))
-        {
-            throw new ServiceException("Lead has already been claimed, please refresh the list");
-        }
-        Long userId = SecurityUtils.getUserId();
-        int rows = leadMapper.claimLead(leadId, userId, SecurityUtils.getDeptId(), SecurityUtils.getUsername());
-        if (rows == 0)
-        {
-            throw new ServiceException("Lead has already been claimed, please refresh the list");
-        }
-        leadMapper.insertAssignmentLog(leadId, null, userId, "claim", "claim from public pool", SecurityUtils.getUsername());
-        publish(BusinessEventType.LEAD_CLAIMED, lead, Map.of("ownerId", userId));
-        return rows;
+        return leadPoolService.claim(leadId);
     }
 
     @Override

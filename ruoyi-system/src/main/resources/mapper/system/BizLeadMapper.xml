@@ -145,17 +145,17 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="assignLead">
         update biz_lead set owner_id = #{ownerId}, dept_id = (select dept_id from sys_user where user_id = #{ownerId}), pool_status = '0',
         status = case when status = '0' then '1' else status end, pool_reason = null,
-        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and status not in ('3','4','5')
+        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and status = #{expectedStatus}
     </update>
     <update id="moveToPool">
         update biz_lead set owner_id = null, dept_id = null, pool_status = '1', status = '0', pool_reason = #{reason},
-        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and status not in ('3','4','5')
+        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and status = #{expectedStatus}
     </update>
     <update id="claimLead">
         update biz_lead set owner_id = #{ownerId}, dept_id = #{deptId}, pool_status = '0',
         status = case when status = '0' then '1' else status end, pool_reason = null,
         update_by = #{updateBy}, update_time = sysdate()
-        where lead_id = #{leadId} and pool_status = '1' and del_flag = '0' and status not in ('3','4','5')
+        where lead_id = #{leadId} and pool_status = '1' and owner_id is null and del_flag = '0' and status = #{expectedStatus}
     </update>
     <update id="convertLead">
         update biz_lead set status = '3', converted_time = sysdate(), update_by = #{updateBy}, update_time = sysdate()
@@ -165,7 +165,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update biz_lead set customer_id = #{customerId}, update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId}
     </update>
-    <insert id="insertAssignmentLog">
+    <insert id="insertAssignmentLog" parameterType="map" useGeneratedKeys="true" keyProperty="logId">
         insert into biz_lead_assignment_log(lead_id, from_owner_id, to_owner_id, action_type, reason, create_by, create_time)
         values(#{leadId}, #{fromOwnerId}, #{toOwnerId}, #{actionType}, #{reason}, #{createBy}, sysdate())
     </insert>

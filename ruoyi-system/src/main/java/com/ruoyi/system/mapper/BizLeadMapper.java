@@ -18,12 +18,12 @@ public interface BizLeadMapper
     public int purgeLeadFollowups(@Param("leadIds") Long[] leadIds);
     public int purgeLeadAssignmentLogs(@Param("leadIds") Long[] leadIds);
     public int purgeLead(@Param("leadIds") Long[] leadIds);
-    public int assignLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("deptId") Long deptId, @Param("updateBy") String updateBy);
-    public int moveToPool(@Param("leadId") Long leadId, @Param("reason") String reason, @Param("updateBy") String updateBy);
-    public int claimLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("deptId") Long deptId, @Param("updateBy") String updateBy);
+    public int assignLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
+    public int moveToPool(@Param("leadId") Long leadId, @Param("reason") String reason, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
+    public int claimLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("deptId") Long deptId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
     public int convertLead(@Param("leadId") Long leadId, @Param("updateBy") String updateBy);
     public int bindCustomer(@Param("leadId") Long leadId, @Param("customerId") Long customerId, @Param("updateBy") String updateBy);
-    public int insertAssignmentLog(@Param("leadId") Long leadId, @Param("fromOwnerId") Long fromOwnerId, @Param("toOwnerId") Long toOwnerId, @Param("actionType") String actionType, @Param("reason") String reason, @Param("createBy") String createBy);
+    public int insertAssignmentLog(Map<String, Object> assignmentLog);
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup);
     public int insertFollowup(BizLeadFollowup followup);
     public int updateFollowup(BizLeadFollowup followup);
