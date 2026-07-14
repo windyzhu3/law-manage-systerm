@@ -14,7 +14,7 @@ public class CustomerAccessPolicy
     private static final String NORMAL = "0";
     private static final String MERGED = "2";
     private static final String DELETED = "2";
-    private static final String DATA_SCOPE_PERMISSIONS =
+    public static final String DATA_SCOPE_PERMISSIONS =
             "customer:list,customer:query,customer:add,customer:edit,customer:remove,customer:import,customer:export,"
             + "customer:contact:list,customer:contact:add,customer:contact:edit,customer:contact:remove,"
             + "customer:followup:list,customer:followup:add,customer:followup:remove,"

@@ -3,13 +3,11 @@ package com.ruoyi.system.service;
 import java.util.List;
 import java.util.Map;
 import com.ruoyi.system.domain.BizCustomer;
-import com.ruoyi.system.domain.BizLead;
 
 public interface IBizCustomerService
 {
     List<BizCustomer> selectCustomerList(BizCustomer customer);
     BizCustomer selectCustomerById(Long customerId);
-    BizCustomer convertLeadToCustomer(BizLead lead);
     int insertCustomer(BizCustomer customer);
     int updateCustomer(BizCustomer customer);
     int deleteCustomerByIds(Long[] customerIds);

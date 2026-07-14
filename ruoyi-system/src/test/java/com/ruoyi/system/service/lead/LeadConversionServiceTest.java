@@ -22,8 +22,8 @@ import com.law.business.shared.status.LeadStatus;
 import com.ruoyi.system.domain.BizCustomer;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.mapper.BizLeadMapper;
-import com.ruoyi.system.service.IBizCustomerService;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.system.service.customer.CustomerCommandService;
 
 @ExtendWith(MockitoExtension.class)
 class LeadConversionServiceTest
@@ -32,7 +32,7 @@ class LeadConversionServiceTest
     @Mock private LeadAccessPolicy access;
     @Mock private BusinessActorProvider actors;
     @Mock private BusinessEventPublisher events;
-    @Mock private IBizCustomerService customers;
+    @Mock private CustomerCommandService customers;
     private LeadConversionService service;
 
     @BeforeEach
@@ -50,7 +50,7 @@ class LeadConversionServiceTest
 
         assertEquals(31L, service.convert(7L, false));
 
-        verify(customers, never()).convertLeadToCustomer(any());
+        verify(customers, never()).createFromLead(any());
         verify(mapper, never()).bindCustomerConditionally(any(), any(), any(), any());
         verify(events, never()).publish(any());
     }
@@ -64,7 +64,7 @@ class LeadConversionServiceTest
         BizCustomer converted = customer(31L, "0", "0");
         when(access.requireOperable(7L)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
-        when(customers.convertLeadToCustomer(lead)).thenReturn(converted);
+        when(customers.createFromLead(lead)).thenReturn(converted.getCustomerId());
         when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code())).thenReturn(1);
 
         assertEquals(31L, service.convert(7L, false));
@@ -82,7 +82,7 @@ class LeadConversionServiceTest
         lead.setOwnerId(8L);
         when(access.requireOperable(7L)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
-        when(customers.convertLeadToCustomer(lead)).thenReturn(customer(31L, "0", "0"));
+        when(customers.createFromLead(lead)).thenReturn(customer(31L, "0", "0").getCustomerId());
         when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code())).thenReturn(0);
 
         ServiceException exception = assertThrows(ServiceException.class, () -> service.convert(7L, false));

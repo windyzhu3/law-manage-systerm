@@ -1,9 +1,5 @@
 package com.ruoyi.system.service.impl;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +13,12 @@ import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.BizCustomer;
-import com.ruoyi.system.domain.BizLead;
-import com.ruoyi.system.domain.BizLeadSetting;
 import com.ruoyi.system.mapper.BizContractMapper;
 import com.ruoyi.system.mapper.BizCustomerMapper;
-import com.ruoyi.system.mapper.BizLeadMapper;
 import com.ruoyi.system.service.IBizCustomerService;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.customer.CustomerCommandService;
+import com.ruoyi.system.service.customer.CustomerQueryService;
 
 @Service
 public class BizCustomerServiceImpl implements IBizCustomerService
@@ -41,163 +36,58 @@ public class BizCustomerServiceImpl implements IBizCustomerService
     private BizCustomerMapper customerMapper;
 
     @Autowired
-    private BizLeadMapper leadMapper;
-
-    @Autowired
     private BizContractMapper contractMapper;
 
     @Autowired
     private ISysDictTypeService dictTypeService;
 
+    @Autowired
+    private CustomerQueryService customerQueryService;
+
+    @Autowired
+    private CustomerCommandService customerCommandService;
+
     @Override
-    @DataScope(deptAlias = "c", userAlias = "c", userField = "owner_id")
     public List<BizCustomer> selectCustomerList(BizCustomer customer)
     {
-        return customerMapper.selectCustomerList(customer);
+        return customerQueryService.list(customer);
     }
 
     @Override
     public BizCustomer selectCustomerById(Long customerId)
     {
-        return requireActiveCustomer(customerId);
-    }
-
-    @Override
-    @Transactional
-    public BizCustomer convertLeadToCustomer(BizLead lead)
-    {
-        BizCustomer existed = customerMapper.selectCustomerByLeadId(lead.getLeadId());
-        if (existed != null)
-        {
-            return requireActiveCustomer(existed.getCustomerId());
-        }
-        String name = StringUtils.isNotEmpty(lead.getCompanyName()) ? lead.getCompanyName() : (StringUtils.isNotEmpty(lead.getContactName()) ? lead.getContactName() : lead.getLeadName());
-        BizCustomer duplicate = customerMapper.selectDuplicateCustomerInScope(lead.getMobile(), null, name, SecurityUtils.getUserId(), SecurityUtils.getDeptId(), !SecurityUtils.isAdmin(), CUSTOMER_MODULE_PERMISSIONS);
-        if (duplicate != null)
-        {
-            insertLeadContactIfAbsent(duplicate.getCustomerId(), lead, name);
-            return duplicate;
-        }
-        BizCustomer customer = new BizCustomer();
-        customer.setCustomerNo("KH" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
-        customer.setCustomerName(name);
-        customer.setCustomerType(dictValue("law_customer_type", StringUtils.isNotEmpty(lead.getCompanyName()) ? "enterprise" : "personal"));
-        customer.setMobile(lead.getMobile());
-        customer.setWechat(lead.getWechat());
-        customer.setCompanyName(lead.getCompanyName());
-        customer.setSourceCode(lead.getSourceCode());
-        customer.setCustomerLevel(dictValue("law_customer_level", lead.getPriority()));
-        customer.setMainDemand(lead.getLegalDemand());
-        customer.setOwnerId(lead.getOwnerId());
-        customer.setDeptId(lead.getDeptId());
-        customer.setLeadId(lead.getLeadId());
-        customer.setCreateBy(SecurityUtils.getUsername());
-        normalizeNewCustomer(customer);
-        validateCustomer(customer);
-        int rows = customerMapper.insertCustomer(customer);
-        assertRowsChanged(rows, "Customer was not created");
-        insertLeadContactIfAbsent(customer.getCustomerId(), lead, name);
-        return customer;
+        return customerQueryService.detail(customerId);
     }
 
     @Override
     public int insertCustomer(BizCustomer customer)
     {
-        normalizeNewCustomer(customer);
-        validateCustomer(customer);
-        customer.setCreateBy(SecurityUtils.getUsername());
-        customer.setCustomerNo("KH" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")));
-        if (customer.getOwnerId() == null)
-        {
-            customer.setOwnerId(SecurityUtils.getUserId());
-            customer.setDeptId(SecurityUtils.getDeptId());
-        }
-        int rows = customerMapper.insertCustomer(customer);
-        assertRowsChanged(rows, "Customer was not created");
-        return rows;
+        return customerCommandService.create(customer);
     }
 
     @Override
     public int updateCustomer(BizCustomer customer)
     {
-        requireActiveCustomer(customer.getCustomerId());
-        normalizeCustomerUpdate(customer);
-        validateCustomer(customer);
-        customer.setStatus(null);
-        customer.setUpdateBy(SecurityUtils.getUsername());
-        int rows = customerMapper.updateCustomer(customer);
-        assertRowsChanged(rows, "Customer was changed, please refresh and try again");
-        return rows;
+        return customerCommandService.update(customer);
     }
 
     @Override
     public int deleteCustomerByIds(Long[] customerIds)
     {
-        for (Long customerId : customerIds)
-        {
-            requireActiveCustomer(customerId);
-            if (customerMapper.countContractsByCustomerId(customerId) > 0)
-            {
-                throw new ServiceException("客户已关联合同，不允许删除，请先处理合同或执行客户合并");
-            }
-        }
-        int rows = customerMapper.deleteCustomerByIds(customerIds, SecurityUtils.getUsername());
-        assertRowsChanged(rows, "Customer was changed, please refresh and try again");
-        return rows;
+        return customerCommandService.delete(customerIds);
     }
 
     @Override
     @Transactional
     public String importCustomer(List<BizCustomer> customerList, Boolean updateSupport, String operName)
     {
-        if (StringUtils.isNull(customerList) || customerList.isEmpty())
-        {
-            throw new ServiceException("导入客户数据不能为空");
-        }
-        int successNum = 0;
-        for (BizCustomer customer : customerList)
-        {
-            if (StringUtils.isEmpty(customer.getCustomerName()))
-            {
-                continue;
-            }
-            customer.setCreateBy(operName);
-            if (StringUtils.isEmpty(customer.getCustomerType()))
-            {
-                customer.setCustomerType(dictValue("law_customer_type", "personal"));
-            }
-            if (customer.getOwnerId() == null)
-            {
-                customer.setOwnerId(SecurityUtils.getUserId());
-                customer.setDeptId(SecurityUtils.getDeptId());
-            }
-            BizCustomer duplicate = customerMapper.selectDuplicateCustomerInScope(customer.getMobile(), customer.getCreditCode(), customer.getCustomerName(), SecurityUtils.getUserId(), SecurityUtils.getDeptId(), !SecurityUtils.isAdmin(), CUSTOMER_MODULE_PERMISSIONS);
-            if (duplicate != null)
-            {
-                if (!Boolean.TRUE.equals(updateSupport))
-                {
-                    throw new ServiceException("客户已存在，勾选更新后可覆盖导入：" + customer.getCustomerName());
-                }
-                customer.setCustomerId(duplicate.getCustomerId());
-                updateCustomer(customer);
-            }
-            else
-            {
-                insertCustomer(customer);
-            }
-            successNum++;
-        }
-        return "导入成功，共 " + successNum + " 条";
+        return customerCommandService.importCustomers(customerList, updateSupport, operName);
     }
 
     @Override
     public Map<String, Object> selectDashboard()
     {
-        Map<String, Object> data = new HashMap<>();
-        Boolean dataScope = !SecurityUtils.isAdmin();
-        data.put("cards", customerMapper.selectDashboardCards(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), dataScope, CUSTOMER_MODULE_PERMISSIONS, Collections.emptyMap()));
-        data.put("types", customerMapper.selectTypeStats(SecurityUtils.getUserId(), SecurityUtils.getDeptId(), dataScope, CUSTOMER_MODULE_PERMISSIONS, Collections.emptyMap()));
-        return data;
+        return customerQueryService.dashboard();
     }
 
     @Override public List<Map<String, Object>> selectContacts(Map<String, Object> params) { applyDataScope(params); return customerMapper.selectContacts(params); }
@@ -302,29 +192,6 @@ public class BizCustomerServiceImpl implements IBizCustomerService
         return Long.valueOf(String.valueOf(value));
     }
 
-    private void insertLeadContactIfAbsent(Long customerId, BizLead lead, String fallbackName)
-    {
-        String contactName = StringUtils.isNotEmpty(lead.getContactName()) ? lead.getContactName() : fallbackName;
-        if (StringUtils.isEmpty(contactName))
-        {
-            return;
-        }
-        if (customerMapper.countContactByCustomerAndMobileOrName(customerId, lead.getMobile(), contactName) > 0)
-        {
-            return;
-        }
-        Map<String, Object> contact = new HashMap<>();
-        contact.put("customerId", customerId);
-        contact.put("contactName", contactName);
-        contact.put("mobile", lead.getMobile());
-        contact.put("wechat", lead.getWechat());
-        contact.put("relationType", dictValue("law_contact_relation", "daily"));
-        contact.put("keyContact", dictValue("law_yes_no_flag", "1"));
-        contact.put("ownerId", lead.getOwnerId());
-        contact.put("createBy", SecurityUtils.getUsername());
-        assertRowsChanged(customerMapper.insertContact(contact), "Contact was not created");
-    }
-
     private String dictValue(String dictType, String preferredValue)
     {
         List<SysDictData> options = dictTypeService.selectDictDataByType(dictType);
@@ -359,96 +226,6 @@ public class BizCustomerServiceImpl implements IBizCustomerService
         }
         assertDictValue("law_contact_relation", contact.get("relationType"), "联系人关系不合法");
         assertDictValue("law_yes_no_flag", contact.get("keyContact"), "关键联系人标记不合法");
-    }
-
-    private void validateCustomer(BizCustomer customer)
-    {
-        if (customer == null)
-        {
-            throw new ServiceException("客户不能为空");
-        }
-        requiredText(customer.getCustomerName(), "客户名称不能为空");
-        requiredText(customer.getCustomerType(), "客户类型不能为空");
-        requiredText(customer.getMobile(), "手机号不能为空");
-        requiredText(customer.getSourceCode(), "客户来源不能为空");
-        requiredText(customer.getCustomerLevel(), "客户等级不能为空");
-        requiredText(customer.getMainDemand(), "主要需求不能为空");
-        if (customer.getOwnerId() == null)
-        {
-            throw new ServiceException("负责人不能为空");
-        }
-        if ("enterprise".equals(customer.getCustomerType()))
-        {
-            requiredText(customer.getCompanyName(), "企业客户公司名称不能为空");
-        }
-        assertDictValue("law_customer_type", customer.getCustomerType(), "客户类型不合法");
-        assertDictValue("law_customer_level", customer.getCustomerLevel(), "客户等级不合法");
-        assertDictValue("law_customer_industry", customer.getIndustry(), "客户行业不合法");
-        assertEnabledLeadSetting("source", customer.getSourceCode(), "客户来源不存在或已停用");
-    }
-
-    private void normalizeNewCustomer(BizCustomer customer)
-    {
-        if (customer == null)
-        {
-            return;
-        }
-        if (StringUtils.isEmpty(customer.getCustomerType()))
-        {
-            customer.setCustomerType(dictValue("law_customer_type", "personal"));
-        }
-        if (StringUtils.isEmpty(customer.getCustomerLevel()))
-        {
-            customer.setCustomerLevel(dictValue("law_customer_level", "2"));
-        }
-    }
-
-    private void normalizeCustomerUpdate(BizCustomer customer)
-    {
-        if (customer == null)
-        {
-            return;
-        }
-        if (StringUtils.isEmpty(customer.getCustomerLevel()))
-        {
-            customer.setCustomerLevel(null);
-        }
-        if (StringUtils.isEmpty(customer.getIndustry()))
-        {
-            customer.setIndustry(null);
-        }
-        if (StringUtils.isEmpty(customer.getWechat()))
-        {
-            customer.setWechat(null);
-        }
-        if (StringUtils.isEmpty(customer.getEmail()))
-        {
-            customer.setEmail(null);
-        }
-        if (StringUtils.isEmpty(customer.getCompanyName()))
-        {
-            customer.setCompanyName(null);
-        }
-        if (StringUtils.isEmpty(customer.getCreditCode()))
-        {
-            customer.setCreditCode(null);
-        }
-        if (StringUtils.isEmpty(customer.getRegion()))
-        {
-            customer.setRegion(null);
-        }
-        if (StringUtils.isEmpty(customer.getSourceCode()))
-        {
-            customer.setSourceCode(null);
-        }
-        if (StringUtils.isEmpty(customer.getMainDemand()))
-        {
-            customer.setMainDemand(null);
-        }
-        if (StringUtils.isEmpty(customer.getRemark()))
-        {
-            customer.setRemark(null);
-        }
     }
 
     private void validateFollowup(Map<String, Object> followup)
@@ -492,20 +269,6 @@ public class BizCustomerServiceImpl implements IBizCustomerService
             }
         }
         throw new ServiceException(message);
-    }
-
-    private void assertEnabledLeadSetting(String settingType, Object value, String message)
-    {
-        String valueText = requiredText(value, message);
-        BizLeadSetting query = new BizLeadSetting();
-        query.setSettingType(settingType);
-        query.setSettingCode(valueText);
-        query.setStatus("0");
-        List<BizLeadSetting> settings = leadMapper.selectSettingList(query);
-        if (settings == null || settings.isEmpty())
-        {
-            throw new ServiceException(message);
-        }
     }
 
     private String requiredText(Object value, String message)

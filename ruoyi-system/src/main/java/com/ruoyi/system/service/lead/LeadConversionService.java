@@ -12,10 +12,9 @@ import com.law.business.security.BusinessActorProvider;
 import com.law.business.shared.error.BusinessErrorCode;
 import com.law.business.shared.status.LeadStatus;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.system.domain.BizCustomer;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.mapper.BizLeadMapper;
-import com.ruoyi.system.service.IBizCustomerService;
+import com.ruoyi.system.service.customer.CustomerCommandService;
 
 @Service
 public class LeadConversionService
@@ -26,10 +25,10 @@ public class LeadConversionService
     private final LeadAccessPolicy access;
     private final BusinessActorProvider actors;
     private final BusinessEventPublisher events;
-    private final IBizCustomerService customers;
+    private final CustomerCommandService customers;
 
     public LeadConversionService(BizLeadMapper mapper, LeadAccessPolicy access,
-            BusinessActorProvider actors, BusinessEventPublisher events, IBizCustomerService customers)
+            BusinessActorProvider actors, BusinessEventPublisher events, CustomerCommandService customers)
     {
         this.mapper = mapper;
         this.access = access;
@@ -53,12 +52,8 @@ public class LeadConversionService
             throw error(BusinessErrorCode.ACCESS_DENIED, "只有当前负责人可以转化该线索");
         }
 
-        BizCustomer customer = customers.convertLeadToCustomer(lead);
-        if (customer == null || customer.getCustomerId() == null)
-        {
-            throw error(BusinessErrorCode.PRECONDITION_FAILED, "客户创建失败");
-        }
-        Long customerId = customer.getCustomerId();
+        Long customerId = customers.createFromLead(lead);
+        if (customerId == null) throw error(BusinessErrorCode.PRECONDITION_FAILED, "客户创建失败");
         int rows = mapper.bindCustomerConditionally(leadId, customerId, actor.userName(), lead.getStatus());
         if (rows <= 0)
         {
