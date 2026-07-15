@@ -22,8 +22,16 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.law.business.contract.dto.ContractApprovalCommand;
+import com.law.business.contract.dto.ContractAttachmentCreateCommand;
+import com.law.business.contract.dto.ContractCreateCommand;
+import com.law.business.contract.dto.ContractFeePlanCreateCommand;
+import com.law.business.contract.dto.ContractFeePlanUpdateCommand;
+import com.law.business.contract.dto.ContractNumberRuleUpdateCommand;
 import com.law.business.contract.dto.ContractReasonCommand;
 import com.law.business.contract.dto.ContractSignCommand;
+import com.law.business.contract.dto.ContractTemplateCreateCommand;
+import com.law.business.contract.dto.ContractTemplateUpdateCommand;
+import com.law.business.contract.dto.ContractUpdateCommand;
 import com.law.business.contract.dto.FeeConfirmCommand;
 import com.law.business.contract.dto.FeeInvoiceCommand;
 import com.law.business.contract.dto.FeeRejectCommand;
@@ -32,6 +40,7 @@ import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.service.IBizContractService;
 import com.ruoyi.system.service.ISysUserService;
+import com.ruoyi.system.service.contract.ContractImportCommand;
 
 @RestController
 @RequestMapping("/contract")
@@ -88,7 +97,8 @@ public class BizContractController extends BaseController
     {
         ExcelUtil<BizContract> util = new ExcelUtil<>(BizContract.class);
         List<BizContract> contractList = util.importExcel(file.getInputStream());
-        return success(contractService.importContract(contractList, updateSupport, getUsername()));
+        return success(contractService.importContract(new ContractImportCommand(
+                contractList, updateSupport, getUsername())));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:import')")
@@ -102,17 +112,17 @@ public class BizContractController extends BaseController
     @Log(title = "contract", businessType = BusinessType.INSERT)
     @PreAuthorize("@ss.hasPermi('contract:add')")
     @PostMapping
-    public AjaxResult add(@RequestBody BizContract contract)
+    public AjaxResult add(@Valid @RequestBody ContractCreateCommand command)
     {
-        return toAjax(contractService.insertContract(contract));
+        return toAjax(contractService.insertContract(command));
     }
 
     @Log(title = "contract", businessType = BusinessType.UPDATE)
     @PreAuthorize("@ss.hasPermi('contract:edit')")
     @PutMapping
-    public AjaxResult edit(@RequestBody BizContract contract)
+    public AjaxResult edit(@Valid @RequestBody ContractUpdateCommand command)
     {
-        return toAjax(contractService.updateContract(contract));
+        return toAjax(contractService.updateContract(command));
     }
 
     @Log(title = "contract", businessType = BusinessType.DELETE)
@@ -136,7 +146,7 @@ public class BizContractController extends BaseController
     @PostMapping("/approval")
     public AjaxResult approval(@Valid @RequestBody ContractApprovalCommand command)
     {
-        return toAjax(contractService.approveContract(command.getContractId(), command.getAction(), command.getOpinion()));
+        return toAjax(contractService.approveContract(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:sign')")
@@ -144,7 +154,7 @@ public class BizContractController extends BaseController
     @PostMapping("/sign")
     public AjaxResult sign(@Valid @RequestBody ContractSignCommand command)
     {
-        return toAjax(contractService.signContract(command.getContractId(), command.getSignStatus()));
+        return toAjax(contractService.signContract(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:archive')")
@@ -152,7 +162,7 @@ public class BizContractController extends BaseController
     @PostMapping("/archive")
     public AjaxResult archive(@Valid @RequestBody ContractReasonCommand command)
     {
-        return toAjax(contractService.archiveContract(command.getContractId(), command.getReason()));
+        return toAjax(contractService.archiveContract(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:void')")
@@ -160,7 +170,7 @@ public class BizContractController extends BaseController
     @PostMapping("/void")
     public AjaxResult voidContract(@Valid @RequestBody ContractReasonCommand command)
     {
-        return toAjax(contractService.voidContract(command.getContractId(), command.getReason()));
+        return toAjax(contractService.voidContract(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:terminate')")
@@ -168,7 +178,7 @@ public class BizContractController extends BaseController
     @PostMapping("/terminate")
     public AjaxResult terminate(@Valid @RequestBody ContractReasonCommand command)
     {
-        return toAjax(contractService.terminateContract(command.getContractId(), command.getReason()));
+        return toAjax(contractService.terminateContract(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:rule:list')")
@@ -181,9 +191,9 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:rule:edit')")
     @Log(title = "contract-rule", businessType = BusinessType.UPDATE)
     @PutMapping("/rule")
-    public AjaxResult editRule(@RequestBody Map<String, Object> rule)
+    public AjaxResult editRule(@Valid @RequestBody ContractNumberRuleUpdateCommand command)
     {
-        return toAjax(contractService.updateRule(rule));
+        return toAjax(contractService.updateRule(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:template:list')")
@@ -197,17 +207,17 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:template:add')")
     @Log(title = "contract-template", businessType = BusinessType.INSERT)
     @PostMapping("/template")
-    public AjaxResult addTemplate(@RequestBody Map<String, Object> template)
+    public AjaxResult addTemplate(@Valid @RequestBody ContractTemplateCreateCommand command)
     {
-        return toAjax(contractService.insertTemplate(template));
+        return toAjax(contractService.insertTemplate(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:template:edit')")
     @Log(title = "contract-template", businessType = BusinessType.UPDATE)
     @PutMapping("/template")
-    public AjaxResult editTemplate(@RequestBody Map<String, Object> template)
+    public AjaxResult editTemplate(@Valid @RequestBody ContractTemplateUpdateCommand command)
     {
-        return toAjax(contractService.updateTemplate(template));
+        return toAjax(contractService.updateTemplate(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:template:remove')")
@@ -237,17 +247,17 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:fee:add')")
     @Log(title = "contract-fee", businessType = BusinessType.INSERT)
     @PostMapping("/fee")
-    public AjaxResult addFee(@RequestBody Map<String, Object> plan)
+    public AjaxResult addFee(@Valid @RequestBody ContractFeePlanCreateCommand command)
     {
-        return toAjax(contractService.insertFeePlan(plan));
+        return toAjax(contractService.insertFeePlan(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:edit')")
     @Log(title = "contract-fee", businessType = BusinessType.UPDATE)
     @PutMapping("/fee")
-    public AjaxResult editFee(@RequestBody Map<String, Object> plan)
+    public AjaxResult editFee(@Valid @RequestBody ContractFeePlanUpdateCommand command)
     {
-        return toAjax(contractService.updateFeePlan(plan));
+        return toAjax(contractService.updateFeePlan(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:remove')")
@@ -263,7 +273,7 @@ public class BizContractController extends BaseController
     @PostMapping("/fee/confirm")
     public AjaxResult confirmFee(@Valid @RequestBody FeeConfirmCommand command)
     {
-        return toAjax(contractService.confirmFeePlan(command.getPlanId(), command.getReceivedAmount()));
+        return toAjax(contractService.confirmFeePlan(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:reject')")
@@ -271,7 +281,7 @@ public class BizContractController extends BaseController
     @PostMapping("/fee/reject")
     public AjaxResult rejectFee(@Valid @RequestBody FeeRejectCommand command)
     {
-        return toAjax(contractService.rejectFeePlan(command.getPlanId(), command.getReason()));
+        return toAjax(contractService.rejectFeePlan(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:fee:invoice')")
@@ -279,7 +289,7 @@ public class BizContractController extends BaseController
     @PostMapping("/fee/invoice")
     public AjaxResult invoiceFee(@Valid @RequestBody FeeInvoiceCommand command)
     {
-        return toAjax(contractService.invoiceFeePlan(command.getPlanId(), command.getInvoiceStatus()));
+        return toAjax(contractService.invoiceFeePlan(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:attachment:list')")
@@ -293,9 +303,9 @@ public class BizContractController extends BaseController
     @PreAuthorize("@ss.hasPermi('contract:attachment:add')")
     @Log(title = "contract-attachment", businessType = BusinessType.INSERT)
     @PostMapping("/attachment")
-    public AjaxResult addAttachment(@RequestBody Map<String, Object> attachment)
+    public AjaxResult addAttachment(@Valid @RequestBody ContractAttachmentCreateCommand command)
     {
-        return toAjax(contractService.insertAttachment(attachment));
+        return toAjax(contractService.insertAttachment(command));
     }
 
     @PreAuthorize("@ss.hasPermi('contract:attachment:remove')")
