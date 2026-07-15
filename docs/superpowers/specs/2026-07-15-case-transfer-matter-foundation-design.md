@@ -127,6 +127,7 @@ Controller 的 `@PreAuthorize` 继续负责功能权限，AccessPolicy 负责对
 
 - 合同存在且未删除。
 - 合同已签署。
+- 合同至少存在一笔 `confirmed` 的收费计划，不能仅依赖 Todo 触发顺序隐含缴费事实。
 - 调用来自现有 `CASE_CREATE_CHECK` 时，材料核验仍由 `ContractTodoValidator` 完成。
 - `biz_case.contract_id` 的现有唯一约束作为最终并发屏障。
 
