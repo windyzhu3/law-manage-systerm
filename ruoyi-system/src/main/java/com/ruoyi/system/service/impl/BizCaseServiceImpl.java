@@ -128,22 +128,14 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int requestTransfer(CaseTransferCommand transfer)
     {
-        Map<String,Object> values = new HashMap<>();
-        values.put("caseId", transfer.getCaseId()); values.put("toLawyerId", transfer.getToLawyerId());
-        values.put("transferReason", transfer.getTransferReason()); values.put("riskLevel", transfer.getRiskLevel());
-        values.put("detail", transfer.getDetail()); values.put("applicantId", SecurityUtils.getUserId());
-        values.put("applicantName", SecurityUtils.getLoginUser().getUser().getNickName());
-        return caseTransferService.request(values);
+        return caseTransferService.request(transfer);
     }
 
     @Override
     @Transactional
     public int approveTransfer(CaseTransferApprovalCommand approval)
     {
-        Map<String,Object> values = new HashMap<>();
-        values.put("transferId", approval.getTransferId()); values.put("action", approval.getAction());
-        values.put("opinion", approval.getOpinion());
-        return caseTransferService.approve(values);
+        return caseTransferService.approve(approval);
     }
 
     @Override
