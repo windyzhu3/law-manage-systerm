@@ -1,12 +1,14 @@
 package com.ruoyi.system.service.contract;
 
+import java.util.HashMap;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.law.business.security.ContractPermissions;
-import com.law.business.shared.status.ContractStatus;
+import com.law.business.contract.dto.ContractAttachmentCreateCommand;
+import com.law.business.security.BusinessActor;
+import com.law.business.security.BusinessActorProvider;
+import com.law.business.shared.error.BusinessErrorCode;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.mapper.BizContractMapper;
@@ -15,81 +17,103 @@ import com.ruoyi.system.mapper.BizContractMapper;
 public class ContractAttachmentService
 {
     private final BizContractMapper mapper;
+    private final ContractAccessPolicy access;
+    private final BusinessActorProvider actors;
     private final ContractActionLogService actionLogs;
 
-    public ContractAttachmentService(BizContractMapper mapper, ContractActionLogService actionLogs)
+    public ContractAttachmentService(BizContractMapper mapper, ContractAccessPolicy access,
+            BusinessActorProvider actors, ContractActionLogService actionLogs)
     {
         this.mapper = mapper;
+        this.access = access;
+        this.actors = actors;
         this.actionLogs = actionLogs;
     }
 
     @Transactional
-    public int create(Map<String, Object> attachment)
+    public int create(ContractAttachmentCreateCommand command)
     {
-        Long contractId = toLong(attachment == null ? null : attachment.get("contractId"));
-        BizContract contract = requireAccessible(contractId);
-        requireEditable(contract);
-        String fileName = requiredText(attachment, "fileName", "请填写附件名称");
-        requiredText(attachment, "fileUrl", "请上传附件");
-        attachment.put("createBy", SecurityUtils.getUsername());
-        int rows = mapper.insertAttachment(attachment);
-        assertChanged(rows, "附件创建失败");
-        log(contractId, "attachment_add", "新增附件: " + fileName);
+        validate(command);
+        access.requireOperable(command.getContractId());
+        BusinessActor actor = actors.current();
+        Map<String, Object> row = toMap(command);
+        row.put("createBy", actor.userName());
+        int rows = mapper.insertAttachment(row);
+        changed(rows, "附件创建失败");
+        actionLogs.record(command.getContractId(), null, null, "attachment_add",
+                "新增附件: " + command.getFileName(), actor);
         return rows;
     }
+
+    public int create(Map<String, Object> value) { return create(toCommand(value)); }
 
     @Transactional
     public int delete(Long attachmentId)
     {
-        if (attachmentId == null) throw new ServiceException("请选择附件");
-        Long contractId = mapper.selectAttachmentContractId(attachmentId);
-        if (contractId == null) throw new ServiceException("附件不存在");
-        BizContract contract = requireAccessible(contractId);
-        requireEditable(contract);
-        int rows = mapper.deleteAttachment(attachmentId, contractId);
-        assertChanged(rows, "附件已变化，请刷新后重试");
-        log(contractId, "attachment_delete", "删除附件");
+        Long contractId = access.requireAttachmentOperable(attachmentId);
+        BizContract contract = access.requireOperable(contractId);
+        BusinessActor actor = actors.current();
+        int rows = mapper.deleteAttachment(attachmentId, contractId, contract.getContractStatus());
+        changed(rows, "附件已变化，请刷新后重试");
+        actionLogs.record(contractId, null, null, "attachment_delete", "删除附件", actor);
         return rows;
     }
 
-    private BizContract requireAccessible(Long contractId)
+    private void validate(ContractAttachmentCreateCommand command)
     {
-        BizContract contract = mapper.selectContractById(contractId);
-        if (contract == null || "2".equals(contract.getDelFlag())) throw new ServiceException("合同不存在或已删除");
-        if (!SecurityUtils.isAdmin() && mapper.countContractInDataScope(contractId, SecurityUtils.getUserId(),
-                SecurityUtils.getDeptId(), ContractPermissions.DATA_SCOPE) == 0) throw new ServiceException("无权访问该合同");
-        return contract;
+        if (command == null || command.getContractId() == null)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "请选择合同");
+        required(command.getFileName(), "请填写附件名称");
+        required(command.getFileUrl(), "请上传附件");
+        required(command.getFileType(), "请选择文件类型");
+        if (command.getFileSize() != null && command.getFileSize() < 0)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "文件大小不能小于0");
     }
 
-    private void requireEditable(BizContract contract)
+    private Map<String, Object> toMap(ContractAttachmentCreateCommand command)
     {
-        String status = contract.getContractStatus();
-        if (ContractStatus.ARCHIVED.code().equals(status) || ContractStatus.VOID.code().equals(status)
-                || ContractStatus.TERMINATED.code().equals(status))
-            throw new ServiceException("归档、作废或终止的合同不允许维护附件");
+        Map<String, Object> row = new HashMap<>();
+        row.put("contractId", command.getContractId());
+        row.put("fileName", command.getFileName().trim());
+        row.put("fileUrl", command.getFileUrl().trim());
+        row.put("fileType", command.getFileType().trim());
+        row.put("fileSize", command.getFileSize());
+        row.put("remark", clean(command.getRemark()));
+        return row;
     }
 
-    private void log(Long contractId, String action, String content)
+    private ContractAttachmentCreateCommand toCommand(Map<String, Object> value)
     {
-        actionLogs.record(contractId, null, null, action, content, SecurityUtils.getUsername());
+        if (value == null) return null;
+        ContractAttachmentCreateCommand command = new ContractAttachmentCreateCommand();
+        command.setContractId(longValue(value.get("contractId")));
+        command.setFileName(text(value.get("fileName")));
+        command.setFileUrl(text(value.get("fileUrl")));
+        Object fileType = value.containsKey("fileType") ? value.get("fileType") : value.get("attachmentType");
+        command.setFileType(text(fileType));
+        command.setFileSize(longValue(value.get("fileSize")));
+        command.setRemark(text(value.get("remark")));
+        return command;
     }
 
-    private String requiredText(Map<String, Object> source, String key, String message)
+    private void required(String value, String message)
     {
-        Object value = source == null ? null : source.get(key);
-        if (value == null || StringUtils.isEmpty(String.valueOf(value)) || "null".equalsIgnoreCase(String.valueOf(value)))
-            throw new ServiceException(message);
-        return String.valueOf(value).trim();
+        if (StringUtils.isEmpty(value)) throw error(BusinessErrorCode.VALIDATION_FAILED, message);
     }
-
-    private Long toLong(Object value)
+    private Long longValue(Object value)
     {
+        if (value == null || StringUtils.isEmpty(String.valueOf(value))) return null;
         try { return Long.valueOf(String.valueOf(value)); }
-        catch (RuntimeException e) { throw new ServiceException("请选择合同"); }
+        catch (NumberFormatException exception) { throw error(BusinessErrorCode.VALIDATION_FAILED, "编号必须为数字"); }
     }
-
-    private void assertChanged(int rows, String message)
+    private String text(Object value) { return value == null ? null : String.valueOf(value); }
+    private String clean(String value) { return StringUtils.isEmpty(value) ? null : value.trim(); }
+    private void changed(int rows, String message)
     {
-        if (rows <= 0) throw new ServiceException(message);
+        if (rows <= 0) throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, message);
+    }
+    private ServiceException error(BusinessErrorCode code, String message)
+    {
+        return new ServiceException(message, code.name());
     }
 }

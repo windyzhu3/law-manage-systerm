@@ -51,7 +51,8 @@ public interface BizContractMapper
     List<Map<String, Object>> selectAttachments(Map<String, Object> params);
     Long selectAttachmentContractId(Long attachmentId);
     int insertAttachment(Map<String, Object> attachment);
-    int deleteAttachment(@Param("attachmentId") Long attachmentId, @Param("contractId") Long contractId);
+    int deleteAttachment(@Param("attachmentId") Long attachmentId, @Param("contractId") Long contractId,
+            @Param("expectedContractStatus") String expectedContractStatus);
     List<Map<String, Object>> selectStatusLogs(Map<String, Object> params);
     int insertStatusLog(ContractStatusLogRecord record);
 }
