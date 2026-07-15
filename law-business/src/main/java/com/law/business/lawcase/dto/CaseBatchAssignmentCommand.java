@@ -2,13 +2,16 @@ package com.law.business.lawcase.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 
-public class CaseAssignmentCommand
+public class CaseBatchAssignmentCommand
 {
-    @NotNull(message = "请选择案件") private Long caseId;
+    @NotEmpty(message = "请选择案件")
+    private List<@NotNull(message = "请选择案件") Long> caseIds;
     @NotNull(message = "请选择主办律师") private Long mainLawyerId;
     @NotBlank(message = "请选择分配方式") private String assignMethod;
     @NotBlank(message = "请选择优先级") private String priority;
@@ -21,7 +24,7 @@ public class CaseAssignmentCommand
     private String assistantLawyerNames;
     private String remark;
 
-    public Long getCaseId(){return caseId;} public void setCaseId(Long v){caseId=v;}
+    public List<Long> getCaseIds(){return caseIds;} public void setCaseIds(List<Long> v){caseIds=v;}
     public Long getMainLawyerId(){return mainLawyerId;} public void setMainLawyerId(Long v){mainLawyerId=v;}
     public String getAssignMethod(){return assignMethod;} public void setAssignMethod(String v){assignMethod=v;}
     public String getPriority(){return priority;} public void setPriority(String v){priority=v;}

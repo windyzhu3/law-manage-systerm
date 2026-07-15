@@ -1,5 +1,6 @@
 package com.ruoyi.system.service.impl;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,12 @@ import com.ruoyi.system.service.casecenter.CaseAssignmentService;
 import com.ruoyi.system.service.casecenter.CaseTransferService;
 import com.ruoyi.system.service.casecenter.CaseConfirmationService;
 import com.ruoyi.system.service.casecenter.LawyerProfileService;
+import com.law.business.lawcase.dto.CaseAssignmentCommand;
+import com.law.business.lawcase.dto.CaseBatchAssignmentCommand;
+import com.law.business.lawcase.dto.CaseConfirmCommand;
+import com.law.business.lawcase.dto.CaseTransferApprovalCommand;
+import com.law.business.lawcase.dto.CaseTransferCommand;
+import com.ruoyi.common.utils.SecurityUtils;
 
 @Service
 public class BizCaseServiceImpl implements IBizCaseService
@@ -100,16 +107,16 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Override
     @Transactional
-    public int assignCase(Map<String, Object> assignment)
+    public int assignCase(CaseAssignmentCommand assignment)
     {
-        return caseAssignmentService.assign(assignment);
+        return caseAssignmentService.assign(assignmentMap(assignment));
     }
 
     @Override
     @Transactional
-    public int batchAssignCases(Map<String, Object> assignment)
+    public int batchAssignCases(CaseBatchAssignmentCommand assignment)
     {
-        return caseAssignmentService.batchAssign(assignment);
+        return caseAssignmentService.batchAssign(batchAssignmentMap(assignment));
     }
 
     @Override
@@ -120,16 +127,24 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Override
     @Transactional
-    public int requestTransfer(Map<String, Object> transfer)
+    public int requestTransfer(CaseTransferCommand transfer)
     {
-        return caseTransferService.request(transfer);
+        Map<String,Object> values = new HashMap<>();
+        values.put("caseId", transfer.getCaseId()); values.put("toLawyerId", transfer.getToLawyerId());
+        values.put("transferReason", transfer.getTransferReason()); values.put("riskLevel", transfer.getRiskLevel());
+        values.put("detail", transfer.getDetail()); values.put("applicantId", SecurityUtils.getUserId());
+        values.put("applicantName", SecurityUtils.getLoginUser().getUser().getNickName());
+        return caseTransferService.request(values);
     }
 
     @Override
     @Transactional
-    public int approveTransfer(Map<String, Object> approval)
+    public int approveTransfer(CaseTransferApprovalCommand approval)
     {
-        return caseTransferService.approve(approval);
+        Map<String,Object> values = new HashMap<>();
+        values.put("transferId", approval.getTransferId()); values.put("action", approval.getAction());
+        values.put("opinion", approval.getOpinion());
+        return caseTransferService.approve(values);
     }
 
     @Override
@@ -146,15 +161,52 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Override
     @Transactional
-    public int handleConfirm(Map<String, Object> confirm)
+    public int handleConfirm(CaseConfirmCommand confirm)
     {
-        return caseConfirmationService.handle(confirm);
+        Map<String,Object> values = new HashMap<>();
+        values.put("confirmId", confirm.getConfirmId()); values.put("confirmResult", confirm.getConfirmResult());
+        values.put("remark", confirm.getRemark());
+        return caseConfirmationService.handle(values);
     }
 
     @Override
     public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params)
     {
         return queryService.statusLogs(params);
+    }
+
+    private Map<String,Object> assignmentMap(CaseAssignmentCommand command)
+    {
+        Map<String,Object> values = assignmentValues(command.getMainLawyerId(), command.getAssignMethod(),
+                command.getPriority(), command.getAssignReason(), command.getEstimatedWorkload(),
+                command.getEstimatedCycle(), command.getPlanStartDate(), command.getNotifyFlag(),
+                command.getAssistantLawyerIds(), command.getAssistantLawyerNames(), command.getRemark());
+        values.put("caseId", command.getCaseId());
+        return values;
+    }
+
+    private Map<String,Object> batchAssignmentMap(CaseBatchAssignmentCommand command)
+    {
+        Map<String,Object> values = assignmentValues(command.getMainLawyerId(), command.getAssignMethod(),
+                command.getPriority(), command.getAssignReason(), command.getEstimatedWorkload(),
+                command.getEstimatedCycle(), command.getPlanStartDate(), command.getNotifyFlag(),
+                command.getAssistantLawyerIds(), command.getAssistantLawyerNames(), command.getRemark());
+        values.put("caseIds", command.getCaseIds());
+        return values;
+    }
+
+    private Map<String,Object> assignmentValues(Long lawyerId, String method, String priority, String reason,
+            Object workload, Object cycle, Object startDate, String notifyFlag, String assistantIds,
+            String assistantNames, String remark)
+    {
+        Map<String,Object> values = new HashMap<>();
+        values.put("mainLawyerId", lawyerId); values.put("assignMethod", method);
+        values.put("priority", priority); values.put("assignReason", reason);
+        values.put("estimatedWorkload", workload); values.put("estimatedCycle", cycle);
+        values.put("planStartDate", startDate); values.put("notifyFlag", notifyFlag);
+        values.put("assistantLawyerIds", assistantIds); values.put("assistantLawyerNames", assistantNames);
+        values.put("remark", remark);
+        return values;
     }
 
 }

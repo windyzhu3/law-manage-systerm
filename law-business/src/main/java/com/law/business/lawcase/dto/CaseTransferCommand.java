@@ -1,7 +1,5 @@
 package com.law.business.lawcase.dto;
 
-import java.util.HashMap;
-import java.util.Map;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
@@ -13,15 +11,6 @@ public class CaseTransferCommand
     @NotBlank(message = "请选择风险等级") private String riskLevel;
     @NotBlank(message = "转案详情不能为空") private String detail;
 
-    public Map<String, Object> toPersistenceMap(Long applicantId, String applicantName)
-    {
-        Map<String, Object> value = new HashMap<>();
-        value.put("caseId", caseId); value.put("toLawyerId", toLawyerId);
-        value.put("transferReason", transferReason); value.put("riskLevel", riskLevel);
-        value.put("detail", detail); value.put("applicantId", applicantId);
-        value.put("applicantName", applicantName);
-        return value;
-    }
     public Long getCaseId(){return caseId;} public void setCaseId(Long v){caseId=v;}
     public Long getToLawyerId(){return toLawyerId;} public void setToLawyerId(Long v){toLawyerId=v;}
     public String getTransferReason(){return transferReason;} public void setTransferReason(String v){transferReason=v;}
