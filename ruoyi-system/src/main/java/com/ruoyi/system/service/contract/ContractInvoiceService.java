@@ -34,6 +34,7 @@ public class ContractInvoiceService
     @Autowired private ContractQueryService queryService;
     @Autowired private ISysDictTypeService dictionaries;
     @Autowired private BusinessEventPublisher publisher;
+    @Autowired private ContractActionLogService actionLogs;
 
     @Transactional
     public int invoice(Long planId, String target, String remark, String invoiceType)
@@ -70,8 +71,7 @@ public class ContractInvoiceService
         if (cleanRemark != null) content += "，备注：" + cleanRemark;
         requireDict("law_contract_status_action", "fee_invoice", "合同状态动作不合法");
         if(invoiceFileUrl!=null&&!invoiceFileUrl.isBlank()){Map<String,Object> file=new HashMap<>();file.put("contractId",contractId(plan));file.put("attachmentType","INVOICE");file.put("fileName",invoiceNo==null?"invoice-"+planId:invoiceNo);file.put("fileUrl",invoiceFileUrl);file.put("createBy",actor.userName());if(mapper.insertAttachment(file)<=0)throw error("CONCURRENT_MODIFICATION","发票附件保存失败");}
-        if (mapper.insertStatusLog(contractId(plan), current, target, "fee_invoice", content, actor.userName()) <= 0)
-            throw error("CONCURRENT_MODIFICATION", "合同状态日志创建失败");
+        actionLogs.record(contractId(plan), current, target, "fee_invoice", content, actor);
         Map<String, Object> payload = new HashMap<>(); payload.put("planId", planId); payload.put("invoiceStatus", target); if (type != null) payload.put("invoiceType", type);
         Long contractId = contractId(plan);
         publisher.publish(new BusinessEventCommand(BusinessEventType.INVOICE_HANDLED, "CONTRACT", contractId,

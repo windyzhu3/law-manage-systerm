@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.BizContract;
+import com.ruoyi.system.service.contract.ContractStatusLogRecord;
 
 public interface BizContractMapper
 {
@@ -44,5 +45,5 @@ public interface BizContractMapper
     int insertAttachment(Map<String, Object> attachment);
     int deleteAttachment(@Param("attachmentId") Long attachmentId, @Param("contractId") Long contractId);
     List<Map<String, Object>> selectStatusLogs(Map<String, Object> params);
-    int insertStatusLog(@Param("contractId") Long contractId, @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus, @Param("actionType") String actionType, @Param("content") String content, @Param("createBy") String createBy);
+    int insertStatusLog(ContractStatusLogRecord record);
 }

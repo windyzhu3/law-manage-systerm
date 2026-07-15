@@ -22,6 +22,7 @@ public class ContractFeePlanService
     private static final String PENDING=FeePaymentStatus.PENDING.code(), CONFIRMED=FeePaymentStatus.CONFIRMED.code(), REJECTED=FeePaymentStatus.REJECTED.code(), NOT_INVOICED=FeeInvoiceStatus.NONE.code();
     @Autowired private BizContractMapper mapper;
     @Autowired private ContractQueryService queryService;
+    @Autowired private ContractActionLogService actionLogs;
 
     @Transactional
     public int create(Map<String,Object> plan)
@@ -57,7 +58,7 @@ public class ContractFeePlanService
     private Map<String,Object> plan(Long id){Map<String,Object> p=mapper.selectFeePlanById(id);if(p==null)throw error("DATA_NOT_FOUND","收费计划不存在");queryService.contract(contractId(p));return p;}
     private void requireEditable(String status){if(ContractStatus.ARCHIVED.code().equals(status)||ContractStatus.VOID.code().equals(status)||ContractStatus.TERMINATED.code().equals(status))throw error("STATE_CONFLICT","归档、作废或终止的合同不允许维护收费计划");}
     private void validate(Map<String,Object> p){int period=integer(required(p,"periodNo","请输入期数"),"期数必须为数字");if(period<=0)throw error("VALIDATION_FAILED","期数必须大于0");BigDecimal amount=decimal(required(p,"receivableAmount","请输入应收金额"),"应收金额必须为数字");if(amount.signum()<=0)throw error("VALIDATION_FAILED","应收金额必须大于0");required(p,"planReceiveDate","请选择计划收款日");}
-    private void log(Long id,String from,String to,String action,String content){if(mapper.insertStatusLog(id,from,to,action,content,SecurityUtils.getUsername())<=0)throw error("CONCURRENT_MODIFICATION","合同状态日志创建失败");}
+    private void log(Long id,String from,String to,String action,String content){actionLogs.record(id,from,to,action,content,SecurityUtils.getUsername());}
     private String content(String action,Map<String,Object> p){return action+": 第 "+p.get("periodNo")+" 期，应收 "+p.get("receivableAmount");}
     private String required(Map<String,Object> p,String key,String msg){Object v=p==null?null:p.get(key);if(v==null||StringUtils.isEmpty(String.valueOf(v))||"null".equalsIgnoreCase(String.valueOf(v)))throw error("VALIDATION_FAILED",msg);return String.valueOf(v);}
     private int integer(String v,String msg){try{return Integer.parseInt(v);}catch(NumberFormatException e){throw error("VALIDATION_FAILED",msg);}}

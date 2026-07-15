@@ -15,10 +15,12 @@ import com.ruoyi.system.mapper.BizContractMapper;
 public class ContractAttachmentService
 {
     private final BizContractMapper mapper;
+    private final ContractActionLogService actionLogs;
 
-    public ContractAttachmentService(BizContractMapper mapper)
+    public ContractAttachmentService(BizContractMapper mapper, ContractActionLogService actionLogs)
     {
         this.mapper = mapper;
+        this.actionLogs = actionLogs;
     }
 
     @Transactional
@@ -69,7 +71,7 @@ public class ContractAttachmentService
 
     private void log(Long contractId, String action, String content)
     {
-        assertChanged(mapper.insertStatusLog(contractId, null, null, action, content, SecurityUtils.getUsername()), "合同状态记录创建失败");
+        actionLogs.record(contractId, null, null, action, content, SecurityUtils.getUsername());
     }
 
     private String requiredText(Map<String, Object> source, String key, String message)

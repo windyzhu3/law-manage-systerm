@@ -19,22 +19,22 @@ import com.law.business.customer.dto.CustomerMergeCommand;
 import com.law.business.security.BusinessActorProvider;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizCustomer;
-import com.ruoyi.system.mapper.BizContractMapper;
+import com.ruoyi.system.service.contract.ContractActionLogService;
 import com.ruoyi.system.mapper.BizCustomerMapper;
 
 @ExtendWith(MockitoExtension.class)
 class CustomerMergeServiceTest
 {
     @Mock private BizCustomerMapper mapper;
-    @Mock private BizContractMapper contracts;
     @Mock private CustomerAccessPolicy access;
     @Mock private BusinessActorProvider actors;
+    @Mock private ContractActionLogService actionLogs;
     private CustomerMergeService service;
 
     @BeforeEach
     void setUp()
     {
-        service = new CustomerMergeService(mapper, contracts, access, actors);
+        service = new CustomerMergeService(mapper, access, actors, actionLogs);
     }
 
     @Test

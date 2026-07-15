@@ -275,5 +275,9 @@
         </where>
         order by l.create_time desc
     </select>
-    <insert id="insertStatusLog">insert into biz_contract_status_log(contract_id,from_status,to_status,action_type,content,create_by,create_time) values(#{contractId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())</insert>
+    <insert id="insertStatusLog" parameterType="com.ruoyi.system.service.contract.ContractStatusLogRecord"
+            useGeneratedKeys="true" keyProperty="logId" keyColumn="log_id">
+        insert into biz_contract_status_log(contract_id,from_status,to_status,action_type,content,create_by,create_time)
+        values(#{contractId},#{fromStatus},#{toStatus},#{actionType},#{content},#{createBy},sysdate())
+    </insert>
 </mapper>

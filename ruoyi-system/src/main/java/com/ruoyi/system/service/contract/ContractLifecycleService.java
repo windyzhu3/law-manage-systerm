@@ -46,15 +46,18 @@ public class ContractLifecycleService
     private final IBizCaseService caseService;
     private final ISysDictTypeService dictService;
     private final BusinessEventPublisher eventPublisher;
+    private final ContractActionLogService actionLogs;
 
     public ContractLifecycleService(BizContractMapper mapper, ContractQueryService queryService,
-            IBizCaseService caseService, ISysDictTypeService dictService, BusinessEventPublisher eventPublisher)
+            IBizCaseService caseService, ISysDictTypeService dictService, BusinessEventPublisher eventPublisher,
+            ContractActionLogService actionLogs)
     {
         this.mapper = mapper;
         this.queryService = queryService;
         this.caseService = caseService;
         this.dictService = dictService;
         this.eventPublisher = eventPublisher;
+        this.actionLogs = actionLogs;
     }
 
     @Transactional
@@ -171,7 +174,7 @@ public class ContractLifecycleService
     private void log(Long id,String from,String to,String action,String content,String operator)
     {
         assertDict("law_contract_status_action", action, "合同状态动作不合法");
-        if (mapper.insertStatusLog(id, from, to, action, content, operator) <= 0) throw new ServiceException("合同状态记录创建失败");
+        actionLogs.record(id, from, to, action, content, operator);
     }
 
     private void assertDict(String type, Object value, String message)

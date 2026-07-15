@@ -21,6 +21,7 @@ class ContractInvoiceServiceTest
 {
     @Mock BizContractMapper mapper; @Mock ContractQueryService queryService;
     @Mock ISysDictTypeService dictionaries; @Mock BusinessEventPublisher publisher;
+    @Mock ContractActionLogService actionLogs;
     @InjectMocks ContractInvoiceService service;
 
     @Test void rejectsInvoiceBeforePaymentConfirmation()

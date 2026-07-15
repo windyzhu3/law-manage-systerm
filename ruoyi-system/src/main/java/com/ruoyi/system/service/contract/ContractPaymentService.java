@@ -29,6 +29,7 @@ public class ContractPaymentService
     @Autowired private ContractQueryService queryService;
     @Autowired private ISysDictTypeService dictionaries;
     @Autowired private BusinessEventPublisher publisher;
+    @Autowired private ContractActionLogService actionLogs;
 
     @Transactional
     public int confirm(Long planId,String receivedAmount,String remark,String paymentMethod)
@@ -80,7 +81,7 @@ public class ContractPaymentService
     private Map<String,Object> baseUpdate(Long id,Map<String,Object> p,String status){return baseUpdate(id,p,status,SecurityUtils.getUsername());}
     private Map<String,Object> baseUpdate(Long id,Map<String,Object> p,String status,String operator){Map<String,Object> m=new HashMap<>();m.put("planId",id);m.put("confirmStatus",status);m.put("expectedConfirmStatus",p.get("confirm_status"));m.put("expectedInvoiceStatus",p.get("invoice_status"));m.put("expectedContractStatus",p.get("contractStatus"));m.put("updateBy",operator);return m;}
     private void log(Map<String,Object> p,String from,String to,String action,String content){log(p,from,to,action,content,SecurityUtils.getUsername());}
-    private void log(Map<String,Object> p,String from,String to,String action,String content,String operator){requireDict("law_contract_status_action",action,"合同状态动作不合法");if(mapper.insertStatusLog(contractId(p),from,to,action,content,operator)<=0)throw error("CONCURRENT_MODIFICATION","合同状态日志创建失败");}
+    private void log(Map<String,Object> p,String from,String to,String action,String content,String operator){requireDict("law_contract_status_action",action,"合同状态动作不合法");actionLogs.record(contractId(p),from,to,action,content,operator);}
     private void publish(BusinessEventType t,Map<String,Object> p,Map<String,Object> d){Long id=contractId(p);publisher.publish(new BusinessEventCommand(t,"CONTRACT",id,text(p.get("contract_no")),t.name()+":"+id+":"+IdUtils.fastUUID(),d));}
     private Map<String,Object> data(Object...v){Map<String,Object> m=new HashMap<>();for(int i=0;i+1<v.length;i+=2)if(v[i+1]!=null)m.put(String.valueOf(v[i]),v[i+1]);return m;}
     private void requireDict(String type,String value,String message){List<SysDictData> xs=dictionaries.selectDictDataByType(type);if(xs!=null)for(SysDictData x:xs)if(value.equals(x.getDictValue()))return;throw error("VALIDATION_FAILED",xs==null||xs.isEmpty()?"字典未初始化："+type:message);}

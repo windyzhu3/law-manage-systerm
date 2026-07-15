@@ -28,6 +28,7 @@ public class ContractCommandService
     @Autowired private ContractQueryService queryService;
     @Autowired private ContractNumberService numberService;
     @Autowired private ISysDictTypeService dictionaries;
+    @Autowired private ContractActionLogService actionLogs;
 
     @Transactional
     public int create(BizContract contract)
@@ -36,7 +37,7 @@ public class ContractCommandService
         contract.setContractNo(numberService.nextNumber()); contract.setCreateBy(SecurityUtils.getUsername());
         if(contract.getOwnerId()==null){contract.setOwnerId(SecurityUtils.getUserId());contract.setDeptId(SecurityUtils.getDeptId());}
         int rows=mapper.insertContract(contract);changed(rows,"合同创建失败");
-        if(mapper.insertStatusLog(contract.getContractId(),null,contract.getContractStatus(),"create","创建合同",SecurityUtils.getUsername())<=0)throw error("CONCURRENT_MODIFICATION","合同状态日志创建失败");
+        actionLogs.record(contract.getContractId(),null,contract.getContractStatus(),"create","创建合同",SecurityUtils.getUsername());
         return rows;
     }
 

@@ -15,24 +15,24 @@ import com.ruoyi.common.annotation.DataScope;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.BizCustomer;
-import com.ruoyi.system.mapper.BizContractMapper;
 import com.ruoyi.system.mapper.BizCustomerMapper;
+import com.ruoyi.system.service.contract.ContractActionLogService;
 
 @Service
 public class CustomerMergeService
 {
     private final BizCustomerMapper mapper;
-    private final BizContractMapper contracts;
     private final CustomerAccessPolicy access;
     private final BusinessActorProvider actors;
+    private final ContractActionLogService actionLogs;
 
-    public CustomerMergeService(BizCustomerMapper mapper, BizContractMapper contracts,
-            CustomerAccessPolicy access, BusinessActorProvider actors)
+    public CustomerMergeService(BizCustomerMapper mapper, CustomerAccessPolicy access,
+            BusinessActorProvider actors, ContractActionLogService actionLogs)
     {
         this.mapper = mapper;
-        this.contracts = contracts;
         this.access = access;
         this.actors = actors;
+        this.actionLogs = actionLogs;
     }
 
     @DataScope(deptAlias = "c", userAlias = "c", userField = "owner_id")
@@ -82,8 +82,7 @@ public class CustomerMergeService
         {
             String detail = limit("客户合并迁移: " + merged.getCustomerName() + " -> "
                     + main.getCustomerName() + "；" + content, 500);
-            changed(contracts.insertStatusLog(contractId, null, null, "customer_merge", detail,
-                    actor.userName()), "合同状态日志创建失败");
+            actionLogs.record(contractId, null, null, "customer_merge", detail, actor);
         }
         return 1;
     }

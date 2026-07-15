@@ -22,6 +22,7 @@ import com.ruoyi.system.service.ISysDictTypeService;
 class ContractPaymentServiceTest
 {
     @Mock BizContractMapper mapper;@Mock ContractQueryService queryService;@Mock ISysDictTypeService dictionaries;@Mock BusinessEventPublisher publisher;
+    @Mock ContractActionLogService actionLogs;
     @InjectMocks ContractPaymentService service;
     @Test void fullyPaidPlanCannotBeConfirmedAgain(){when(mapper.selectFeePlanById(1L)).thenReturn(plan("1",100,100));ServiceException e=assertThrows(ServiceException.class,()->service.confirm(1L,"10",null,null));assertEquals("STATE_CONFLICT",e.getBusinessCode());verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());}
     @Test void rejectedPlanCannotBeRejectedAgain(){when(mapper.selectFeePlanById(1L)).thenReturn(plan("2",100,0));ServiceException e=assertThrows(ServiceException.class,()->service.reject(1L,"again"));assertEquals("STATE_CONFLICT",e.getBusinessCode());verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());}

@@ -22,6 +22,7 @@ class ContractCommandServiceTest
     @Mock ContractQueryService queryService;
     @Mock ContractNumberService numberService;
     @Mock ISysDictTypeService dictionaries;
+    @Mock ContractActionLogService actionLogs;
     @InjectMocks ContractCommandService service;
 
     @Test void createRejectsMissingContractBeforeDatabaseAccess()

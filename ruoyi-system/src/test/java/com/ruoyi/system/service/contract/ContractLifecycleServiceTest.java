@@ -29,12 +29,13 @@ class ContractLifecycleServiceTest
     @Mock private IBizCaseService caseService;
     @Mock private ISysDictTypeService dictService;
     @Mock private BusinessEventPublisher eventPublisher;
+    @Mock private ContractActionLogService actionLogs;
     private ContractLifecycleService service;
 
     @BeforeEach
     void setUp()
     {
-        service = new ContractLifecycleService(mapper, queryService, caseService, dictService, eventPublisher);
+        service = new ContractLifecycleService(mapper, queryService, caseService, dictService, eventPublisher, actionLogs);
     }
 
     @Test
