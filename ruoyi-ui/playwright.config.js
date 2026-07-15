@@ -1,2 +1,2 @@
 const { defineConfig } = require('@playwright/test')
-module.exports = defineConfig({ testDir: './e2e', timeout: 30000, retries: 0, use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' }, webServer: { command: 'npx serve -s dist -l 4173', port: 4173, reuseExistingServer: true }, reporter: [['list'], ['html', { outputFolder: 'output/playwright/report', open: 'never' }]] })
+module.exports = defineConfig({ testDir: './e2e', timeout: 30000, retries: 0, use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure' }, webServer: { command: 'node node_modules/serve/build/main.js -s dist -l 4173', port: 4173, reuseExistingServer: true }, reporter: [['list'], ['html', { outputFolder: 'output/playwright/report', open: 'never' }]] })

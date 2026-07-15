@@ -205,5 +205,351 @@
           <el-table-column label="å®¢æˆ·åç§°" prop="customerName" min-width="150" />
           <el-table-column label="æ‰‹æœºå·" width="130"><template slot-scope="{ row }">{{ maskMobile(row.mobile) }}</template></el-table-column>
           <el-table-column label="ä¿¡ç”¨ä»£ç " prop="creditCode" min-width="160" show-overflow-tooltip />
-          <el-table-column label="æ“ä½œ" width="120" align="center"><template slot-scope="{ row }"><el-button v-hasPermi="['customer:merge:merge']" :size="controlSize" type="teÛ^ü¶‰žËkºwµçx(€€€€€€€€€€€€ñ•°µ½ÁÑ¥½¸Øµ™½Èô‰¥Ñ•´¥¸ÕÍÑ½µ•É=ÁÑ¥½¹Ìˆ€é­•äô‰¥Ñ•´¹ÕÍÑ½µ•É%ˆ€é±…‰•°ô‰¥Ñ•´¹ÕÍÑ½µ•É9…µ”ˆ€éÙ…±Õ”ô‰¥Ñ•´¹ÕÍÑ½µ•É%ˆ€é‘¥Í…‰±•ôˆ……¹=Á•É…Ñ•ÕÍÑ½µ•È¡¥Ñ•´¤ˆø(€€€€€€€€€€€€€€ñÍÁ…¸ùíì¥Ñ•´¹ÕÍÑ½µ•É9…µ”õôð½ÍÁ…¸ø(€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÌô‰Í•±•ÐµÍÕˆˆùíì¥Ñ•´¹µ½‰¥±”ñð¥Ñ•´¹½µÁ…¹å9…µ”ñð¥Ñ•´¹ÕÍÑ½µ•É9¼õôð½ÍÁ…¸ø(€€€€€€€€€€€€ð½•°µ½ÁÑ¥½¸ø(€€€€€€€€€€ð½•°µÍ•±•Ðø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹šZç–ò<ˆÁÉ½Àô‰™½±±½ÝQåÁ”ˆøñ•°µÍ•±•ÐØµµ½‘•°ô‰™½±±½Ý½É´¹™½±±½ÝQåÁ”ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆøñ•°µ½ÁÑ¥½¸Øµ™½Èô‰¥Ñ•´¥¸‘¥Ð¹ÑåÁ”¹±…Ý}ÕÍÑ½µ•É}™½±±½Ý}ÑåÁ”ˆ€é­•äô‰¥Ñ•´¹Ù…±Õ”ˆ€é±…‰•°ô‰¥Ñ•´¹±…‰•°ˆ€éÙ…±Õ”ô‰¥Ñ•´¹Ù…±Õ”ˆ€¼øð½•°µÍ•±•Ðøð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹––ºäˆÁÉ½Àô‰½¹Ñ•¹Ðˆøñ•°µ¥¹ÁÕÐØµµ½‘•°ô‰™½±±½Ý½É´¹½¹Ñ•¹Ðˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰Ñ•áÑ…É•„ˆ€éÉ½ÝÌôˆÐˆ€¼øð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹’â/š²‡¢Þ¢þlˆøñ•°µ‘…Ñ”µÁ¥­•ÈØµµ½‘•°ô‰™½±±½Ý½É´¹¹•áÑ½±±½ÝQ¥µ”ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÙ…±Õ”µ™½Éµ…Ðô‰åååäµ54µ‘! éµ´éÍÌˆÑåÁ”ô‰‘…Ñ•Ñ¥µ”ˆ€¼øð½•°µ™½É´µ¥Ñ•´ø(€€€€€€ð½•°µ™½É´ø(€€€€€€ñ‘¥ØÍ±½Ðô‰™½½Ñ•Èˆøñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ±¥¬ô‰™½±±½Ý=Á•¸€ô™…±Í”ˆû–>[šÚ ð½•°µ‰ÕÑÑ½¸øñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰ÁÉ¥µ…Éäˆ±¥¬ô‰Í…Ù•½±±½ÝÕÀˆûž†»–ºhð½•°µ‰ÕÑÑ½¸øð½‘¥Øø(€€€€ð½•°µ‘¥…±½œø((€€€€ñ•°µ‘¥…±½œ€éÑ¥Ñ±”ô‰Ñ…½É´¹Ñ…%€ü€Ÿžò[¢úGš‚ž¶øœ€è€ŸšZÃ–Š{š‚ž¶øœˆ€éÙ¥Í¥‰±”¹Íå¹Œô‰Ñ…=Á•¸ˆÝ¥‘Ñ ôˆÐØÁÁàˆ€éÕÍÑ½´µ±…ÍÌô‰‘¥…±½±…ÍÌˆ…ÁÁ•¹µÑ¼µ‰½‘äø(€€€€€€ñ•°µ™½É´É•˜ô‰Ñ…½ÉµI•˜ˆ€éµ½‘•°ô‰Ñ…½É´ˆ€éÉÕ±•Ìô‰Ñ…IÕ±•Ìˆ±…‰•°µÝ¥‘Ñ ôˆäÁÁàˆø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹š‚ž¶û–B4ˆÁÉ½Àô‰Ñ…9…µ”ˆøñ•°µ¥¹ÁÕÐØµµ½‘•°ô‰Ñ…½É´¹Ñ…9…µ”ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ€¼øð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹¦Šs¢&Èˆøñ•°µ½±½ÈµÁ¥­•ÈØµµ½‘•°ô‰Ñ…½É´¹Ñ…½±½Èˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ€¼øð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹š:K–ê<ˆøñ•°µ¥¹ÁÕÐµ¹Õµ‰•ÈØµµ½‘•°ô‰Ñ…½É´¹½É‘•É9Õ´ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ€éµ¥¸ôˆÀˆ€¼øð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹ž*Ûšˆøñ•°µÉ…‘¥¼µÉ½ÕÀØµµ½‘•°ô‰Ñ…½É´¹ÍÑ…ÑÕÌˆøñ•°µÉ…‘¥¼Øµ™½Èô‰¥Ñ•´¥¸‘¥Ð¹ÑåÁ”¹ÍåÍ}¹½Éµ…±}‘¥Í…‰±”ˆ€é­•äô‰¥Ñ•´¹Ù…±Õ”ˆ€é±…‰•°ô‰¥Ñ•´¹Ù…±Õ”ˆùíì¥Ñ•´¹±…‰•°õôð½•°µÉ…‘¥¼øð½•°µÉ…‘¥¼µÉ½ÕÀøð½•°µ™½É´µ¥Ñ•´ø(€€€€€€ð½•°µ™½É´ø(€€€€€€ñ‘¥ØÍ±½Ðô‰™½½Ñ•Èˆøñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ±¥¬ô‰Ñ…=Á•¸€ô™…±Í”ˆû–>[šÚ ð½•°µ‰ÕÑÑ½¸øñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰ÁÉ¥µ…Éäˆ±¥¬ô‰Í…Ù•Q…œˆûž†»–ºhð½•°µ‰ÕÑÑ½¸øð½‘¥Øø(€€€€ð½•°µ‘¥…±½œø((€€€€ñ•°µ‘¥…±½œÑ¥Ñ±”ô‹–º‹š"ßš‚ž¶øˆ€éÙ¥Í¥‰±”¹Íå¹Œô‰ÕÍÑ½µ•ÉQ…=Á•¸ˆÝ¥‘Ñ ôˆÔÈÁÁàˆ€éÕÍÑ½´µ±…ÍÌô‰‘¥…±½±…ÍÌˆ…ÁÁ•¹µÑ¼µ‰½‘äø(€€€€€€ñ•°µ™½É´±…‰•°µÝ¥‘Ñ ôˆäÁÁàˆø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹–º‹š"Üˆø(€€€€€€€€€€ñ•°µ¥¹ÁÕÐ€éÙ…±Õ”ô‰ÕÍÑ½µ•ÉQ…½É´¹ÕÍÑ½µ•É9…µ”ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ‘¥Í…‰±•€¼ø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹š‚ž¶øˆø(€€€€€€€€€€ñ•°µ¡•­‰½àµÉ½ÕÀØµµ½‘•°ô‰ÕÍÑ½µ•ÉQ…½É´¹Ñ…%‘Ìˆø(€€€€€€€€€€€€ñ•°µ¡•­‰½àØµ™½Èô‰¥Ñ•´¥¸ÕÍÑ½µ•ÉQ…=ÁÑ¥½¹Ìˆ€é­•äô‰¥Ñ•´¹Ñ…}¥ˆ€é±…‰•°ô‰¥Ñ•´¹Ñ…}¥ˆø(€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÌô‰Ñ…œµ‘½Ðˆ€éÍÑå±”ô‰ì‰…­É½Õ¹è¥Ñ•´¹Ñ…}½±½Èñð€œŒÍˆàÉ˜Øœôˆ€¼ùíì¥Ñ•´¹Ñ…}¹…µ”õô(€€€€€€€€€€€€ð½•°µ¡•­‰½àø(€€€€€€€€€€ð½•°µ¡•­‰½àµÉ½ÕÀø(€€€€€€€€€€ñ•°µ•µÁÑäØµ¥˜ôˆ…ÕÍÑ½µ•ÉQ…=ÁÑ¥½¹Ì¹±•¹Ñ ˆ‘•ÍÉ¥ÁÑ¥½¸ô‹šjš^ƒ–B¿žR£š‚ž¶øˆ€é¥µ…”µÍ¥é”ôˆÜÈˆ€¼ø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€ð½•°µ™½É´ø(€€€€€€ñ‘¥ØÍ±½Ðô‰™½½Ñ•Èˆøñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ±¥¬ô‰ÕÍÑ½µ•ÉQ…=Á•¸€ô™…±Í”ˆû–>[šÚ ð½•°µ‰ÕÑÑ½¸øñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰ÁÉ¥µ…Éäˆ±¥¬ô‰Í…Ù•ÕÍÑ½µ•ÉQ…Ìˆûž†»–ºhð½•°µ‰ÕÑÑ½¸øð½‘¥Øø(€€€€ð½•°µ‘¥…±½œø((€€€€ñ•°µ‘¥…±½œÑ¥Ñ±”ô‹–º‹š"ß–B#–æØˆ€éÙ¥Í¥‰±”¹Íå¹Œô‰µ•É•=Á•¸ˆÝ¥‘Ñ ôˆÔØÁÁàˆ€éÕÍÑ½´µ±…ÍÌô‰‘¥…±½±…ÍÌˆ…ÁÁ•¹µÑ¼µ‰½‘äø(€€€€€€ñ•°µ…±•ÉÐÑ¥Ñ±”ô‹–B#–æÛ–B;¾ò3–ú–B#–æÛ–º‹š"ßžj¢SžÎï’êëŽ¢Þ¢þoŽš‚ž¶û–J3–B#–B3–Â¢þžžï–"Ã’âï–º‹š"ß¾ò3–:–º‹š"ß’òkš‚¢ºÃ’âë–ÞË–B#–æÛŽˆÑåÁ”ô‰Ý…É¹¥¹œˆ€é±½Í…‰±”ô‰™…±Í”ˆÍ¡½Üµ¥½¸€¼ø(€€€€€€ñ•°µ™½É´É•˜ô‰µ•É•½ÉµI•˜ˆ€éµ½‘•°ô‰µ•É•½É´ˆ€éÉÕ±•Ìô‰µ•É•IÕ±•Ìˆ±…‰•°µÝ¥‘Ñ ôˆÄÄÁÁàˆ±…ÍÌô‰µ•É”µ™½É´ˆø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹–ú–B#–æÛ–º‹š"ÜˆÁÉ½Àô‰µ•É•‘ÕÍÑ½µ•É%ˆø(€€€€€€€€€€ñ•°µ¥¹ÁÕÐ€éÙ…±Õ”ô‰µ•É•½É´¹µ•É•‘ÕÍÑ½µ•É9…µ”ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ‘¥Í…‰±•€¼ø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹’âï–º‹š"ÜˆÁÉ½Àô‰µ…¥¹ÕÍÑ½µ•É%ˆø(€€€€€€€€€€ñ•°µÍ•±•ÐØµµ½‘•°ô‰µ•É•½É´¹µ…¥¹ÕÍÑ½µ•É%ˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ™¥±Ñ•É…‰±”É•µ½Ñ”É•Í•ÉÙ”µ­•åÝ½ÉÁ±…•¡½±‘•Èô‹šBsžÒ‹–æÛ¦'š.§’âï–º‹š"Üˆ€éÉ•µ½Ñ”µµ•Ñ¡½ô‰Í•…É¡ÕÍÑ½µ•É=ÁÑ¥½¹Ìˆ€é±½…‘¥¹œô‰ÕÍÑ½µ•ÉM•±•Ñ1½…‘¥¹œˆ¡…¹”ô‰Í•±•Ñ5…¥¹ÕÍÑ½µ•Èˆø(€€€€€€€€€€€€ñ•°µ½ÁÑ¥½¸Øµ™½Èô‰¥Ñ•´¥¸ÕÍÑ½µ•É=ÁÑ¥½¹Ìˆ€é­•äô‰¥Ñ•´¹ÕÍÑ½µ•É%ˆ€é±…‰•°ô‰¥Ñ•´¹ÕÍÑ½µ•É9…µ”ˆ€éÙ…±Õ”ô‰¥Ñ•´¹ÕÍÑ½µ•É%ˆ€é‘¥Í…‰±•ô‰¥Ñ•´¹ÕÍÑ½µ•É%€ôôôµ•É•½É´¹µ•É•‘ÕÍÑ½µ•É%ñð€……¹=Á•É…Ñ•ÕÍÑ½µ•È¡¥Ñ•´¤ˆø(€€€€€€€€€€€€€€ñÍÁ…¸ùíì¥Ñ•´¹ÕÍÑ½µ•É9…µ”õôð½ÍÁ…¸ø(€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÌô‰Í•±•ÐµÍÕˆˆùíì¥Ñ•´¹µ½‰¥±”ñð¥Ñ•´¹½µÁ…¹å9…µ”ñð¥Ñ•´¹ÕÍÑ½µ•É9¼õôð½ÍÁ…¸ø(€€€€€€€€€€€€ð½•°µ½ÁÑ¥½¸ø(€€€€€€€€€€ð½•°µÍ•±•Ðø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€€€ñ•°µ™½É´µ¥Ñ•´±…‰•°ô‹–B#–æÛ¢¾Óšb8ˆø(€€€€€€€€€€ñ•°µ¥¹ÁÕÐØµµ½‘•°ô‰µ•É•½É´¹½¹Ñ•¹Ðˆ€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰Ñ•áÑ…É•„ˆ€éÉ½ÝÌôˆÌˆ€¼ø(€€€€€€€€ð½•°µ™½É´µ¥Ñ•´ø(€€€€€€ð½•°µ™½É´ø(€€€€€€ñ‘¥ØÍ±½Ðô‰™½½Ñ•Èˆøñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ±¥¬ô‰µ•É•=Á•¸€ô™…±Í”ˆû–>[šÚ ð½•°µ‰ÕÑÑ½¸øñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰ÁÉ¥µ…Éäˆ±¥¬ô‰Í…Ù•5•É”ˆûž†»¢º“–B#–æØð½•°µ‰ÕÑÑ½¸øð½‘¥Øø(€€€€ð½•°µ‘¥…±½œø(€€ð½‘¥Øø(ð½Ñ•µÁ±…Ñ”ø((ñÍÉ¥ÁÐø)¥µÁ½ÉÐá•±%µÁ½ÉÑ¥…±½œ™É½´€ ½½µÁ½¹•¹ÑÌ½á•±%µÁ½ÉÑ¥…±½œœ)¥µÁ½ÉÐ	¥é!•É¼™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é!•É¼œ)¥µÁ½ÉÐ	¥é5•ÑÉ¥Ì™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é5•ÑÉ¥Ìœ)¥µÁ½ÉÐ	¥éA…•!•…‘•È™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éA…•!•…‘•Èœ)¥µÁ½ÉÐ	¥éQ…‰±•…É™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éQ…‰±•…Éœ)¥µÁ½ÉÐ‰ÕÍ¥¹•ÍÍU¤™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½‰ÕÍ¥¹•ÍÍU¤œ)¥µÁ½ÉÐÕÍÑ½µ•É1¥™•å±”™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½ÕÍÑ½µ•É1¥™•å±”œ)¥µÁ½ÉÐÕÍÑ½µ•ÉA…•Ñ¥½¹Ì™É½´€œ¸½ÕÍÑ½µ•ÈµÁ…”µ…Ñ¥½¹Ìœ)¥µÁ½ÉÐÕÍÑ½µ•É•Ñ…¥±É…Ý•È™É½´€œ¸½½µÁ½¹•¹ÑÌ½ÕÍÑ½µ•É•Ñ…¥±É…Ý•Èœ)¥µÁ½ÉÐì±¥ÍÑÕÍÑ½µ•É=Ý¹•È°±¥ÍÑQ…œô™É½´€ ½…Á¤½ÕÍÑ½µ•Èœ)¥µÁ½ÉÐì±¥ÍÑM•ÑÑ¥¹œô™É½´€ ½…Á¤½±•…œ()•áÁ½ÉÐ‘•™…Õ±Ðì(€¹…µ”è€ÕÍÑ½µ•Èœ°(€µ¥á¥¹Ìèm‰ÕÍ¥¹•ÍÍU¤°ÕÍÑ½µ•É1¥™•å±”°ÕÍÑ½µ•ÉA…•Ñ¥½¹Ít°(€½µÁ½¹•¹ÑÌèìá•±%µÁ½ÉÑ¥…±½œ°	¥é!•É¼°	¥é5•ÑÉ¥Ì°	¥éA…•!•…‘•È°	¥éQ…‰±•…É°ÕÍÑ½µ•É•Ñ…¥±É…Ý•Èô°(€‘¥ÑÌèl±…Ý}ÕÍÑ½µ•É}ÑåÁ”œ°€±…Ý}å•Í}¹½}™±…œœ°€±…Ý}ÕÍÑ½µ•É}±•Ù•°œ°€±…Ý}ÕÍÑ½µ•É}¥¹‘ÕÍÑÉäœ°€±…Ý}½¹Ñ…Ñ}É•±…Ñ¥½¸œ°€±…Ý}ÕÍÑ½µ•É}™½±±½Ý}ÑåÁ”œ°€±…Ý}ÕÍÑ½µ•É}ÍÑ…ÑÕÌœ°€ÍåÍ}¹½Éµ…±}‘¥Í…‰±”t°(€‘…Ñ„ ¤ì(€€€½¹ÍÐ½µÁ…¹åI•ÅÕ¥É•€ô€¡ÉÕ±”°Ù…±Õ”°…±±‰…¬¤€ôøì(€€€€€¥˜€¡Ñ¡¥Ì¹™½É´¹ÕÍÑ½µ•ÉQåÁ”€ôôô€•¹Ñ•ÉÁÉ¥Í”œ€˜˜€…Ù…±Õ”¤ì(€€€€€€€…±±‰…¬¡¹•ÜÉÉ½È Ÿ’ò’âk–º‹š"ß¢¾ß¢úO–—–³–>ã–B7žžÀœ¤¤(€€€€€ô•±Í”ì(€€€€€€€…±±‰…¬ ¤(€€€€€ô(€€€ô(€€€É•ÑÕÉ¸ì(€€€€€µ½‘”è€±¥ÍÐœ°(€€€€€…Ù…¥±…‰±•5½‘•Ìèl±¥ÍÐœ°€½¹Ñ…Ðœ°€™½±±½ÝÕÀœ°€Ñ…œœ°€µ•É”t°(€€€€€Í¡½ÝM•…É èÑÉÕ”°(€€€€€±½…‘¥¹œè™…±Í”°(€€€€€Ñ½Ñ…°è€À°(€€€€€±¥ÍÐèmt°(€€€€€½¹Ñ…ÑÌèmt°(€€€€€™½±±½ÝÕÁÌèmt°(€€€€€Ñ…Ìèmt°(€€€€€µ•ÑÉ¥Ìèmt°(€€€€€½¹Ñ…Ñ5•ÑÉ¥Ìèmt°(€€€€€µ•É•5•ÑÉ¥Ìèmt°(€€€€€ÅÕ•ÉäèìÁ…•9Õ´è€Ä°Á…•M¥é”è€ÄÀ°ÕÍÑ½µ•É9…µ”è€œœ°ÕÍÑ½µ•ÉQåÁ”è€œœ°¥¹‘ÕÍÑÉäè€œœ°Ñ…%è€œœ°½Ý¹•É%è€œœ°ÕÍÑ½µ•É1•Ù•°è€œœô°(€€€€€½Ý¹•É=ÁÑ¥½¹Ìèmt°(€€€€€±•…‘M½ÕÉ•=ÁÑ¥½¹Ìèmt°(€€€€€Ñ…=ÁÑ¥½¹Ìèmt°(€€€€€…‘Ù…¹•‘=Á•¸è™…±Í”°(€€€€€™½É´èíô°(€€€€€½¹Ñ…Ñ½É´èíô°(€€€€€™½±±½Ý½É´èíô°(€€€€€Ñ…½É´èíô°(€€€€€ÕÍÑ½µ•ÉQ…½É´èíô°(€€€€€ÕÍÑ½µ•ÉQ…=ÁÑ¥½¹Ìèmt°(€€€€€µ•É•EÕ•Éäèíô°(€€€€€µ•É•½É´èíô°(€€€€€µ•É•1¥ÍÐèmt°(€€€€€ÕÍÑ½µ•É=ÁÑ¥½¹Ìèmt°(€€€€€ÕÍÑ½µ•ÉM•±•Ñ1½…‘¥¹œè™…±Í”°(€€€€€‰ÕÍ¥¹•ÍÍA…•5•Ñ„èì(€€€€€€€‘•™…Õ±ÑQ¥Ñ±”è€Ÿ–º‹š"ß’â·–þœ°(€€€€€€€Ñ¥Ñ±•Ìèì±¥ÍÐè€Ÿ–º‹š"ß–"_¢† œ°½¹Ñ…Ðè€Ÿ¢SžÎï’êëžº‡žBœ°™½±±½ÝÕÀè€Ÿ–º‹š"ß¢Þ¢þlœ°Ñ…œè€Ÿ–º‹š"ßš‚ž¶øœ°µ•É”è€Ÿ–:ï¦7–B#–æØœô°(€€€€€€€‘•ÍÉ¥ÁÑ¥½¹Ìèì(€€€€€€€€€±¥ÍÐè€Ÿžî’âžîÓš*“–º‹š"ßš†š†#Ž¢SžÎï’êëŽ¢Þ¢þo’â;–B#–B3¢ö³–2Xœ°(€€€€€€€€€½¹Ñ…Ðè€Ÿžº‡žB–º‹š"ß’â/žj–Ï¦R»¢SžÎï’êë–J3šÊ¦k–ÏžÎìœ°(€€€€€€€€€™½±±½ÝÕÀè€Ÿ¢ºÃ–öW–º‹š"ßšÊ¦k––ºç’â;’â/š²‡¢Þ¢þo¢º‡–"Hœ°(€€€€€€€€€Ñ…œè€ŸžîÓš*“–º‹š"ß–"žú“š‚ž¶û¾ò3žR£’ê;–B;žî·žî?¢B”œ°(€€€€€€€€€µ•É”è€Ÿ¢¾–"¯¦7–’7–º‹š"ß–æÛ¢þžžï¢SžÎï’êëŽ¢Þ¢þoŽš‚ž¶û–J3–B#–B3–Ï¢Pœ(€€€€€€€ô(€€€€€ô°(€€€€€‘•Ñ…¥±=Á•¸è™…±Í”°(€€€€€‘•Ñ…¥±ÕÍÑ½µ•É%è¹Õ±°°(€€€€€‘•Ñ…¥±ÕÍÑ½µ•Èèíô°(€€€€€‘•Ñ…¥±½¹Ñ…ÑÌèmt°(€€€€€‘•Ñ…¥±½±±½ÝÕÁÌèmt°(€€€€€‘•Ñ…¥±½¹ÑÉ…ÑÌèmt°(€€€€€‘•Ñ…¥±5•É•1½Ìèmt°(€€€€€ÕÍÑ½µ•É=Á•¸è™…±Í”°(€€€€€½¹Ñ…Ñ=Á•¸è™…±Í”°(€€€€€™½±±½Ý=Á•¸è™…±Í”°(€€€€€Ñ…=Á•¸è™…±Í”°(€€€€€ÕÍÑ½µ•ÉQ…=Á•¸è™…±Í”°(€€€€€µ•É•=Á•¸è™…±Í”°(€€€€€ÕÍÑ½µ•ÉIÕ±•Ìèì(€€€€€€€ÕÍÑ½µ•É9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–º‹š"ß–B7žžÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€ÕÍÑ½µ•ÉQåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‹š"ßžÆï–z,œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€µ½‰¥±”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—š&/šrë–>Üœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€Í½ÕÉ•½‘”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‹š"ßšv—šê@œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€ÕÍÑ½µ•É1•Ù•°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‹š"ßž¶'žêœœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€µ…¥¹•µ…¹èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—’âï¢š¦ršÆœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€½Ý¹•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¢Ò¢Ò’êèœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€½µÁ…¹å9…µ”èmìÙ…±¥‘…Ñ½Èè½µÁ…¹åI•ÅÕ¥É•°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€½¹Ñ…ÑIÕ±•Ìèì(€€€€€€€ÕÍÑ½µ•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š&–Æ{–º‹š"Üœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€½¹Ñ…Ñ9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—¢SžÎï’êèœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€µ½‰¥±”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—š&/šrë–>Üœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€É•±…Ñ¥½¹QåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–ÏžÎìœ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€™½±±½ÝIÕ±•Ìèì(€€€€€€€ÕÍÑ½µ•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š&–Æ{–º‹š"Üœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€™½±±½ÝQåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¢Þ¢þošZç–ò<œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€½¹Ñ•¹ÐèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—¢Þ¢þo––ºäœ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€Ñ…IÕ±•Ìèì(€€€€€€€Ñ…9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—š‚ž¶û–B4œ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€µ•É•IÕ±•Ìèì(€€€€€€€µ•É•‘ÕÍÑ½µ•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–ú–B#–æÛ–º‹š"Üœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€µ…¥¹ÕÍÑ½µ•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§’âï–º‹š"Üœ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€µ•ÑÉ¥½¹™¥œèl(€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ–º‹š"ßšïšVÀœ°¡¥¹Ðè€Ÿ–£¦£šr'šV#–º‹š"Üœ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€ì­•äè€µ½¹Ñ¡9•Üœ°±…‰•°è€Ÿšr³šr#šZÃ–Šxœ°¡¥¹Ðè€ŸšZÃšÊ'šÞ–º‹š"Üœ°¥½¸è€‘…Ñ”œ°½±½Èè€å…¸œô°(€€€€€€€ì­•äè€¡¥¡Y…±Õ”œ°±…‰•°è€Ÿ¦®c’îß–ó–º‹š"Üœ°¡¥¹Ðè€Ÿ¦7ž
-çžî?¢B—–º‹š"Üœ°¥½¸è€ÍÑ…Èœ°½±½Èè€Ù¥½±•Ðœô°(€€€€€€€ì­•äè€…Ñ¥Ù”œ°±…‰•°è€ŸšÒï¢Þ–º‹š"Üœ°¡¥¹Ðè€Ÿ–ÞËšr'¢Þ¢þo¢ºÃ–öTœ°¥½¸è€Ñ¥µ”œ°½±½Èè€É••¸œô(€€€€€t°(€€€€€½¹Ñ…Ñ5•ÑÉ¥½¹™¥œèl(€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ¢SžÎï’êëšïšVÀœ°¡¥¹Ðè€Ÿž²›–B#–öO–&7ž¶o¦$œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€ì­•äè€­•å½¹Ñ…ÑÌœ°±…‰•°è€Ÿ–Ï¦R»¢SžÎï’êèœ°¡¥¹Ðè€Ÿ–öO–&7¦†×–Ï¦R»¢SžÎï’êèœ°¥½¸è€ÍÑ…Èœ°½±½Èè€Ù¥½±•Ðœô°(€€€€€€€ì­•äè€ÕÍÑ½µ•ÉÌœ°±…‰•°è€Ÿ–Ï¢S–º‹š"Üœ°¡¥¹Ðè€Ÿ–öO–&7¦†×¢šžn[–º‹š"Üœ°¥½¸è€ÑÉ•”œ°½±½Èè€å…¸œô°(€€€€€€€ì­•äè€Ý¥Ñ¡5½‰¥±”œ°±…‰•°è€ŸžVg–¶cš&/šrë–>Üœ°¡¥¹Ðè€Ÿ–öO–&7¦†×šr'š&/šrë–>Üœ°¥½¸è€Á¡½¹”œ°½±½Èè€É••¸œô(€€€€€t°(€€€€€µ•É•5•ÑÉ¥½¹™¥œèl(€€€€€€€ì­•äè€…¹‘¥‘…Ñ•Ìœ°±…‰•°è€Ÿ–g¦'–º‹š"Üœ°¡¥¹Ðè€Ÿ–öO–&7¢¾–"¯žîOšzpœ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€ì­•äè€Ý¥Ñ¡5½‰¥±”œ°±…‰•°è€Ÿš&/šrë–>ßžêÿžÒˆœ°¡¥¹Ðè€Ÿ–>¿š2'š&/šrë–>ßš¾S–¾äœ°¥½¸è€Á¡½¹”œ°½±½Èè€å…¸œô°(€€€€€€€ì­•äè€Ý¥Ñ¡½µÁ…¹äœ°±…‰•°è€Ÿ’ò’âk–º‹š"Üœ°¡¥¹Ðè€Ÿ–B¯–³–>ã–B7žžÀœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€Ù¥½±•Ðœô°(€€€€€€€ì­•äè€Ý¥Ñ¡É•‘¥Ñ½‘”œ°±…‰•°è€Ÿ’þ‡žR£’îž‚œ°¡¥¹Ðè€Ÿ–>¿š2'’þ‡žR£’îž‚š¾S–¾äœ°¥½¸è€•‘Õ…Ñ¥½¸œ°½±½Èè€É••¸œô(€€€€€t(€€€ô(€ô°(€½µÁÕÑ•èì(€€€¡•É½5•Ñ„ ¤ì(€€€€€½¹ÍÐµ•Ñ„€ôì(€€€€€€€±¥ÍÐèì(€€€€€€€€€•å•‰É½Üè€Ÿ–º‹š"ß¢Ö’êŸšÊ'šÞ œ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿžî’âžîÓš*“–º‹š"ßš†š†#Ž¢SžÎï’êë’â;’âk–*‡¢ö³–2Xœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€ŸžêÿžÒ‹¢ö³–2[–B;–ö‹š"C–º‹š"ß¢Ö’êŸ¾ò3š2žî·¢ºÃ–öWšÊ¦kŽ–B#–B3’â;šr7–*‡ž*ÛšŽœ(€€€€€€€ô°(€€€€€€€½¹Ñ…Ðèì(€€€€€€€€€•å•‰É½Üè€=9QP5959Pœ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿžî’âžº‡žB–º‹š"ß¢SžÎï’êë’â;–Ï¦R»šÊ¦k–ÏžÎìœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€ŸšÊ'šÞ–º‹š"ß¢SžÎï’êëŽ–ÏžÎïžÆï–z/’â;–Ï¦R»¢SžÎï’êëš‚¢¾¾ò3šZç’úÿ–B;žî·¢Þ¢þo–J3–B#–B3–6?–B3Žœ(€€€€€€€ô°(€€€€€€€µ•É”èì(€€€€€€€€€•å•‰É½Üè€UA1%Q%=8œ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿ¢¾–"¯¦7–’7–º‹š"ß–æÛ–B#–æÛ’âk–*‡¢Ö’êœœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€Ÿš2'–º‹š"ß–B7žžÃŽš&/šrë–>ß–J3’þ‡žR£’îž‚¢ú–*§¢¾–"¯¦7–’7¢ºÃ–öW¾ò3–B#–æÛ¢SžÎï’êëŽ¢Þ¢þoŽš‚ž¶û’â;–B#–B3–Ï¢SŽœ(€€€€€€€ô(€€€€€ô(€€€€€É•ÑÕÉ¸µ•Ñ…mÑ¡¥Ì¹µ½‘•tñðµ•Ñ„¹±¥ÍÐ(€€€ô°(€€€µ½‘•5•ÑÉ¥Ì ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€½¹Ñ…Ðœ¤É•ÑÕÉ¸Ñ¡¥Ì¹½¹Ñ…Ñ5•ÑÉ¥Ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€µ•É”œ¤É•ÑÕÉ¸Ñ¡¥Ì¹µ•É•5•ÑÉ¥Ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹µ•ÑÉ¥Ì(€€€ô°(€€€µ½‘•5•ÑÉ¥½¹™¥œ ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€½¹Ñ…Ðœ¤É•ÑÕÉ¸Ñ¡¥Ì¹½¹Ñ…Ñ5•ÑÉ¥½¹™¥œ(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€µ•É”œ¤É•ÑÕÉ¸Ñ¡¥Ì¹µ•É•5•ÑÉ¥½¹™¥œ(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹µ•ÑÉ¥½¹™¥œ(€€€ô°(€€€…¹I•…‘½¹ÑÉ…Ð ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¥=È¡l½¹ÑÉ…Ðé±¥ÍÐœ°€½¹ÑÉ…ÐéÅÕ•Éät¤(€€€ô°(€€€…¹I•…‘½¹Ñ…Ð ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ÕÍÑ½µ•Èé½¹Ñ…Ðé±¥ÍÐœ¤(€€€ô°(€€€…¹I•…‘½±±½ÝÕÀ ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ÕÍÑ½µ•Èé™½±±½ÝÕÀé±¥ÍÐœ¤(€€€ô°(€€€…¹I•…‘Q…œ ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¥=È¡lÕÍÑ½µ•ÈéÑ…œé±¥ÍÐœ°€ÕÍÑ½µ•ÈéÑ…œéÅÕ•Éäœ°€ÕÍÑ½µ•ÈéÑ…œé…ÍÍ¥¸t¤(€€€ô°(€€€…¹É•…Ñ•½¹ÑÉ…Ð ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ½¹ÑÉ…Ðé…‘œ¤€˜˜Ñ¡¥Ì¹…¹I•…‘½¹ÑÉ…Ð(€€€ô°(€€€…¹I•…‘5•É•1½œ ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ÕÍÑ½µ•Èéµ•É”é±¥ÍÐœ¤(€€€ô(€ô°(€Ý…Ñ èì(€€€€œ‘É½ÕÑ”¹ÅÕ•Éä¹µ½‘Õ±”œèì(€€€€€¥µµ•‘¥…Ñ”èÑÉÕ”°(€€€€€¡…¹‘±•È¡Ù…±Õ”¤ì(€€€€€€€Ñ¡¥Ì¹µ½‘”€ôÑ¡¥Ì¹¹½Éµ…±¥é•5½‘”¡Ù…±Õ”¤(€€€€€€€Ñ¡¥Ì¹±½…‘A…” ¤(€€€€€ô(€€€ô(€ô°(€É•…Ñ• ¤ì(€€€€¼¼ƒ¢Ò¢Ò’êë’â/š.'¾òk’î–¾çšr'šZÃ–Šx¿žò[¢úD¿–"¦7šv¦fCžjžR£š"ß–*ƒ¢ö÷¾ò#–>¢±•…½¥¹‘•à¹ÙÕ—¾ò$(€€€¥˜€¡Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¥=È¡lÕÍÑ½µ•Èé…‘œ°€ÕÍÑ½µ•Èé•‘¥Ðœ°€ÕÍÑ½µ•Èé…ÍÍ¥¸t¤¤ì(€€€€€±¥ÍÑÕÍÑ½µ•É=Ý¹•È ¤¹Ñ¡•¸¡É•Ì€ôøìÑ¡¥Ì¹½Ý¹•É=ÁÑ¥½¹Ì€ôÉ•Ì¹‘…Ñ„ñðmtô¤(€€€ô(€€€±¥ÍÑM•ÑÑ¥¹œ¡ìÍ•ÑÑ¥¹QåÁ”è€Í½ÕÉ”œô¤¹Ñ¡•¸¡É•Ì€ôøì(€€€€€Ñ¡¥Ì¹±•…‘M½ÕÉ•=ÁÑ¥½¹Ì€ô€¡É•Ì¹‘…Ñ„ñðmt¤¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹ÍÑ…ÑÕÌ€ôôô€œÀœ¤(€€€ô¤(€€€€¼¼ƒ–B¿žR£’â·žjš‚ž¶û’â/š.$(€€€¥˜€¡Ñ¡¥Ì¹…¹I•…‘Q…œ¤ì(€€€€€±¥ÍÑQ…œ¡ìÍÑ…ÑÕÌèÑ¡¥Ì¹‘¥ÑY…±Õ” ÍåÍ}¹½Éµ…±}‘¥Í…‰±”œ°€œÀœ¤ô¤¹Ñ¡•¸¡É•Ì€ôøì(€€€€€€€Ñ¡¥Ì¹Ñ…=ÁÑ¥½¹Ì€ôÉ•Ì¹‘…Ñ„ñðmt(€€€€€ô¤(€€€ô(€ô)ô(ð½ÍÉ¥ÁÐø((ñÍÑå±”Í½Á•±…¹œô‰ÍÍÌˆø)¥µÁ½ÉÐ€ˆ¸¸½‰ÕÍ¥¹•ÍÌ½‰ÕÍ¥¹•ÍÌ¹ÍÍÌˆì((¹ÕÍÑ½µ•ÈµÁ…”ì(€€´µ‰¥èµ™¥±Ñ•Èµ¥¹ÁÕÐµÝ¥‘Ñ è€ÈÄÁÁàì(€€´µ‰¥èµ™¥±Ñ•ÈµÍ•±•ÐµÝ¥‘Ñ è€ÄÈáÁàì)ô((¹ÑåÁ”µÝ•¡…Ñí‰…­É½Õ¹èŒÄÁˆäàÅô¹ÑåÁ”µµ••Ñ¥¹í‰…­É½Õ¹è˜Ôå”Á‰ô¹ÑåÁ”µ•µ…¥±í‰…­É½Õ¹èŒáˆÕ˜Ùô(¹Ñ…œµÁ¥±±Íí‘¥ÍÁ±…äé™±•àí™±•àµÝÉ…ÀéÝÉ…Àí…ÀèÕÁáô¹Ñ…œµÁ¥±±Ì¥íÁ…‘‘¥¹œèÉÁà€ÝÁàí‰½É‘•ÈèÅÁàÍ½±¥í‰½É‘•ÈµÉ…‘¥ÕÌèÄÁÁàí‰…­É½Õ¹è™™˜í™½¹ÐµÍ¥é”éÙ…È ´µ‰¥èµ™½¹Ðµµ¥¹¤¤í™½¹ÐµÍÑå±”é¹½Éµ…°í±¥¹”µ¡•¥¡ÐèÄ¸Ñô(¹½¹ÑÉ…Ðµ½Õ¹Ñí‘¥ÍÁ±…äé¥¹±¥¹”µ™±•àí…±¥¸µ¥Ñ•µÌé•¹Ñ•Èí©ÕÍÑ¥™äµ½¹Ñ•¹Ðé•¹Ñ•Èíµ¥¸µÝ¥‘Ñ èÈáÁàí¡•¥¡ÐèÈÉÁàíÁ…‘‘¥¹œèÀ€áÁàí‰½É‘•ÈµÉ…‘¥ÕÌèääåÁàí½±½ÈèŒÈÔØÍ•ˆí‰…­É½Õ¹è••˜Ñ™˜í™½¹ÐµÝ•¥¡ÐèØÀÀí™½¹ÐµÍ¥é”éÙ…È ´µ‰¥èµ™½¹ÐµÍµ…±°¥ô(ð½ÍÑå±”ø((ñÍÑå±”±…¹œô‰ÍÍÌˆø)¥µÁ½ÉÐ€ˆ¸¸½‰ÕÍ¥¹•ÍÌ½‰ÕÍ¥¹•ÍÌµ‘¥…±½œ¹ÍÍÌˆì(ð½ÍÑå±”ø(
+          <el-table-column label="æ“ä½œ" width="120" align="center"><template slot-scope="{ row }"><el-button v-hasPermi="['customer:merge:merge']" :size="controlSize" type="text" @click="openMerge(row)">åˆå¹¶</el-button></template></el-table-column>
+      </el-table>
+    </biz-table-card>
+
+    <excel-import-dialog ref="importRef" title="å®¢æˆ·å¯¼å…¥" action="/customer/importData" template-action="/customer/importTemplate" template-file-name="customer_template" update-support-label="æŒ‰å®¢æˆ·åç§°é‡å¤æ—¶æ›´æ–°å·²æœ‰å®¢æˆ·" @success="loadPage" />
+    <customer-detail-drawer
+      :visible.sync="detailOpen"
+      :customer="detailCustomer"
+      :contacts="detailContacts"
+      :followups="detailFollowups"
+      :contracts="detailContracts"
+      :merge-logs="detailMergeLogs"
+      :can-create-contract="canCreateContract"
+      :can-operate="canOperateCustomer(detailCustomer)"
+      :size-class="'biz-size-' + appSize"
+      @edit="openCustomer"
+      @contact="openContact"
+      @follow="openFollowup"
+      @tags="openCustomerTags"
+      @new-contract="newContract"
+      @matter="viewMatter"
+    />
+
+    <el-dialog :title="form.customerId ? 'ç¼–è¾‘å®¢æˆ·' : 'æ–°å¢žå®¢æˆ·'" :visible.sync="customerOpen" width="760px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="customerForm" :model="form" :rules="customerRules" label-width="110px">
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="å®¢æˆ·åç§°" prop="customerName"><el-input v-model="form.customerName" :size="controlSize" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="å®¢æˆ·ç±»åž‹" prop="customerType"><el-select v-model="form.customerType" :size="controlSize"><el-option v-for="item in dict.type.law_customer_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="æ‰‹æœºå·" prop="mobile"><el-input v-model="form.mobile" :size="controlSize" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="å¾®ä¿¡"><el-input v-model="form.wechat" :size="controlSize" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="å®¢æˆ·æ¥æº" prop="sourceCode"><el-select v-model="form.sourceCode" :size="controlSize"><el-option v-for="item in leadSourceOptions" :key="item.settingCode" :label="item.settingName" :value="item.settingCode" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="è´Ÿè´£äºº" prop="ownerId"><el-select v-model="form.ownerId" :size="controlSize" filterable><el-option v-for="item in ownerOptions" :key="item.userId" :label="item.nickName" :value="item.userId" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="å…¬å¸åç§°" prop="companyName"><el-input v-model="form.companyName" :size="controlSize" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="ä¿¡ç”¨ä»£ç "><el-input v-model="form.creditCode" :size="controlSize" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="è¡Œä¸š"><el-select v-model="form.industry" :size="controlSize"><el-option v-for="item in dict.type.law_customer_industry" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="ç­‰çº§" prop="customerLevel"><el-select v-model="form.customerLevel" :size="controlSize"><el-option v-for="item in dict.type.law_customer_level" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="ä¸»è¦éœ€æ±‚" prop="mainDemand"><el-input v-model="form.mainDemand" :size="controlSize" type="textarea" :rows="3" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="å¤‡æ³¨"><el-input v-model="form.remark" :size="controlSize" type="textarea" :rows="2" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="customerOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveCustomer">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog :title="contactForm.contactId ? 'ç¼–è¾‘è”ç³»äºº' : 'æ–°å¢žè”ç³»äºº'" :visible.sync="contactOpen" width="560px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="contactFormRef" :model="contactForm" :rules="contactRules" label-width="100px">
+        <el-form-item label="æ‰€å±žå®¢æˆ·" prop="customerId">
+          <el-select v-model="contactForm.customerId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢å¹¶é€‰æ‹©å®¢æˆ·" :remote-method="searchCustomerOptions" :loading="customerSelectLoading" @change="selectCustomerForContact">
+            <el-option v-for="item in customerOptions" :key="item.customerId" :label="item.customerName" :value="item.customerId" :disabled="!canOperateCustomer(item)">
+              <span>{{ item.customerName }}</span>
+              <span class="select-sub">{{ item.mobile || item.companyName || item.customerNo }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="è”ç³»äºº" prop="contactName"><el-input v-model="contactForm.contactName" :size="controlSize" /></el-form-item>
+        <el-form-item label="æ‰‹æœºå·" prop="mobile"><el-input v-model="contactForm.mobile" :size="controlSize" /></el-form-item>
+        <el-form-item label="å…³ç³»" prop="relationType"><el-select v-model="contactForm.relationType" :size="controlSize"><el-option v-for="item in dict.type.law_contact_relation" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="å…³é”®è”ç³»äºº"><el-switch v-model="contactForm.keyContact" :active-value="dictValue('law_yes_no_flag', '1')" :inactive-value="dictValue('law_yes_no_flag', '0')" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="contactOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveContact">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog title="æ–°å¢žè·Ÿè¿›" :visible.sync="followOpen" width="560px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="followFormRef" :model="followForm" :rules="followRules" label-width="100px">
+        <el-form-item label="æ‰€å±žå®¢æˆ·" prop="customerId">
+          <el-select v-model="followForm.customerId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢å¹¶é€‰æ‹©å®¢æˆ·" :remote-method="searchCustomerOptions" :loading="customerSelectLoading" @change="selectCustomerForFollow">
+            <el-option v-for="item in customerOptions" :key="item.customerId" :label="item.customerName" :value="item.customerId" :disabled="!canOperateCustomer(item)">
+              <span>{{ item.customerName }}</span>
+              <span class="select-sub">{{ item.mobile || item.companyName || item.customerNo }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="æ–¹å¼" prop="followType"><el-select v-model="followForm.followType" :size="controlSize"><el-option v-for="item in dict.type.law_customer_follow_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="å†…å®¹" prop="content"><el-input v-model="followForm.content" :size="controlSize" type="textarea" :rows="4" /></el-form-item>
+        <el-form-item label="ä¸‹æ¬¡è·Ÿè¿›"><el-date-picker v-model="followForm.nextFollowTime" :size="controlSize" value-format="yyyy-MM-dd HH:mm:ss" type="datetime" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="followOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveFollowup">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog :title="tagForm.tagId ? 'ç¼–è¾‘æ ‡ç­¾' : 'æ–°å¢žæ ‡ç­¾'" :visible.sync="tagOpen" width="460px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="tagFormRef" :model="tagForm" :rules="tagRules" label-width="90px">
+        <el-form-item label="æ ‡ç­¾å" prop="tagName"><el-input v-model="tagForm.tagName" :size="controlSize" /></el-form-item>
+        <el-form-item label="é¢œè‰²"><el-color-picker v-model="tagForm.tagColor" :size="controlSize" /></el-form-item>
+        <el-form-item label="æŽ’åº"><el-input-number v-model="tagForm.orderNum" :size="controlSize" :min="0" /></el-form-item>
+        <el-form-item label="çŠ¶æ€"><el-radio-group v-model="tagForm.status"><el-radio v-for="item in dict.type.sys_normal_disable" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="tagOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveTag">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog title="å®¢æˆ·æ ‡ç­¾" :visible.sync="customerTagOpen" width="520px" :custom-class="dialogClass" append-to-body>
+      <el-form label-width="90px">
+        <el-form-item label="å®¢æˆ·">
+          <el-input :value="customerTagForm.customerName" :size="controlSize" disabled />
+        </el-form-item>
+        <el-form-item label="æ ‡ç­¾">
+          <el-checkbox-group v-model="customerTagForm.tagIds">
+            <el-checkbox v-for="item in customerTagOptions" :key="item.tag_id" :label="item.tag_id">
+              <span class="tag-dot" :style="{ background: item.tag_color || '#3b82f6' }" />{{ item.tag_name }}
+            </el-checkbox>
+          </el-checkbox-group>
+          <el-empty v-if="!customerTagOptions.length" description="æš‚æ— å¯ç”¨æ ‡ç­¾" :image-size="72" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="customerTagOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveCustomerTags">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog title="å®¢æˆ·åˆå¹¶" :visible.sync="mergeOpen" width="560px" :custom-class="dialogClass" append-to-body>
+      <el-alert title="åˆå¹¶åŽï¼Œå¾…åˆå¹¶å®¢æˆ·çš„è”ç³»äººã€è·Ÿè¿›ã€æ ‡ç­¾å’ŒåˆåŒå°†è¿ç§»åˆ°ä¸»å®¢æˆ·ï¼ŒåŽŸå®¢æˆ·ä¼šæ ‡è®°ä¸ºå·²åˆå¹¶ã€‚" type="warning" :closable="false" show-icon />
+      <el-form ref="mergeFormRef" :model="mergeForm" :rules="mergeRules" label-width="110px" class="merge-form">
+        <el-form-item label="å¾…åˆå¹¶å®¢æˆ·" prop="mergedCustomerId">
+          <el-input :value="mergeForm.mergedCustomerName" :size="controlSize" disabled />
+        </el-form-item>
+        <el-form-item label="ä¸»å®¢æˆ·" prop="mainCustomerId">
+          <el-select v-model="mergeForm.mainCustomerId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢å¹¶é€‰æ‹©ä¸»å®¢æˆ·" :remote-method="searchCustomerOptions" :loading="customerSelectLoading" @change="selectMainCustomer">
+            <el-option v-for="item in customerOptions" :key="item.customerId" :label="item.customerName" :value="item.customerId" :disabled="item.customerId === mergeForm.mergedCustomerId || !canOperateCustomer(item)">
+              <span>{{ item.customerName }}</span>
+              <span class="select-sub">{{ item.mobile || item.companyName || item.customerNo }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="åˆå¹¶è¯´æ˜Ž">
+          <el-input v-model="mergeForm.content" :size="controlSize" type="textarea" :rows="3" />
+        </el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="mergeOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveMerge">ç¡®è®¤åˆå¹¶</el-button></div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import ExcelImportDialog from '@/components/ExcelImportDialog'
+import BizHero from '@/views/business/components/BizHero'
+import BizMetrics from '@/views/business/components/BizMetrics'
+import BizPageHeader from '@/views/business/components/BizPageHeader'
+import BizTableCard from '@/views/business/components/BizTableCard'
+import businessUi from '@/views/business/mixins/businessUi'
+import customerLifecycle from '@/views/business/mixins/customerLifecycle'
+import CustomerDetailDrawer from './components/CustomerDetailDrawer'
+import customerPageActions from './customer-page-actions'
+import { listCustomerOwner, listTag } from '@/api/customer'
+import { listSetting } from '@/api/lead'
+
+export default {
+  name: 'Customer',
+  mixins: [businessUi, customerLifecycle, customerPageActions],
+  components: { ExcelImportDialog, BizHero, BizMetrics, BizPageHeader, BizTableCard, CustomerDetailDrawer },
+  dicts: ['law_customer_type', 'law_yes_no_flag', 'law_customer_level', 'law_customer_industry', 'law_contact_relation', 'law_customer_follow_type', 'law_customer_status', 'sys_normal_disable'],
+  data() {
+    const companyRequired = (rule, value, callback) => {
+      if (this.form.customerType === 'enterprise' && !value) {
+        callback(new Error('ä¼ä¸šå®¢æˆ·è¯·è¾“å…¥å…¬å¸åç§°'))
+      } else {
+        callback()
+      }
+    }
+    return {
+      mode: 'list',
+      availableModes: ['list', 'contact', 'followup', 'tag', 'merge'],
+      showSearch: true,
+      loading: false,
+      total: 0,
+      list: [],
+      contacts: [],
+      followups: [],
+      tags: [],
+      metrics: [],
+      contactMetrics: [],
+      mergeMetrics: [],
+      query: { pageNum: 1, pageSize: 10, customerName: '', customerType: '', industry: '', tagId: '', ownerId: '', customerLevel: '' },
+      ownerOptions: [],
+      leadSourceOptions: [],
+      tagOptions: [],
+      advancedOpen: false,
+      form: {},
+      contactForm: {},
+      followForm: {},
+      tagForm: {},
+      customerTagForm: {},
+      customerTagOptions: [],
+      mergeQuery: {},
+      mergeForm: {},
+      mergeList: [],
+      customerOptions: [],
+      customerSelectLoading: false,
+      businessPageMeta: {
+        defaultTitle: 'å®¢æˆ·ä¸­å¿ƒ',
+        titles: { list: 'å®¢æˆ·åˆ—è¡¨', contact: 'è”ç³»äººç®¡ç†', followup: 'å®¢æˆ·è·Ÿè¿›', tag: 'å®¢æˆ·æ ‡ç­¾', merge: 'åŽ»é‡åˆå¹¶' },
+        descriptions: {
+          list: 'ç»Ÿä¸€ç»´æŠ¤å®¢æˆ·æ¡£æ¡ˆã€è”ç³»äººã€è·Ÿè¿›ä¸ŽåˆåŒè½¬åŒ–',
+          contact: 'ç®¡ç†å®¢æˆ·ä¸‹çš„å…³é”®è”ç³»äººå’Œæ²Ÿé€šå…³ç³»',
+          followup: 'è®°å½•å®¢æˆ·æ²Ÿé€šå†…å®¹ä¸Žä¸‹æ¬¡è·Ÿè¿›è®¡åˆ’',
+          tag: 'ç»´æŠ¤å®¢æˆ·åˆ†ç¾¤æ ‡ç­¾ï¼Œç”¨äºŽåŽç»­ç»è¥',
+          merge: 'è¯†åˆ«é‡å¤å®¢æˆ·å¹¶è¿ç§»è”ç³»äººã€è·Ÿè¿›ã€æ ‡ç­¾å’ŒåˆåŒå…³è”'
+        }
+      },
+      detailOpen: false,
+      detailCustomerId: null,
+      detailCustomer: {},
+      detailContacts: [],
+      detailFollowups: [],
+      detailContracts: [],
+      detailMergeLogs: [],
+      customerOpen: false,
+      contactOpen: false,
+      followOpen: false,
+      tagOpen: false,
+      customerTagOpen: false,
+      mergeOpen: false,
+      customerRules: {
+        customerName: [{ required: true, message: 'è¯·è¾“å…¥å®¢æˆ·åç§°', trigger: 'blur' }],
+        customerType: [{ required: true, message: 'è¯·é€‰æ‹©å®¢æˆ·ç±»åž‹', trigger: 'change' }],
+        mobile: [{ required: true, message: 'è¯·è¾“å…¥æ‰‹æœºå·', trigger: 'blur' }],
+        sourceCode: [{ required: true, message: 'è¯·é€‰æ‹©å®¢æˆ·æ¥æº', trigger: 'change' }],
+        customerLevel: [{ required: true, message: 'è¯·é€‰æ‹©å®¢æˆ·ç­‰çº§', trigger: 'change' }],
+        mainDemand: [{ required: true, message: 'è¯·è¾“å…¥ä¸»è¦éœ€æ±‚', trigger: 'blur' }],
+        ownerId: [{ required: true, message: 'è¯·é€‰æ‹©è´Ÿè´£äºº', trigger: 'change' }],
+        companyName: [{ validator: companyRequired, trigger: 'blur' }]
+      },
+      contactRules: {
+        customerId: [{ required: true, message: 'è¯·é€‰æ‹©æ‰€å±žå®¢æˆ·', trigger: 'change' }],
+        contactName: [{ required: true, message: 'è¯·è¾“å…¥è”ç³»äºº', trigger: 'blur' }],
+        mobile: [{ required: true, message: 'è¯·è¾“å…¥æ‰‹æœºå·', trigger: 'blur' }],
+        relationType: [{ required: true, message: 'è¯·é€‰æ‹©å…³ç³»', trigger: 'change' }]
+      },
+      followRules: {
+        customerId: [{ required: true, message: 'è¯·é€‰æ‹©æ‰€å±žå®¢æˆ·', trigger: 'change' }],
+        followType: [{ required: true, message: 'è¯·é€‰æ‹©è·Ÿè¿›æ–¹å¼', trigger: 'change' }],
+        content: [{ required: true, message: 'è¯·è¾“å…¥è·Ÿè¿›å†…å®¹', trigger: 'blur' }]
+      },
+      tagRules: {
+        tagName: [{ required: true, message: 'è¯·è¾“å…¥æ ‡ç­¾å', trigger: 'blur' }]
+      },
+      mergeRules: {
+        mergedCustomerId: [{ required: true, message: 'è¯·é€‰æ‹©å¾…åˆå¹¶å®¢æˆ·', trigger: 'change' }],
+        mainCustomerId: [{ required: true, message: 'è¯·é€‰æ‹©ä¸»å®¢æˆ·', trigger: 'change' }]
+      },
+      metricConfig: [
+        { key: 'total', label: 'å®¢æˆ·æ€»æ•°', hint: 'å…¨éƒ¨æœ‰æ•ˆå®¢æˆ·', icon: 'peoples', color: 'blue' },
+        { key: 'monthNew', label: 'æœ¬æœˆæ–°å¢ž', hint: 'æ–°æ²‰æ·€å®¢æˆ·', icon: 'date', color: 'cyan' },
+        { key: 'highValue', label: 'é«˜ä»·å€¼å®¢æˆ·', hint: 'é‡ç‚¹ç»è¥å®¢æˆ·', icon: 'star', color: 'violet' },
+        { key: 'active', label: 'æ´»è·ƒå®¢æˆ·', hint: 'å·²æœ‰è·Ÿè¿›è®°å½•', icon: 'time', color: 'green' }
+      ],
+      contactMetricConfig: [
+        { key: 'total', label: 'è”ç³»äººæ€»æ•°', hint: 'ç¬¦åˆå½“å‰ç­›é€‰', icon: 'peoples', color: 'blue' },
+        { key: 'keyContacts', label: 'å…³é”®è”ç³»äºº', hint: 'å½“å‰é¡µå…³é”®è”ç³»äºº', icon: 'star', color: 'violet' },
+        { key: 'customers', label: 'å…³è”å®¢æˆ·', hint: 'å½“å‰é¡µè¦†ç›–å®¢æˆ·', icon: 'tree', color: 'cyan' },
+        { key: 'withMobile', label: 'ç•™å­˜æ‰‹æœºå·', hint: 'å½“å‰é¡µæœ‰æ‰‹æœºå·', icon: 'phone', color: 'green' }
+      ],
+      mergeMetricConfig: [
+        { key: 'candidates', label: 'å€™é€‰å®¢æˆ·', hint: 'å½“å‰è¯†åˆ«ç»“æžœ', icon: 'peoples', color: 'blue' },
+        { key: 'withMobile', label: 'æ‰‹æœºå·çº¿ç´¢', hint: 'å¯æŒ‰æ‰‹æœºå·æ¯”å¯¹', icon: 'phone', color: 'cyan' },
+        { key: 'withCompany', label: 'ä¼ä¸šå®¢æˆ·', hint: 'å«å…¬å¸åç§°', icon: 'documentation', color: 'violet' },
+        { key: 'withCreditCode', label: 'ä¿¡ç”¨ä»£ç ', hint: 'å¯æŒ‰ä¿¡ç”¨ä»£ç æ¯”å¯¹', icon: 'education', color: 'green' }
+      ]
+    }
+  },
+  computed: {
+    heroMeta() {
+      const meta = {
+        list: {
+          eyebrow: 'å®¢æˆ·èµ„äº§æ²‰æ·€',
+          title: 'ç»Ÿä¸€ç»´æŠ¤å®¢æˆ·æ¡£æ¡ˆã€è”ç³»äººä¸Žä¸šåŠ¡è½¬åŒ–',
+          description: 'çº¿ç´¢è½¬åŒ–åŽå½¢æˆå®¢æˆ·èµ„äº§ï¼ŒæŒç»­è®°å½•æ²Ÿé€šã€åˆåŒä¸ŽæœåŠ¡çŠ¶æ€ã€‚'
+        },
+        contact: {
+          eyebrow: 'CONTACT MANAGEMENT',
+          title: 'ç»Ÿä¸€ç®¡ç†å®¢æˆ·è”ç³»äººä¸Žå…³é”®æ²Ÿé€šå…³ç³»',
+          description: 'æ²‰æ·€å®¢æˆ·è”ç³»äººã€å…³ç³»ç±»åž‹ä¸Žå…³é”®è”ç³»äººæ ‡è¯†ï¼Œæ–¹ä¾¿åŽç»­è·Ÿè¿›å’ŒåˆåŒååŒã€‚'
+        },
+        merge: {
+          eyebrow: 'DEDUPLICATION',
+          title: 'è¯†åˆ«é‡å¤å®¢æˆ·å¹¶åˆå¹¶ä¸šåŠ¡èµ„äº§',
+          description: 'æŒ‰å®¢æˆ·åç§°ã€æ‰‹æœºå·å’Œä¿¡ç”¨ä»£ç è¾…åŠ©è¯†åˆ«é‡å¤è®°å½•ï¼Œåˆå¹¶è”ç³»äººã€è·Ÿè¿›ã€æ ‡ç­¾ä¸ŽåˆåŒå…³è”ã€‚'
+        }
+      }
+      return meta[this.mode] || meta.list
+    },
+    modeMetrics() {
+      if (this.mode === 'contact') return this.contactMetrics
+      if (this.mode === 'merge') return this.mergeMetrics
+      return this.metrics
+    },
+    modeMetricConfig() {
+      if (this.mode === 'contact') return this.contactMetricConfig
+      if (this.mode === 'merge') return this.mergeMetricConfig
+      return this.metricConfig
+    },
+    canReadContract() {
+      return this.$auth.hasPermiOr(['contract:list', 'contract:query'])
+    },
+    canReadContact() {
+      return this.$auth.hasPermi('customer:contact:list')
+    },
+    canReadFollowup() {
+      return this.$auth.hasPermi('customer:followup:list')
+    },
+    canReadTag() {
+      return this.$auth.hasPermiOr(['customer:tag:list', 'customer:tag:query', 'customer:tag:assign'])
+    },
+    canCreateContract() {
+      return this.$auth.hasPermi('contract:add') && this.canReadContract
+    },
+    canReadMergeLog() {
+      return this.$auth.hasPermi('customer:merge:list')
+    }
+  },
+  watch: {
+    '$route.query.module': {
+      immediate: true,
+      handler(value) {
+        this.mode = this.normalizeMode(value)
+        this.loadPage()
+      }
+    }
+  },
+  created() {
+    // è´Ÿè´£äººä¸‹æ‹‰ï¼šä»…å¯¹æœ‰æ–°å¢ž/ç¼–è¾‘/åˆ†é…æƒé™çš„ç”¨æˆ·åŠ è½½ï¼ˆå‚è€ƒ lead/index.vueï¼‰
+    if (this.$auth.hasPermiOr(['customer:add', 'customer:edit', 'customer:assign'])) {
+      listCustomerOwner().then(res => { this.ownerOptions = res.data || [] })
+    }
+    listSetting({ settingType: 'source' }).then(res => {
+      this.leadSourceOptions = (res.data || []).filter(item => item.status === '0')
+    })
+    // å¯ç”¨ä¸­çš„æ ‡ç­¾ä¸‹æ‹‰
+    if (this.canReadTag) {
+      listTag({ status: this.dictValue('sys_normal_disable', '0') }).then(res => {
+        this.tagOptions = res.data || []
+      })
+    }
+  },
+}
+</script>
+
+<style scoped lang="scss">
+@import "../business/business.scss";
+
+.customer-page {
+  --biz-filter-input-width: 210px;
+  --biz-filter-select-width: 128px;
+}
+
+.type-wechat{background:#10b981}.type-meeting{background:#f59e0b}.type-email{background:#8b5cf6}
+.tag-pills{display:flex;flex-wrap:wrap;gap:5px}.tag-pills i{padding:2px 7px;border:1px solid;border-radius:10px;background:#fff;font-size:var(--biz-font-mini);font-style:normal;line-height:1.4}
+.contract-count{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 8px;border-radius:999px;color:#2563eb;background:#eef4ff;font-weight:600;font-size:var(--biz-font-small)}
+</style>
+
+<style lang="scss">
+@import "../business/business-dialog.scss";
+</style>

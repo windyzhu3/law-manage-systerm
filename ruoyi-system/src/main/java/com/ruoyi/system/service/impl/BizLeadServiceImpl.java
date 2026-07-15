@@ -40,70 +40,16 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Autowired
     private LeadFollowupService leadFollowupService;
 
-    @Override
-    public List<BizLead> selectLeadList(BizLead lead)
-    {
-        return leadQueryService.list(lead);
-    }
-
-    @Override
-    public BizLead selectLeadById(Long leadId)
-    {
-        return leadQueryService.detail(leadId);
-    }
-
-    @Override
-    @Transactional
-    public int insertLead(BizLead lead)
-    {
-        return leadCommandService.create(lead);
-    }
-
-    @Override
-    public int updateLead(BizLead lead)
-    {
-        return leadCommandService.update(lead);
-    }
-
-    @Override
-    public int softDeleteLead(Long[] leadIds)
-    {
-        return leadCommandService.softDelete(leadIds);
-    }
-
-    @Override
-    public int restoreLead(Long[] leadIds)
-    {
-        return leadCommandService.restore(leadIds);
-    }
-
-    @Override
-    @Transactional
-    public int purgeLead(Long[] leadIds)
-    {
-        return leadCommandService.purge(leadIds);
-    }
-
-    @Override
-    @Transactional
-    public int assignLead(Long leadId, Long ownerId, String reason)
-    {
-        return leadAssignmentService.assign(leadId, ownerId, reason);
-    }
-
-    @Override
-    @Transactional
-    public int moveToPool(Long leadId, String reason)
-    {
-        return leadPoolService.moveToPool(leadId, reason);
-    }
-
-    @Override
-    @Transactional
-    public int claimLead(Long leadId)
-    {
-        return leadPoolService.claim(leadId);
-    }
+    @Override public List<BizLead> selectLeadList(BizLead lead) { return leadQueryService.list(lead); }
+    @Override public BizLead selectLeadById(Long leadId) { return leadQueryService.detail(leadId); }
+    @Override @Transactional public int insertLead(BizLead lead) { return leadCommandService.create(lead); }
+    @Override public int updateLead(BizLead lead) { return leadCommandService.update(lead); }
+    @Override public int softDeleteLead(Long[] leadIds) { return leadCommandService.softDelete(leadIds); }
+    @Override public int restoreLead(Long[] leadIds) { return leadCommandService.restore(leadIds); }
+    @Override @Transactional public int purgeLead(Long[] leadIds) { return leadCommandService.purge(leadIds); }
+    @Override @Transactional public int assignLead(Long leadId, Long ownerId, String reason) { return leadAssignmentService.assign(leadId, ownerId, reason); }
+    @Override @Transactional public int moveToPool(Long leadId, String reason) { return leadPoolService.moveToPool(leadId, reason); }
+    @Override @Transactional public int claimLead(Long leadId) { return leadPoolService.claim(leadId); }
 
     @Override
     @Transactional
@@ -115,11 +61,7 @@ public class BizLeadServiceImpl implements IBizLeadService
         return 1;
     }
 
-    @Override
-    public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup)
-    {
-        return leadFollowupService.list(followup);
-    }
+    @Override public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup) { return leadFollowupService.list(followup); }
 
     @Override
     @Transactional
@@ -130,45 +72,11 @@ public class BizLeadServiceImpl implements IBizLeadService
         return leadFollowupService.add(followup, ownerOnly);
     }
 
-    @Override
-    public int updateFollowup(LeadFollowupCommand followup)
-    {
-        return leadFollowupService.update(followup, false);
-    }
-
-    @Override
-    public int deleteFollowup(Long followupId)
-    {
-        return leadFollowupService.remove(followupId, false);
-    }
-
-    @Override
-    public List<BizLeadSetting> selectSettingList(BizLeadSetting setting)
-    {
-        return leadQueryService.settings(setting);
-    }
-
-    @Override
-    public int insertSetting(BizLeadSetting setting)
-    {
-        return leadCommandService.createSetting(setting);
-    }
-
-    @Override
-    public int updateSetting(BizLeadSetting setting)
-    {
-        return leadCommandService.updateSetting(setting);
-    }
-
-    @Override
-    public int deleteSetting(Long settingId)
-    {
-        return leadCommandService.deleteSetting(settingId);
-    }
-
-    @Override
-    public Map<String, Object> selectDashboard()
-    {
-        return leadQueryService.dashboard();
-    }
+    @Override public int updateFollowup(LeadFollowupCommand followup) { return leadFollowupService.update(followup, false); }
+    @Override public int deleteFollowup(Long followupId) { return leadFollowupService.remove(followupId, false); }
+    @Override public List<BizLeadSetting> selectSettingList(BizLeadSetting setting) { return leadQueryService.settings(setting); }
+    @Override public int insertSetting(BizLeadSetting setting) { return leadCommandService.createSetting(setting); }
+    @Override public int updateSetting(BizLeadSetting setting) { return leadCommandService.updateSetting(setting); }
+    @Override public int deleteSetting(Long settingId) { return leadCommandService.deleteSetting(settingId); }
+    @Override public Map<String, Object> selectDashboard() { return leadQueryService.dashboard(); }
 }
