@@ -1,80 +1,251 @@
 package com.ruoyi.system.service.contract;
 
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.time.LocalDate;
 import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.law.business.contract.dto.ContractCreateCommand;
+import com.law.business.contract.dto.ContractUpdateCommand;
+import com.law.business.security.BusinessActor;
+import com.law.business.security.BusinessActorProvider;
+import com.law.business.shared.error.BusinessErrorCode;
 import com.law.business.shared.status.ContractAuditStatus;
 import com.law.business.shared.status.ContractSignStatus;
 import com.law.business.shared.status.ContractStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
-import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.domain.BizCustomer;
 import com.ruoyi.system.mapper.BizContractMapper;
-import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.customer.CustomerAccessPolicy;
 
-/** Owns basic contract create, edit and delete commands. */
 @Service
 public class ContractCommandService
 {
-    private static final String CUSTOMER_PERMISSIONS = "customer:list,customer:query,customer:add,customer:edit,customer:remove,customer:import,customer:export,customer:contact:list,customer:contact:add,customer:contact:edit,customer:contact:remove,customer:followup:list,customer:followup:add,customer:followup:remove,customer:tag:list,customer:tag:add,customer:tag:edit,customer:tag:remove,customer:tag:assign,customer:merge:list,customer:merge:merge";
-    @Autowired private BizContractMapper mapper;
-    @Autowired private BizCustomerMapper customers;
-    @Autowired private ContractQueryService queryService;
-    @Autowired private ContractNumberService numberService;
-    @Autowired private ISysDictTypeService dictionaries;
-    @Autowired private ContractActionLogService actionLogs;
+    private static final String ACTIVE = "0";
+
+    private final BizContractMapper mapper;
+    private final CustomerAccessPolicy customers;
+    private final ContractAccessPolicy access;
+    private final ContractNumberService numberService;
+    private final ISysDictTypeService dictionaries;
+    private final BusinessActorProvider actors;
+    private final ContractActionLogService actionLogs;
+
+    public ContractCommandService(BizContractMapper mapper, CustomerAccessPolicy customers,
+            ContractAccessPolicy access, ContractNumberService numberService,
+            ISysDictTypeService dictionaries, BusinessActorProvider actors,
+            ContractActionLogService actionLogs)
+    {
+        this.mapper = mapper;
+        this.customers = customers;
+        this.access = access;
+        this.numberService = numberService;
+        this.dictionaries = dictionaries;
+        this.actors = actors;
+        this.actionLogs = actionLogs;
+    }
 
     @Transactional
-    public int create(BizContract contract)
+    public int create(ContractCreateCommand command)
     {
-        normalizeNew(contract); validate(contract); validateCustomer(contract);
-        contract.setContractNo(numberService.nextNumber()); contract.setCreateBy(SecurityUtils.getUsername());
-        if(contract.getOwnerId()==null){contract.setOwnerId(SecurityUtils.getUserId());contract.setDeptId(SecurityUtils.getDeptId());}
-        int rows=mapper.insertContract(contract);changed(rows,"合同创建失败");
-        actionLogs.record(contract.getContractId(),null,contract.getContractStatus(),"create","创建合同",SecurityUtils.getUsername());
+        requireCreateCommand(command);
+        BusinessActor actor = actors.current();
+        BizCustomer customer = customers.requireOperable(command.getCustomerId());
+        BizContract contract = map(command);
+        contract.setCustomerName(customer.getCustomerName());
+        contract.setContractNo(numberService.nextNumber());
+        if (contract.getOwnerId() == null)
+        {
+            contract.setOwnerId(actor.userId());
+            contract.setDeptId(actor.deptId());
+        }
+        contract.setFeeType(defaultValue("law_contract_fee_type", contract.getFeeType(), "once"));
+        contract.setSignMethod(defaultValue("law_contract_sign_method", contract.getSignMethod(), "online"));
+        contract.setRiskLevel(defaultValue("law_contract_risk_level", contract.getRiskLevel(), "1"));
+        validate(contract);
+        contract.setSignStatus(ContractSignStatus.UNSIGNED.code());
+        contract.setAuditStatus(ContractAuditStatus.PENDING.code());
+        contract.setContractStatus(ContractStatus.DRAFT.code());
+        contract.setDelFlag(ACTIVE);
+        contract.setCreateBy(actor.userName());
+        changed(mapper.insertContract(contract), "合同创建失败");
+        actionLogs.record(contract.getContractId(), null, ContractStatus.DRAFT.code(),
+                "create", "创建合同", actor);
+        return 1;
+    }
+
+    @Transactional
+    public int update(ContractUpdateCommand command)
+    {
+        if (command == null || command.getContractId() == null)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "请选择合同");
+        BizContract current = access.requireOperable(command.getContractId());
+        requireEditable(current);
+        BizCustomer customer = customers.requireOperable(command.getCustomerId());
+        BusinessActor actor = actors.current();
+        BizContract contract = map(command);
+        contract.setContractId(command.getContractId());
+        contract.setCustomerName(customer.getCustomerName());
+        validate(contract);
+        contract.setUpdateBy(actor.userName());
+        int rows = mapper.updateContractConditionally(contract, current.getAuditStatus(),
+                current.getContractStatus(), current.getDelFlag());
+        changed(rows, "合同状态已变化，请刷新后重试");
         return rows;
     }
 
     @Transactional
+    public int delete(Long[] contractIds)
+    {
+        if (contractIds == null || contractIds.length == 0)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "请选择合同");
+        BusinessActor actor = actors.current();
+        for (Long contractId : contractIds)
+        {
+            BizContract current = access.requireOperable(contractId);
+            requireEditable(current);
+            changed(mapper.deleteContractConditionally(contractId, current.getAuditStatus(),
+                    current.getContractStatus(), actor.userName()), "合同状态已变化，请刷新后重试");
+        }
+        return contractIds.length;
+    }
+
+    public int create(BizContract contract)
+    {
+        return create(toCreateCommand(contract));
+    }
+
     public int update(BizContract contract)
     {
-        BizContract existed=queryService.contract(contract.getContractId());requireEditable(existed);normalizeUpdate(contract);validate(contract);validateCustomer(contract);
-        contract.setContractNo(null);contract.setAuditStatus(null);contract.setContractStatus(null);contract.setSignStatus(null);contract.setUpdateBy(SecurityUtils.getUsername());
-        int rows=mapper.updateContract(contract);changed(rows,"合同状态已变化，请刷新后重试");return rows;
+        ContractUpdateCommand command = toUpdateCommand(contract);
+        return update(command);
     }
 
-    @Transactional
-    public int delete(Long[] ids)
+    private BizContract map(ContractCreateCommand command)
     {
-        if(ids==null||ids.length==0)throw error("VALIDATION_FAILED","请选择合同");
-        for(Long id:ids){BizContract c=queryService.contract(id);if(ContractAuditStatus.REVIEWING.code().equals(c.getAuditStatus())||ContractStatus.PERFORMING.code().equals(c.getContractStatus())||ContractStatus.ARCHIVED.code().equals(c.getContractStatus()))throw error("STATE_CONFLICT","当前合同状态不允许删除");}
-        int rows=mapper.deleteContractByIds(ids,SecurityUtils.getUsername());changed(rows,"合同状态已变化，请刷新后重试");return rows;
+        BizContract contract = new BizContract();
+        contract.setContractName(trim(command.getContractName()));
+        contract.setCustomerId(command.getCustomerId());
+        contract.setCaseType(trim(command.getCaseType()));
+        contract.setLawyerId(command.getLawyerId());
+        contract.setLawyerName(trim(command.getLawyerName()));
+        contract.setOwnerId(command.getOwnerId());
+        contract.setDeptId(command.getDeptId());
+        contract.setSignAmount(command.getSignAmount());
+        contract.setFeeType(trim(command.getFeeType()));
+        contract.setSignDate(date(command.getSignDate()));
+        contract.setEffectiveDate(date(command.getEffectiveDate()));
+        contract.setExpireDate(date(command.getExpireDate()));
+        contract.setSignMethod(trim(command.getSignMethod()));
+        contract.setRiskLevel(trim(command.getRiskLevel()));
+        contract.setRemark(trim(command.getRemark()));
+        return contract;
     }
 
-    private void normalizeNew(BizContract c)
+    private void validate(BizContract contract)
     {
-        if(c==null)throw error("VALIDATION_FAILED","合同不能为空");
-        if(StringUtils.isEmpty(c.getFeeType()))c.setFeeType(dictValue("law_contract_fee_type","once"));
-        if(StringUtils.isEmpty(c.getSignMethod()))c.setSignMethod(dictValue("law_contract_sign_method","online"));
-        if(StringUtils.isEmpty(c.getRiskLevel()))c.setRiskLevel(dictValue("law_contract_risk_level","1"));
-        if(StringUtils.isEmpty(c.getAuditStatus()))c.setAuditStatus(ContractAuditStatus.PENDING.code());
-        if(StringUtils.isEmpty(c.getContractStatus()))c.setContractStatus(ContractStatus.DRAFT.code());
-        if(c.getSignAmount()==null)c.setSignAmount(BigDecimal.ZERO);c.setSignStatus(ContractSignStatus.UNSIGNED.code());
-        if(!ContractAuditStatus.PENDING.code().equals(c.getAuditStatus()))throw error("STATE_CONFLICT","新建合同必须为待审核状态");
-        if(!ContractStatus.DRAFT.code().equals(c.getContractStatus()))throw error("STATE_CONFLICT","新建合同必须为草稿状态");
+        required(contract.getContractName(), "合同名称不能为空");
+        required(contract.getCaseType(), "案件类型不能为空");
+        if (contract.getSignAmount() == null || contract.getSignAmount().compareTo(BigDecimal.ZERO) <= 0)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "签约金额必须大于0");
+        dict("law_contract_case_type", contract.getCaseType(), "案件类型不合法");
+        dict("law_contract_fee_type", contract.getFeeType(), "收费方式不合法");
+        dict("law_contract_sign_method", contract.getSignMethod(), "签订方式不合法");
+        dict("law_contract_risk_level", contract.getRiskLevel(), "风险等级不合法");
     }
 
-    private void normalizeUpdate(BizContract c){if(StringUtils.isEmpty(c.getLawyerName()))c.setLawyerName(null);if(StringUtils.isEmpty(c.getFeeType()))c.setFeeType(null);if(StringUtils.isEmpty(c.getSignMethod()))c.setSignMethod(null);if(StringUtils.isEmpty(c.getRiskLevel()))c.setRiskLevel(null);}
-    private void validate(BizContract c){if(c==null)throw error("VALIDATION_FAILED","合同不能为空");if(StringUtils.isEmpty(c.getContractName()))throw error("VALIDATION_FAILED","合同名称不能为空");if(StringUtils.isEmpty(c.getCaseType()))throw error("VALIDATION_FAILED","案件类型不能为空");dict("law_contract_case_type",c.getCaseType(),"案件类型不合法");dict("law_contract_fee_type",c.getFeeType(),"收费方式不合法");dict("law_contract_sign_method",c.getSignMethod(),"签订方式不合法");dict("law_contract_risk_level",c.getRiskLevel(),"风险等级不合法");if(c.getSignAmount()==null||c.getSignAmount().signum()<=0)throw error("VALIDATION_FAILED","签约金额必须大于0");}
-    private void validateCustomer(BizContract c){if(c.getCustomerId()==null)throw error("VALIDATION_FAILED","合同必须关联客户");BizCustomer customer=customers.selectCustomerById(c.getCustomerId());if(customer==null||"2".equals(customer.getDelFlag())||!"0".equals(customer.getStatus()))throw error("PRECONDITION_FAILED","客户不存在、已停用或已删除");if(!SecurityUtils.isAdmin()&&customers.countCustomerInDataScope(c.getCustomerId(),SecurityUtils.getUserId(),SecurityUtils.getDeptId(),CUSTOMER_PERMISSIONS)==0)throw error("ACCESS_DENIED","无权为该客户创建或编辑合同");c.setCustomerName(customer.getCustomerName());}
-    private void requireEditable(BizContract c){if(ContractAuditStatus.REVIEWING.code().equals(c.getAuditStatus()))throw error("STATE_CONFLICT","审核中的合同不允许编辑");if(ContractAuditStatus.PASSED.code().equals(c.getAuditStatus()))throw error("STATE_CONFLICT","审核通过的合同不允许直接编辑");if(ContractStatus.ARCHIVED.code().equals(c.getContractStatus())||ContractStatus.VOID.code().equals(c.getContractStatus())||ContractStatus.TERMINATED.code().equals(c.getContractStatus()))throw error("STATE_CONFLICT","归档、作废或终止的合同不允许编辑");}
-    private String dictValue(String type,String preferred){List<SysDictData> xs=dictionaries.selectDictDataByType(type);if(xs!=null){for(SysDictData x:xs)if(preferred.equals(x.getDictValue()))return x.getDictValue();for(SysDictData x:xs)if(x.getDefault())return x.getDictValue();}return preferred;}
-    private void dict(String type,Object value,String message){String v=value==null?null:String.valueOf(value).trim();if(StringUtils.isEmpty(v))return;List<SysDictData> xs=dictionaries.selectDictDataByType(type);if(xs==null||xs.isEmpty())throw error("PRECONDITION_FAILED","字典未初始化："+type);for(SysDictData x:xs)if(v.equals(x.getDictValue()))return;throw error("VALIDATION_FAILED",message);}
-    private void changed(int rows,String message){if(rows<=0)throw error("CONCURRENT_MODIFICATION",message);}private ServiceException error(String code,String message){return new ServiceException(message,code);}
+    private void requireCreateCommand(ContractCreateCommand command)
+    {
+        if (command == null || command.getCustomerId() == null)
+            throw error(BusinessErrorCode.VALIDATION_FAILED, "合同和客户不能为空");
+    }
+
+    private void requireEditable(BizContract contract)
+    {
+        if (ContractAuditStatus.REVIEWING.code().equals(contract.getAuditStatus())
+                || ContractAuditStatus.PASSED.code().equals(contract.getAuditStatus())
+                || !ContractStatus.DRAFT.code().equals(contract.getContractStatus()))
+            throw error(BusinessErrorCode.STATE_CONFLICT, "当前合同状态不允许编辑或删除");
+    }
+
+    private String defaultValue(String type, String value, String fallback)
+    {
+        if (!StringUtils.isEmpty(value)) return value;
+        List<SysDictData> options = dictionaries.selectDictDataByType(type);
+        if (options != null)
+        {
+            for (SysDictData option : options) if (option.getDefault()) return option.getDictValue();
+            for (SysDictData option : options) if (fallback.equals(option.getDictValue())) return fallback;
+        }
+        return fallback;
+    }
+
+    private void dict(String type, String value, String message)
+    {
+        List<SysDictData> options = dictionaries.selectDictDataByType(type);
+        if (options == null || options.isEmpty())
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "字典未初始化：" + type);
+        for (SysDictData option : options) if (value != null && value.equals(option.getDictValue())) return;
+        throw error(BusinessErrorCode.VALIDATION_FAILED, message);
+    }
+
+    private ContractCreateCommand toCreateCommand(BizContract value)
+    {
+        if (value == null) return null;
+        ContractCreateCommand command = new ContractCreateCommand();
+        copy(value, command);
+        return command;
+    }
+
+    private ContractUpdateCommand toUpdateCommand(BizContract value)
+    {
+        if (value == null) return null;
+        ContractUpdateCommand command = new ContractUpdateCommand();
+        command.setContractId(value.getContractId());
+        copy(value, command);
+        return command;
+    }
+
+    private void copy(BizContract source, ContractCreateCommand target)
+    {
+        target.setContractName(source.getContractName());
+        target.setCustomerId(source.getCustomerId());
+        target.setCaseType(source.getCaseType());
+        target.setLawyerId(source.getLawyerId());
+        target.setLawyerName(source.getLawyerName());
+        target.setOwnerId(source.getOwnerId());
+        target.setDeptId(source.getDeptId());
+        target.setSignAmount(source.getSignAmount());
+        target.setFeeType(source.getFeeType());
+        target.setSignDate(localDate(source.getSignDate()));
+        target.setEffectiveDate(localDate(source.getEffectiveDate()));
+        target.setExpireDate(localDate(source.getExpireDate()));
+        target.setSignMethod(source.getSignMethod());
+        target.setRiskLevel(source.getRiskLevel());
+        target.setRemark(source.getRemark());
+    }
+
+    private Date date(LocalDate value) { return value == null ? null : Date.valueOf(value); }
+    private LocalDate localDate(java.util.Date value)
+    {
+        return value == null ? null : new Date(value.getTime()).toLocalDate();
+    }
+    private String trim(String value) { return StringUtils.isEmpty(value) ? null : value.trim(); }
+    private void required(String value, String message)
+    {
+        if (StringUtils.isEmpty(value)) throw error(BusinessErrorCode.VALIDATION_FAILED, message);
+    }
+    private void changed(int rows, String message)
+    {
+        if (rows <= 0) throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, message);
+    }
+    private ServiceException error(BusinessErrorCode code, String message)
+    {
+        return new ServiceException(message, code.name());
+    }
 }

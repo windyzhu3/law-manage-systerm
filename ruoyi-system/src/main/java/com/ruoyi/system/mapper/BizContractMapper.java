@@ -13,7 +13,15 @@ public interface BizContractMapper
     List<BizContract> selectContractsByExactNameInScope(@Param("contractName") String contractName, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope, @Param("permissions") String permissions);
     int insertContract(BizContract contract);
     int updateContract(BizContract contract);
+    int updateContractConditionally(@Param("contract") BizContract contract,
+            @Param("expectedAuditStatus") String expectedAuditStatus,
+            @Param("expectedContractStatus") String expectedContractStatus,
+            @Param("expectedDelFlag") String expectedDelFlag);
     int deleteContractByIds(@Param("contractIds") Long[] contractIds, @Param("updateBy") String updateBy);
+    int deleteContractConditionally(@Param("contractId") Long contractId,
+            @Param("expectedAuditStatus") String expectedAuditStatus,
+            @Param("expectedContractStatus") String expectedContractStatus,
+            @Param("updateBy") String updateBy);
     int countContractInDataScope(@Param("contractId") Long contractId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("permissions") String permissions);
     List<Map<String, Object>> selectDashboardCards(@Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope, @Param("permissions") String permissions, @Param("params") Map<String, Object> params);
     List<Map<String, Object>> selectCaseStats(@Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope, @Param("permissions") String permissions, @Param("params") Map<String, Object> params);
