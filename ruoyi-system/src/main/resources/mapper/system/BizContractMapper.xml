@@ -194,7 +194,7 @@
         </where>
         order by a.create_time desc
     </select>
-    <insert id="insertApproval" parameterType="map" useGeneratedKeys="true" keyProperty="approvalId">insert into biz_contract_approval(contract_id,approval_action,approval_opinion,approver_id,approver_name,create_by,create_time) values(#{contractId},#{approvalAction},#{approvalOpinion},#{approverId},#{approverName},#{createBy},sysdate())</insert>
+    <insert id="insertApproval" parameterType="map" useGeneratedKeys="true" keyProperty="approvalId" keyColumn="approval_id">insert into biz_contract_approval(contract_id,approval_action,approval_opinion,approver_id,approver_name,create_by,create_time) values(#{contractId},#{approvalAction},#{approvalOpinion},#{approverId},#{approverName},#{createBy},sysdate())</insert>
     <update id="updateAuditStatus">
         update biz_contract
         set audit_status=#{auditStatus}, contract_status=#{contractStatus}, update_by=#{updateBy}, update_time=sysdate()
@@ -299,7 +299,7 @@
         order by a.create_time desc
     </select>
     <select id="selectAttachmentContractId" resultType="java.lang.Long">select contract_id from biz_contract_attachment where attachment_id=#{attachmentId}</select>
-    <insert id="insertAttachment" parameterType="map" useGeneratedKeys="true" keyProperty="attachmentId">insert into biz_contract_attachment(contract_id,file_name,file_url,file_type,file_size,remark,create_by,create_time) values(#{contractId},#{fileName},#{fileUrl},#{fileType},#{fileSize},#{remark},#{createBy},sysdate())</insert>
+    <insert id="insertAttachment" parameterType="map" useGeneratedKeys="true" keyProperty="attachmentId" keyColumn="attachment_id">insert into biz_contract_attachment(contract_id,file_name,file_url,file_type,file_size,remark,create_by,create_time) values(#{contractId},#{fileName},#{fileUrl},#{fileType},#{fileSize},#{remark},#{createBy},sysdate())</insert>
     <delete id="deleteAttachment">
         delete from biz_contract_attachment
         where attachment_id=#{attachmentId}
