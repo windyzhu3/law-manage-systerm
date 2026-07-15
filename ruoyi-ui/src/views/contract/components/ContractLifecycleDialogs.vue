@@ -43,6 +43,7 @@ export default {
     approvalOpen: Boolean, signOpen: Boolean, invoiceOpen: Boolean,
     approvalForm: Object, approvalRules: Object, approvalActionOptions: Array,
     signForm: Object, signActionOptions: Array, invoiceForm: Object, invoiceActionOptions: Array,
+    signActionTip: String, invoiceActionTip: String,
     dictOptions: Object, controlSize: String, dialogClass: String,
     saveApproval: Function, saveSign: Function, saveInvoice: Function
   },

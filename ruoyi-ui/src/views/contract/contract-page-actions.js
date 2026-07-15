@@ -9,6 +9,9 @@ export default {
         return total + (Number.isNaN(value) ? 0 : value)
       }, 0)
     },
+    loadOwnerOptions() {
+      listContractOwner().then(res => { this.ownerOptions = res.data || [] })
+    },
     normalizeMode(value) {
       return this.availableModes.includes(value) ? value : 'list'
     },

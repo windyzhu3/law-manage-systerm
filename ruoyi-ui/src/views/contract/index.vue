@@ -172,4 +172,452 @@
             <template slot-scope="{ row }">
               <el-button v-if="isFeePending(row)" v-hasPermi="['contract:fee:confirm']" :size="controlSize" type="text" icon="el-icon-check" :disabled="!canConfirmFee(row)" @click="confirmFeeOne(row)">ç¡®è®¤</el-button>
               <el-button v-if="isFeePending(row)" v-hasPermi="['contract:fee:reject']" :size="controlSize" type="text" icon="el-icon-close" class="danger-text" :disabled="!canRejectFee(row)" @click="rejectFeeOne(row)">é©³å›ž</el-button>
-              <el-button v-if="canInvoiceFee(row)" v-hasPermi="['contract:fÛ=¶‰žËkºwµçM•½É´ˆ€é¥¹Ù½¥”µ…Ñ¥½¸µ½ÁÑ¥½¹Ìô‰¥¹Ù½¥•Ñ¥½¹=ÁÑ¥½¹Ìˆ(€€€€€€é‘¥Ðµ½ÁÑ¥½¹Ìô‰‘¥Ð¹ÑåÁ”ˆ€é½¹ÑÉ½°µÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆ€é‘¥…±½œµ±…ÍÌô‰‘¥…±½±…ÍÌˆ(€€€€€€éÍ…Ù”µ…ÁÁÉ½Ù…°ô‰Í…Ù•ÁÁÉ½Ù…°ˆ€éÍ…Ù”µÍ¥¸ô‰Í…Ù•M¥¸ˆ€éÍ…Ù”µ¥¹Ù½¥”ô‰Í…Ù•%¹Ù½¥”ˆ(€€€€¼ø((((€€ð½‘¥Øø(ð½Ñ•µÁ±…Ñ”ø((ñÍÉ¥ÁÐø)¥µÁ½ÉÐá•±%µÁ½ÉÑ¥…±½œ™É½´€ ½½µÁ½¹•¹ÑÌ½á•±%µÁ½ÉÑ¥…±½œœ)¥µÁ½ÉÐ	¥é!•É¼™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é!•É¼œ)¥µÁ½ÉÐ	¥é5•ÑÉ¥Ì™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é5•ÑÉ¥Ìœ)¥µÁ½ÉÐ	¥éA…•!•…‘•È™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éA…•!•…‘•Èœ)¥µÁ½ÉÐ	¥éQ…‰±•…É™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éQ…‰±•…Éœ)¥µÁ½ÉÐ‰ÕÍ¥¹•ÍÍU¤™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½‰ÕÍ¥¹•ÍÍU¤œ)¥µÁ½ÉÐÕÍÑ½µ•É1¥™•å±”™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½ÕÍÑ½µ•É1¥™•å±”œ)¥µÁ½ÉÐ½¹ÑÉ…Ñ1¥™•å±”™É½´€ ½Ù¥•ÝÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½½¹ÑÉ…Ñ1¥™•å±”œ)¥µÁ½ÉÐ½¹ÑÉ…ÑA…•Ñ¥½¹Ì™É½´€œ¸½½¹ÑÉ…ÐµÁ…”µ…Ñ¥½¹Ìœ)¥µÁ½ÉÐ½¹ÑÉ…Ñ•Ñ…¥±É…Ý•È™É½´€œ¸½½µÁ½¹•¹ÑÌ½½¹ÑÉ…Ñ•Ñ…¥±É…Ý•Èœ)¥µÁ½ÉÐ½¹ÑÉ…Ñ1¥™•å±•¥…±½Ì™É½´€œ¸½½µÁ½¹•¹ÑÌ½½¹ÑÉ…Ñ1¥™•å±•¥…±½Ìœ)¥µÁ½ÉÐ½¹ÑÉ…ÑI•Í½ÕÉ•¥…±½Ì™É½´€œ¸½½µÁ½¹•¹ÑÌ½½¹ÑÉ…ÑI•Í½ÕÉ•¥…±½Ìœ()•áÁ½ÉÐ‘•™…Õ±Ðì(€¹…µ”è€½¹ÑÉ…Ðœ°(€µ¥á¥¹Ìèm‰ÕÍ¥¹•ÍÍU¤°ÕÍÑ½µ•É1¥™•å±”°½¹ÑÉ…Ñ1¥™•å±”°½¹ÑÉ…ÑA…•Ñ¥½¹Ít°(€½µÁ½¹•¹ÑÌèìá•±%µÁ½ÉÑ¥…±½œ°	¥é!•É¼°	¥é5•ÑÉ¥Ì°	¥éA…•!•…‘•È°	¥éQ…‰±•…É°½¹ÑÉ…Ñ•Ñ…¥±É…Ý•È°½¹ÑÉ…Ñ1¥™•å±•¥…±½Ì°½¹ÑÉ…ÑI•Í½ÕÉ•¥…±½Ìô°(€‘¥ÑÌèl±…Ý}ÕÍÑ½µ•É}ÍÑ…ÑÕÌœ°€±…Ý}½¹ÑÉ…Ñ}…Í•}ÑåÁ”œ°€±…Ý}½¹ÑÉ…Ñ}™••}ÑåÁ”œ°€±…Ý}½¹ÑÉ…Ñ}Í¥¹}µ•Ñ¡½œ°€±…Ý}½¹ÑÉ…Ñ}Í¥¹}ÍÑ…ÑÕÌœ°€±…Ý}½¹ÑÉ…Ñ}…Õ‘¥Ñ}ÍÑ…ÑÕÌœ°€±…Ý}½¹ÑÉ…Ñ}…ÁÁÉ½Ù…±}…Ñ¥½¸œ°€±…Ý}½¹ÑÉ…Ñ}ÍÑ…ÑÕÌœ°€±…Ý}½¹ÑÉ…Ñ}ÍÑ…ÑÕÍ}…Ñ¥½¸œ°€±…Ý}½¹ÑÉ…Ñ}É¥Í­}±•Ù•°œ°€±…Ý}½¹ÑÉ…Ñ}É••¥Ù•}ÍÑ…ÑÕÌœ°€±…Ý}½¹ÑÉ…Ñ}¥¹Ù½¥•}ÍÑ…ÑÕÌœ°€ÍåÍ}¹½Éµ…±}‘¥Í…‰±”t°(€‘…Ñ„ ¤ì(€€€½¹ÍÐÁ½Í¥Ñ¥Ù•µ½Õ¹Ð€ô€¡ÉÕ±”°Ù…±Õ”°…±±‰…¬¤€ôøì(€€€€€¥˜€¡Ù…±Õ”€ôôôÕ¹‘•™¥¹•ñðÙ…±Õ”€ôôô¹Õ±°ñðÙ…±Õ”€ôôô€œœñð9Õµ‰•È¡Ù…±Õ”¤€ðô€À¤ì(€€€€€€€…±±‰…¬¡¹•ÜÉÉ½È Ÿ¦G¦Šw–þ¦†ï–’Ÿ’ê8Àœ¤¤(€€€€€ô•±Í”ì(€€€€€€€…±±‰…¬ ¤(€€€€€ô(€€€ô(€€€É•ÑÕÉ¸ì(€€€€€µ½‘”è€±¥ÍÐœ°(€€€€€…Ù…¥±…‰±•5½‘•Ìèl±¥ÍÐœ°€…ÁÁÉ½Ù…°œ°€Ñ•µÁ±…Ñ”œ°€™•”œ°€…ÑÑ…¡µ•¹Ðœ°€ÍÑ…ÑÕÌœ°€ÉÕ±”t°(€€€€€¡•É½5½‘•Ìèl±¥ÍÐœ°€…ÁÁÉ½Ù…°œ°€Ñ•µÁ±…Ñ”œ°€™•”œ°€…ÑÑ…¡µ•¹Ðt°(€€€€€Í¡½ÝM•…É èÑÉÕ”°(€€€€€±½…‘¥¹œè™…±Í”°(€€€€€Ñ½Ñ…°è€À°(€€€€€½¹ÑÉ…ÑÌèmt°(€€€€€Ñ•µÁ±…Ñ•Ìèmt°(€€€€€™••Ìèmt°(€€€€€…ÑÑ…¡µ•¹ÑÌèmt°(€€€€€ÍÑ…ÑÕÍ•Ìèmt°(€€€€€ÉÕ±•Ìèmt°(€€€€€µ•ÑÉ¥Ìèmt°(€€€€€ÅÕ•ÉäèìÁ…•9Õ´è€Ä°Á…•M¥é”è€ÄÀô°(€€€€€½¹ÑÉ…Ñ½É´èíô°(€€€€€Ñ•µÁ±…Ñ•½É´èíô°(€€€€€™••½É´èíô°(€€€€€…ÑÑ…¡µ•¹Ñ½É´èíô°(€€€€€…ÁÁÉ½Ù…±½É´èíô°(€€€€€Í¥¹½É´èíô°(€€€€€¥¹Ù½¥•½É´èíô°(€€€€€ÉÕ±•½É´èíô°(€€€€€ÕÍÑ½µ•É=ÁÑ¥½¹Ìèmt°(€€€€€½¹ÑÉ…Ñ=ÁÑ¥½¹Ìèmt°(€€€€€½Ý¹•É=ÁÑ¥½¹Ìèmt°(€€€€€…‘Ù…¹•‘=Á•¸è™…±Í”°(€€€€€ÕÍÑ½µ•ÉM•±•Ñ1½…‘¥¹œè™…±Í”°(€€€€€½¹ÑÉ…ÑM•±•Ñ1½…‘¥¹œè™…±Í”°(€€€€€‰ÕÍ¥¹•ÍÍA…•5•Ñ„èì(€€€€€€€‘•™…Õ±ÑQ¥Ñ±”è€Ÿ–B#–B3’â·–þœ°(€€€€€€€Ñ¥Ñ±•Ìèì±¥ÍÐè€Ÿ–B#–B3–"_¢† œ°…ÁÁÉ½Ù…°è€Ÿ–B#–B3–º‡š&äœ°Ñ•µÁ±…Ñ”è€Ÿ–B#–B3š¢‡švüœ°™•”è€ŸšRÛ¢Òç¢º‡–"Hœ°…ÑÑ…¡µ•¹Ðè€Ÿ–B#–B3¦f’îØœ°ÍÑ…ÑÕÌè€Ÿž*Ûš¢ºÃ–öTœ°ÉÕ±”è€Ÿžò[–>ß¢ž–"dœô°(€€€€€€€‘•ÍÉ¥ÁÑ¥½¹Ìèì(€€€€€€€€€±¥ÍÐè€Ÿžî’âžº‡žB–B#–B3–"o–îëŽ–º‡š&çŽž¶û¢º‹–J3–Æ—žê›ž*Ûšœ°(€€€€€€€€€…ÁÁÉ½Ù…°è€Ÿ–’žBš>C’ê“–º‡š‚ãžj–B#–B3¾ò3–º‡š&çš?¢ž–þ¦†ïžVgž^Tœ°(€€€€€€€€€Ñ•µÁ±…Ñ”è€ŸžîÓš*“–B#–B3š¢‡švÿšZ’îÛŽž&#šr³–J3–B¿–sž*Ûšœ°(€€€€€€€€€™•”è€ŸžîÓš*“–B#–B3–êSšRÛŽ–º{šRÛŽ–òž–£’â;ž†»¢º“ž*Ûšœ°(€€€€€€€€€…ÑÑ…¡µ•¹Ðè€Ÿ–’7žR£žÎïžî’â+’òƒ¢÷–*ožº‡žB–B#–B3¦f’îØœ°(€€€€€€€€€ÍÑ…ÑÕÌè€Ÿ¢þ÷¢â«–B#–B3–Ï¦R»ž*Ûš–>c–2[¢ºÃ–öTœ°(€€€€€€€€€ÉÕ±”è€ŸžîÓš*“–B#–B3¢«–*£žò[–>ß¢ž–"dœ(€€€€€€€ô(€€€€€ô°(€€€€€‘•Ñ…¥±=Á•¸è™…±Í”°(€€€€€‘•Ñ…¥±½¹ÑÉ…Ðèíô°(€€€€€‘•Ñ…¥±••Ìèmt°(€€€€€‘•Ñ…¥±ÑÑ…¡µ•¹ÑÌèmt°(€€€€€‘•Ñ…¥±ÁÁÉ½Ù…±Ìèmt°(€€€€€‘•Ñ…¥±MÑ…ÑÕÍ•Ìèmt°(€€€€€½¹ÑÉ…Ñ=Á•¸è™…±Í”°(€€€€€Ñ•µÁ±…Ñ•=Á•¸è™…±Í”°(€€€€€™••=Á•¸è™…±Í”°(€€€€€…ÑÑ…¡µ•¹Ñ=Á•¸è™…±Í”°(€€€€€…ÁÁÉ½Ù…±=Á•¸è™…±Í”°(€€€€€Í¥¹=Á•¸è™…±Í”°(€€€€€¥¹Ù½¥•=Á•¸è™…±Í”°(€€€€€ÉÕ±•=Á•¸è™…±Í”°(€€€€€½¹ÑÉ…ÑIÕ±•Ìèì(€€€€€€€ÕÍÑ½µ•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‹š"Üœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€ÕÍÑ½µ•É9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–º‹š"ß–B7žžÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€½¹ÑÉ…Ñ9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–B#–B3–B7žžÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€…Í•QåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š†#’îÛžÆï–z,œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€Í¥¹µ½Õ¹ÐèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—ž¶ûžê›¦G¦Štœ°ÑÉ¥•Èè€‰±ÕÈœô°ìÙ…±¥‘…Ñ½ÈèÁ½Í¥Ñ¥Ù•µ½Õ¹Ð°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€™••QåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§šRÛ¢ÒçšZç–ò<œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€Í¥¹5•Ñ¡½èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§ž¶û¢º‹šZç–ò<œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€É¥Í­1•Ù•°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¦Ž;¦f§ž¶'žêœœ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€…ÁÁÉ½Ù…±IÕ±•Ìèì(€€€€€€€…Ñ¥½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‡š&ç–*£’öpœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€½Á¥¹¥½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–º‡š&çš?¢žœ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€Ñ•µÁ±…Ñ•IÕ±•Ìèì(€€€€€€€Ñ•µÁ±…Ñ•9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—š¢‡švÿ–B7žžÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€…Í•QåÁ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š†#’îÛžÆï–z,œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€™¥±•UÉ°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß’â+’òƒš¢‡švÿšZ’îØœ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€™••IÕ±•Ìèì(€€€€€€€½¹ÑÉ…Ñ%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š&–Æ{–B#–B0œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€Á•É¥½‘9¼èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—šršVÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€É••¥Ù…‰±•µ½Õ¹ÐèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–êSšRÛ¦G¦Štœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€Á±…¹I••¥Ù•…Ñ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¢º‡–"KšRÛš²ûš^”œ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€…ÑÑ…¡µ•¹ÑIÕ±•Ìèì(€€€€€€€½¹ÑÉ…Ñ%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š&–Æ{–B#–B0œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€™¥±•UÉ°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß’â+’òƒ¦f’îØœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€™¥±•9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—šZ’îÛ–B4œ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€ÉÕ±•IÕ±•Ìèì(€€€€€€€ÉÕ±•9…µ”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—¢ž–"g–B7žžÀœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€ÁÉ•™¥àèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–&7žò œ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€‘…Ñ•A…ÑÑ•É¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—š^—šrš‚ó–ò<œ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€Í•É¥…±1•¹Ñ èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—šÖšÂÓ¦Vÿ–ê˜œ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€ÍÑ…ÑÕÌèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§ž*Ûšœ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€µ•ÑÉ¥½¹™¥œèl(€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ–B#–B3šïšVÀœ°¡¥¹Ðè€Ÿ–£¦£šr'šV#–B#–B0œ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€‰±Õ”œô°(€€€€€€€ì­•äè€µ½¹Ñ¡9•Üœ°±…‰•°è€Ÿšr³šr#šZÃ–Šxœ°¡¥¹Ðè€ŸšZÃ–îë–B#–B0œ°¥½¸è€‘…Ñ”œ°½±½Èè€å…¸œô°(€€€€€€€ì­•äè€Á•¹‘¥¹Õ‘¥Ðœ°±…‰•°è€Ÿ–ú–º‡š&äœ°¡¥¹Ðè€Ÿ–º‡š‚ã’â·–B#–B0œ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€ì­•äè€Á•É™½Éµ¥¹œœ°±…‰•°è€Ÿ–Æ—žê›’â´œ°¡¥¹Ðè€Ÿ–ÞË¦k¢þ–æÛž¶û¢ºˆœ°¥½¸è€¡…ÉÐœ°½±½Èè€É••¸œô°(€€€€€€€ì­•äè€µ½¹Ñ¡µ½Õ¹Ðœ°±…‰•°è€Ÿšr³šr#¦G¦Štœ°¡¥¹Ðè€Ÿšr³šr#ž¶ûžê›šï¦Štœ°¥½¸è€µ½¹•äœ°½±½Èè€Ù¥½±•Ðœô(€€€€€t°(€€€€€Á…•5•ÑÉ¥½¹™¥Ìèì(€€€€€€€…ÁÁÉ½Ù…°èl(€€€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ–ú–º‡š&ç–B#–B0œ°¡¥¹Ðè€Ÿ–öO–&7ž¶o¦'žîOšzpœ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€€€ì­•äè€É•Ù¥•Ý¥¹œœ°±…‰•°è€Ÿ–º‡š‚ã’â´œ°¡¥¹Ðè€Ÿž¶'–ú–’žBœ°¥½¸è€Ìµ¡•¬œ°½±½Èè€‰±Õ”œô°(€€€€€€€€€ì­•äè€ÕÍÑ½µ•ÉÌœ°±…‰•°è€Ÿ–Ï¢S–º‹š"Üœ°¡¥¹Ðè€Ÿšr³¦†×–:ï¦7–º‹š"Üœ°¥½¸è€Á•½Á±”œ°½±½Èè€å…¸œô°(€€€€€€€€€ì­•äè€…µ½Õ¹Ðœ°±…‰•°è€Ÿšr³¦†×¦G¦Štœ°¡¥¹Ðè€Ÿšr³¦†×ž¶ûžê›¦G¦Štœ°¥½¸è€µ½¹•äœ°½±½Èè€Ù¥½±•Ðœô(€€€€€€€t°(€€€€€€€Ñ•µÁ±…Ñ”èl(€€€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿš¢‡švÿšïšVÀœ°¡¥¹Ðè€Ÿ–öO–&7ž¶o¦'žîOšzpœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€‰±Õ”œô°(€€€€€€€€€ì­•äè€•¹…‰±•œ°±…‰•°è€Ÿ–B¿žR£š¢‡švüœ°¡¥¹Ðè€Ÿ–>¿žR£’ê;–B#–B0œ°¥½¸è€Ù…±¥‘½‘”œ°½±½Èè€É••¸œô°(€€€€€€€€€ì­•äè€‘¥Í…‰±•œ°±…‰•°è€Ÿ–sžR£š¢‡švüœ°¡¥¹Ðè€Ÿšj’â7–>¿žR œ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€€€ì­•äè€Ý¥Ñ¡¥±”œ°±…‰•°è€Ÿ–ÞË’â+’òƒšZ’îØœ°¡¥¹Ðè€Ÿšr³¦†×š¢‡švÿšZ’îØœ°¥½¸è€ÕÁ±½…œ°½±½Èè€å…¸œô(€€€€€€€t°(€€€€€€€™•”èl(€€€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ¢º‡–"KšïšVÀœ°¡¥¹Ðè€Ÿ–öO–&7ž¶o¦'žîOšzpœ°¥½¸è€µ½¹•äœ°½±½Èè€‰±Õ”œô°(€€€€€€€€€ì­•äè€Á•¹‘¥¹œœ°±…‰•°è€Ÿ–úž†»¢ºœ°¡¥¹Ðè€Ÿž¶'–úšRÛš²ûž†»¢ºœ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€€€ì­•äè€½¹™¥Éµ•œ°±…‰•°è€Ÿ–ÞËž†»¢ºœ°¡¥¹Ðè€Ÿ–ÞËž†»¢º“šRÛš²øœ°¥½¸è€Ù…±¥‘½‘”œ°½±½Èè€É••¸œô°(€€€€€€€€€ì­•äè€¥¹Ù½¥•œ°±…‰•°è€Ÿ–ÞË–òž– œ°¡¥¹Ðè€Ÿšr³¦†×–òž–£¢ºÃ–öTœ°¥½¸è€™½É´œ°½±½Èè€å…¸œô(€€€€€€€t°(€€€€€€€…ÑÑ…¡µ•¹Ðèl(€€€€€€€€€ì­•äè€Ñ½Ñ…°œ°±…‰•°è€Ÿ¦f’îÛšïšVÀœ°¡¥¹Ðè€Ÿ–öO–&7ž¶o¦'žîOšzpœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€‰±Õ”œô°(€€€€€€€€€ì­•äè€½¹ÑÉ…ÑÌœ°±…‰•°è€Ÿ–Ï¢S–B#–B0œ°¡¥¹Ðè€Ÿšr³¦†×–:ï¦7–B#–B0œ°¥½¸è€¹•ÍÑ•œ°½±½Èè€å…¸œô°(€€€€€€€€€ì­•äè€ÑåÁ•œ°±…‰•°è€Ÿ–ÞË¢¾–"¯žÆï–z,œ°¡¥¹Ðè€Ÿ–¶c–r£šZ’îÛžÆï–z,œ°¥½¸è€‘¥Ðœ°½±½Èè€É••¸œô°(€€€€€€€€€ì­•äè€™¥±•Ìœ°±…‰•°è€Ÿ–>¿š&O–òšZ’îØœ°¡¥¹Ðè€Ÿ–¶c–r£šZ’îÛ–rÃ–v œ°¥½¸è€±¥¹¬œ°½±½Èè€Ù¥½±•Ðœô(€€€€€€€t(€€€€€ô(€€€ô(€ô°(€É•…Ñ• ¤ì(€€€¥˜€¡Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¥=È¡l½¹ÑÉ…Ðé±¥ÍÐœ°€½¹ÑÉ…ÐéÅÕ•Éäœ°€½¹ÑÉ…Ðé…‘œ°€½¹ÑÉ…Ðé•‘¥Ðœ°€½¹ÑÉ…Ðé…ÁÁÉ½Ù…°é±¥ÍÐt¤¤ì(€€€€€±¥ÍÑ½¹ÑÉ…Ñ=Ý¹•È ¤¹Ñ¡•¸¡É•Ì€ôøìÑ¡¥Ì¹½Ý¹•É=ÁÑ¥½¹Ì€ôÉ•Ì¹‘…Ñ„ñðmtô¤(€€€ô(€ô°(€½µÁÕÑ•èì(€€€¡•É½5•Ñ„ ¤ì(€€€€€½¹ÍÐµ•Ñ…Ì€ôì(€€€€€€€±¥ÍÐèì(€€€€€€€€€•å•‰É½Üè€Ÿ–B#–B3–£žR–F÷–F£šr|œ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿ’î;–º‹š"ßž¶ûžê›–"Ã–º‡š&çŽšRÛ¢ÒçŽ–öKš†–£ž¢/¢þ÷¢â¨œ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€Ÿ–B#–B3–þ¦†ï–Ï¢S–º‹š"ß¾ò3–º‡š&çž*Ûš’â;–Æ—žê›ž*Ûš’êKšZ—šÖ¢ö³¾ò3–Ï¦R»–>cšnÓžVgž^WŽœ(€€€€€€€ô°(€€€€€€€…ÁÁÉ½Ù…°èì(€€€€€€€€€•å•‰É½Üè€Ÿ–º‡š&ç–Þ—’ös–>Àœ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿ¦n’â·–’žB–B#–B3–º‡š‚ã’â;¦–n{’þ»šRäœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€Ÿ–>«¢kž›–º‡š‚ã’â·–B#–B3¾ò3–º‡š&çš?¢ž–þ–†¯¾ò3–º‡š&ç–*£’ös¢þo–—ž*Ûš¢ºÃ–öWŽœ(€€€€€€€ô°(€€€€€€€Ñ•µÁ±…Ñ”èì(€€€€€€€€€•å•‰É½Üè€Ÿš¢‡švÿ¢Ö’êœœ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿžî’âžîÓš*“–B#–B3š¢‡švÿŽž&#šr³’â;–B¿–sž*Ûšœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€Ÿš¢‡švÿšZ’îÛ–’7žR£žÎïžî’â+’òƒ¢÷–*o¾ò3–B¿žR£š¢‡švÿžR£’ê;–B;žî·–B#–B3¢Öß¢6'Žœ(€€€€€€€ô°(€€€€€€€™•”èì(€€€€€€€€€•å•‰É½Üè€ŸšRÛ¢Òç¢º‡–"Hœ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿ¢Þ¢â«–B#–B3–êSšRÛŽ–º{šRÛŽž†»¢º“’â;–òž–£ž*Ûšœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€ŸšRÛ¢Òç¢º‡–"K’â—š‚ó–>_–B#–B3ž*Ûšžê›šv¾ò3žî#š–B#–B3žšš¶‹žîŸžî·¢ÂšVÓŽœ(€€€€€€€ô°(€€€€€€€…ÑÑ…¡µ•¹Ðèì(€€€€€€€€€•å•‰É½Üè€Ÿ–B#–B3¦f’îØœ°(€€€€€€€€€Ñ¥Ñ±”è€Ÿ–öK¦n–B#–B3šZ’îÛ’â;’âk–*‡¦f’îØœ°(€€€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è€Ÿ¦f’îÛžî’â–Ï¢S–B#–B3¾ò3–’7žR£žÎïžî’â+’òƒ¢÷–*o–æÛ’þwžVg’âk–*‡–šVÃš6»Žœ(€€€€€€€ô(€€€€€ô(€€€€€É•ÑÕÉ¸µ•Ñ…ÍmÑ¡¥Ì¹µ½‘•tñðµ•Ñ…Ì¹±¥ÍÐ(€€€ô°(€€€µ½‘•5•ÑÉ¥½¹™¥œ ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹µ½‘”€ôôô€±¥ÍÐœ€üÑ¡¥Ì¹µ•ÑÉ¥½¹™¥œ€è€¡Ñ¡¥Ì¹Á…•5•ÑÉ¥½¹™¥ÍmÑ¡¥Ì¹µ½‘•tñðmt¤(€€€ô°(€€€…ÁÁÉ½Ù…±Ñ¥½¹=ÁÑ¥½¹Ì ¤ì(€€€€€½¹ÍÐ½ÁÑ¥½¹Ì€ôÑ¡¥Ì¹‘¥Ð¹ÑåÁ”¹±…Ý}½¹ÑÉ…Ñ}…ÁÁÉ½Ù…±}…Ñ¥½¸ñðmt(€€€€€É•ÑÕÉ¸½ÁÑ¥½¹Ì¹±•¹Ñ €ü½ÁÑ¥½¹Ì€èl(€€€€€€€ì±…‰•°è€Ÿ¦k¢þœ°Ù…±Õ”è€Á…ÍÌœô°(€€€€€€€ì±…‰•°è€Ÿ¦¦Ï–nxœ°Ù…±Õ”è€É•©•Ðœô°(€€€€€€€ì±…‰•°è€Ÿ¦–n{’þ»šRäœ°Ù…±Õ”è€‰…¬œô(€€€€€t(€€€ô°(€€€Í¥¹Ñ¥½¹=ÁÑ¥½¹Ì ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹Í¥¹½É´€˜˜Ñ¡¥Ì¹Í¥¹½É´¹Á…ÉÑ¥…°¤ì(€€€€€€€É•ÑÕÉ¸mì±…‰•°è€Ÿ¢†—¦öCž¶ûžöË’âë–ÞËž¶û¢ºˆœ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹Í¥¹M¥¹•õt(€€€€€ô(€€€€€É•ÑÕÉ¸l(€€€€€€€ì±…‰•°è€Ÿ¦£–"ž¶û¢ºˆœ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹Í¥¹A…ÉÑ¥…°ô°(€€€€€€€ì±…‰•°è€Ÿ–ÞËž¶û¢ºˆœ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹Í¥¹M¥¹•ô(€€€€€t(€€€ô°(€€€Í¥¹Ñ¥½¹Q¥À ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹Í¥¹½É´€˜˜Ñ¡¥Ì¹Í¥¹½É´¹Á…ÉÑ¥…°(€€€€€€€€ü€Ÿ–öO–&7–B#–B3’âë¦£–"ž¶û¢º‹¾ò3–>¿žîŸžî·¢†—¦öC’âë–ÞËž¶û¢º‹Žœ(€€€€€€€€è€Ÿž¶ûžöË–B;–B#–B3¢þo–—–Æ—žê›’â·¾òo–šž¶ûžöË–Âkšr«–º3š"C¾ò3¢¾ß¦'š.§¦£–"ž¶û¢º‹Žœ(€€€ô°(€€€¥¹Ù½¥•Ñ¥½¹=ÁÑ¥½¹Ì ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹¥¹Ù½¥•½É´€˜˜Ñ¡¥Ì¹¥¹Ù½¥•½É´¹Á…ÉÑ¥…°¤ì(€€€€€€€É•ÑÕÉ¸mì±…‰•°è€Ÿ¢†—¦öC–òž–£’âë–ÞË–òž– œ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹¥¹Ù½¥•%ÍÍÕ•õt(€€€€€ô(€€€€€É•ÑÕÉ¸l(€€€€€€€ì±…‰•°è€Ÿ¦£–"–òž– œ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹¥¹Ù½¥•A…ÉÑ¥…°ô°(€€€€€€€ì±…‰•°è€Ÿ–ÞË–òž– œ°Ù…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑMÑ…Ñ•Ì¹¥¹Ù½¥•%ÍÍÕ•ô(€€€€€t(€€€ô°(€€€¥¹Ù½¥•Ñ¥½¹Q¥À ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹¥¹Ù½¥•½É´€˜˜Ñ¡¥Ì¹¥¹Ù½¥•½É´¹Á…ÉÑ¥…°(€€€€€€€€ü€Ÿ–öO–&7šRÛ¢Òç¢º‡–"K’âë¦£–"–òž–£¾ò3–>¿žîŸžî·¢†—¦öC’âë–ÞË–òž–£Žœ(€€€€€€€€è€Ÿ–ššr³šr–>Gž–£–Âkšr«–£¦£–ò–ß¾ò3¢¾ß¦'š.§¦£–"–òž–£Žœ(€€€ô°(€€€µ½‘•5•ÑÉ¥Ì ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€±¥ÍÐœ¤É•ÑÕÉ¸Ñ¡¥Ì¹µ•ÑÉ¥Ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€…ÁÁÉ½Ù…°œ¤ì(€€€€€€€½¹ÍÐÕÍÑ½µ•É%‘Ì€ô¹•ÜM•Ð¡Ñ¡¥Ì¹½¹ÑÉ…ÑÌ¹µ…À¡¥Ñ•´€ôø¥Ñ•´¹ÕÍÑ½µ•É%ñð¥Ñ•´¹ÕÍÑ½µ•É}¥¤¹™¥±Ñ•È¡	½½±•…¸¤¤(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€É•Ù¥•Ý¥¹œœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹½¹ÑÉ…ÑÌ¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€ÕÍÑ½µ•ÉÌœ°µ•ÑÉ¥Y…±Õ”èÕÍÑ½µ•É%‘Ì¹Í¥é”ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€…µ½Õ¹Ðœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹™½Éµ…Ñ5½¹•ä¡Ñ¡¥Ì¹ÍÕµ	ä¡Ñ¡¥Ì¹½¹ÑÉ…ÑÌ°¥Ñ•´€ôø¥Ñ•´¹Í¥¹µ½Õ¹Ðñð¥Ñ•´¹Í¥¹}…µ½Õ¹Ð¤¤ô(€€€€€€€t(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€Ñ•µÁ±…Ñ”œ¤ì(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€•¹…‰±•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ•µÁ±…Ñ•Ì¹™¥±Ñ•È¡¥Ñ•´€ôøÑ¡¥Ì¹¥Í¹…‰±•¡¥Ñ•´¹ÍÑ…ÑÕÌ¤¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€‘¥Í…‰±•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ•µÁ±…Ñ•Ì¹™¥±Ñ•È¡¥Ñ•´€ôø€…Ñ¡¥Ì¹¥Í¹…‰±•¡¥Ñ•´¹ÍÑ…ÑÕÌ¤¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ý¥Ñ¡¥±”œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ•µÁ±…Ñ•Ì¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹™¥±•UÉ°ñð¥Ñ•´¹™¥±•}ÕÉ°¤¹±•¹Ñ ô(€€€€€€€t(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€™•”œ¤ì(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€Á•¹‘¥¹œœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹™••Ì¹™¥±Ñ•È¡¥Ñ•´€ôøÑ¡¥Ì¹¥Í••A•¹‘¥¹œ¡¥Ñ•´¤¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥Éµ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹™••Ì¹™¥±Ñ•È¡¥Ñ•´€ôøÑ¡¥Ì¹¥Í••½¹™¥Éµ•¡¥Ñ•´¤¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€¥¹Ù½¥•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹™••Ì¹™¥±Ñ•È¡¥Ñ•´€ôøÑ¡¥Ì¹¥Í••%¹Ù½¥•¡¥Ñ•´¤¤¹±•¹Ñ ô(€€€€€€€t(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€…ÑÑ…¡µ•¹Ðœ¤ì(€€€€€€€½¹ÍÐ½¹ÑÉ…Ñ%‘Ì€ô¹•ÜM•Ð¡Ñ¡¥Ì¹…ÑÑ…¡µ•¹ÑÌ¹µ…À¡¥Ñ•´€ôø¥Ñ•´¹½¹ÑÉ…Ñ%ñð¥Ñ•´¹½¹ÑÉ…Ñ}¥¤¹™¥±Ñ•È¡	½½±•…¸¤¤(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹ÑÉ…ÑÌœ°µ•ÑÉ¥Y…±Õ”è½¹ÑÉ…Ñ%‘Ì¹Í¥é”ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€ÑåÁ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹…ÑÑ…¡µ•¹ÑÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹™¥±•QåÁ”ñð¥Ñ•´¹™¥±•}ÑåÁ”¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€™¥±•Ìœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹…ÑÑ…¡µ•¹ÑÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹™¥±•UÉ°ñð¥Ñ•´¹™¥±•}ÕÉ°¤¹±•¹Ñ ô(€€€€€€€t(€€€€€ô(€€€€€É•ÑÕÉ¸mt(€€€ô°(€€€…¹I•…‘ÁÁÉ½Ù…° ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ½¹ÑÉ…Ðé…ÁÁÉ½Ù…°é±¥ÍÐœ¤(€€€ô°(€€€…¹I•…‘•” ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ½¹ÑÉ…Ðé™•”é±¥ÍÐœ¤(€€€ô°(€€€…¹I•…‘ÑÑ…¡µ•¹Ð ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ½¹ÑÉ…Ðé…ÑÑ…¡µ•¹Ðé±¥ÍÐœ¤(€€€ô°(€€€…¹I•…‘MÑ…ÑÕÌ ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¸‘…ÕÑ ¹¡…ÍA•Éµ¤ ½¹ÑÉ…ÐéÍÑ…ÑÕÌé±¥ÍÐœ¤(€€€ô(€ô°(€Ý…Ñ èì(€€€€œ‘É½ÕÑ”¹ÅÕ•Éäœèì(€€€€€¥µµ•‘¥…Ñ”èÑÉÕ”°(€€€€€¡…¹‘±•È¡ÅÕ•Éä¤ì(€€€€€€€Ñ¡¥Ì¹µ½‘”€ôÑ¡¥Ì¹¹½Éµ…±¥é•5½‘”¡ÅÕ•Éä¹µ½‘Õ±”¤(€€€€€€€Ñ¡¥Ì¹…ÁÁ±åÕÍÑ½µ•ÉI½ÕÑ•EÕ•Éä ¤(€€€€€€€Ñ¡¥Ì¹±½…‘A…” ¤(€€€€€ô(€€€ô(€ô)ô(ð½ÍÉ¥ÁÐø((ñÍÑå±”Í½Á•±…¹œô‰ÍÍÌˆÍÉŒôˆ¸½½¹ÑÉ…ÐµÁ…”¹ÍÍÌˆøð½ÍÑå±”ø((ñÍÑå±”±…¹œô‰ÍÍÌˆø)¥µÁ½ÉÐ€ˆ¸¸½‰ÕÍ¥¹•ÍÌ½‰ÕÍ¥¹•ÍÌµ‘¥…±½œ¹ÍÍÌˆì(ð½ÍÑå±”ø(
+              <el-button v-if="canInvoiceFee(row)" v-hasPermi="['contract:fee:invoice']" :size="controlSize" type="text" icon="el-icon-tickets" @click="invoiceFeeOne(row)">{{ invoiceActionText(row) }}</el-button>
+              <el-button v-hasPermi="['contract:fee:edit']" :size="controlSize" type="text" icon="el-icon-edit" :disabled="!canEditFeePlan(row)" :title="feePlanEditTip(row)" @click="openFee(row)">ç¼–è¾‘</el-button>
+              <el-button v-hasPermi="['contract:fee:remove']" :size="controlSize" type="text" icon="el-icon-delete" class="danger-text" :disabled="!canEditFeePlan(row)" :title="feePlanEditTip(row)" @click="removeFee(row)">åˆ é™¤</el-button>
+            </template>
+          </el-table-column>
+      </el-table>
+    </biz-table-card>
+
+    <biz-table-card
+      v-else-if="mode === 'attachment'"
+      :show-search.sync="showSearch"
+      :total="total"
+      :page.sync="query.pageNum"
+      :limit.sync="query.pageSize"
+      @query="loadAttachments"
+      @pagination="loadAttachments"
+    >
+      <template #filters>
+        <div class="biz-filter-main">
+          <el-input v-model="query.keyword" :size="controlSize" prefix-icon="el-icon-search" placeholder="æœç´¢åˆåŒç¼–å·ã€åˆåŒåç§°ã€æ–‡ä»¶å" clearable @clear="search" @keyup.enter.native="search" />
+          <el-input v-model="query.fileType" :size="controlSize" placeholder="æ–‡ä»¶ç±»åž‹" clearable @clear="search" @keyup.enter.native="search" />
+        </div>
+        <div class="biz-filter-actions">
+          <el-button :size="controlSize" plain icon="el-icon-refresh" @click="reset">é‡ç½®</el-button>
+        </div>
+      </template>
+      <el-table v-loading="loading" :data="attachments" :size="controlSize">
+          <el-table-column label="åˆåŒç¼–å·" prop="contractNo" min-width="150" />
+          <el-table-column label="åˆåŒåç§°" prop="contractName" min-width="170" />
+          <el-table-column label="æ–‡ä»¶å" prop="file_name" min-width="180" show-overflow-tooltip>
+            <template slot-scope="{ row }"><a class="biz-link" @click="openAttachmentFile(row)">{{ row.file_name || fileNameFromUrl(row.file_url) }}</a></template>
+          </el-table-column>
+          <el-table-column label="æ–‡ä»¶ç±»åž‹" prop="file_type" width="100" align="center" />
+          <el-table-column label="ä¸Šä¼ æ—¶é—´" prop="create_time" width="150" align="center" />
+          <el-table-column label="æ“ä½œ" width="130" align="center" class-name="small-padding fixed-width"><template slot-scope="{ row }"><el-button :size="controlSize" type="text" icon="el-icon-view" @click="openAttachmentFile(row)">æ‰“å¼€</el-button><el-button v-hasPermi="['contract:attachment:remove']" :size="controlSize" type="text" icon="el-icon-delete" class="danger-text" :disabled="!canEditContractResource(row)" :title="contractResourceEditTip(row)" @click="removeAttachment(row)">åˆ é™¤</el-button></template></el-table-column>
+      </el-table>
+    </biz-table-card>
+
+    <div v-else-if="mode === 'status'" class="table-card timeline-page">
+      <div class="section-title"><h3>çŠ¶æ€è®°å½•</h3><p>è®°å½•åˆåŒåˆ›å»ºã€æäº¤å®¡æ‰¹ã€å®¡æ‰¹ç»“æžœä¸ŽåŽç»­çŠ¶æ€å˜åŒ–</p></div>
+      <div v-loading="loading" class="biz-timeline-list two-column status-list">
+        <article v-for="item in statuses" :key="item.log_id || item.create_time">
+          <i class="timeline-icon el-icon-time" />
+          <div>
+            <h4>{{ item.contractNo || '-' }} <span>{{ dictLabel('law_contract_status_action', item.action_type) }}</span></h4>
+            <p>{{ item.content || '-' }}</p>
+            <small>{{ item.create_by || '-' }} Â· {{ item.create_time || '-' }}</small>
+          </div>
+        </article>
+        <el-empty v-if="!statuses.length" description="æš‚æ— çŠ¶æ€è®°å½•" />
+      </div>
+      <pagination v-show="total > 0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="loadStatuses" />
+    </div>
+
+    <div v-else-if="mode === 'rule'" class="setting-grid">
+      <article v-for="item in rules" :key="item.ruleId">
+        <i />
+        <div><h4>{{ item.ruleName }}</h4><p>{{ item.prefix }}{{ item.datePattern }} / {{ item.serialLength }} ä½æµæ°´</p></div>
+        <span :class="{ disabled: !sameValue(item.status, dictValue('sys_normal_disable', '0')) }">{{ dictLabel('sys_normal_disable', item.status) }}</span>
+        <footer><el-button v-hasPermi="['contract:rule:edit']" :size="controlSize" type="text" @click="openRule(item)">ç¼–è¾‘</el-button></footer>
+      </article>
+    </div>
+
+    <excel-import-dialog ref="importRef" title="åˆåŒå¯¼å…¥" action="/contract/importData" template-action="/contract/importTemplate" template-file-name="contract_template" update-support-label="æŒ‰åˆåŒåç§°é‡å¤æ—¶æ›´æ–°å·²æœ‰åˆåŒ" @success="loadPage" />
+    <contract-detail-drawer
+      :visible.sync="detailOpen"
+      :contract="detailContract"
+      :fees="detailFees"
+      :attachments="detailAttachments"
+      :approvals="detailApprovals"
+      :statuses="detailStatuses"
+      :size-class="'biz-size-' + appSize"
+      @edit="openContract"
+      @submit="handleDetailAction(submitOne, $event)"
+      @approval="handleDetailAction(openApproval, $event)"
+      @fee="openFee"
+      @attachment="openAttachment"
+      @sign="handleDetailAction(signOne, $event)"
+      @archive="handleDetailAction(archiveOne, $event)"
+      @void="handleDetailAction(voidOne, $event)"
+      @terminate="handleDetailAction(terminateOne, $event)"
+      @matter="viewMatter"
+    />
+
+    <contract-resource-dialogs
+      ref="resourceDialogs"
+      :contract-open.sync="contractOpen"
+      :template-open.sync="templateOpen"
+      :fee-open.sync="feeOpen"
+      :attachment-open.sync="attachmentOpen"
+      :rule-open.sync="ruleOpen"
+      :contract-form="contractForm"
+      :contract-rules="contractRules"
+      :template-form="templateForm"
+      :template-rules="templateRules"
+      :fee-form="feeForm"
+      :fee-rules="feeRules"
+      :attachment-form="attachmentForm"
+      :attachment-rules="attachmentRules"
+      :rule-form="ruleForm"
+      :rule-rules="ruleRules"
+      :customer-options="customerOptions"
+      :contract-options="contractOptions"
+      :customer-select-loading="customerSelectLoading"
+      :contract-select-loading="contractSelectLoading"
+      :dict-options="dict.type"
+      :control-size="controlSize"
+      :dialog-class="dialogClass"
+      :search-customer-options="searchCustomerOptions"
+      :select-customer-for-contract="selectCustomerForContract"
+      :can-operate-customer="canOperateCustomer"
+      :sync-template-meta="syncTemplateMeta"
+      :search-contract-options="searchContractOptions"
+      :select-contract-for-fee="selectContractForFee"
+      :select-contract-for-attachment="selectContractForAttachment"
+      :can-edit-contract-resource="canEditContractResource"
+      :sync-attachment-meta="syncAttachmentMeta"
+      :save-contract="saveContract"
+      :save-template="saveTemplate"
+      :save-fee="saveFee"
+      :save-attachment="saveAttachment"
+      :save-rule="saveRule"
+    />
+
+    <contract-lifecycle-dialogs
+      ref="lifecycleDialogs"
+      :approval-open.sync="approvalOpen"
+      :sign-open.sync="signOpen"
+      :invoice-open.sync="invoiceOpen"
+      :approval-form="approvalForm"
+      :approval-rules="approvalRules"
+      :approval-action-options="approvalActionOptions"
+      :sign-form="signForm"
+      :sign-action-options="signActionOptions"
+      :sign-action-tip="signActionTip"
+      :invoice-form="invoiceForm"
+      :invoice-action-options="invoiceActionOptions"
+      :invoice-action-tip="invoiceActionTip"
+      :dict-options="dict.type"
+      :control-size="controlSize"
+      :dialog-class="dialogClass"
+      :save-approval="saveApproval"
+      :save-sign="saveSign"
+      :save-invoice="saveInvoice"
+    />
+  </div>
+</template>
+
+<script>
+import ExcelImportDialog from '@/components/ExcelImportDialog'
+import BizHero from '@/views/business/components/BizHero'
+import BizMetrics from '@/views/business/components/BizMetrics'
+import BizPageHeader from '@/views/business/components/BizPageHeader'
+import BizTableCard from '@/views/business/components/BizTableCard'
+import businessUi from '@/views/business/mixins/businessUi'
+import customerLifecycle from '@/views/business/mixins/customerLifecycle'
+import contractLifecycle from '@/views/business/mixins/contractLifecycle'
+import ContractDetailDrawer from './components/ContractDetailDrawer'
+import ContractLifecycleDialogs from './components/ContractLifecycleDialogs'
+import ContractResourceDialogs from './components/ContractResourceDialogs'
+import contractPageActions from './contract-page-actions'
+
+export default {
+  name: 'Contract',
+  mixins: [businessUi, customerLifecycle, contractLifecycle, contractPageActions],
+  components: { ExcelImportDialog, BizHero, BizMetrics, BizPageHeader, BizTableCard, ContractDetailDrawer, ContractLifecycleDialogs, ContractResourceDialogs },
+  dicts: ['law_customer_status', 'law_contract_case_type', 'law_contract_fee_type', 'law_contract_sign_method', 'law_contract_sign_status', 'law_contract_audit_status', 'law_contract_approval_action', 'law_contract_status', 'law_contract_status_action', 'law_contract_risk_level', 'law_contract_receive_status', 'law_contract_invoice_status', 'sys_normal_disable'],
+  data() {
+    const positiveAmount = (rule, value, callback) => {
+      if (value === undefined || value === null || value === '' || Number(value) <= 0) {
+        callback(new Error('é‡‘é¢å¿…é¡»å¤§äºŽ0'))
+      } else {
+        callback()
+      }
+    }
+    return {
+      mode: 'list',
+      availableModes: ['list', 'approval', 'template', 'fee', 'attachment', 'status', 'rule'],
+      heroModes: ['list', 'approval', 'template', 'fee', 'attachment'],
+      showSearch: true,
+      loading: false,
+      total: 0,
+      contracts: [],
+      templates: [],
+      fees: [],
+      attachments: [],
+      statuses: [],
+      rules: [],
+      metrics: [],
+      query: { pageNum: 1, pageSize: 10 },
+      contractForm: {},
+      templateForm: {},
+      feeForm: {},
+      attachmentForm: {},
+      approvalForm: {},
+      signForm: {},
+      invoiceForm: {},
+      ruleForm: {},
+      customerOptions: [],
+      contractOptions: [],
+      ownerOptions: [],
+      advancedOpen: false,
+      customerSelectLoading: false,
+      contractSelectLoading: false,
+      businessPageMeta: {
+        defaultTitle: 'åˆåŒä¸­å¿ƒ',
+        titles: { list: 'åˆåŒåˆ—è¡¨', approval: 'åˆåŒå®¡æ‰¹', template: 'åˆåŒæ¨¡æ¿', fee: 'æ”¶è´¹è®¡åˆ’', attachment: 'åˆåŒé™„ä»¶', status: 'çŠ¶æ€è®°å½•', rule: 'ç¼–å·è§„åˆ™' },
+        descriptions: {
+          list: 'ç»Ÿä¸€ç®¡ç†åˆåŒåˆ›å»ºã€å®¡æ‰¹ã€ç­¾è®¢å’Œå±¥çº¦çŠ¶æ€',
+          approval: 'å¤„ç†æäº¤å®¡æ ¸çš„åˆåŒï¼Œå®¡æ‰¹æ„è§å¿…é¡»ç•™ç—•',
+          template: 'ç»´æŠ¤åˆåŒæ¨¡æ¿æ–‡ä»¶ã€ç‰ˆæœ¬å’Œå¯åœçŠ¶æ€',
+          fee: 'ç»´æŠ¤åˆåŒåº”æ”¶ã€å®žæ”¶ã€å¼€ç¥¨ä¸Žç¡®è®¤çŠ¶æ€',
+          attachment: 'å¤ç”¨ç³»ç»Ÿä¸Šä¼ èƒ½åŠ›ç®¡ç†åˆåŒé™„ä»¶',
+          status: 'è¿½è¸ªåˆåŒå…³é”®çŠ¶æ€å˜åŒ–è®°å½•',
+          rule: 'ç»´æŠ¤åˆåŒè‡ªåŠ¨ç¼–å·è§„åˆ™'
+        }
+      },
+      detailOpen: false,
+      detailContract: {},
+      detailFees: [],
+      detailAttachments: [],
+      detailApprovals: [],
+      detailStatuses: [],
+      contractOpen: false,
+      templateOpen: false,
+      feeOpen: false,
+      attachmentOpen: false,
+      approvalOpen: false,
+      signOpen: false,
+      invoiceOpen: false,
+      ruleOpen: false,
+      contractRules: {
+        customerId: [{ required: true, message: 'è¯·é€‰æ‹©å®¢æˆ·', trigger: 'blur' }],
+        customerName: [{ required: true, message: 'è¯·è¾“å…¥å®¢æˆ·åç§°', trigger: 'blur' }],
+        contractName: [{ required: true, message: 'è¯·è¾“å…¥åˆåŒåç§°', trigger: 'blur' }],
+        caseType: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶ç±»åž‹', trigger: 'change' }],
+        signAmount: [{ required: true, message: 'è¯·è¾“å…¥ç­¾çº¦é‡‘é¢', trigger: 'blur' }, { validator: positiveAmount, trigger: 'blur' }],
+        feeType: [{ required: true, message: 'è¯·é€‰æ‹©æ”¶è´¹æ–¹å¼', trigger: 'change' }],
+        signMethod: [{ required: true, message: 'è¯·é€‰æ‹©ç­¾è®¢æ–¹å¼', trigger: 'change' }],
+        riskLevel: [{ required: true, message: 'è¯·é€‰æ‹©é£Žé™©ç­‰çº§', trigger: 'change' }]
+      },
+      approvalRules: {
+        action: [{ required: true, message: 'è¯·é€‰æ‹©å®¡æ‰¹åŠ¨ä½œ', trigger: 'change' }],
+        opinion: [{ required: true, message: 'è¯·è¾“å…¥å®¡æ‰¹æ„è§', trigger: 'blur' }]
+      },
+      templateRules: {
+        templateName: [{ required: true, message: 'è¯·è¾“å…¥æ¨¡æ¿åç§°', trigger: 'blur' }],
+        caseType: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶ç±»åž‹', trigger: 'change' }],
+        fileUrl: [{ required: true, message: 'è¯·ä¸Šä¼ æ¨¡æ¿æ–‡ä»¶', trigger: 'change' }]
+      },
+      feeRules: {
+        contractId: [{ required: true, message: 'è¯·é€‰æ‹©æ‰€å±žåˆåŒ', trigger: 'change' }],
+        periodNo: [{ required: true, message: 'è¯·è¾“å…¥æœŸæ•°', trigger: 'blur' }],
+        receivableAmount: [{ required: true, message: 'è¯·è¾“å…¥åº”æ”¶é‡‘é¢', trigger: 'blur' }],
+        planReceiveDate: [{ required: true, message: 'è¯·é€‰æ‹©è®¡åˆ’æ”¶æ¬¾æ—¥', trigger: 'change' }]
+      },
+      attachmentRules: {
+        contractId: [{ required: true, message: 'è¯·é€‰æ‹©æ‰€å±žåˆåŒ', trigger: 'change' }],
+        fileUrl: [{ required: true, message: 'è¯·ä¸Šä¼ é™„ä»¶', trigger: 'change' }],
+        fileName: [{ required: true, message: 'è¯·è¾“å…¥æ–‡ä»¶å', trigger: 'blur' }]
+      },
+      ruleRules: {
+        ruleName: [{ required: true, message: 'è¯·è¾“å…¥è§„åˆ™åç§°', trigger: 'blur' }],
+        prefix: [{ required: true, message: 'è¯·è¾“å…¥å‰ç¼€', trigger: 'blur' }],
+        datePattern: [{ required: true, message: 'è¯·è¾“å…¥æ—¥æœŸæ ¼å¼', trigger: 'blur' }],
+        serialLength: [{ required: true, message: 'è¯·è¾“å…¥æµæ°´é•¿åº¦', trigger: 'blur' }],
+        status: [{ required: true, message: 'è¯·é€‰æ‹©çŠ¶æ€', trigger: 'change' }]
+      },
+      metricConfig: [
+        { key: 'total', label: 'åˆåŒæ€»æ•°', hint: 'å…¨éƒ¨æœ‰æ•ˆåˆåŒ', icon: 'documentation', color: 'blue' },
+        { key: 'monthNew', label: 'æœ¬æœˆæ–°å¢ž', hint: 'æ–°å»ºåˆåŒ', icon: 'date', color: 'cyan' },
+        { key: 'pendingAudit', label: 'å¾…å®¡æ‰¹', hint: 'å®¡æ ¸ä¸­åˆåŒ', icon: 'time', color: 'orange' },
+        { key: 'performing', label: 'å±¥çº¦ä¸­', hint: 'å·²é€šè¿‡å¹¶ç­¾è®¢', icon: 'chart', color: 'green' },
+        { key: 'monthAmount', label: 'æœ¬æœˆé‡‘é¢', hint: 'æœ¬æœˆç­¾çº¦æ€»é¢', icon: 'money', color: 'violet' }
+      ],
+      pageMetricConfigs: {
+        approval: [
+          { key: 'total', label: 'å¾…å®¡æ‰¹åˆåŒ', hint: 'å½“å‰ç­›é€‰ç»“æžœ', icon: 'time', color: 'orange' },
+          { key: 'reviewing', label: 'å®¡æ ¸ä¸­', hint: 'ç­‰å¾…å¤„ç†', icon: 's-check', color: 'blue' },
+          { key: 'customers', label: 'å…³è”å®¢æˆ·', hint: 'æœ¬é¡µåŽ»é‡å®¢æˆ·', icon: 'people', color: 'cyan' },
+          { key: 'amount', label: 'æœ¬é¡µé‡‘é¢', hint: 'æœ¬é¡µç­¾çº¦é‡‘é¢', icon: 'money', color: 'violet' }
+        ],
+        template: [
+          { key: 'total', label: 'æ¨¡æ¿æ€»æ•°', hint: 'å½“å‰ç­›é€‰ç»“æžœ', icon: 'documentation', color: 'blue' },
+          { key: 'enabled', label: 'å¯ç”¨æ¨¡æ¿', hint: 'å¯ç”¨äºŽåˆåŒ', icon: 'validCode', color: 'green' },
+          { key: 'disabled', label: 'åœç”¨æ¨¡æ¿', hint: 'æš‚ä¸å¯ç”¨', icon: 'time', color: 'orange' },
+          { key: 'withFile', label: 'å·²ä¸Šä¼ æ–‡ä»¶', hint: 'æœ¬é¡µæ¨¡æ¿æ–‡ä»¶', icon: 'upload', color: 'cyan' }
+        ],
+        fee: [
+          { key: 'total', label: 'è®¡åˆ’æ€»æ•°', hint: 'å½“å‰ç­›é€‰ç»“æžœ', icon: 'money', color: 'blue' },
+          { key: 'pending', label: 'å¾…ç¡®è®¤', hint: 'ç­‰å¾…æ”¶æ¬¾ç¡®è®¤', icon: 'time', color: 'orange' },
+          { key: 'confirmed', label: 'å·²ç¡®è®¤', hint: 'å·²ç¡®è®¤æ”¶æ¬¾', icon: 'validCode', color: 'green' },
+          { key: 'invoiced', label: 'å·²å¼€ç¥¨', hint: 'æœ¬é¡µå¼€ç¥¨è®°å½•', icon: 'form', color: 'cyan' }
+        ],
+        attachment: [
+          { key: 'total', label: 'é™„ä»¶æ€»æ•°', hint: 'å½“å‰ç­›é€‰ç»“æžœ', icon: 'documentation', color: 'blue' },
+          { key: 'contracts', label: 'å…³è”åˆåŒ', hint: 'æœ¬é¡µåŽ»é‡åˆåŒ', icon: 'nested', color: 'cyan' },
+          { key: 'typed', label: 'å·²è¯†åˆ«ç±»åž‹', hint: 'å­˜åœ¨æ–‡ä»¶ç±»åž‹', icon: 'dict', color: 'green' },
+          { key: 'files', label: 'å¯æ‰“å¼€æ–‡ä»¶', hint: 'å­˜åœ¨æ–‡ä»¶åœ°å€', icon: 'link', color: 'violet' }
+        ]
+      }
+    }
+  },
+  created() {
+    if (this.$auth.hasPermiOr(['contract:list', 'contract:query', 'contract:add', 'contract:edit', 'contract:approval:list'])) {
+      this.loadOwnerOptions()
+    }
+  },
+  computed: {
+    heroMeta() {
+      const metas = {
+        list: {
+          eyebrow: 'åˆåŒå…¨ç”Ÿå‘½å‘¨æœŸ',
+          title: 'ä»Žå®¢æˆ·ç­¾çº¦åˆ°å®¡æ‰¹ã€æ”¶è´¹ã€å½’æ¡£å…¨ç¨‹è¿½è¸ª',
+          description: 'åˆåŒå¿…é¡»å…³è”å®¢æˆ·ï¼Œå®¡æ‰¹çŠ¶æ€ä¸Žå±¥çº¦çŠ¶æ€äº’æ–¥æµè½¬ï¼Œå…³é”®å˜æ›´ç•™ç—•ã€‚'
+        },
+        approval: {
+          eyebrow: 'å®¡æ‰¹å·¥ä½œå°',
+          title: 'é›†ä¸­å¤„ç†åˆåŒå®¡æ ¸ä¸Žé€€å›žä¿®æ”¹',
+          description: 'åªèšç„¦å®¡æ ¸ä¸­åˆåŒï¼Œå®¡æ‰¹æ„è§å¿…å¡«ï¼Œå®¡æ‰¹åŠ¨ä½œè¿›å…¥çŠ¶æ€è®°å½•ã€‚'
+        },
+        template: {
+          eyebrow: 'æ¨¡æ¿èµ„äº§',
+          title: 'ç»Ÿä¸€ç»´æŠ¤åˆåŒæ¨¡æ¿ã€ç‰ˆæœ¬ä¸Žå¯åœçŠ¶æ€',
+          description: 'æ¨¡æ¿æ–‡ä»¶å¤ç”¨ç³»ç»Ÿä¸Šä¼ èƒ½åŠ›ï¼Œå¯ç”¨æ¨¡æ¿ç”¨äºŽåŽç»­åˆåŒèµ·è‰ã€‚'
+        },
+        fee: {
+          eyebrow: 'æ”¶è´¹è®¡åˆ’',
+          title: 'è·Ÿè¸ªåˆåŒåº”æ”¶ã€å®žæ”¶ã€ç¡®è®¤ä¸Žå¼€ç¥¨çŠ¶æ€',
+          description: 'æ”¶è´¹è®¡åˆ’ä¸¥æ ¼å—åˆåŒçŠ¶æ€çº¦æŸï¼Œç»ˆæ€åˆåŒç¦æ­¢ç»§ç»­è°ƒæ•´ã€‚'
+        },
+        attachment: {
+          eyebrow: 'åˆåŒé™„ä»¶',
+          title: 'å½’é›†åˆåŒæ–‡ä»¶ä¸Žä¸šåŠ¡é™„ä»¶',
+          description: 'é™„ä»¶ç»Ÿä¸€å…³è”åˆåŒï¼Œå¤ç”¨ç³»ç»Ÿä¸Šä¼ èƒ½åŠ›å¹¶ä¿ç•™ä¸šåŠ¡å…ƒæ•°æ®ã€‚'
+        }
+      }
+      return metas[this.mode] || metas.list
+    },
+    modeMetricConfig() {
+      return this.mode === 'list' ? this.metricConfig : (this.pageMetricConfigs[this.mode] || [])
+    },
+    approvalActionOptions() {
+      const options = this.dict.type.law_contract_approval_action || []
+      return options.length ? options : [
+        { label: 'é€šè¿‡', value: 'pass' },
+        { label: 'é©³å›ž', value: 'reject' },
+        { label: 'é€€å›žä¿®æ”¹', value: 'back' }
+      ]
+    },
+    signActionOptions() {
+      if (this.signForm && this.signForm.partial) {
+        return [{ label: 'è¡¥é½ç­¾ç½²ä¸ºå·²ç­¾è®¢', value: this.contractStates.signSigned }]
+      }
+      return [
+        { label: 'éƒ¨åˆ†ç­¾è®¢', value: this.contractStates.signPartial },
+        { label: 'å·²ç­¾è®¢', value: this.contractStates.signSigned }
+      ]
+    },
+    signActionTip() {
+      return this.signForm && this.signForm.partial
+        ? 'å½“å‰åˆåŒä¸ºéƒ¨åˆ†ç­¾è®¢ï¼Œå¯ç»§ç»­è¡¥é½ä¸ºå·²ç­¾è®¢ã€‚'
+        : 'ç­¾ç½²åŽåˆåŒè¿›å…¥å±¥çº¦ä¸­ï¼›å¦‚ç­¾ç½²å°šæœªå®Œæˆï¼Œè¯·é€‰æ‹©éƒ¨åˆ†ç­¾è®¢ã€‚'
+    },
+    invoiceActionOptions() {
+      if (this.invoiceForm && this.invoiceForm.partial) {
+        return [{ label: 'è¡¥é½å¼€ç¥¨ä¸ºå·²å¼€ç¥¨', value: this.contractStates.invoiceIssued }]
+      }
+      return [
+        { label: 'éƒ¨åˆ†å¼€ç¥¨', value: this.contractStates.invoicePartial },
+        { label: 'å·²å¼€ç¥¨', value: this.contractStates.invoiceIssued }
+      ]
+    },
+    invoiceActionTip() {
+      return this.invoiceForm && this.invoiceForm.partial
+        ? 'å½“å‰æ”¶è´¹è®¡åˆ’ä¸ºéƒ¨åˆ†å¼€ç¥¨ï¼Œå¯ç»§ç»­è¡¥é½ä¸ºå·²å¼€ç¥¨ã€‚'
+        : 'å¦‚æœ¬æœŸå‘ç¥¨å°šæœªå…¨éƒ¨å¼€å…·ï¼Œè¯·é€‰æ‹©éƒ¨åˆ†å¼€ç¥¨ã€‚'
+    },
+    modeMetrics() {
+      if (this.mode === 'list') return this.metrics
+      if (this.mode === 'approval') {
+        const customerIds = new Set(this.contracts.map(item => item.customerId || item.customer_id).filter(Boolean))
+        return [
+          { metricKey: 'total', metricValue: this.total },
+          { metricKey: 'reviewing', metricValue: this.contracts.length },
+          { metricKey: 'customers', metricValue: customerIds.size },
+          { metricKey: 'amount', metricValue: this.formatMoney(this.sumBy(this.contracts, item => item.signAmount || item.sign_amount)) }
+        ]
+      }
+      if (this.mode === 'template') {
+        return [
+          { metricKey: 'total', metricValue: this.total },
+          { metricKey: 'enabled', metricValue: this.templates.filter(item => this.isEnabled(item.status)).length },
+          { metricKey: 'disabled', metricValue: this.templates.filter(item => !this.isEnabled(item.status)).length },
+          { metricKey: 'withFile', metricValue: this.templates.filter(item => item.fileUrl || item.file_url).length }
+        ]
+      }
+      if (this.mode === 'fee') {
+        return [
+          { metricKey: 'total', metricValue: this.total },
+          { metricKey: 'pending', metricValue: this.fees.filter(item => this.isFeePending(item)).length },
+          { metricKey: 'confirmed', metricValue: this.fees.filter(item => this.isFeeConfirmed(item)).length },
+          { metricKey: 'invoiced', metricValue: this.fees.filter(item => this.isFeeInvoiced(item)).length }
+        ]
+      }
+      if (this.mode === 'attachment') {
+        const contractIds = new Set(this.attachments.map(item => item.contractId || item.contract_id).filter(Boolean))
+        return [
+          { metricKey: 'total', metricValue: this.total },
+          { metricKey: 'contracts', metricValue: contractIds.size },
+          { metricKey: 'typed', metricValue: this.attachments.filter(item => item.fileType || item.file_type).length },
+          { metricKey: 'files', metricValue: this.attachments.filter(item => item.fileUrl || item.file_url).length }
+        ]
+      }
+      return []
+    },
+    canReadApproval() {
+      return this.$auth.hasPermi('contract:approval:list')
+    },
+    canReadFee() {
+      return this.$auth.hasPermi('contract:fee:list')
+    },
+    canReadAttachment() {
+      return this.$auth.hasPermi('contract:attachment:list')
+    },
+    canReadStatus() {
+      return this.$auth.hasPermi('contract:status:list')
+    }
+  },
+  watch: {
+    '$route.query': {
+      immediate: true,
+      handler(query) {
+        this.mode = this.normalizeMode(query.module)
+        this.applyCustomerRouteQuery()
+        this.loadPage()
+      }
+    }
+  },
+}
+</script>
+
+<style scoped lang="scss">
+@import "./contract-page.scss";
+</style>
+
+<style lang="scss">
+@import "../business/business-dialog.scss";
+</style>
