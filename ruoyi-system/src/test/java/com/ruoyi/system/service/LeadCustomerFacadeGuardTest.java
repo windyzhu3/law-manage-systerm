@@ -11,7 +11,9 @@ import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 import com.ruoyi.system.mapper.BizCustomerMapper;
+import com.ruoyi.system.mapper.BizContractMapper;
 import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.service.impl.BizContractServiceImpl;
 import com.ruoyi.system.service.impl.BizCustomerServiceImpl;
 import com.ruoyi.system.service.impl.BizLeadServiceImpl;
 
@@ -22,6 +24,7 @@ class LeadCustomerFacadeGuardTest
     {
         assertTrue(lines("BizLeadServiceImpl.java") <= 150, "线索 Facade 不应超过150行");
         assertTrue(lines("BizCustomerServiceImpl.java") <= 150, "客户 Facade 不应超过150行");
+        assertTrue(lines("BizContractServiceImpl.java") <= 150, "合同 Facade 不应超过150行");
     }
 
     @Test
@@ -29,6 +32,7 @@ class LeadCustomerFacadeGuardTest
     {
         assertNoMapper(BizLeadServiceImpl.class, BizLeadMapper.class);
         assertNoMapper(BizCustomerServiceImpl.class, BizCustomerMapper.class);
+        assertNoMapper(BizContractServiceImpl.class, BizContractMapper.class);
     }
 
     private long lines(String fileName) throws Exception
