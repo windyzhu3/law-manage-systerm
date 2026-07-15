@@ -154,10 +154,7 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int handleConfirm(CaseConfirmCommand confirm)
     {
-        Map<String,Object> values = new HashMap<>();
-        values.put("confirmId", confirm.getConfirmId()); values.put("confirmResult", confirm.getConfirmResult());
-        values.put("remark", confirm.getRemark());
-        return caseConfirmationService.handle(values);
+        return caseConfirmationService.handle(confirm);
     }
 
     @Override

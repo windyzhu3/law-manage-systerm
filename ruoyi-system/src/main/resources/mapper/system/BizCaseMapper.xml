@@ -117,7 +117,7 @@
         </set>
         where case_id=#{caseId}
         and del_flag='0'
-        and case_status in ('confirming','processing')
+        and case_status=#{expectedStatus}
     </update>
 
     <select id="countCaseInDataScope" resultType="int">

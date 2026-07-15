@@ -37,7 +37,8 @@ class CaseManagementTodoFlowTest
         TodoInstance accept = todo("CASE_ACCEPT"); accept.setTodoId(9L);
         new CaseAcceptanceTodoHandler(confirmations, todos).complete(accept,
                 Map.of("confirmId", 33L, "accepted", true, "reason", "同意"), 12L, "lawyer");
-        verify(confirmations).handle(argThat(row -> "accepted".equals(row.get("confirmResult"))), any());
+        verify(confirmations).handle(argThat(command -> "accepted".equals(command.getConfirmResult())
+                && Long.valueOf(33L).equals(command.getConfirmId())), any());
         verify(todos).cancelActiveByBusiness("CASE", 8L, 9L, "lawyer");
     }
 
