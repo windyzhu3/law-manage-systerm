@@ -23,6 +23,8 @@ import com.law.business.lawcase.dto.CaseBatchAssignmentCommand;
 import com.law.business.lawcase.dto.CaseConfirmCommand;
 import com.law.business.lawcase.dto.CaseTransferApprovalCommand;
 import com.law.business.lawcase.dto.CaseTransferCommand;
+import com.law.business.lawcase.dto.LawyerProfileSaveCommand;
+import com.law.business.lawcase.dto.LawyerProfileStatusCommand;
 import com.ruoyi.system.service.IBizCaseService;
 
 @RestController
@@ -118,7 +120,7 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:lawyer:config')")
     @Log(title = "case-lawyer-profile", businessType = BusinessType.INSERT)
     @PostMapping("/lawyer/profile")
-    public AjaxResult addLawyerProfile(@RequestBody Map<String, Object> body)
+    public AjaxResult addLawyerProfile(@Valid @RequestBody LawyerProfileSaveCommand body)
     {
         return toAjax(caseService.saveLawyerProfile(body));
     }
@@ -126,7 +128,7 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:lawyer:config')")
     @Log(title = "case-lawyer-profile", businessType = BusinessType.UPDATE)
     @PutMapping("/lawyer/profile")
-    public AjaxResult editLawyerProfile(@RequestBody Map<String, Object> body)
+    public AjaxResult editLawyerProfile(@Valid @RequestBody LawyerProfileSaveCommand body)
     {
         return toAjax(caseService.saveLawyerProfile(body));
     }
@@ -134,7 +136,7 @@ public class BizCaseController extends BaseController
     @PreAuthorize("@ss.hasPermi('case:lawyer:config')")
     @Log(title = "case-lawyer-profile-status", businessType = BusinessType.UPDATE)
     @PutMapping("/lawyer/profile/status")
-    public AjaxResult updateLawyerProfileStatus(@RequestBody Map<String, Object> body)
+    public AjaxResult updateLawyerProfileStatus(@Valid @RequestBody LawyerProfileStatusCommand body)
     {
         return toAjax(caseService.updateLawyerProfileStatus(body));
     }

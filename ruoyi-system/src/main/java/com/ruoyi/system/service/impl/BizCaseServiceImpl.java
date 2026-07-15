@@ -1,6 +1,5 @@
 package com.ruoyi.system.service.impl;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +17,8 @@ import com.law.business.lawcase.dto.CaseBatchAssignmentCommand;
 import com.law.business.lawcase.dto.CaseConfirmCommand;
 import com.law.business.lawcase.dto.CaseTransferApprovalCommand;
 import com.law.business.lawcase.dto.CaseTransferCommand;
-import com.ruoyi.common.utils.SecurityUtils;
+import com.law.business.lawcase.dto.LawyerProfileSaveCommand;
+import com.law.business.lawcase.dto.LawyerProfileStatusCommand;
 
 @Service
 public class BizCaseServiceImpl implements IBizCaseService
@@ -85,14 +85,14 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Override
     @Transactional
-    public int saveLawyerProfile(Map<String, Object> profile)
+    public int saveLawyerProfile(LawyerProfileSaveCommand profile)
     {
         return lawyerProfileService.save(profile);
     }
 
     @Override
     @Transactional
-    public int updateLawyerProfileStatus(Map<String, Object> profile)
+    public int updateLawyerProfileStatus(LawyerProfileStatusCommand profile)
     {
         return lawyerProfileService.updateStatus(profile);
     }

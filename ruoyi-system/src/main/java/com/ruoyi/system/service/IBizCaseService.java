@@ -7,6 +7,8 @@ import com.law.business.lawcase.dto.CaseBatchAssignmentCommand;
 import com.law.business.lawcase.dto.CaseConfirmCommand;
 import com.law.business.lawcase.dto.CaseTransferApprovalCommand;
 import com.law.business.lawcase.dto.CaseTransferCommand;
+import com.law.business.lawcase.dto.LawyerProfileSaveCommand;
+import com.law.business.lawcase.dto.LawyerProfileStatusCommand;
 
 public interface IBizCaseService
 {
@@ -24,9 +26,9 @@ public interface IBizCaseService
 
     Map<String, Object> selectLawyerProfileByUserId(Long userId);
 
-    int saveLawyerProfile(Map<String, Object> profile);
+    int saveLawyerProfile(LawyerProfileSaveCommand profile);
 
-    int updateLawyerProfileStatus(Map<String, Object> profile);
+    int updateLawyerProfileStatus(LawyerProfileStatusCommand profile);
 
     int createCaseFromContract(Long contractId);
 
