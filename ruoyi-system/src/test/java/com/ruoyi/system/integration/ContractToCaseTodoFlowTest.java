@@ -30,8 +30,8 @@ class ContractToCaseTodoFlowTest
     }
     @Test void caseCreationHandlerIsIdempotentThroughExistingCaseGuard()
     {
-        CaseCreationService service=mock(CaseCreationService.class);BizContractMapper mapper=mock(BizContractMapper.class);BizContract contract=new BizContract();contract.setContractId(8L);when(mapper.selectContractById(8L)).thenReturn(contract);CaseCreationTodoHandler handler=new CaseCreationTodoHandler(service,mapper);
-        handler.complete(todo("CASE_CREATE_CHECK"),Map.of("materialsChecked",true),7L,"alice");verify(service).createFromContract(eq(contract),any());
+        CaseCreationService service=mock(CaseCreationService.class);CaseCreationTodoHandler handler=new CaseCreationTodoHandler(service);
+        handler.complete(todo("CASE_CREATE_CHECK"),Map.of("materialsChecked",true),7L,"alice");verify(service).createFromContract(eq(8L),any());
     }
     private TodoInstance todo(String code){TodoInstance value=new TodoInstance();value.setTemplateCode(code);value.setBusinessType("CONTRACT");value.setBusinessId(8L);value.setOwnerDeptId(3L);return value;}
 }

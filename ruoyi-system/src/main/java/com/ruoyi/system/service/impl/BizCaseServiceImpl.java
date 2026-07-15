@@ -6,7 +6,6 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.service.IBizCaseService;
 import com.ruoyi.system.service.casecenter.CaseQueryService;
 import com.ruoyi.system.service.casecenter.CaseCreationService;
@@ -100,9 +99,9 @@ public class BizCaseServiceImpl implements IBizCaseService
 
     @Override
     @Transactional
-    public int createCaseFromContract(BizContract contract)
+    public int createCaseFromContract(Long contractId)
     {
-        return caseCreationService.createFromContract(contract);
+        return caseCreationService.createFromContract(contractId);
     }
 
     @Override

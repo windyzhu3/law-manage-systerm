@@ -231,6 +231,10 @@
     <select id="selectFeePlanById" resultType="java.util.Map">
         select p.*, c.contract_no contractNo,c.contract_name contractName,c.customer_name customerName,c.contract_status contractStatus from biz_contract_fee_plan p left join biz_contract c on c.contract_id=p.contract_id where p.plan_id=#{planId} and c.del_flag='0'
     </select>
+    <select id="countConfirmedFeePlans" resultType="int">
+        select count(1) from biz_contract_fee_plan
+        where contract_id=#{contractId} and confirm_status='confirmed'
+    </select>
     <select id="selectFeePlanContractId" resultType="java.lang.Long">select contract_id from biz_contract_fee_plan where plan_id=#{planId}</select>
     <insert id="insertFeePlan" parameterType="map" useGeneratedKeys="true" keyProperty="planId">insert into biz_contract_fee_plan(contract_id,period_no,receivable_amount,plan_receive_date,received_amount,confirm_status,invoice_status,finance_user_id,remark,create_by,create_time) values(#{contractId},#{periodNo},#{receivableAmount},#{planReceiveDate},#{receivedAmount},#{confirmStatus},#{invoiceStatus},#{financeUserId},#{remark},#{createBy},sysdate())</insert>
     <update id="updateFeePlan" parameterType="map">

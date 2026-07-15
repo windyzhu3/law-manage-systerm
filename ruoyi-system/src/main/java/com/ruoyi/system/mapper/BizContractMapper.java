@@ -43,6 +43,7 @@ public interface BizContractMapper
     int updateSignMetadata(@Param("contractId") Long contractId,@Param("signMethod") String signMethod,@Param("signDate") java.time.LocalDate signDate,@Param("updateBy") String updateBy);
     List<Map<String, Object>> selectFeePlans(Map<String, Object> params);
     Map<String, Object> selectFeePlanById(Long planId);
+    int countConfirmedFeePlans(Long contractId);
     Long selectFeePlanContractId(Long planId);
     int insertFeePlan(Map<String, Object> plan);
     int updateFeePlan(Map<String, Object> plan);

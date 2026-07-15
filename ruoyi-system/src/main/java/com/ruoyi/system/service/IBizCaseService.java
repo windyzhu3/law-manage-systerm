@@ -2,7 +2,6 @@ package com.ruoyi.system.service;
 
 import java.util.List;
 import java.util.Map;
-import com.ruoyi.system.domain.BizContract;
 import com.law.business.lawcase.dto.CaseAssignmentCommand;
 import com.law.business.lawcase.dto.CaseBatchAssignmentCommand;
 import com.law.business.lawcase.dto.CaseConfirmCommand;
@@ -29,7 +28,7 @@ public interface IBizCaseService
 
     int updateLawyerProfileStatus(Map<String, Object> profile);
 
-    int createCaseFromContract(BizContract contract);
+    int createCaseFromContract(Long contractId);
 
     int assignCase(CaseAssignmentCommand assignment);
 
