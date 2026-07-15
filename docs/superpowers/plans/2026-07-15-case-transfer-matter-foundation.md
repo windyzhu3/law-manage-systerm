@@ -86,7 +86,7 @@
 - Produces: `CaseBatchAssignmentCommand#getCaseIds()` with `@NotEmpty`.
 - Produces: `LawyerProfileSaveCommand` and `LawyerProfileStatusCommand` for the remaining case Controller writes.
 
-- [ ] **Step 1: Write failing validation and reflection tests**
+- [x] **Step 1: Write failing validation and reflection tests**
 
 ```java
 class CaseCommandValidationTest {
@@ -113,7 +113,7 @@ class CaseCommandValidationTest {
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 Run:
 
@@ -123,7 +123,7 @@ mvn --batch-mode --no-transfer-progress -pl law-business -Dtest=CaseCommandValid
 
 Expected: test compilation fails because the three new command classes do not exist and current commands still expose `toPersistenceMap()`.
 
-- [ ] **Step 3: Implement the commands**
+- [x] **Step 3: Implement the commands**
 
 Implement `CaseBatchAssignmentCommand` with the same assign fields as the single command and:
 
@@ -144,11 +144,11 @@ public class LawyerProfileStatusCommand {
 
 Delete all `toPersistenceMap()` methods from case write commands.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the Task 1 Maven command. Expected: `CaseCommandValidationTest` passes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add law-business/src/main/java/com/law/business/lawcase/dto law-business/src/test/java/com/law/business/lawcase/dto
@@ -170,7 +170,7 @@ git commit -m "refactor: define typed case commands"
 - Consumes: `BusinessActorProvider.current()` and explicit `BusinessActor` from Todo handlers.
 - Produces: `requireReadable`, `requireAssignable`, `requireTransferRequestable`, `requireTransferApprovable`, `requireConfirmable`.
 
-- [ ] **Step 1: Write failing policy tests**
+- [x] **Step 1: Write failing policy tests**
 
 ```java
 @Test void onlyAssignedLawyerOrOwnerCanRequestTransfer() {
@@ -196,7 +196,7 @@ git commit -m "refactor: define typed case commands"
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseAccessPolicyTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -204,7 +204,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseAccessPo
 
 Expected: test compilation fails because `CaseAccessPolicy` is absent.
 
-- [ ] **Step 3: Implement policy and typed contexts**
+- [x] **Step 3: Implement policy and typed contexts**
 
 Use exact signatures:
 
@@ -220,7 +220,7 @@ public CaseConfirmContext requireConfirmable(Long confirmId, BusinessActor actor
 
 Refactor `CaseQueryService.caseDetail()` and `requireAccess()` to delegate to the policy without changing query payloads.
 
-- [ ] **Step 4: Run GREEN and existing case tests**
+- [x] **Step 4: Run GREEN and existing case tests**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=CaseAccessPolicyTest,CaseAssignmentServiceTest,CaseTransferServiceTest,CaseConfirmationServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test
@@ -228,7 +228,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=CaseAccessP
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseAccessPolicy.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseTransferContext.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseConfirmContext.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseQueryService.java ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseAccessPolicyTest.java
@@ -253,7 +253,7 @@ git commit -m "refactor: centralize case access policy"
 - Produces: mapper `int countConfirmedFeePlans(Long contractId)`.
 - Produces: idempotency key `CASE_CREATED:{caseId}`.
 
-- [ ] **Step 1: Write failing creation tests**
+- [x] **Step 1: Write failing creation tests**
 
 Add tests that assert:
 
@@ -274,7 +274,7 @@ verify(cases, never()).insertCase(anyMap());
 
 Also assert an existing case returns without publishing another event.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=CaseCreationServiceTest,ContractToCaseTodoFlowTest' -Dsurefire.failIfNoSpecifiedTests=false test
@@ -282,7 +282,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=CaseCreatio
 
 Expected: compilation or assertions fail because creation accepts `BizContract`, does not check confirmed payment, and publishes a UUID key.
 
-- [ ] **Step 3: Implement creation eligibility and stable event**
+- [x] **Step 3: Implement creation eligibility and stable event**
 
 Add mapper SQL:
 
@@ -302,11 +302,11 @@ new BusinessEventCommand(BusinessEventType.CASE_CREATED, "CASE", caseId, caseNo,
 
 Update the Todo handler to call `createFromContract(todo.getBusinessId(), actor)`. The validator repeats the payment precondition for a user-facing DoD error, while Service remains authoritative.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run the Task 3 Maven command. Expected: all selected tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseCreationService.java ruoyi-system/src/main/java/com/ruoyi/system/service/event/CaseCreationTodoHandler.java ruoyi-system/src/main/java/com/ruoyi/system/service/event/ContractTodoValidator.java ruoyi-system/src/main/java/com/ruoyi/system/mapper/BizContractMapper.java ruoyi-system/src/main/resources/mapper/system/BizContractMapper.xml ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseCreationServiceTest.java ruoyi-system/src/test/java/com/ruoyi/system/integration/ContractToCaseTodoFlowTest.java
@@ -328,7 +328,7 @@ git commit -m "refactor: stabilize paid contract case creation"
 - Produces: `assign(command, actor)` and `batchAssign(command, actor)`.
 - Produces: `CASE_ASSIGNED:{caseId}:{assignmentId}` with `confirmId` in payload when required.
 
-- [ ] **Step 1: Write failing assignment tests**
+- [x] **Step 1: Write failing assignment tests**
 
 ```java
 when(mapper.insertAssignment(anyMap())).thenAnswer(invocation -> {
@@ -347,7 +347,7 @@ verify(events).publish(argThat(event ->
 
 Add a batch test where the second case fails and a transaction fixture restores the first case, its assignment, log and event.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseAssignmentServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -355,7 +355,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseAssignme
 
 Expected: compilation fails on typed signatures or stable-key assertion fails because UUID is present.
 
-- [ ] **Step 3: Implement typed assignment**
+- [x] **Step 3: Implement typed assignment**
 
 Convert commands to Mapper parameter maps only in private `assignmentRow(...)`. Derive names and actor fields in Service. Capture generated `assignmentId` and `confirmId`, then publish:
 
@@ -365,7 +365,7 @@ String key = "CASE_ASSIGNED:" + caseId + ":" + assignmentId;
 
 Call `CaseStatusTransitions.requireAllowed(PENDING, target)` before `updateCaseAssignment`. Keep `batchAssign` as one public `@Transactional` method calling a non-proxied private `assignOne`, so one failure rolls back all rows.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run Task 4 test, then:
 
@@ -375,7 +375,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=CaseAssignm
 
 Expected: selected tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseAssignmentService.java ruoyi-system/src/main/java/com/ruoyi/system/mapper/BizCaseMapper.java ruoyi-system/src/main/resources/mapper/system/BizCaseMapper.xml ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseAssignmentServiceTest.java
@@ -394,7 +394,7 @@ git commit -m "refactor: stabilize case assignment facts"
 - Consumes: typed transfer commands and explicit `BusinessActor`.
 - Produces: `CASE_TRANSFER_REQUESTED:{caseId}:{transferId}` and `CASE_TRANSFER_APPROVED:{caseId}:{transferId}`.
 
-- [ ] **Step 1: Write failing transfer tests**
+- [x] **Step 1: Write failing transfer tests**
 
 Assert the request actor is enforced by `CaseAccessPolicy`, generated `transferId` is used in the request event, and approval event includes generated `confirmId`:
 
@@ -406,7 +406,7 @@ verify(publisher).publish(argThat(event ->
         && Long.valueOf(71L).equals(event.getPayload().get("confirmId"))));
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseTransferServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -414,7 +414,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseTransfer
 
 Expected: typed method calls do not compile or UUID key assertions fail.
 
-- [ ] **Step 3: Implement typed request and approval**
+- [x] **Step 3: Implement typed request and approval**
 
 Use `CaseAccessPolicy` contexts; derive applicant and approver fields from actor. Call transitions:
 
@@ -426,11 +426,11 @@ CaseStatusTransitions.requireAllowed(CaseStatus.TRANSFERRING,
 
 Keep the existing actions `passed/rejected/supplement`. Build persistence maps privately and publish only after transfer, case status, confirmation, log and notice writes succeed.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run Task 5 test. Expected: all transfer tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseTransferService.java ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseTransferServiceTest.java
@@ -450,7 +450,7 @@ git commit -m "refactor: stabilize case transfer facts"
 - Consumes: `CaseConfirmCommand`, `CaseAccessPolicy.requireConfirmable`.
 - Produces: stable accepted/rejected events tied to `confirmId`.
 
-- [ ] **Step 1: Write failing acceptance tests**
+- [x] **Step 1: Write failing acceptance tests**
 
 ```java
 @Test void namedRecipientProducesStableAcceptanceFact() {
@@ -466,7 +466,7 @@ git commit -m "refactor: stabilize case transfer facts"
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseConfirmationServiceTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -474,7 +474,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseConfirma
 
 Expected: typed signature or stable key assertion fails; current Mapper update has no exact expected status.
 
-- [ ] **Step 3: Implement secure confirmation**
+- [x] **Step 3: Implement secure confirmation**
 
 Use the policy context, validate transition, set `expectedStatus='confirming'`, and change SQL to:
 
@@ -486,11 +486,11 @@ where case_id=#{caseId}
 
 Publish `CASE_ACCEPTED:{caseId}:{confirmId}` or `CASE_REJECTED:{caseId}:{confirmId}` after all writes.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run Task 6 test. Expected: all confirmation tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/CaseConfirmationService.java ruoyi-system/src/main/resources/mapper/system/BizCaseMapper.xml ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseConfirmationServiceTest.java
@@ -514,7 +514,7 @@ git commit -m "refactor: secure case acceptance facts"
 - Produces: no case write `Map` signatures in Controller, facade, child services or Todo handlers.
 - Keeps existing JSON and URL contracts.
 
-- [ ] **Step 1: Write failing structural guard**
+- [x] **Step 1: Write failing structural guard**
 
 ```java
 @Test void caseWriteBoundariesAreTyped() throws Exception {
@@ -532,7 +532,7 @@ git commit -m "refactor: secure case acceptance facts"
 }
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseFacadeGuardTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -540,7 +540,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseFacadeGu
 
 Expected: guard fails on Map signatures and/or random keys.
 
-- [ ] **Step 3: Refactor facade and handlers**
+- [x] **Step 3: Refactor facade and handlers**
 
 Use exact facade signatures:
 
@@ -557,7 +557,7 @@ int createCaseFromContract(Long contractId);
 
 Controller passes commands directly. Todo handlers instantiate typed commands and call child services with explicit actor. Lawyer profile service derives audit fields from `BusinessActorProvider`; it ignores any client-supplied names or audit fields.
 
-- [ ] **Step 4: Run GREEN and module compilation**
+- [x] **Step 4: Run GREEN and module compilation**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am '-Dtest=CaseFacadeGuardTest,CaseManagementTodoFlowTest' -Dsurefire.failIfNoSpecifiedTests=false test
@@ -565,7 +565,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am '-Dtest=CaseFacadeGu
 
 Expected: selected tests and compilation of all dependent modules pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add law-business/src/main/java/com/law/business/lawcase/dto ruoyi-admin/src/main/java/com/ruoyi/web/controller/lawcase/BizCaseController.java ruoyi-system/src/main/java/com/ruoyi/system/service/IBizCaseService.java ruoyi-system/src/main/java/com/ruoyi/system/service/impl/BizCaseServiceImpl.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter/LawyerProfileService.java ruoyi-system/src/main/java/com/ruoyi/system/service/event ruoyi-system/src/test/java/com/ruoyi/system/integration/CaseManagementTodoFlowTest.java ruoyi-system/src/test/java/com/ruoyi/system/service/casecenter/CaseFacadeGuardTest.java
@@ -584,7 +584,7 @@ git commit -m "refactor: enforce typed case api commands"
 - Consumes: final typed services from Tasks 3–7.
 - Produces: evidence for event order and rollback on Outbox failure.
 
-- [ ] **Step 1: Write failing full-flow test**
+- [x] **Step 1: Write failing full-flow test**
 
 Build a stateful fixture like `CustomerContractPaymentFlowTest` and assert:
 
@@ -602,7 +602,7 @@ assertEquals(13L, caseState.mainLawyerId());
 
 Add a second test whose publisher throws during transfer approval; `TransactionTemplate` must restore transfer status, case status, confirmation list and action logs.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseHandoffFoundationFlowTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -610,11 +610,11 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am -Dtest=CaseHandoffF
 
 Expected: at least one assertion fails if any event key, actor check, conditional update or rollback boundary is incomplete.
 
-- [ ] **Step 3: Make only the minimal service/fixture corrections**
+- [x] **Step 3: Make only the minimal service/fixture corrections**
 
 Do not weaken assertions. Correct production transaction ordering only where the failing test proves a defect. Ensure publisher calls remain last within each transaction.
 
-- [ ] **Step 4: Run GREEN and all case tests**
+- [x] **Step 4: Run GREEN and all case tests**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=Case*Test,ContractToCaseTodoFlowTest' -Dsurefire.failIfNoSpecifiedTests=false test
@@ -622,7 +622,7 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am '-Dtest=Case*Test,C
 
 Expected: all matching case and contract-to-case tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-system/src/test/java/com/ruoyi/system/integration/CaseHandoffFoundationFlowTest.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter
@@ -643,7 +643,7 @@ git commit -m "test: cover case handoff foundation flow"
 - Produces: `npm run test:encoding` with fatal UTF-8 decoding.
 - Preserves: `case-page-actions.js`, existing components, modes, URLs and permissions.
 
-- [ ] **Step 1: Add the encoding checker and observe RED**
+- [x] **Step 1: Add the encoding checker and observe RED**
 
 ```js
 const fs = require('fs')
@@ -670,11 +670,11 @@ node scripts/check-source-encoding.js
 
 Expected: FAIL with invalid UTF-8 in `src/views/case/index.vue` around byte 15000.
 
-- [ ] **Step 2: Restore the case page from the last valid semantic version**
+- [x] **Step 2: Restore the case page from the last valid semantic version**
 
 Use `50814311^:ruoyi-ui/src/views/case/index.vue` only as the valid template baseline. Reconnect the current extracted `case-page-actions.js`, `CaseActionDialogs.vue`, resource drawers and SCSS. Do not reintroduce the old monolithic script or styles.
 
-- [ ] **Step 3: Add package and CI gates**
+- [x] **Step 3: Add package and CI gates**
 
 Add:
 
@@ -684,7 +684,7 @@ Add:
 
 Run `npm run test:encoding` before the production build in `.github/workflows/ci.yml`.
 
-- [ ] **Step 4: Run GREEN and frontend build**
+- [x] **Step 4: Run GREEN and frontend build**
 
 ```powershell
 Set-Location ruoyi-ui
@@ -695,7 +695,7 @@ npm run build:prod
 
 Expected: encoding check prints `source encoding ok`; Todo UI test passes; production build succeeds with only existing bundle-size warnings.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-ui/scripts/check-source-encoding.js ruoyi-ui/src/views/case/index.vue ruoyi-ui/package.json .github/workflows/ci.yml
@@ -713,7 +713,7 @@ git commit -m "fix: restore case center source integrity"
 **Interfaces:**
 - Produces: mocked API E2E for assignment, transfer request/approval and acceptance.
 
-- [ ] **Step 1: Write failing page E2E**
+- [x] **Step 1: Write failing page E2E**
 
 Set up the authenticated case route and capture requests. Include error collection:
 
@@ -735,7 +735,7 @@ expect(confirmBody).toEqual({ confirmId: 121, confirmResult: 'accepted', remark:
 expect(errors).toEqual([])
 ```
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```powershell
 Set-Location ruoyi-ui
@@ -744,11 +744,11 @@ npx playwright test e2e/case-handoff-foundation.spec.js
 
 Expected: test fails before all required case routes and restored controls are wired correctly.
 
-- [ ] **Step 3: Correct page wiring without adding features**
+- [x] **Step 3: Correct page wiring without adding features**
 
 Fix only request mapping, component props/emits, mode routing or restored template bindings proven by E2E. Keep existing labels, permissions and endpoint paths.
 
-- [ ] **Step 4: Run GREEN and complete Playwright**
+- [x] **Step 4: Run GREEN and complete Playwright**
 
 ```powershell
 npx playwright test e2e/case-handoff-foundation.spec.js
@@ -757,7 +757,7 @@ npx playwright test
 
 Expected: the new spec and entire suite pass with zero page/console errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add ruoyi-ui/e2e/case-handoff-foundation.spec.js ruoyi-ui/e2e/fixtures.js ruoyi-ui/src/views/case
@@ -776,7 +776,7 @@ git commit -m "test: cover case handoff page flows"
 - Produces: requirement-by-requirement completion evidence.
 - Produces: explicit CI-only status for database tests when local DB is absent.
 
-- [ ] **Step 1: Run backend full verification**
+- [x] **Step 1: Run backend full verification**
 
 ```powershell
 mvn --batch-mode --no-transfer-progress clean verify
@@ -784,7 +784,7 @@ mvn --batch-mode --no-transfer-progress clean verify
 
 Expected: all modules `SUCCESS`, zero test failures/errors. Record executed/skipped counts from Surefire XML, not only the Maven exit code.
 
-- [ ] **Step 2: Run frontend full verification**
+- [x] **Step 2: Run frontend full verification**
 
 ```powershell
 Set-Location ruoyi-ui
@@ -796,16 +796,16 @@ npx playwright test
 
 Expected: encoding and Todo checks pass, production build succeeds, entire Playwright suite passes.
 
-- [ ] **Step 3: Run database-targeted tests**
+- [x] **Step 3: Run database-targeted tests**
 
 ```powershell
 Set-Location ..
-mvn --batch-mode --no-transfer-progress -pl ruoyi-admin '-Dtest=FlywayMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest' -Dsurefire.failIfNoSpecifiedTests=false test
+mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am '-Dtest=FlywayMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest' '-Dsurefire.failIfNoSpecifiedTests=false' test
 ```
 
 Expected: execute and pass when `TODO_MIGRATION_DB_URL` is configured. If absent, record each skipped test and leave the database CI gate explicitly pending.
 
-- [ ] **Step 4: Run scope and structure audit**
+- [x] **Step 4: Run scope and structure audit**
 
 ```powershell
 rg -n "@RequestBody\s+Map|assignCase\(Map|batchAssignCases\(Map|requestTransfer\(Map|approveTransfer\(Map|handleConfirm\(Map|IdUtils\.fastUUID" ruoyi-admin/src/main/java/com/ruoyi/web/controller/lawcase ruoyi-system/src/main/java/com/ruoyi/system/service/IBizCaseService.java ruoyi-system/src/main/java/com/ruoyi/system/service/impl/BizCaseServiceImpl.java ruoyi-system/src/main/java/com/ruoyi/system/service/casecenter ruoyi-system/src/main/java/com/ruoyi/system/service/event
@@ -816,7 +816,7 @@ git status --short
 
 Expected: first two searches produce no prohibited matches; diff check is clean. Generated `dist`, reports, screenshots and `test-results` are removed before commit.
 
-- [ ] **Step 5: Update evidence documents**
+- [x] **Step 5: Update evidence documents**
 
 Mark each completed checkbox in this plan only after its command evidence exists. Add to `doc/v0.2-prd-readiness-gap-analysis.md`:
 
@@ -827,7 +827,7 @@ Mark each completed checkbox in this plan only after its command evidence exists
 - database tests executed or honestly skipped;
 - statement that 11 materials, conflict and classification remain v0.2 work.
 
-- [ ] **Step 6: Commit documentation**
+- [x] **Step 6: Commit documentation**
 
 ```powershell
 git add docs/superpowers/plans/2026-07-15-case-transfer-matter-foundation.md doc/v0.2-prd-readiness-gap-analysis.md
@@ -840,14 +840,14 @@ git commit -m "docs: close case handoff foundation governance"
 
 Do not mark this plan complete unless current evidence proves all of the following:
 
-- [ ] all case write boundaries are typed;
-- [ ] object access, transfer actor and confirmation recipient checks are tested;
-- [ ] case creation requires signed contract and a confirmed payment;
-- [ ] six existing case events have stable business keys;
-- [ ] state changes use exact conditional updates;
-- [ ] Outbox failure rolls back business state and logs;
-- [ ] case center source is valid UTF-8 and protected by CI;
-- [ ] actual case page and the full Playwright suite pass;
-- [ ] full Maven verify passes;
-- [ ] no new v0.2 schema, dictionary, Todo definition or event type was introduced;
-- [ ] database migration tests are either executed successfully or explicitly left as a CI gate.
+- [x] all case write boundaries are typed;
+- [x] object access, transfer actor and confirmation recipient checks are tested;
+- [x] case creation requires signed contract and a confirmed payment;
+- [x] six existing case events have stable business keys;
+- [x] state changes use exact conditional updates;
+- [x] Outbox failure rolls back business state and logs;
+- [x] case center source is valid UTF-8 and protected by CI;
+- [x] actual case page and the full Playwright suite pass;
+- [x] full Maven verify passes;
+- [x] no new v0.2 schema, dictionary, Todo definition or event type was introduced;
+- [x] database migration tests are either executed successfully or explicitly left as a CI gate.
