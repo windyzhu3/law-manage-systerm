@@ -134,4 +134,1397 @@
         </div>
         <div class="biz-filter-actions"><el-button :size="controlSize" plain icon="el-icon-refresh" @click="reset">é‡ç½®</el-button></div>
       </template>
-    ã½}¶‰ËkºwµçTˆ±…ÍÌô‰‰¥èµ½¹™¥œµÑ…‰±”ˆø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹–ú/–â ˆµ¥¸µİ¥‘Ñ ôˆÄÌÀˆøñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½ÜôˆøñÍÁ…¸±…ÍÌô‰½İ¹•Èµ•±°ˆøñ¤ùíì…Ù…Ñ…È¡É½Ü¹¹¥­9…µ”¤õôğ½¤ùíìÉ½Ü¹¹¥­9…µ”õôğ½ÍÁ…¸øñÍÁ…¸±…ÍÌô‰ÍÕˆµÑ•áĞˆùíìÉ½Ü¹ÕÍ•É9…µ”õôğ½ÍÁ…¸øğ½Ñ•µÁ±…Ñ”øğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹¦£¦^ ˆÁÉ½Àô‰‘•ÁÑ9…µ”ˆµ¥¸µİ¥‘Ñ ôˆÄÈÀˆÍ¡½Üµ½Ù•É™±½ÜµÑ½½±Ñ¥À€¼ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹¦7ö»*Ûšˆİ¥‘Ñ ôˆäÀˆ…±¥¸ô‰•¹Ñ•ÈˆøñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½ÜôˆøñÍÁ…¸€é±…ÍÌô‰l½¹™¥œµÍÑ…ÑÕÌœ°É½Ü¹ÁÉ½™¥±•%€ü€¥ÌµÉ•…‘äœ€è€¥Ìµ•µÁÑätˆùíìÉ½Ü¹ÁÉ½™¥±•%€ü€Ÿ–ŞË¦7ö¸œ€è€Ÿšr«¦7ö¸œõôğ½ÍÁ…¸øğ½Ñ•µÁ±…Ñ”øğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹’âk–*‡¢K¢&Èˆİ¥‘Ñ ôˆÄÀÀˆ…±¥¸ô‰•¹Ñ•ÈˆøñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½Üôˆøñ‘¥ĞµÑ…œØµ¥˜ô‰É½Ü¹±…İå•ÉI½±”ˆ€é½ÁÑ¥½¹Ìô‰‘¥Ğ¹ÑåÁ”¹±…İ}±…İå•É}É½±”ˆ€éÙ…±Õ”ô‰É½Ü¹±…İå•ÉI½±”ˆ€¼øñÍÁ…¸Øµ•±Í”±…ÍÌô‰µÕÑ•µÑ•áĞˆûšr«¢ºûö¸ğ½ÍÁ…¸øğ½Ñ•µÁ±…Ñ”øğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹’âO’âkšZç–BDˆµ¥¸µİ¥‘Ñ ôˆÄÔÀˆøñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½ÜôˆøñÍÁ…¸Øµ¥˜ô‰É½Ü¹ÍÁ•¥…±Ñ¥•Ìˆ±…ÍÌô‰Ñ…œµÁ¥±±Ìˆøñ¤Øµ™½Èô‰¥Ñ•´¥¸ÍÁ•¥…±Ñå1¥ÍĞ¡É½Ü¹ÍÁ•¥…±Ñ¥•Ì¤ˆ€é­•äô‰¥Ñ•´ˆùíì‘¥Ñ1…‰•° ±…İ}…Í•}ÑåÁ”œ°¥Ñ•´¤õôğ½¤øğ½ÍÁ…¸øñÍÁ…¸Øµ•±Í”±…ÍÌô‰µÕÑ•µÑ•áĞˆûšr«¢ºûö¸ğ½ÍÁ…¸øğ½Ñ•µÁ±…Ñ”øğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹¢Ò¢ö÷’â+¦f@ˆÁÉ½Àô‰±½…‘1¥µ¥Ğˆİ¥‘Ñ ôˆäÀˆ…±¥¸ô‰•¹Ñ•Èˆ€¼ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹–æÏ–v–N7–êPˆİ¥‘Ñ ôˆäÀˆ…±¥¸ô‰•¹Ñ•ÈˆøñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½ÜôˆùíìÉ½Ü¹…ÙI•ÍÁ½¹Í•!½ÕÉÌñğ€Àõõ ğ½Ñ•µÁ±…Ñ”øğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹–>¿–"š† ˆİ¥‘Ñ ôˆäÀˆ…±¥¸ô‰•¹Ñ•Èˆø(€€€€€€€€€€€€€€ñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½Üôˆø(€€€€€€€€€€€€€€€€ñ•°µÍİ¥Ñ Øµµ½‘•°ô‰É½Ü¹…ÍÍ¥¹¹…‰±•ˆ…Ñ¥Ù”µÙ…±Õ”ô‰dˆ¥¹…Ñ¥Ù”µÙ…±Õ”ô‰8ˆ¡…¹”ô‰¡…¹•AÉ½™¥±•MÑ…ÑÕÌ¡É½Ü¤ˆ€¼ø(€€€€€€€€€€€€€€ğ½Ñ•µÁ±…Ñ”ø(€€€€€€€€€€€€ğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€€€ñ•°µÑ…‰±”µ½±Õµ¸±…‰•°ô‹šN7’öpˆİ¥‘Ñ ôˆÄÀÀˆ…±¥¸ô‰•¹Ñ•Èˆ±…ÍÌµ¹…µ”ô‰Íµ…±°µÁ…‘‘¥¹œ™¥á•µİ¥‘Ñ ‰¥èµ½Á•É…Ñ¥½¸µ½±Õµ¸ˆ™¥á•ô‰É¥¡Ğˆø(€€€€€€€€€€€€€€ñÑ•µÁ±…Ñ”Í±½ĞµÍ½Á”ô‰ìÉ½ÜôˆøñÍÁ…¸±…ÍÌô‰…Ñ¥½¸µ‰ÕÑÑ½¹Ìˆøñ•°µ‰ÕÑÑ½¸€éÍ¥é”ô‰½¹ÑÉ½±M¥é”ˆÑåÁ”ô‰Ñ•áĞˆ±¥¬ô‰½Á•¹AÉ½™¥±•½É´¡É½Ü¤ˆûò[¢úDğ½•°µ‰ÕÑÑ½¸øğ½ÍÁ…¸øğ½Ñ•µÁ±…Ñ”ø(€€€€€€€€€€€€ğ½•°µÑ…‰±”µ½±Õµ¸ø(€€€€€€€€€€ğ½•°µÑ…‰±”ø(€€€€€€€€€€ñÁ…¥¹…Ñ¥½¸ØµÍ¡½Üô‰ÁÉ½™¥±•Q½Ñ…°€ø€Àˆ€éÑ½Ñ…°ô‰ÁÉ½™¥±•Q½Ñ…°ˆ€éÁ…”¹Íå¹Œô‰ÁÉ½™¥±•EÕ•Éä¹Á…•9Õ´ˆ€é±¥µ¥Ğ¹Íå¹Œô‰ÁÉ½™¥±•EÕ•Éä¹Á…•M¥é”ˆÁ…¥¹…Ñ¥½¸ô‰±½…‘AÉ½™¥±•Ìˆ€¼ø(€€€€€€€€ğ½Í•Ñ¥½¸ø(€€€€€€ğ½‘¥Øø(€€€€ğ½•°µ‘É…İ•Èø((€€ğ½‘¥Øø(ğ½Ñ•µÁ±…Ñ”ø((ñÍÉ¥ÁĞø)¥µÁ½ÉĞ‰ÕÍ¥¹•ÍÍU¤™É½´€ ½Ù¥•İÌ½‰ÕÍ¥¹•ÍÌ½µ¥á¥¹Ì½‰ÕÍ¥¹•ÍÍU¤œ)¥µÁ½ÉĞ…Í•A…•Ñ¥½¹Ì™É½´€œ¸½…Í”µÁ…”µ…Ñ¥½¹Ìœ)¥µÁ½ÉĞ	¥é!•É¼™É½´€ ½Ù¥•İÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é!•É¼œ)¥µÁ½ÉĞ	¥é5•ÑÉ¥Ì™É½´€ ½Ù¥•İÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥é5•ÑÉ¥Ìœ)¥µÁ½ÉĞ	¥éA…•!•…‘•È™É½´€ ½Ù¥•İÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éA…•!•…‘•Èœ)¥µÁ½ÉĞ	¥éQ…‰±•…É™É½´€ ½Ù¥•İÌ½‰ÕÍ¥¹•ÍÌ½½µÁ½¹•¹ÑÌ½	¥éQ…‰±•…Éœ)¥µÁ½ÉĞ…Í••Ñ…¥±É…İ•È™É½´€œ¸½½µÁ½¹•¹ÑÌ½…Í••Ñ…¥±É…İ•Èœ)¥µÁ½ÉĞ…Í•±½İÉ…İ•È™É½´€œ¸½½µÁ½¹•¹ÑÌ½…Í•±½İÉ…İ•Èœ)¥µÁ½ÉĞ…Í•Ñ¥½¹¥…±½Ì™É½´€œ¸½½µÁ½¹•¹ÑÌ½…Í•Ñ¥½¹¥…±½Ìœ()•áÁ½ÉĞ‘•™…Õ±Ğì(€¹…µ”è€…Í••¹Ñ•Èœ°(€µ¥á¥¹Ìèm‰ÕÍ¥¹•ÍÍU¤°…Í•A…•Ñ¥½¹Ít°(€½µÁ½¹•¹ÑÌèì	¥é!•É¼°	¥é5•ÑÉ¥Ì°	¥éA…•!•…‘•È°	¥éQ…‰±•…É°…Í••Ñ…¥±É…İ•È°…Í•±½İÉ…İ•È°…Í•Ñ¥½¹¥…±½Ìô°(€‘¥ÑÌèl±…İ}…Í•}ÑåÁ”œ°€±…İ}…Í•}ÕÉ•¹äœ°€±…İ}…Í•}ÍÑ…ÑÕÌœ°€±…İ}…Í•}ÁÉ¥½É¥Ñäœ°€±…İ}…Í•}…ÍÍ¥¹}µ•Ñ¡½œ°€±…İ}…Í•}…ÍÍ¥¹}É•…Í½¸œ°€±…İ}±…İå•É}É½±”œ°€±…İ}±…İå•É}µ…Ñ¡}±•Ù•°œ°€±…İ}±…İå•É}±½…‘}ÍÑ…ÑÕÌœ°€±…İ}…Í•}ÑÉ…¹Í™•É}ÍÑ…ÑÕÌœ°€±…İ}…Í•}ÑÉ…¹Í™•É}É•…Í½¸œ°€±…İ}…Í•}É¥Í­}±•Ù•°œ°€±…İ}…Í•}ÍÑ…ÑÕÍ}…Ñ¥½¸œ°€±…İ}…Í•}½¹™¥Éµ}ÍÑ…ÑÕÌt°(€‘…Ñ„ ¤ì(€€€É•ÑÕÉ¸ì(€€€€€µ½‘”è€Á•¹‘¥¹œœ°(€€€€€Í¡½İM•…É èÑÉÕ”°(€€€€€±½…‘¥¹œè™…±Í”°(€€€€€Ñ½Ñ…°è€À°(€€€€€ÅÕ•ÉäèÑ¡¥Ì¹‘•™…Õ±ÑEÕ•Éä ¤°(€€€€€…Í•Ìèmt°(€€€€€…ÍÍ¥¹µ•¹ÑÌèmt°(€€€€€ÑÉ…¹Í™•ÉÌèmt°(€€€€€±…İå•É1½…‘Ìèmt°(€€€€€ÍÁ•¥…±ÑåMÑ…ÑÌèmt°(€€€€€½¹™¥ÉµÌèmt°(€€€€€ÍÑ…ÑÕÍ•Ìèmt°(€€€€€Í•±•Ñ•‘I½İÌèmt°(€€€€€±…İå•É=ÁÑ¥½¹Ìèmt°(€€€€€ÁÉ½•ÍÍ¥¹…Í•Ìèmt°(€€€€€µ•ÑÉ¥Ìèmt°(€€€€€…ÍÍ¥¹=Á•¸è™…±Í”°(€€€€€…ÍÍ¥¹…Í•I½Üèíô°(€€€€€…ÍÍ¥¹½É´èíô°(€€€€€ÑÉ…¹Í™•É=Á•¸è™…±Í”°(€€€€€ÑÉ…¹Í™•É½É´èíô°(€€€€€ÑÉ…¹Í™•É•Ñ…¥±=Á•¸è™…±Í”°(€€€€€…ÁÁÉ½Ù…±QÉ…¹Í™•Èèíô°(€€€€€…ÁÁÉ½Ù…±½É´èíô°(€€€€€‘•Ñ…¥±=Á•¸è™…±Í”°(€€€€€‘•Ñ…¥±…Í”èíô°(€€€€€±…İå•É•Ñ…¥±=Á•¸è™…±Í”°(€€€€€±…İå•É•Ñ…¥°èíô°(€€€€€™±½İ=Á•¸è™…±Í”°(€€€€€™±½İ…Í”èíô°(€€€€€™±½İMÑ…ÑÕÍ•Ìèmt°(€€€€€™±½İ1½…‘¥¹œè™…±Í”°(€€€€€ÁÉ½™¥±•=Á•¸è™…±Í”°(€€€€€ÁÉ½™¥±•½Éµ=Á•¸è™…±Í”°(€€€€€ÁÉ½™¥±•1½…‘¥¹œè™…±Í”°(€€€€€ÁÉ½™¥±•1¥ÍĞèmt°(€€€€€ÁÉ½™¥±•Q½Ñ…°è€À°(€€€€€ÁÉ½™¥±•EÕ•ÉäèìÁ…•9Õ´è€Ä°Á…•M¥é”è€ÄÀô°(€€€€€ÁÉ½™¥±•½É´èíô°(€€€€€…ÍÍ¥¹IÕ±•Ìèì(€€€€€€€µ…¥¹1…İå•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§’âï–*{–ú/–â œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€…ÍÍ¥¹5•Ñ¡½èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–"¦7šZç–ò<œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€ÁÉ¥½É¥ÑäèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§’òc–#êœœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€…ÍÍ¥¹I•…Í½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–"¦7–:–n€œ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô°(€€€€€ÑÉ…¹Í™•ÉIÕ±•Ìèì(€€€€€€€…Í•%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š†#’îØœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€Ñ½1…İå•É%èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§š.¢ö³–—–ú/–â œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€ÑÉ…¹Í™•ÉI•…Í½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¢ö³š†#–:–n€œ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€É¥Í­1•Ù•°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§¦;¦f§¶'êœœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€‘•Ñ…¥°èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—¢ö³š†#¢¾›šœ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€…ÁÁÉ½Ù…±IÕ±•Ìèì(€€€€€€€…Ñ¥½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§–º‡š&ç–*£’öpœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€½Á¥¹¥½¸èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–º‡š&çš?¢œ°ÑÉ¥•Èè€‰±ÕÈœõt(€€€€€ô°(€€€€€ÁÉ½™¥±•IÕ±•Ìèì(€€€€€€€±…İå•ÉI½±”èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§’âk–*‡¢K¢&Èœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€ÍÁ•¥…±Ñ¥•ÌèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§’âO’âkšZç–BDœ°ÑÉ¥•Èè€¡…¹”œõt°(€€€€€€€±½…‘1¥µ¥ĞèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—¢Ò¢ö÷’â+¦f@œ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€…ÙI•ÍÁ½¹Í•!½ÕÉÌèmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¢úO–—–æÏ–v–N7–êSš^Û¦Vüœ°ÑÉ¥•Èè€‰±ÕÈœõt°(€€€€€€€…ÍÍ¥¹¹…‰±•èmìÉ•ÅÕ¥É•èÑÉÕ”°µ•ÍÍ…”è€Ÿ¢¾ß¦'š.§šb¿–B›–>¿–"š† œ°ÑÉ¥•Èè€¡…¹”œõt(€€€€€ô(€€€ô(€ô°(€½µÁÕÑ•èì(€€€Á…•Q¥Ñ±” ¤ì(€€€€€½¹ÍĞÑ¥Ñ±•Ì€ôìÁ•¹‘¥¹œè€Ÿ–ú–"š†#–"_¢† œ°…ÍÍ¥¸è€Ÿ–"š†#¢ºÃ–öTœ°ÑÉ…¹Í™•Èè€Ÿ¢ö³š†#–º‡š&äœ°±…İå•Èè€Ÿ–ú/–â#¢Ò¢öôœ°½¹™¥É´è€Ÿ–ú†»¢º“’ş‡š¼œ°ÍÑ…ÑÕÌè€Ÿ*Ûš¢ºÃ–öTœô(€€€€€É•ÑÕÉ¸Ñ¥Ñ±•ÍmÑ¡¥Ì¹µ½‘•tñğ€Ÿš†#º‡’â·–şœ(€€€ô°(€€€Á…••ÍÉ¥ÁÑ¥½¸ ¤ì(€€€€€½¹ÍĞ‘•ÍÉ¥ÁÑ¥½¹Ì€ôì(€€€€€€€Á•¹‘¥¹œè€Ÿ¦n’â·º‡B–ú–"š†#š†#’îÛ¾ò3šR¿š2¶o¦'š~—¢¾‹’â;–"š†#¾ò3–B#B–2ç¦7’âO’âk–ú/–â#œ°(€€€€€€€…ÍÍ¥¸è€ŸšÊ'šŞš†#’îÛ–"¦7¢ºÃ–öW¾ò3¢ş÷¢â«’âï–*{–ú/–â#–6?–*{–ú/–â#’â;–"¦7–:–nƒœ°(€€€€€€€ÑÉ…¹Í™•Èè€Ÿº‡B–ú/–â#¢ö³š†#RÏ¢¾ß¾ò3¢¢2¢ö³š†#šÖ¢/’â;¦;¦f§š:Ÿ–"Ûœ°(€€€€€€€±…İå•Èè€Ÿ–*£šš:3š>‡–ú/–â#¢Ò¢ö÷¾ò3¢ú–*§š†#º‡–Fc–B#B–"¦7š†#’îÛ¢ÖšêCœ°(€€€€€€€½¹™¥É´è€Ÿ–’B–ú/–â#š:—š†#†»¢º“’â;¢ÖšZg¢†—–†»¢º“œ°(€€€€€€€ÍÑ…ÑÕÌè€Ÿ¢ş÷¢â«š†#’îÛ–Ï¦R»*ÛššÖ¢ö³¢ºÃ–öWœ(€€€€€ô(€€€€€É•ÑÕÉ¸‘•ÍÉ¥ÁÑ¥½¹ÍmÑ¡¥Ì¹µ½‘•tñğ‘•ÍÉ¥ÁÑ¥½¹Ì¹Á•¹‘¥¹œ(€€€ô°(€€€¡•É½5½‘•Ì ¤ì(€€€€€É•ÑÕÉ¸lÁ•¹‘¥¹œœ°€…ÍÍ¥¸œ°€ÑÉ…¹Í™•Èœ°€±…İå•Èœ°€½¹™¥É´t(€€€ô°(€€€¡•É½5•Ñ„ ¤ì(€€€€€½¹ÍĞµ•Ñ…Ì€ôì(€€€€€€€Á•¹‘¥¹œèì•å•‰É½Üè€Ÿš†#’îÛ¢Â–ê˜œ°Ñ¥Ñ±”è€Ÿ¦®cšV#–6?¢Â–"š†#šÖ¢ö³¾ò3š>C–6–*{š†#–6?–B3šV#:œ°‘•ÍÉ¥ÁÑ¥½¸è€ŸÊû––2ç¦7–B#¦–ú/–â#¾ò3–v¢†‡–Ş—’ös¢Ò¢ö÷¾ò3–£¢/¢Ş¢â«šÖ¢ö³*Ûšœô°(€€€€€€€…ÍÍ¥¸èì•å•‰É½Üè€Ÿ–"š†#¢ºÃ–öTœ°Ñ¥Ñ±”è€ŸšÊ'šŞ–"š†#¢ş¢/¾ò3š>C–6š†#’îÛ¢Â–ê›–>¿¢ş÷šê¿šœœ°‘•ÍÉ¥ÁÑ¥½¸è€Ÿ¦n’â·¢ºÃ–öW’âï–*{–ú/–â#–6?–*{–ú/–â#–"¦7–:–nƒ’â;–"¦7š^Û¦^Ó¾ò3šZç’úÿ–B;î·–’7ncœô°(€€€€€€€ÑÉ…¹Í™•Èèì•å•‰É½Üè€Ÿ¢ö³š†#¦;š:œœ°Ñ¥Ñ±”è€Ÿ¢¢2–’B¢ö³š†#RÏ¢¾ß¾ò3†»’şwš†#’îÛ–æÏ¢ÏšÖ¢ö°œ°‘•ÍÉ¥ÁÑ¥½¸è€Ÿ–’kîÓ¦;¦f§¢¾–"¯¾ò3–º‡š&çš?¢Vg^W¾ò3’şw¦jsš†#’îÛ–B#¢šÖ¢ö³œô°(€€€€€€€±…İå•Èèì•å•‰É½Üè€Ÿ–ú/–â#¢Ò¢öôœ°Ñ¥Ñ±”è€Ÿ–*£šš:3š>‡–ú/–â#¢Ò¢ö÷¾ò3š>C–6–"š†#–v¢†‡–ê˜œ°‘•ÍÉ¥ÁÑ¥½¸è€Ÿ¦k¢ş¢Ò¢ö÷šVÃš6»–º{š^ÛšÒ{–¾–ú/–â#–Ş—’ös*Ûš¾ò3–B#B–"¦7š†#’îÛœô°(€€€€€€€½¹™¥É´èì•å•‰É½Üè€Ÿš:—š†#†»¢ºœ°Ñ¥Ñ±”è€Ÿ¦n’â·–’B†»¢º“šÚ#š¿¾ò3’şw¢¾–"š†#¦^·:¼œ°‘•ÍÉ¥ÁÑ¥½¸è€Ÿ¢Ş¢şo–ú/–â#š:—š†#†»¢º“š.Kîw’â;¢ÖšZg¢†—––’B¾ò3¦ÿ–7š†#’îÛšÖ¢ö³–sšî{œô(€€€€€ô(€€€€€É•ÑÕÉ¸µ•Ñ…ÍmÑ¡¥Ì¹µ½‘•tñğµ•Ñ…Ì¹Á•¹‘¥¹œ(€€€ô°(€€€µ½‘•5•ÑÉ¥Ì ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€Á•¹‘¥¹œœ¤É•ÑÕÉ¸Ñ¡¥Ì¹µ•ÑÉ¥Ì(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€…ÍÍ¥¸œ¤ì(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€…ÍÍ¥¹Q½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ñğÑ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€…ÍÍ¥¹Q½‘…äœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹™¥±Ñ•È¡¥Ñ•´€ôøMÑÉ¥¹œ¡¥Ñ•´¹É•…Ñ•}Ñ¥µ”ñğ€œœ¤¹Í±¥” À°€ÄÀ¤€ôôô¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤¹Í±¥” À°€ÄÀ¤¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€µ…¥¹1…İå•ÉÌœ°µ•ÑÉ¥Y…±Õ”è¹•ÜM•Ğ¡Ñ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹µ…À¡¥Ñ•´€ôø¥Ñ•´¹µ…¥¹}±…İå•É}¹…µ”¤¹™¥±Ñ•È¡	½½±•…¸¤¤¹Í¥é”ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€‰…Ñ¡ÍÍ¥¸œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹™¥±Ñ•È¡¥Ñ•´€ôøMÑÉ¥¹œ¡¥Ñ•´¹É•µ…É¬ñğ€œœ¤¹¥¹‘•á=˜ Ÿš&ç¦<œ¤€ø€´Ä¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€…Ù]½É­±½…œ°µ•ÑÉ¥Y…±Õ”è5…Ñ ¹É½Õ¹¡Ñ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹É•‘Õ” ¡Ñ½Ñ…°°¥Ñ•´¤€ôøÑ½Ñ…°€¬9Õµ‰•È¡¥Ñ•´¹•ÍÑ¥µ…Ñ•‘}İ½É­±½…ñğ€À¤°€À¤€¼€¡Ñ¡¥Ì¹…ÍÍ¥¹µ•¹ÑÌ¹±•¹Ñ ñğ€Ä¤¤€¬€ œô(€€€€€€€t(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€±…İå•Èœ¤ì(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½Ñ…±1…İå•ÉÌœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹±…İå•É1½…‘Ì¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€¡¥¡1½…œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹±…İå•É1½…‘Ì¹™¥±Ñ•È¡¥Ñ•´€ôø9Õµ‰•È¡¥Ñ•´¹±½…‘I…Ñ”ñğ€À¤€øô€àÀ¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€¥‘±”œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹±…İå•É1½…‘Ì¹™¥±Ñ•È¡¥Ñ•´€ôø9Õµ‰•È¡¥Ñ•´¹±½…‘I…Ñ”ñğ€À¤€ğ€ÈÀ¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€µ½¹Ñ¡ÍÍ¥¹•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹±…İå•É1½…‘Ì¹É•‘Õ” ¡Ñ½Ñ…°°¥Ñ•´¤€ôøÑ½Ñ…°€¬9Õµ‰•È¡¥Ñ•´¹µ½¹Ñ¡ÍÍ¥¹•ñğ€À¤°€À¤ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€…Ù1½…œ°µ•ÑÉ¥Y…±Õ”è5…Ñ ¹É½Õ¹¡Ñ¡¥Ì¹±…İå•É1½…‘Ì¹É•‘Õ” ¡Ñ½Ñ…°°¥Ñ•´¤€ôøÑ½Ñ…°€¬9Õµ‰•È¡¥Ñ•´¹±½…‘I…Ñ”ñğ€À¤°€À¤€¼€¡Ñ¡¥Ì¹±…İå•É1½…‘Ì¹±•¹Ñ ñğ€Ä¤¤€¬€œ”œô(€€€€€€€t(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹µ½‘”€ôôô€½¹™¥É´œ¤ì(€€€€€€€É•ÑÕÉ¸l(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥ÉµQ½Ñ…°œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹Ñ½Ñ…°ñğÑ¡¥Ì¹½¹™¥ÉµÌ¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥ÉµA•¹‘¥¹œœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹½¹™¥ÉµÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹½¹™¥Éµ}ÍÑ…ÑÕÌ€ôôô€Á•¹‘¥¹œœ¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥Éµ•ÁÑ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹½¹™¥ÉµÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹½¹™¥Éµ}ÍÑ…ÑÕÌ€ôôô€…•ÁÑ•œ¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥ÉµI•©•Ñ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹½¹™¥ÉµÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹½¹™¥Éµ}ÍÑ…ÑÕÌ€ôôô€É•©•Ñ•œ¤¹±•¹Ñ ô°(€€€€€€€€€ìµ•ÑÉ¥-•äè€½¹™¥ÉµQ½‘…äœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹½¹™¥ÉµÌ¹™¥±Ñ•È¡¥Ñ•´€ôøMÑÉ¥¹œ¡¥Ñ•´¹É•…Ñ•}Ñ¥µ”ñğ€œœ¤¹Í±¥” À°€ÄÀ¤€ôôô¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤¹Í±¥” À°€ÄÀ¤¤¹±•¹Ñ ô(€€€€€€€t(€€€€€ô(€€€€€É•ÑÕÉ¸l(€€€€€€€ìµ•ÑÉ¥-•äè€Á•¹‘¥¹QÉ…¹Í™•Èœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹ÑÉ…¹Í™•ÉÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹ÑÉ…¹Í™•É}ÍÑ…ÑÕÌ€ôôô€Á•¹‘¥¹œœ¤¹±•¹Ñ ô°(€€€€€€€ìµ•ÑÉ¥-•äè€Ñ½‘…åÁÁ±äœ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹ÑÉ…¹Í™•ÉÌ¹™¥±Ñ•È¡¥Ñ•´€ôøMÑÉ¥¹œ¡¥Ñ•´¹É•…Ñ•}Ñ¥µ”ñğ€œœ¤¹Í±¥” À°€ÄÀ¤€ôôô¹•Ü…Ñ” ¤¹Ñ½%M=MÑÉ¥¹œ ¤¹Í±¥” À°€ÄÀ¤¤¹±•¹Ñ ô°(€€€€€€€ìµ•ÑÉ¥-•äè€Á…ÍÍ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹ÑÉ…¹Í™•ÉÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹ÑÉ…¹Í™•É}ÍÑ…ÑÕÌ€ôôô€Á…ÍÍ•œ¤¹±•¹Ñ ô°(€€€€€€€ìµ•ÑÉ¥-•äè€É•©•Ñ•œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹ÑÉ…¹Í™•ÉÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹ÑÉ…¹Í™•É}ÍÑ…ÑÕÌ€ôôô€É•©•Ñ•œ¤¹±•¹Ñ ô°(€€€€€€€ìµ•ÑÉ¥-•äè€¡¥¡I¥Í¬œ°µ•ÑÉ¥Y…±Õ”èÑ¡¥Ì¹ÑÉ…¹Í™•ÉÌ¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹É¥Í­}±•Ù•°€ôôô€¡¥ œ¤¹±•¹Ñ ô(€€€€€t(€€€ô°(€€€µ½‘•5•ÑÉ¥½¹™¥œ ¤ì(€€€€€½¹ÍĞ½¹™¥Ì€ôì(€€€€€€€Á•¹‘¥¹œèì±…‰•°è€Ÿ–ú–"š†#š†#’îØœ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€Ñ½‘…å9•Üèì±…‰•°è€Ÿ’î+š^—šZÃ¢ö³–”œ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€å…¸œô°(€€€€€€€ÑÉ…¹Í™•ÉA•¹‘¥¹œèì±…‰•°è€Ÿ–ú–º‡š&ç¢ö³š† œ°¥½¸è€Ù…±¥‘½‘”œ°½±½Èè€½É…¹”œô°(€€€€€€€¡¥¡1½…‘1…İå•ÉÌèì±…‰•°è€Ÿ¦®c¢Ò¢ö÷–ú/–â œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€Ù¥½±•Ğœô°(€€€€€€€…ÙÍÍ¥¹…åÌèì±…‰•°è€Ÿ–æÏ–v–"š†#š^Û¦Vüœ°¥½¸è€Ñ¥µ”œ°½±½Èè€É••¸œô°(€€€€€€€Ñ½Ñ…±1…İå•ÉÌèì±…‰•°è€Ÿ–ú/–â#šïšVÀœ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€¡¥¡1½…èì±…‰•°è€Ÿ¦®c¢Ò¢ö÷–ú/–â œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€½É…¹”œô°(€€€€€€€¥‘±”èì±…‰•°è€Ÿ¦ë¦^Ë–ú/–â œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€É••¸œô°(€€€€€€€µ½¹Ñ¡ÍÍ¥¹•èì±…‰•°è€Ÿšr³šr#–ŞË–"š† œ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€Ù¥½±•Ğœô°(€€€€€€€…Ù1½…èì±…‰•°è€Ÿ–æÏ–v¢Ò¢ö÷:œ°¥½¸è€Ñ¥µ”œ°½±½Èè€É••¸œô°(€€€€€€€Á•¹‘¥¹QÉ…¹Í™•Èèì±…‰•°è€Ÿ–ú–º‡š&ç¢ö³š† œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€‰±Õ”œô°(€€€€€€€Ñ½‘…åÁÁ±äèì±…‰•°è€Ÿ’î+š^—šZÃ–Š{RÏ¢¾Üœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€å…¸œô°(€€€€€€€Á…ÍÍ•èì±…‰•°è€Ÿ–ŞË¦k¢şœ°¥½¸è€Ù…±¥‘½‘”œ°½±½Èè€É••¸œô°(€€€€€€€É•©•Ñ•èì±…‰•°è€Ÿ–ŞË¦¦Ï–nxœ°¥½¸è€±½Í”œ°½±½Èè€½É…¹”œô°(€€€€€€€¡¥¡I¥Í¬èì±…‰•°è€Ÿ¦®c¦;¦f§¢ö³š† œ°¥½¸è€İ…É¹¥¹œœ°½±½Èè€½É…¹”œô°(€€€€€€€…ÍÍ¥¹Q½Ñ…°èì±…‰•°è€Ÿ–"š†#¢ºÃ–öTœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€‰±Õ”œô°(€€€€€€€…ÍÍ¥¹Q½‘…äèì±…‰•°è€Ÿ’î+š^—–"š† œ°¥½¸è€Ñ¥µ”œ°½±½Èè€å…¸œô°(€€€€€€€µ…¥¹1…İå•ÉÌèì±…‰•°è€Ÿ’âï–*{–ú/–â œ°¥½¸è€Á•½Á±•Ìœ°½±½Èè€É••¸œô°(€€€€€€€‰…Ñ¡ÍÍ¥¸èì±…‰•°è€Ÿš&ç¦?–"š† œ°¥½¸è€ÑÉ•”œ°½±½Èè€Ù¥½±•Ğœô°(€€€€€€€…Ù]½É­±½…èì±…‰•°è€Ÿ–æÏ–v–Ş—’ös¦<œ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€½¹™¥ÉµQ½Ñ…°èì±…‰•°è€Ÿ†»¢º“šÚ#š¼œ°¥½¸è€µ•ÍÍ…”œ°½±½Èè€‰±Õ”œô°(€€€€€€€½¹™¥ÉµA•¹‘¥¹œèì±…‰•°è€Ÿ–ú†»¢ºœ°¥½¸è€Ñ¥µ”œ°½±½Èè€½É…¹”œô°(€€€€€€€½¹™¥Éµ•ÁÑ•èì±…‰•°è€Ÿ–ŞË†»¢ºœ°¥½¸è€Ù…±¥‘½‘”œ°½±½Èè€É••¸œô°(€€€€€€€½¹™¥ÉµI•©•Ñ•èì±…‰•°è€Ÿ–ŞËš.Kîtœ°¥½¸è€±½Í”œ°½±½Èè€½É…¹”œô°(€€€€€€€½¹™¥ÉµQ½‘…äèì±…‰•°è€Ÿ’î+š^—šZÃ–Šxœ°¥½¸è€‘½Õµ•¹Ñ…Ñ¥½¸œ°½±½Èè€å…¸œô(€€€€€ô(€€€€€½¹ÍĞ­•åÌ€ôÑ¡¥Ì¹µ½‘”€ôôô€±…İå•Èœ(€€€€€€€€ülÑ½Ñ…±1…İå•ÉÌœ°€¡¥¡1½…œ°€¥‘±”œ°€µ½¹Ñ¡ÍÍ¥¹•œ°€…Ù1½…t(€€€€€€€€è€¡Ñ¡¥Ì¹µ½‘”€ôôô€ÑÉ…¹Í™•Èœ(€€€€€€€€€€ülÁ•¹‘¥¹QÉ…¹Í™•Èœ°€Ñ½‘…åÁÁ±äœ°€Á…ÍÍ•œ°€É•©•Ñ•œ°€¡¥¡I¥Í¬t(€€€€€€€€€€è€¡Ñ¡¥Ì¹µ½‘”€ôôô€…ÍÍ¥¸œ(€€€€€€€€€€€€ül…ÍÍ¥¹Q½Ñ…°œ°€…ÍÍ¥¹Q½‘…äœ°€µ…¥¹1…İå•ÉÌœ°€‰…Ñ¡ÍÍ¥¸œ°€…Ù]½É­±½…t(€€€€€€€€€€€€è€¡Ñ¡¥Ì¹µ½‘”€ôôô€½¹™¥É´œ(€€€€€€€€€€€€€€ül½¹™¥ÉµQ½Ñ…°œ°€½¹™¥ÉµA•¹‘¥¹œœ°€½¹™¥Éµ•ÁÑ•œ°€½¹™¥ÉµI•©•Ñ•œ°€½¹™¥ÉµQ½‘…ät(€€€€€€€€€€€€€€èlÁ•¹‘¥¹œœ°€Ñ½‘…å9•Üœ°€ÑÉ…¹Í™•ÉA•¹‘¥¹œœ°€¡¥¡1½…‘1…İå•ÉÌœ°€…ÙÍÍ¥¹…åÌt¤¤¤(€€€€€É•ÑÕÉ¸­•åÌ¹µ…À¡­•ä€ôø€¡ì­•ä°¡¥¹Ğè€Ÿ–º{š^Ûî¢º„œ°€¸¸¹½¹™¥Ím­•åtô¤¤(€€€ô°(€€€‘…Í¡‰½…É‘…É‘Ì ¤ì(€€€€€É•ÑÕÉ¸€¡Ñ¡¥Ì¹µ•ÑÉ¥Ìñğmt¤¹É•‘Õ” ¡É•ÍÕ±Ğ°¥Ñ•´¤€ôøì(€€€€€€€É•ÍÕ±Ñm¥Ñ•´¹µ•ÑÉ¥-•åt€ô¥Ñ•´¹µ•ÑÉ¥Y…±Õ”(€€€€€€€É•ÑÕÉ¸É•ÍÕ±Ğ(€€€€€ô°íô¤(€€€ô°(€€€É•½µµ•¹‘•‘1…İå•É9…µ” ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹±…İå•É1½…‘ÍlÁt€üÑ¡¥Ì¹±…İå•É1½…‘ÍlÁt¹±…İå•É9…µ”€è€œ´œ(€€€ô°(€€€µ…¥¹1…İå•É=ÁÑ¥½¹Ì ¤ì(€€€€€É•ÑÕÉ¸€¡Ñ¡¥Ì¹±…İå•É=ÁÑ¥½¹Ìñğmt¤¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹…ÍÍ¥¹¹…‰±•€„ôô€8œ€˜˜¥Ñ•´¹±…İå•ÉI½±”€„ôô€…ÍÍ¥ÍÑ…¹Ğœ¤(€€€ô°(€€€…ÍÍ¥ÍÑ…¹Ñ1…İå•É=ÁÑ¥½¹Ì ¤ì(€€€€€É•ÑÕÉ¸€¡Ñ¡¥Ì¹±…İå•É=ÁÑ¥½¹Ìñğmt¤¹™¥±Ñ•È¡¥Ñ•´€ôø¥Ñ•´¹…ÍÍ¥¹¹…‰±•€„ôô€8œ¤(€€€ô(€ô°(€İ…Ñ èì(€€€€œ‘É½ÕÑ”¹ÅÕ•Éä¹µ½‘Õ±”œèì(€€€€€¥µµ•‘¥…Ñ”èÑÉÕ”°(€€€€€¡…¹‘±•È¡Ù…±Õ”¤ì(€€€€€€€Ñ¡¥Ì¹µ½‘”€ôÙ…±Õ”ñğ€Á•¹‘¥¹œœ(€€€€€€€Ñ¡¥Ì¹É•Í•Ğ¡™…±Í”¤(€€€€€ô(€€€ô(€ô)ô(ğ½ÍÉ¥ÁĞø((ñÍÑå±”Í½Á•±…¹œô‰ÍÍÌˆÍÉŒôˆ¸½…Í”µÁ…”¹ÍÍÌˆøğ½ÍÑå±”ø((ñÍÑå±”±…¹œô‰ÍÍÌˆÍÉŒôˆ¸½…Í”µÁ…”µ±½‰…°¹ÍÍÌˆøğ½ÍÑå±”ø(
+      <el-table v-loading="loading" :data="confirms" :size="controlSize">
+        <el-table-column label="æ¡ˆä»¶ç¼–å·" prop="caseNo" min-width="140" />
+        <el-table-column label="æ¡ˆä»¶åç§°" prop="caseName" min-width="180" />
+        <el-table-column label="ç¡®è®¤äºº" prop="confirm_user_name" width="120" align="center" />
+        <el-table-column label="ç¡®è®¤å†…å®¹" prop="content" min-width="220" show-overflow-tooltip />
+        <el-table-column label="çŠ¶æ€" width="100" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_confirm_status" :value="row.confirm_status" /></template></el-table-column>
+        <el-table-column label="æ“ä½œ" width="170" align="center" class-name="small-padding fixed-width">
+          <template slot-scope="{ row }">
+            <el-button v-hasPermi="['case:confirm:handle']" :size="controlSize" type="text" :disabled="row.confirm_status !== 'pending'" @click="handleConfirmRow(row, 'accepted')">ç¡®è®¤æ¥æ”¶</el-button>
+            <el-button v-hasPermi="['case:confirm:handle']" :size="controlSize" type="text" :disabled="row.confirm_status !== 'pending'" @click="handleConfirmRow(row, 'rejected')">æ‹’ç»</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </biz-table-card>
+
+    <div v-else-if="mode === 'status'" class="table-card timeline-page">
+      <div class="section-title"><h3>çŠ¶æ€è®°å½•</h3><p>è®°å½•æ¡ˆä»¶ç”Ÿæˆã€åˆ†æ¡ˆã€ç¡®è®¤ã€è½¬æ¡ˆå®¡æ‰¹ç­‰å…³é”®èŠ‚ç‚¹</p></div>
+      <div v-loading="loading" class="biz-timeline-list two-column status-list">
+        <article v-for="item in statuses" :key="item.log_id || item.create_time">
+          <i class="timeline-icon el-icon-time" />
+          <div><h4>{{ item.caseNo || '-' }} <span>{{ dictLabel('law_case_status_action', item.action_type) }}</span></h4><p>{{ item.content || '-' }}</p><small>{{ item.create_by || '-' }} Â· {{ item.create_time || '-' }}</small></div>
+        </article>
+        <el-empty v-if="!statuses.length" description="æš‚æ— çŠ¶æ€è®°å½•" />
+      </div>
+      <pagination v-show="total > 0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="loadStatuses" />
+    </div>
+
+    <el-drawer :visible.sync="transferDetailOpen" size="520px" custom-class="case-transfer-drawer" append-to-body>
+      <div slot="title" class="drawer-title" :class="'biz-size-' + appSize">
+        <div>
+          <span>è½¬æ¡ˆè¯¦æƒ…</span>
+          <h3>{{ approvalTransfer.caseName || '-' }}</h3>
+          <p>{{ approvalTransfer.transfer_no || '-' }} Â· {{ approvalTransfer.caseNo || '-' }}</p>
+        </div>
+      </div>
+      <div class="transfer-drawer-body" :class="'biz-size-' + appSize">
+        <section class="drawer-card">
+          <div class="section-title"><h3>è½¬æ¡ˆç”³è¯·ä¿¡æ¯</h3><p>æŸ¥çœ‹ç”³è¯·æ¥æºã€é£é™©ç­‰çº§ä¸å½“å‰èŠ‚ç‚¹</p></div>
+          <dl class="drawer-kv">
+            <div><dt>ç”³è¯·äºº</dt><dd>{{ approvalTransfer.applicant_name || '-' }}</dd></div>
+            <div><dt>ç”³è¯·æ—¶é—´</dt><dd>{{ approvalTransfer.create_time || '-' }}</dd></div>
+            <div><dt>è½¬æ¡ˆåŸå› </dt><dd>{{ dictLabel('law_case_transfer_reason', approvalTransfer.transfer_reason) }}</dd></div>
+            <div><dt>é£é™©ç­‰çº§</dt><dd><dict-tag :options="dict.type.law_case_risk_level" :value="approvalTransfer.risk_level" /></dd></div>
+            <div><dt>å½“å‰èŠ‚ç‚¹</dt><dd>{{ approvalTransfer.current_node || '-' }}</dd></div>
+            <div><dt>å®¡æ‰¹çŠ¶æ€</dt><dd><dict-tag :options="dict.type.law_case_transfer_status" :value="approvalTransfer.transfer_status" /></dd></div>
+          </dl>
+        </section>
+        <section class="drawer-card">
+          <div class="section-title"><h3>å¾‹å¸ˆä¿¡æ¯</h3><p>å½“å‰æ‰¿åŠå¾‹å¸ˆä¸æ‹Ÿè½¬å…¥å¾‹å¸ˆå¯¹æ¯”</p></div>
+          <div class="lawyer-compare">
+            <span>{{ approvalTransfer.from_lawyer_name || '-' }}</span>
+            <i class="el-icon-right" />
+            <span>{{ approvalTransfer.to_lawyer_name || '-' }}</span>
+          </div>
+        </section>
+        <section class="drawer-card">
+          <div class="section-title"><h3>è½¬æ¡ˆè¯¦æƒ…</h3><p>è½¬æ¡ˆè¯´æ˜ä¸å®¡æ‰¹å¤„ç†æ„è§</p></div>
+          <p class="approval-detail-text">{{ approvalTransfer.detail || '-' }}</p>
+          <div v-if="approvalTransfer.transfer_status !== 'pending'" class="approval-result">
+            {{ dictLabel('law_case_transfer_status', approvalTransfer.transfer_status) }}ï¼š{{ approvalTransfer.approval_opinion || '-' }}
+          </div>
+        </section>
+        <section class="drawer-card">
+          <div class="section-title"><h3>å®¡æ‰¹æµç¨‹</h3><p>å½“å‰è½¬æ¡ˆå®¡æ‰¹æµè½¬èŠ‚ç‚¹</p></div>
+          <div class="approval-flow">
+            <span class="done">è½¬æ¡ˆç”³è¯·</span>
+            <span class="active">{{ approvalTransfer.current_node || 'å®¡æ‰¹ä¸­' }}</span>
+            <span>æ¡ˆä»¶åŠç†</span>
+          </div>
+        </section>
+        <section v-if="approvalTransfer.transfer_status === 'pending'" class="drawer-card">
+          <div class="section-title"><h3>å®¡æ‰¹æ„è§</h3><p>é€‰æ‹©å®¡æ‰¹ç»“æœå¹¶å¡«å†™å¤„ç†æ„è§</p></div>
+          <el-form ref="transferApprovalFormRef" :model="approvalForm" :rules="approvalRules" label-width="88px">
+            <el-form-item label="å®¡æ‰¹åŠ¨ä½œ" prop="action">
+              <el-radio-group v-model="approvalForm.action" :size="controlSize" class="approval-action-group">
+                <el-radio-button label="passed">åŒæ„è½¬æ¡ˆ</el-radio-button>
+                <el-radio-button label="rejected">é©³å›</el-radio-button>
+                <el-radio-button label="supplement">è¡¥å……ææ–™</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="å®¡æ‰¹æ„è§" prop="opinion">
+              <el-input v-model="approvalForm.opinion" :size="controlSize" type="textarea" :rows="5" placeholder="è¯·å¡«å†™å®¡æ‰¹æ„è§" />
+            </el-form-item>
+          </el-form>
+        </section>
+      </div>
+      <div v-if="approvalTransfer.transfer_status === 'pending'" class="drawer-footer">
+        <el-button :size="controlSize" @click="transferDetailOpen = false">å–æ¶ˆ</el-button>
+        <el-button v-hasPermi="['case:transfer:approve']" :size="controlSize" type="primary" @click="saveApproval">æäº¤å®¡æ‰¹</el-button>
+      </div>
+    </el-drawer>
+
+    <case-detail-drawer
+      :visible.sync="detailOpen"
+      :case-data="detailCase"
+      :size-class="'biz-size-' + appSize"
+      @assign="openAssign"
+      @flow="openCaseFlow"
+    />
+
+    <case-flow-drawer
+      :visible.sync="flowOpen"
+      :case-data="flowCase"
+      :statuses="flowStatuses"
+      :loading="flowLoading"
+      :size-class="'biz-size-' + appSize"
+    />
+
+    <el-drawer :visible.sync="lawyerDetailOpen" size="560px" custom-class="case-lawyer-detail-drawer" append-to-body>
+      <div slot="title" class="drawer-title" :class="'biz-size-' + appSize">
+        <div>
+          <span>LAWYER LOAD</span>
+          <h3>{{ lawyerDetail.lawyerName || lawyerDetail.nickName || '-' }}</h3>
+          <p>{{ lawyerDetail.deptName || '-' }} Â· {{ dictLabel('law_lawyer_role', lawyerDetail.lawyerRole) }}</p>
+        </div>
+      </div>
+      <div class="lawyer-detail-body" :class="'biz-size-' + appSize">
+        <section class="lawyer-profile-hero">
+          <i>{{ avatar(lawyerDetail.lawyerName || lawyerDetail.nickName) }}</i>
+          <div>
+            <h3>{{ lawyerDetail.lawyerName || lawyerDetail.nickName || '-' }}</h3>
+            <p>{{ lawyerDetail.deptName || 'æœªè®¾ç½®éƒ¨é—¨' }}</p>
+            <span :class="['load-badge', loadStatus(lawyerDetail.loadRate)]">{{ dictLabel('law_lawyer_load_status', loadStatus(lawyerDetail.loadRate)) }}</span>
+          </div>
+        </section>
+
+        <section class="drawer-card">
+          <div class="section-title"><h3>è´Ÿè½½æ¦‚è§ˆ</h3><p>ç»“åˆå½“å‰åœ¨åŠæ¡ˆä»¶ã€æœˆåº¦åˆ†æ¡ˆä¸è´Ÿè½½ä¸Šé™è¯„ä¼°æ‰¿æ¥èƒ½åŠ›</p></div>
+          <div class="lawyer-load-ring">
+            <el-progress type="circle" :percentage="Number(lawyerDetail.loadRate || 0)" :width="112" :color="loadColor(lawyerDetail.loadRate)" />
+            <dl>
+              <div><dt>å½“å‰è´Ÿè½½</dt><dd>{{ lawyerDetail.currentLoad || 0 }} / {{ lawyerDetail.loadLimit || 100 }}</dd></div>
+              <div><dt>åœ¨åŠæ¡ˆä»¶</dt><dd>{{ lawyerDetail.activeCases || 0 }} ä»¶</dd></div>
+              <div><dt>æœ¬æœˆåˆ†æ¡ˆ</dt><dd>{{ lawyerDetail.monthAssigned || 0 }} ä»¶</dd></div>
+              <div><dt>å¹³å‡å“åº”</dt><dd>{{ lawyerDetail.avgResponseHours || 0 }}h</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="drawer-card">
+          <div class="section-title"><h3>ä¸“ä¸šä¸åˆ†æ¡ˆèµ„æ ¼</h3><p>ä¸»åŠå¾‹å¸ˆä¸å…è®¸é€‰æ‹©å®ä¹ å¾‹å¸ˆï¼ŒååŠå¾‹å¸ˆå¯é€‰æ‹©å®ä¹ å¾‹å¸ˆ</p></div>
+          <dl class="drawer-kv">
+            <div><dt>ä¸šåŠ¡è§’è‰²</dt><dd><dict-tag :options="dict.type.law_lawyer_role" :value="lawyerDetail.lawyerRole" /></dd></div>
+            <div><dt>å¯åˆ†æ¡ˆ</dt><dd>{{ lawyerDetail.assignEnabled === 'N' ? 'å¦' : 'æ˜¯' }}</dd></div>
+            <div><dt>åŒ¹é…å€¾å‘</dt><dd><dict-tag :options="dict.type.law_lawyer_match_level" :value="matchLevel(lawyerDetail)" /></dd></div>
+            <div><dt>ä¸»åŠèµ„æ ¼</dt><dd>{{ lawyerDetail.lawyerRole === 'assistant' ? 'ä¸å¯ä½œä¸ºä¸»åŠ' : 'å¯ä½œä¸ºä¸»åŠ' }}</dd></div>
+          </dl>
+          <div class="detail-specialties">
+            <span v-for="item in specialtyList(lawyerDetail.specialties)" :key="item">{{ dictLabel('law_case_type', item) }}</span>
+            <em v-if="!specialtyList(lawyerDetail.specialties).length">æœªé…ç½®ä¸“ä¸šæ–¹å‘</em>
+          </div>
+        </section>
+
+        <section class="drawer-card">
+          <div class="section-title"><h3>åˆ†æ¡ˆå»ºè®®</h3><p>åŸºäºè´Ÿè½½ç‡ç”Ÿæˆè½»é‡æç¤ºï¼Œä¸æ›¿ä»£æ¡ˆç®¡å‘˜åˆ¤æ–­</p></div>
+          <div class="lawyer-suggestion" :class="loadStatus(lawyerDetail.loadRate)">
+            {{ lawyerSuggestion(lawyerDetail) }}
+          </div>
+        </section>
+      </div>
+      <div class="drawer-footer">
+        <el-button v-hasPermi="['case:lawyer:config']" :size="controlSize" plain icon="el-icon-setting" @click="openProfileForm(lawyerDetail)">ç¼–è¾‘æ¡£æ¡ˆ</el-button>
+        <el-button v-hasPermi="['case:pending:assign']" :size="controlSize" type="primary" icon="el-icon-user" :disabled="lawyerDetail.lawyerRole === 'assistant' || lawyerDetail.assignEnabled === 'N'" @click="assignRecommended(lawyerDetail)">åˆ†é…æ¡ˆä»¶</el-button>
+      </div>
+    </el-drawer>
+
+    <el-dialog :title="assignForm.batch ? 'æ‰¹é‡åˆ†é…æ¡ˆä»¶' : 'æ¡ˆä»¶åˆ†é…'" :visible.sync="assignOpen" width="980px" :custom-class="dialogClass" append-to-body>
+      <div class="assign-dialog-grid">
+        <section>
+          <div class="case-summary">
+            <span>æ¡ˆä»¶ç¼–å·<b>{{ assignCaseRow.case_no }}</b></span>
+            <span>æ¡ˆä»¶åç§°<b>{{ assignCaseRow.case_name }}</b></span>
+            <span>å®¢æˆ·åç§°<b>{{ assignCaseRow.customer_name }}</b></span>
+            <span>æ¡ˆä»¶ç±»å‹<b>{{ dictLabel('law_case_type', assignCaseRow.case_type) }}</b></span>
+            <span>ç´§æ€¥ç¨‹åº¦<b>{{ dictLabel('law_case_urgency', assignCaseRow.urgency) }}</b></span>
+            <span>æ¥æºåˆåŒ<b>{{ assignCaseRow.contract_no }}</b></span>
+            <span v-if="assignForm.batch">æ‰¹é‡æ•°é‡<b>{{ assignForm.caseIds.length }} ä»¶</b></span>
+          </div>
+          <el-form ref="assignFormRef" :model="assignForm" :rules="assignRules" label-width="110px">
+            <el-form-item label="åˆ†é…æ–¹å¼" prop="assignMethod"><el-radio-group v-model="assignForm.assignMethod"><el-radio v-for="item in dict.type.law_case_assign_method" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
+            <el-form-item label="ä¸»åŠå¾‹å¸ˆ" prop="mainLawyerId"><el-select v-model="assignForm.mainLawyerId" :size="controlSize" filterable placeholder="è¯·é€‰æ‹©ä¸»åŠå¾‹å¸ˆ"><el-option v-for="item in mainLawyerOptions" :key="item.userId" :label="item.nickName" :value="item.userId" /></el-select></el-form-item>
+            <el-form-item label="ååŠå¾‹å¸ˆ"><el-select v-model="assignForm.assistantLawyerIds" :size="controlSize" multiple filterable placeholder="è¯·é€‰æ‹©ååŠå¾‹å¸ˆ"><el-option v-for="item in assistantLawyerOptions" :key="item.userId" :label="item.nickName" :value="item.userId" /></el-select></el-form-item>
+            <el-row :gutter="12">
+              <el-col :span="12"><el-form-item label="ä¼˜å…ˆçº§" prop="priority"><el-select v-model="assignForm.priority" :size="controlSize"><el-option v-for="item in dict.type.law_case_priority" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="é¢„è®¡å‘¨æœŸ"><el-input v-model="assignForm.estimatedCycle" :size="controlSize" placeholder="å¦‚ 7 å¤©" /></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="12">
+              <el-col :span="12"><el-form-item label="å¼€æ¡ˆæ—¥æœŸ"><el-date-picker v-model="assignForm.planStartDate" :size="controlSize" value-format="yyyy-MM-dd" type="date" placeholder="è¯·é€‰æ‹©" /></el-form-item></el-col>
+              <el-col :span="12"><el-form-item label="é¢„è®¡å·¥ä½œé‡"><el-input-number v-model="assignForm.estimatedWorkload" :size="controlSize" :min="1" /></el-form-item></el-col>
+            </el-row>
+            <el-form-item label="åˆ†é…åŸå› " prop="assignReason"><el-select v-model="assignForm.assignReason" :size="controlSize"><el-option v-for="item in dict.type.law_case_assign_reason" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+            <el-form-item label="å¤‡æ³¨"><el-input v-model="assignForm.remark" :size="controlSize" type="textarea" :rows="3" maxlength="200" show-word-limit /></el-form-item>
+            <el-form-item label="ç«™å†…é€šçŸ¥"><el-radio-group v-model="assignForm.notifyFlag"><el-radio label="Y">æ˜¯</el-radio><el-radio label="N">å¦</el-radio></el-radio-group></el-form-item>
+          </el-form>
+        </section>
+        <section class="lawyer-reference">
+          <header><b>äººå‘˜å‚è€ƒ</b><el-button :size="controlSize" type="text" @click="loadLawyers">æ¢ä¸€æ‰¹</el-button></header>
+          <article v-for="item in mainLawyerOptions.slice(0, 5)" :key="item.userId" :class="{ active: sameValue(assignForm.mainLawyerId, item.userId) }" @click="selectAssignLawyer(item)">
+            <div class="reference-lawyer-head">
+              <span class="owner-cell"><i>{{ avatar(item.lawyerName) }}</i>{{ item.lawyerName }}</span>
+              <dict-tag :options="dict.type.law_lawyer_role" :value="item.lawyerRole" />
+            </div>
+            <span class="tag-pills compact"><i v-for="specialty in specialtyList(item.specialties)" :key="specialty">{{ dictLabel('law_case_type', specialty) }}</i></span>
+            <el-progress :percentage="Number(item.loadRate || 0)" :color="loadColor(item.loadRate)" />
+            <small>åœ¨åŠ {{ item.activeCases || 0 }} Â· æœ¬æœˆåˆ†æ¡ˆ {{ item.monthAssigned || 0 }} Â· {{ dictLabel('law_lawyer_match_level', matchLevel(item)) }}</small>
+          </article>
+        </section>
+      </div>
+      <div slot="footer"><el-button :size="controlSize" @click="assignOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveAssign">ç¡®è®¤åˆ†æ¡ˆ</el-button></div>
+    </el-dialog>
+
+    <el-dialog title="å‘èµ·è½¬æ¡ˆ" :visible.sync="transferOpen" width="620px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="transferFormRef" :model="transferForm" :rules="transferRules" label-width="110px">
+        <el-form-item label="æ¡ˆä»¶" prop="caseId"><el-select v-model="transferForm.caseId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢å¹¶é€‰æ‹©åŠç†ä¸­æ¡ˆä»¶" :remote-method="searchProcessingCases"><el-option v-for="item in processingCases" :key="item.case_id" :label="item.case_name" :value="item.case_id"><span>{{ item.case_name }}</span><span class="select-sub">{{ item.case_no }} Â· {{ item.main_lawyer_name }}</span></el-option></el-select></el-form-item>
+        <el-form-item label="æ‹Ÿè½¬å…¥å¾‹å¸ˆ" prop="toLawyerId"><el-select v-model="transferForm.toLawyerId" :size="controlSize" filterable placeholder="è¯·é€‰æ‹©å¾‹å¸ˆ"><el-option v-for="item in mainLawyerOptions" :key="item.userId" :label="item.nickName" :value="item.userId" /></el-select></el-form-item>
+        <el-form-item label="è½¬æ¡ˆåŸå› " prop="transferReason"><el-select v-model="transferForm.transferReason" :size="controlSize"><el-option v-for="item in dict.type.law_case_transfer_reason" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="é£é™©ç­‰çº§" prop="riskLevel"><el-select v-model="transferForm.riskLevel" :size="controlSize"><el-option v-for="item in dict.type.law_case_risk_level" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="è½¬æ¡ˆè¯¦æƒ…" prop="detail"><el-input v-model="transferForm.detail" :size="controlSize" type="textarea" :rows="4" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="transferOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveTransfer">æäº¤</el-button></div>
+    </el-dialog>
+
+    <el-drawer :visible.sync="profileOpen" size="780px" custom-class="case-profile-drawer" append-to-body>
+      <div slot="title" class="drawer-title" :class="'biz-size-' + appSize">
+        <div>
+          <span>LAWYER PROFILE</span>
+          <h3>å¾‹å¸ˆæ¡£æ¡ˆé…ç½®</h3>
+          <p>ç»´æŠ¤ä¸šåŠ¡è§’è‰²ã€ä¸“ä¸šæ–¹å‘ã€è´Ÿè½½ä¸Šé™ä¸æ˜¯å¦å¯åˆ†æ¡ˆ</p>
+        </div>
+      </div>
+      <div class="profile-drawer-body" :class="'biz-size-' + appSize">
+        <section class="drawer-card">
+          <div class="profile-toolbar">
+            <div class="profile-search">
+              <el-input v-model="profileQuery.keyword" :size="controlSize" prefix-icon="el-icon-search" placeholder="æœç´¢å§“åã€è´¦å·ã€éƒ¨é—¨æˆ–ä¸“ä¸šæ–¹å‘" clearable @clear="loadProfiles" @keyup.enter.native="loadProfiles" />
+            </div>
+            <div class="profile-quick-tabs">
+              <button :class="{ active: !profileQuery.assignEnabled }" type="button" @click="setProfileAssignable('')">å…¨éƒ¨</button>
+              <button :class="{ active: profileQuery.assignEnabled === 'Y' }" type="button" @click="setProfileAssignable('Y')">å¯åˆ†æ¡ˆ</button>
+              <button :class="{ active: profileQuery.assignEnabled === 'N' }" type="button" @click="setProfileAssignable('N')">å·²åœåˆ†æ¡ˆ</button>
+            </div>
+            <el-popover placement="bottom-end" width="360" trigger="click" popper-class="profile-filter-popover">
+              <div class="profile-advanced-filter">
+                <label>ä¸šåŠ¡è§’è‰²</label>
+                <el-select v-model="profileQuery.lawyerRole" :size="controlSize" placeholder="å…¨éƒ¨è§’è‰²" clearable @change="loadProfiles"><el-option v-for="item in dict.type.law_lawyer_role" :key="item.value" :label="item.label" :value="item.value" /></el-select>
+                <label>ä¸“ä¸šæ–¹å‘</label>
+                <el-select v-model="profileQuery.specialty" :size="controlSize" placeholder="å…¨éƒ¨ä¸“ä¸š" clearable @change="loadProfiles"><el-option v-for="item in dict.type.law_case_type" :key="item.value" :label="item.label" :value="item.value" /></el-select>
+                <div class="profile-advanced-actions">
+                  <el-button :size="controlSize" plain icon="el-icon-refresh" @click="resetProfileQuery">é‡ç½®ç­›é€‰</el-button>
+                </div>
+              </div>
+              <el-button slot="reference" :size="controlSize" plain icon="el-icon-s-operation">é«˜çº§ç­›é€‰</el-button>
+            </el-popover>
+          </div>
+          <el-table v-loading="profileLoading" :data="profileList" :size="controlSize" class="biz-config-table">
+            <el-table-column label="å¾‹å¸ˆ" min-width="130"><template slot-scope="{ row }"><span class="owner-cell"><i>{{ avatar(row.nickName) }}</i>{{ row.nickName }}</span><span class="sub-text">{{ row.userName }}</span></template></el-table-column>
+            <el-table-column label="éƒ¨é—¨" prop="deptName" min-width="120" show-overflow-tooltip />
+            <el-table-column label="é…ç½®çŠ¶æ€" width="90" align="center"><template slot-scope="{ row }"><span :class="['config-status', row.profileId ? 'is-ready' : 'is-empty']">{{ row.profileId ? 'å·²é…ç½®' : 'æœªé…ç½®' }}</span></template></el-table-column>
+            <el-table-column label="ä¸šåŠ¡è§’è‰²" width="100" align="center"><template slot-scope="{ row }"><dict-tag v-if="row.lawyerRole" :options="dict.type.law_lawyer_role" :value="row.lawyerRole" /><span v-else class="muted-text">æœªè®¾ç½®</span></template></el-table-column>
+            <el-table-column label="ä¸“ä¸šæ–¹å‘" min-width="150"><template slot-scope="{ row }"><span v-if="row.specialties" class="tag-pills"><i v-for="item in specialtyList(row.specialties)" :key="item">{{ dictLabel('law_case_type', item) }}</i></span><span v-else class="muted-text">æœªè®¾ç½®</span></template></el-table-column>
+            <el-table-column label="è´Ÿè½½ä¸Šé™" prop="loadLimit" width="90" align="center" />
+            <el-table-column label="å¹³å‡å“åº”" width="90" align="center"><template slot-scope="{ row }">{{ row.avgResponseHours || 0 }}h</template></el-table-column>
+            <el-table-column label="å¯åˆ†æ¡ˆ" width="90" align="center">
+              <template slot-scope="{ row }">
+                <el-switch v-model="row.assignEnabled" active-value="Y" inactive-value="N" @change="changeProfileStatus(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="æ“ä½œ" width="100" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right">
+              <template slot-scope="{ row }"><span class="action-buttons"><el-button :size="controlSize" type="text" @click="openProfileForm(row)">ç¼–è¾‘</el-button></span></template>
+            </el-table-column>
+          </el-table>
+          <pagination v-show="profileTotal > 0" :total="profileTotal" :page.sync="profileQuery.pageNum" :limit.sync="profileQuery.pageSize" @pagination="loadProfiles" />
+        </section>
+      </div>
+    </el-drawer>
+
+    <el-dialog title="ç¼–è¾‘å¾‹å¸ˆæ¡£æ¡ˆ" :visible.sync="profileFormOpen" width="560px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-width="110px">
+        <el-form-item label="å¾‹å¸ˆ"><el-input :value="profileForm.nickName || profileForm.lawyerName || profileForm.userName" :size="controlSize" disabled /></el-form-item>
+        <el-form-item label="ä¸šåŠ¡è§’è‰²" prop="lawyerRole"><el-select v-model="profileForm.lawyerRole" :size="controlSize" placeholder="è¯·é€‰æ‹©ä¸šåŠ¡è§’è‰²"><el-option v-for="item in dict.type.law_lawyer_role" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="ä¸“ä¸šæ–¹å‘" prop="specialties"><el-select v-model="profileForm.specialties" :size="controlSize" multiple placeholder="è¯·é€‰æ‹©ä¸“ä¸šæ–¹å‘"><el-option v-for="item in dict.type.law_case_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="è´Ÿè½½ä¸Šé™" prop="loadLimit"><el-input-number v-model="profileForm.loadLimit" :size="controlSize" :min="1" :max="999" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="å¹³å‡å“åº”" prop="avgResponseHours"><el-input-number v-model="profileForm.avgResponseHours" :size="controlSize" :min="0" :max="999" :precision="1" /></el-form-item></el-col>
+        </el-row>
+        <el-form-item label="æ˜¯å¦å¯åˆ†æ¡ˆ" prop="assignEnabled"><el-radio-group v-model="profileForm.assignEnabled"><el-radio label="Y">æ˜¯</el-radio><el-radio label="N">å¦</el-radio></el-radio-group></el-form-item>
+        <el-form-item label="å¤‡æ³¨"><el-input v-model="profileForm.remark" :size="controlSize" type="textarea" :rows="3" maxlength="200" show-word-limit /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="profileFormOpen = false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveProfile">ä¿å­˜</el-button></div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import businessUi from '@/views/business/mixins/businessUi'
+import BizHero from '@/views/business/components/BizHero'
+import BizMetrics from '@/views/business/components/BizMetrics'
+import BizPageHeader from '@/views/business/components/BizPageHeader'
+import BizTableCard from '@/views/business/components/BizTableCard'
+import CaseDetailDrawer from './components/CaseDetailDrawer'
+import CaseFlowDrawer from './components/CaseFlowDrawer'
+import { getCaseDashboard, listCaseLawyer, listCase, getCase, assignCase, batchAssignCase, listAssignment, listLawyerLoad, listLawyerSpecialty, listLawyerProfile, updateLawyerProfile, updateLawyerProfileStatus, listTransfer, requestTransfer, approveTransfer, listConfirm, handleConfirm, listCaseStatus } from '@/api/case'
+
+export default {
+  name: 'CaseCenter',
+  mixins: [businessUi],
+  components: { BizHero, BizMetrics, BizPageHeader, BizTableCard, CaseDetailDrawer, CaseFlowDrawer },
+  dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority', 'law_case_assign_method', 'law_case_assign_reason', 'law_lawyer_role', 'law_lawyer_match_level', 'law_lawyer_load_status', 'law_case_transfer_status', 'law_case_transfer_reason', 'law_case_risk_level', 'law_case_status_action', 'law_case_confirm_status'],
+  data() {
+    return {
+      mode: 'pending',
+      showSearch: true,
+      loading: false,
+      total: 0,
+      query: this.defaultQuery(),
+      cases: [],
+      assignments: [],
+      transfers: [],
+      lawyerLoads: [],
+      specialtyStats: [],
+      confirms: [],
+      statuses: [],
+      selectedRows: [],
+      lawyerOptions: [],
+      processingCases: [],
+      metrics: [],
+      assignOpen: false,
+      assignCaseRow: {},
+      assignForm: {},
+      transferOpen: false,
+      transferForm: {},
+      transferDetailOpen: false,
+      approvalTransfer: {},
+      approvalForm: {},
+      detailOpen: false,
+      detailCase: {},
+      lawyerDetailOpen: false,
+      lawyerDetail: {},
+      flowOpen: false,
+      flowCase: {},
+      flowStatuses: [],
+      flowLoading: false,
+      profileOpen: false,
+      profileFormOpen: false,
+      profileLoading: false,
+      profileList: [],
+      profileTotal: 0,
+      profileQuery: { pageNum: 1, pageSize: 10 },
+      profileForm: {},
+      assignRules: {
+        mainLawyerId: [{ required: true, message: 'è¯·é€‰æ‹©ä¸»åŠå¾‹å¸ˆ', trigger: 'change' }],
+        assignMethod: [{ required: true, message: 'è¯·é€‰æ‹©åˆ†é…æ–¹å¼', trigger: 'change' }],
+        priority: [{ required: true, message: 'è¯·é€‰æ‹©ä¼˜å…ˆçº§', trigger: 'change' }],
+        assignReason: [{ required: true, message: 'è¯·é€‰æ‹©åˆ†é…åŸå› ', trigger: 'change' }]
+      },
+      transferRules: {
+        caseId: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶', trigger: 'change' }],
+        toLawyerId: [{ required: true, message: 'è¯·é€‰æ‹©æ‹Ÿè½¬å…¥å¾‹å¸ˆ', trigger: 'change' }],
+        transferReason: [{ required: true, message: 'è¯·é€‰æ‹©è½¬æ¡ˆåŸå› ', trigger: 'change' }],
+        riskLevel: [{ required: true, message: 'è¯·é€‰æ‹©é£é™©ç­‰çº§', trigger: 'change' }],
+        detail: [{ required: true, message: 'è¯·è¾“å…¥è½¬æ¡ˆè¯¦æƒ…', trigger: 'blur' }]
+      },
+      approvalRules: {
+        action: [{ required: true, message: 'è¯·é€‰æ‹©å®¡æ‰¹åŠ¨ä½œ', trigger: 'change' }],
+        opinion: [{ required: true, message: 'è¯·è¾“å…¥å®¡æ‰¹æ„è§', trigger: 'blur' }]
+      },
+      profileRules: {
+        lawyerRole: [{ required: true, message: 'è¯·é€‰æ‹©ä¸šåŠ¡è§’è‰²', trigger: 'change' }],
+        specialties: [{ required: true, message: 'è¯·é€‰æ‹©ä¸“ä¸šæ–¹å‘', trigger: 'change' }],
+        loadLimit: [{ required: true, message: 'è¯·è¾“å…¥è´Ÿè½½ä¸Šé™', trigger: 'blur' }],
+        avgResponseHours: [{ required: true, message: 'è¯·è¾“å…¥å¹³å‡å“åº”æ—¶é•¿', trigger: 'blur' }],
+        assignEnabled: [{ required: true, message: 'è¯·é€‰æ‹©æ˜¯å¦å¯åˆ†æ¡ˆ', trigger: 'change' }]
+      }
+    }
+  },
+  computed: {
+    pageTitle() {
+      const titles = { pending: 'å¾…åˆ†æ¡ˆåˆ—è¡¨', assign: 'åˆ†æ¡ˆè®°å½•', transfer: 'è½¬æ¡ˆå®¡æ‰¹', lawyer: 'å¾‹å¸ˆè´Ÿè½½', confirm: 'å¾…ç¡®è®¤ä¿¡æ¯', status: 'çŠ¶æ€è®°å½•' }
+      return titles[this.mode] || 'æ¡ˆç®¡ä¸­å¿ƒ'
+    },
+    pageDescription() {
+      const descriptions = {
+        pending: 'é›†ä¸­ç®¡ç†å¾…åˆ†æ¡ˆæ¡ˆä»¶ï¼Œæ”¯æŒç­›é€‰ã€æŸ¥è¯¢ä¸åˆ†æ¡ˆï¼Œåˆç†åŒ¹é…ä¸“ä¸šå¾‹å¸ˆã€‚',
+        assign: 'æ²‰æ·€æ¡ˆä»¶åˆ†é…è®°å½•ï¼Œè¿½è¸ªä¸»åŠå¾‹å¸ˆã€ååŠå¾‹å¸ˆä¸åˆ†é…åŸå› ã€‚',
+        transfer: 'ç®¡ç†å¾‹å¸ˆè½¬æ¡ˆç”³è¯·ï¼Œè§„èŒƒè½¬æ¡ˆæµç¨‹ä¸é£é™©æ§åˆ¶ã€‚',
+        lawyer: 'åŠ¨æ€æŒæ¡å¾‹å¸ˆè´Ÿè½½ï¼Œè¾…åŠ©æ¡ˆç®¡å‘˜åˆç†åˆ†é…æ¡ˆä»¶èµ„æºã€‚',
+        confirm: 'å¤„ç†å¾‹å¸ˆæ¥æ¡ˆç¡®è®¤ä¸èµ„æ–™è¡¥å……ç¡®è®¤ã€‚',
+        status: 'è¿½è¸ªæ¡ˆä»¶å…³é”®çŠ¶æ€æµè½¬è®°å½•ã€‚'
+      }
+      return descriptions[this.mode] || descriptions.pending
+    },
+    heroModes() {
+      return ['pending', 'assign', 'transfer', 'lawyer', 'confirm']
+    },
+    heroMeta() {
+      const metas = {
+        pending: { eyebrow: 'æ¡ˆä»¶è°ƒåº¦', title: 'é«˜æ•ˆåè°ƒåˆ†æ¡ˆæµè½¬ï¼Œæå‡åŠæ¡ˆååŒæ•ˆç‡', description: 'ç²¾å‡†åŒ¹é…åˆé€‚å¾‹å¸ˆï¼Œå‡è¡¡å·¥ä½œè´Ÿè½½ï¼Œå…¨ç¨‹è·Ÿè¸ªæµè½¬çŠ¶æ€ã€‚' },
+        assign: { eyebrow: 'åˆ†æ¡ˆè®°å½•', title: 'æ²‰æ·€åˆ†æ¡ˆè¿‡ç¨‹ï¼Œæå‡æ¡ˆä»¶è°ƒåº¦å¯è¿½æº¯æ€§', description: 'é›†ä¸­è®°å½•ä¸»åŠå¾‹å¸ˆã€ååŠå¾‹å¸ˆã€åˆ†é…åŸå› ä¸åˆ†é…æ—¶é—´ï¼Œæ–¹ä¾¿åç»­å¤ç›˜ã€‚' },
+        transfer: { eyebrow: 'è½¬æ¡ˆé£æ§', title: 'è§„èŒƒå¤„ç†è½¬æ¡ˆç”³è¯·ï¼Œç¡®ä¿æ¡ˆä»¶å¹³ç¨³æµè½¬', description: 'å¤šç»´é£é™©è¯†åˆ«ï¼Œå®¡æ‰¹æ„è§ç•™ç—•ï¼Œä¿éšœæ¡ˆä»¶åˆè§„æµè½¬ã€‚' },
+        lawyer: { eyebrow: 'å¾‹å¸ˆè´Ÿè½½', title: 'åŠ¨æ€æŒæ¡å¾‹å¸ˆè´Ÿè½½ï¼Œæå‡åˆ†æ¡ˆå‡è¡¡åº¦', description: 'é€šè¿‡è´Ÿè½½æ•°æ®å®æ—¶æ´å¯Ÿå¾‹å¸ˆå·¥ä½œçŠ¶æ€ï¼Œåˆç†åˆ†é…æ¡ˆä»¶ã€‚' },
+        confirm: { eyebrow: 'æ¥æ¡ˆç¡®è®¤', title: 'é›†ä¸­å¤„ç†ç¡®è®¤æ¶ˆæ¯ï¼Œä¿è¯åˆ†æ¡ˆé—­ç¯', description: 'è·Ÿè¿›å¾‹å¸ˆæ¥æ¡ˆç¡®è®¤ã€æ‹’ç»ä¸èµ„æ–™è¡¥å……å¤„ç†ï¼Œé¿å…æ¡ˆä»¶æµè½¬åœæ»ã€‚' }
+      }
+      return metas[this.mode] || metas.pending
+    },
+    modeMetrics() {
+      if (this.mode === 'pending') return this.metrics
+      if (this.mode === 'assign') {
+        return [
+          { metricKey: 'assignTotal', metricValue: this.total || this.assignments.length },
+          { metricKey: 'assignToday', metricValue: this.assignments.filter(item => String(item.create_time || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length },
+          { metricKey: 'mainLawyers', metricValue: new Set(this.assignments.map(item => item.main_lawyer_name).filter(Boolean)).size },
+          { metricKey: 'batchAssign', metricValue: this.assignments.filter(item => String(item.remark || '').indexOf('æ‰¹é‡') > -1).length },
+          { metricKey: 'avgWorkload', metricValue: Math.round(this.assignments.reduce((total, item) => total + Number(item.estimated_workload || 0), 0) / (this.assignments.length || 1)) + 'h' }
+        ]
+      }
+      if (this.mode === 'lawyer') {
+        return [
+          { metricKey: 'totalLawyers', metricValue: this.lawyerLoads.length },
+          { metricKey: 'highLoad', metricValue: this.lawyerLoads.filter(item => Number(item.loadRate || 0) >= 80).length },
+          { metricKey: 'idle', metricValue: this.lawyerLoads.filter(item => Number(item.loadRate || 0) < 20).length },
+          { metricKey: 'monthAssigned', metricValue: this.lawyerLoads.reduce((total, item) => total + Number(item.monthAssigned || 0), 0) },
+          { metricKey: 'avgLoad', metricValue: Math.round(this.lawyerLoads.reduce((total, item) => total + Number(item.loadRate || 0), 0) / (this.lawyerLoads.length || 1)) + '%' }
+        ]
+      }
+      if (this.mode === 'confirm') {
+        return [
+          { metricKey: 'confirmTotal', metricValue: this.total || this.confirms.length },
+          { metricKey: 'confirmPending', metricValue: this.confirms.filter(item => item.confirm_status === 'pending').length },
+          { metricKey: 'confirmAccepted', metricValue: this.confirms.filter(item => item.confirm_status === 'accepted').length },
+          { metricKey: 'confirmRejected', metricValue: this.confirms.filter(item => item.confirm_status === 'rejected').length },
+          { metricKey: 'confirmToday', metricValue: this.confirms.filter(item => String(item.create_time || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length }
+        ]
+      }
+      return [
+        { metricKey: 'pendingTransfer', metricValue: this.transfers.filter(item => item.transfer_status === 'pending').length },
+        { metricKey: 'todayApply', metricValue: this.transfers.filter(item => String(item.create_time || '').slice(0, 10) === new Date().toISOString().slice(0, 10)).length },
+        { metricKey: 'passed', metricValue: this.transfers.filter(item => item.transfer_status === 'passed').length },
+        { metricKey: 'rejected', metricValue: this.transfers.filter(item => item.transfer_status === 'rejected').length },
+        { metricKey: 'highRisk', metricValue: this.transfers.filter(item => item.risk_level === 'high').length }
+      ]
+    },
+    modeMetricConfig() {
+      const configs = {
+        pending: { label: 'å¾…åˆ†æ¡ˆæ¡ˆä»¶', icon: 'peoples', color: 'blue' },
+        todayNew: { label: 'ä»Šæ—¥æ–°è½¬å…¥', icon: 'documentation', color: 'cyan' },
+        transferPending: { label: 'å¾…å®¡æ‰¹è½¬æ¡ˆ', icon: 'validCode', color: 'orange' },
+        highLoadLawyers: { label: 'é«˜è´Ÿè½½å¾‹å¸ˆ', icon: 'peoples', color: 'violet' },
+        avgAssignDays: { label: 'å¹³å‡åˆ†æ¡ˆæ—¶é•¿', icon: 'time', color: 'green' },
+        totalLawyers: { label: 'å¾‹å¸ˆæ€»æ•°', icon: 'peoples', color: 'blue' },
+        highLoad: { label: 'é«˜è´Ÿè½½å¾‹å¸ˆ', icon: 'peoples', color: 'orange' },
+        idle: { label: 'ç©ºé—²å¾‹å¸ˆ', icon: 'peoples', color: 'green' },
+        monthAssigned: { label: 'æœ¬æœˆå·²åˆ†æ¡ˆ', icon: 'documentation', color: 'violet' },
+        avgLoad: { label: 'å¹³å‡è´Ÿè½½ç‡', icon: 'time', color: 'green' },
+        pendingTransfer: { label: 'å¾…å®¡æ‰¹è½¬æ¡ˆ', icon: 'peoples', color: 'blue' },
+        todayApply: { label: 'ä»Šæ—¥æ–°å¢ç”³è¯·', icon: 'documentation', color: 'cyan' },
+        passed: { label: 'å·²é€šè¿‡', icon: 'validCode', color: 'green' },
+        rejected: { label: 'å·²é©³å›', icon: 'close', color: 'orange' },
+        highRisk: { label: 'é«˜é£é™©è½¬æ¡ˆ', icon: 'warning', color: 'orange' },
+        assignTotal: { label: 'åˆ†æ¡ˆè®°å½•', icon: 'documentation', color: 'blue' },
+        assignToday: { label: 'ä»Šæ—¥åˆ†æ¡ˆ', icon: 'time', color: 'cyan' },
+        mainLawyers: { label: 'ä¸»åŠå¾‹å¸ˆ', icon: 'peoples', color: 'green' },
+        batchAssign: { label: 'æ‰¹é‡åˆ†æ¡ˆ', icon: 'tree', color: 'violet' },
+        avgWorkload: { label: 'å¹³å‡å·¥ä½œé‡', icon: 'time', color: 'orange' },
+        confirmTotal: { label: 'ç¡®è®¤æ¶ˆæ¯', icon: 'message', color: 'blue' },
+        confirmPending: { label: 'å¾…ç¡®è®¤', icon: 'time', color: 'orange' },
+        confirmAccepted: { label: 'å·²ç¡®è®¤', icon: 'validCode', color: 'green' },
+        confirmRejected: { label: 'å·²æ‹’ç»', icon: 'close', color: 'orange' },
+        confirmToday: { label: 'ä»Šæ—¥æ–°å¢', icon: 'documentation', color: 'cyan' }
+      }
+      const keys = this.mode === 'lawyer'
+        ? ['totalLawyers', 'highLoad', 'idle', 'monthAssigned', 'avgLoad']
+        : (this.mode === 'transfer'
+          ? ['pendingTransfer', 'todayApply', 'passed', 'rejected', 'highRisk']
+          : (this.mode === 'assign'
+            ? ['assignTotal', 'assignToday', 'mainLawyers', 'batchAssign', 'avgWorkload']
+            : (this.mode === 'confirm'
+              ? ['confirmTotal', 'confirmPending', 'confirmAccepted', 'confirmRejected', 'confirmToday']
+              : ['pending', 'todayNew', 'transferPending', 'highLoadLawyers', 'avgAssignDays'])))
+      return keys.map(key => ({ key, hint: 'å®æ—¶ç»Ÿè®¡', ...configs[key] }))
+    },
+    dashboardCards() {
+      return (this.metrics || []).reduce((result, item) => {
+        result[item.metricKey] = item.metricValue
+        return result
+      }, {})
+    },
+    recommendedLawyerName() {
+      return this.lawyerLoads[0] ? this.lawyerLoads[0].lawyerName : '-'
+    },
+    mainLawyerOptions() {
+      return (this.lawyerOptions || []).filter(item => item.assignEnabled !== 'N' && item.lawyerRole !== 'assistant')
+    },
+    assistantLawyerOptions() {
+      return (this.lawyerOptions || []).filter(item => item.assignEnabled !== 'N')
+    }
+  },
+  watch: {
+    '$route.query.module': {
+      immediate: true,
+      handler(value) {
+        this.mode = value || 'pending'
+        this.reset(false)
+      }
+    }
+  },
+  methods: {
+    defaultQuery() {
+      const query = { pageNum: 1, pageSize: 10 }
+      if (this.$route.query.caseId) query.caseId = this.$route.query.caseId
+      return query
+    },
+    goMode(mode) {
+      this.$router.push({ path: this.$route.path, query: { module: mode } })
+    },
+    reset(keepMode = true) {
+      this.query = this.defaultQuery()
+      if (keepMode) this.loadPage()
+      else this.$nextTick(this.loadPage)
+    },
+    search() {
+      this.query.pageNum = 1
+      this.loadPage()
+    },
+    loadPage() {
+      this.loadDashboard()
+      this.loadLawyerOptions()
+      if (this.mode === 'assign') return this.loadAssignments()
+      if (this.mode === 'transfer') return this.loadTransfers()
+      if (this.mode === 'lawyer') return this.loadLawyers()
+      if (this.mode === 'confirm') return this.loadConfirms()
+      if (this.mode === 'status') return this.loadStatuses()
+      return this.loadCases()
+    },
+    loadDashboard() {
+      getCaseDashboard().then(res => {
+        const data = res.data || {}
+        this.metrics = data.cards || []
+        this.lawyerLoads = data.lawyers || this.lawyerLoads
+        this.specialtyStats = data.specialties || this.specialtyStats
+      })
+    },
+    loadLawyerOptions() {
+      listCaseLawyer().then(res => { this.lawyerOptions = res.data || [] })
+    },
+    loadCases() {
+      this.loading = true
+      listCase({ ...this.query, mode: 'pending' }).then(res => {
+        this.cases = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+    },
+    loadAssignments() {
+      this.loading = true
+      listAssignment(this.query).then(res => {
+        this.assignments = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+    },
+    loadTransfers() {
+      this.loading = true
+      listTransfer(this.query).then(res => {
+        this.transfers = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+    },
+    loadLawyers() {
+      this.loading = true
+      listLawyerLoad(this.query).then(res => {
+        this.lawyerLoads = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+      listLawyerSpecialty(this.query).then(res => { this.specialtyStats = res.data || [] })
+    },
+    openProfileConfig() {
+      this.profileOpen = true
+      this.resetProfileQuery()
+    },
+    resetProfileQuery(load = true) {
+      this.profileQuery = { pageNum: 1, pageSize: 10 }
+      if (load) this.loadProfiles()
+    },
+    setProfileAssignable(value) {
+      this.$set(this.profileQuery, 'assignEnabled', value)
+      this.profileQuery.pageNum = 1
+      this.loadProfiles()
+    },
+    loadProfiles() {
+      this.profileLoading = true
+      listLawyerProfile(this.profileQuery).then(res => {
+        this.profileList = res.rows || []
+        this.profileTotal = res.total || 0
+      }).finally(() => {
+        this.profileLoading = false
+      })
+    },
+    openProfileForm(row) {
+      const userId = row && row.userId
+      if (!userId) return
+      this.setProfileForm(row)
+      this.profileFormOpen = true
+      this.$nextTick(() => this.$refs.profileFormRef && this.$refs.profileFormRef.clearValidate())
+    },
+    setProfileForm(data) {
+      this.profileForm = {
+        ...data,
+        lawyerRole: data.lawyerRole || 'lawyer',
+        specialties: this.specialtyList(data.specialties),
+        loadLimit: Number(data.loadLimit || 100),
+        avgResponseHours: Number(data.avgResponseHours || 4),
+        assignEnabled: data.assignEnabled || 'N'
+      }
+    },
+    filterProfileFallback() {
+      const keyword = String(this.profileQuery.keyword || '').trim()
+      const role = this.profileQuery.lawyerRole
+      const specialty = this.profileQuery.specialty
+      const assignEnabled = this.profileQuery.assignEnabled
+      return (this.lawyerLoads || []).filter(item => {
+        const keywordMatched = !keyword || [item.userName, item.nickName, item.lawyerName, item.deptName, item.specialties].some(value => String(value || '').indexOf(keyword) > -1)
+        const roleMatched = !role || item.lawyerRole === role
+        const specialtyMatched = !specialty || this.specialtyList(item.specialties).includes(specialty)
+        const assignMatched = !assignEnabled || (item.assignEnabled || 'Y') === assignEnabled
+        return keywordMatched && roleMatched && specialtyMatched && assignMatched
+      })
+    },
+    saveProfile() {
+      this.$refs.profileFormRef.validate(valid => {
+        if (!valid) return
+        const payload = {
+          ...this.profileForm,
+          specialties: (this.profileForm.specialties || []).join(',')
+        }
+        updateLawyerProfile(payload).then(() => {
+          this.$modal.msgSuccess('å¾‹å¸ˆæ¡£æ¡ˆå·²ä¿å­˜')
+          this.profileFormOpen = false
+          this.loadProfiles()
+          this.loadLawyers()
+          this.loadLawyerOptions()
+          this.loadDashboard()
+        }).catch(() => {
+          this.$modal.msgError('å¾‹å¸ˆæ¡£æ¡ˆä¿å­˜å¤±è´¥ï¼Œè¯·ç¡®è®¤åç«¯å·²é‡å¯å¹¶ä¸” case:lawyer:config æƒé™å·²åˆå§‹åŒ–')
+        })
+      })
+    },
+    changeProfileStatus(row) {
+      if (row.assignEnabled === 'Y' && !row.profileId) {
+        row.assignEnabled = 'N'
+        this.$modal.msgWarning('è¯·å…ˆç¼–è¾‘å¹¶ä¿å­˜å¾‹å¸ˆæ¡£æ¡ˆåå†å¯ç”¨åˆ†æ¡ˆ')
+        this.openProfileForm({ ...row, assignEnabled: 'Y' })
+        return
+      }
+      updateLawyerProfileStatus({ userId: row.userId, assignEnabled: row.assignEnabled }).then(() => {
+        this.$modal.msgSuccess(row.assignEnabled === 'Y' ? 'å·²å¯ç”¨åˆ†æ¡ˆ' : 'å·²ç¦ç”¨åˆ†æ¡ˆ')
+        this.loadProfiles()
+        this.loadLawyers()
+        this.loadLawyerOptions()
+      }).catch(() => {
+        row.assignEnabled = row.assignEnabled === 'Y' ? 'N' : 'Y'
+      })
+    },
+    loadConfirms() {
+      this.loading = true
+      listConfirm(this.query).then(res => {
+        this.confirms = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+    },
+    loadStatuses() {
+      this.loading = true
+      listCaseStatus(this.query).then(res => {
+        this.statuses = res.rows || []
+        this.total = res.total || 0
+      }).finally(() => { this.loading = false })
+    },
+    openDetail(row) {
+      const caseId = this.caseIdOf(row)
+      this.detailCase = row || {}
+      this.detailOpen = true
+      if (!caseId) return
+      getCase(caseId).then(res => {
+        this.detailCase = res.data || row || {}
+      })
+    },
+    openCaseFlow(row) {
+      const caseId = this.caseIdOf(row)
+      this.flowCase = row || {}
+      this.flowStatuses = []
+      this.flowOpen = true
+      if (!caseId) return
+      this.flowLoading = true
+      listCaseStatus({ caseId, pageNum: 1, pageSize: 20 }).then(res => {
+        this.flowStatuses = res.rows || []
+      }).finally(() => { this.flowLoading = false })
+    },
+    openAssign(row, rows) {
+      const selected = rows && rows.length ? rows : (row ? [row] : [])
+      this.assignCaseRow = row || {}
+      this.assignForm = {
+        caseId: row && row.case_id,
+        caseIds: selected.map(item => item.case_id),
+        batch: selected.length > 1,
+        assignMethod: this.dictDefault('law_case_assign_method'),
+        priority: row && row.priority || this.dictDefault('law_case_priority'),
+        assignReason: this.dictDefault('law_case_assign_reason'),
+        estimatedWorkload: row && Number(row.estimated_workload || 24),
+        notifyFlag: 'Y',
+        assistantLawyerIds: []
+      }
+      this.assignOpen = true
+      this.$nextTick(() => this.$refs.assignFormRef && this.$refs.assignFormRef.clearValidate())
+    },
+    selectAssignLawyer(item) {
+      this.$set(this.assignForm, 'mainLawyerId', item.userId)
+    },
+    saveAssign() {
+      this.$refs.assignFormRef.validate(valid => {
+        if (!valid) return
+        const assistants = this.lawyerOptions.filter(item => (this.assignForm.assistantLawyerIds || []).some(id => String(id) === String(item.userId)))
+        const payload = {
+          ...this.assignForm,
+          assistantLawyerIds: (this.assignForm.assistantLawyerIds || []).join(','),
+          assistantLawyerNames: assistants.map(item => item.nickName).join(',')
+        }
+        const request = payload.batch ? batchAssignCase : assignCase
+        request(payload).then(() => {
+          this.assignOpen = false
+          this.assignCaseRow = {}
+          this.$modal.msgSuccess('åˆ†æ¡ˆæˆåŠŸ')
+          this.assignOpen = false
+          this.selectedRows = []
+          this.loadPage()
+          this.$nextTick(() => { this.assignOpen = false })
+        })
+      })
+    },
+    assignRecommended(lawyer) {
+      listCase({ pageNum: 1, pageSize: 1, mode: 'pending' }).then(res => {
+        const row = (res.rows || [])[0]
+        if (!row) {
+          this.$modal.msgWarning('æš‚æ— å¾…åˆ†æ¡ˆæ¡ˆä»¶')
+          return
+        }
+        this.openAssign(row)
+        this.$set(this.assignForm, 'mainLawyerId', lawyer.userId)
+      })
+    },
+    openLawyerDetail(row) {
+      this.lawyerDetail = row || {}
+      this.lawyerDetailOpen = true
+    },
+    searchProcessingCases(keyword) {
+      listCase({ pageNum: 1, pageSize: 20, mode: 'processing', keyword }).then(res => { this.processingCases = res.rows || [] })
+    },
+    openTransfer() {
+      this.transferForm = { transferReason: this.dictDefault('law_case_transfer_reason'), riskLevel: this.dictDefault('law_case_risk_level') }
+      this.searchProcessingCases('')
+      this.transferOpen = true
+      this.$nextTick(() => this.$refs.transferFormRef && this.$refs.transferFormRef.clearValidate())
+    },
+    saveTransfer() {
+      this.$refs.transferFormRef.validate(valid => {
+        if (!valid) return
+        requestTransfer(this.transferForm).then(() => {
+          this.$modal.msgSuccess('è½¬æ¡ˆç”³è¯·å·²æäº¤')
+          this.transferOpen = false
+          this.loadPage()
+        })
+      })
+    },
+    openApproval(row) {
+      this.approvalTransfer = row
+      this.approvalForm = { transferId: row.transfer_id, action: 'passed', opinion: '' }
+      this.transferDetailOpen = true
+      this.$nextTick(() => { if (this.$refs.transferApprovalFormRef) this.$refs.transferApprovalFormRef.clearValidate() })
+    },
+    saveApproval() {
+      if (!this.approvalForm.transferId) return
+      this.$refs.transferApprovalFormRef.validate(valid => {
+        if (!valid) return
+        approveTransfer(this.approvalForm).then(() => {
+          this.$modal.msgSuccess('å®¡æ‰¹å®Œæˆ')
+          this.transferDetailOpen = false
+          this.approvalForm = {}
+          this.approvalTransfer = {}
+          this.loadTransfers()
+          this.loadDashboard()
+        })
+      })
+    },
+    handleConfirmRow(row, result) {
+      const text = result === 'accepted' ? 'ç¡®è®¤æ¥æ”¶' : 'æ‹’ç»æ¥æ¡ˆ'
+      handleConfirm({ confirmId: row.confirm_id, confirmResult: result, remark: text }).then(() => {
+        this.$modal.msgSuccess(text + 'æˆåŠŸ')
+        this.loadConfirms()
+        this.loadDashboard()
+      })
+    },
+    avatar(name) {
+      return (name || '-').slice(0, 1)
+    },
+    dictDefault(type) {
+      const item = (this.dict.type[type] || []).find(item => item.raw && item.raw.isDefault === 'Y') || (this.dict.type[type] || [])[0]
+      return item ? item.value : undefined
+    },
+    dictLabel(type, value) {
+      const item = (this.dict.type[type] || []).find(item => item.value === value)
+      return item ? item.label : value || '-'
+    },
+    specialtyList(value) {
+      return String(value || '').split(',').filter(Boolean)
+    },
+    sameValue(a, b) {
+      return String(a) === String(b)
+    },
+    caseIdOf(row) {
+      return row && (row.case_id || row.caseId)
+    },
+    loadColor(value) {
+      const rate = Number(value || 0)
+      if (rate >= 80) return '#ef4444'
+      if (rate >= 50) return '#f59e0b'
+      return '#10b981'
+    },
+    loadStatus(value) {
+      const rate = Number(value || 0)
+      if (rate >= 80) return 'high'
+      if (rate < 20) return 'idle'
+      return 'normal'
+    },
+    matchLevel(row) {
+      const rate = Number(row && row.loadRate || 0)
+      if (rate < 50) return 'high'
+      if (rate < 80) return 'medium'
+      return 'low'
+    },
+    lawyerSuggestion(row) {
+      const rate = Number(row && row.loadRate || 0)
+      if (row && row.assignEnabled === 'N') return 'è¯¥å¾‹å¸ˆå½“å‰å·²å…³é—­å¯åˆ†æ¡ˆï¼Œä¸å»ºè®®ç»§ç»­åˆ†é…æ–°æ¡ˆä»¶ã€‚'
+      if (row && row.lawyerRole === 'assistant') return 'è¯¥äººå‘˜ä¸ºå®ä¹ å¾‹å¸ˆï¼Œé€‚åˆä½œä¸ºååŠå¾‹å¸ˆå‚ä¸æ¡ˆä»¶ï¼Œä¸å»ºè®®ä½œä¸ºä¸»åŠå¾‹å¸ˆã€‚'
+      if (rate >= 80) return 'å½“å‰è´Ÿè½½è¾ƒé«˜ï¼Œå»ºè®®ä»…åˆ†é…ç´§æ€¥ä¸”ä¸“ä¸šé«˜åº¦åŒ¹é…çš„æ¡ˆä»¶ï¼Œæˆ–ä¼˜å…ˆè€ƒè™‘å…¶ä»–å¾‹å¸ˆã€‚'
+      if (rate >= 50) return 'å½“å‰è´Ÿè½½é€‚ä¸­ï¼Œå¯æ‰¿æ¥æ™®é€šæ¡ˆä»¶ï¼Œå»ºè®®å…³æ³¨é¢„è®¡å·¥ä½œé‡å’Œå“åº”æ—¶é•¿ã€‚'
+      return 'å½“å‰è´Ÿè½½è¾ƒä½ï¼Œé€‚åˆä¼˜å…ˆåˆ†é…ä¸“ä¸šåŒ¹é…çš„æ–°æ¡ˆä»¶ã€‚'
+    }
+  }
+}
+</script>
+
+<style scoped lang="scss">
+@import "../business/business.scss";
+
+.case-page {
+  --biz-filter-input-width: 220px;
+  --biz-filter-select-width: 126px;
+}
+
+.sub-text {
+  display: block;
+  margin-top: 3px;
+  color: #8a98ad;
+  font-size: var(--biz-font-mini, 11px);
+}
+
+.owner-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.owner-cell i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #1d4ed8;
+  background: #eaf1ff;
+  font-style: normal;
+}
+
+.biz-link {
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.tag-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tag-pills i {
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #4b5d78;
+  background: #f1f5fb;
+  font-style: normal;
+}
+
+.muted-text {
+  color: #9aa8bd;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.config-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: var(--biz-font-mini, 11px);
+  font-weight: 700;
+}
+
+.config-status.is-ready {
+  color: #059669;
+  background: #ecfdf5;
+}
+
+.config-status.is-empty {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.drawer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.drawer-title span {
+  color: #2563eb;
+  font-size: var(--biz-font-mini, 11px);
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+.drawer-title h3 {
+  margin: 4px 0;
+  color: #172b4d;
+  font-size: var(--biz-font-section, 18px);
+}
+
+.drawer-title p {
+  margin: 0;
+  color: #7a869a;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.transfer-drawer-body {
+  padding: 0 18px 74px;
+}
+
+.lawyer-detail-body,
+.profile-drawer-body {
+  padding: 0 18px 74px;
+}
+
+.drawer-card {
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid #e8edf6;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 18px rgba(36, 73, 135, .05);
+}
+
+.lawyer-profile-hero {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 18px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #1557ff 0%, #19b7f0 50%, #7c3aed 100%);
+  box-shadow: 0 16px 36px rgba(37, 99, 235, .22);
+}
+
+.lawyer-profile-hero > i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 66px;
+  height: 66px;
+  border-radius: 20px;
+  color: #1d4ed8;
+  background: rgba(255, 255, 255, .92);
+  font-size: 28px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.lawyer-profile-hero h3 {
+  margin: 0 0 6px;
+  font-size: var(--biz-font-title, 22px);
+}
+
+.lawyer-profile-hero p {
+  margin: 0 0 10px;
+  color: rgba(255, 255, 255, .78);
+}
+
+.load-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  font-size: var(--biz-font-mini, 11px);
+  font-weight: 700;
+}
+
+.lawyer-load-ring {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.lawyer-load-ring dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.lawyer-load-ring div {
+  padding: 10px;
+  border-radius: 12px;
+  background: #f7faff;
+}
+
+.lawyer-load-ring dt {
+  margin-bottom: 5px;
+  color: #8a98ad;
+  font-size: var(--biz-font-mini, 11px);
+}
+
+.lawyer-load-ring dd {
+  margin: 0;
+  color: #172b4d;
+  font-weight: 800;
+}
+
+.detail-specialties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.detail-specialties span,
+.detail-specialties em {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #1d4ed8;
+  background: #eaf1ff;
+  font-style: normal;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.lawyer-suggestion {
+  padding: 12px;
+  border-radius: 12px;
+  color: #1d4ed8;
+  background: #f1f6ff;
+  line-height: 1.7;
+}
+
+.lawyer-suggestion.high {
+  color: #dc2626;
+  background: #fff1f2;
+}
+
+.lawyer-suggestion.normal {
+  color: #b45309;
+  background: #fff7ed;
+}
+
+.lawyer-suggestion.idle {
+  color: #059669;
+  background: #ecfdf5;
+}
+
+.profile-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f7faff 0%, #eef6ff 100%);
+}
+
+.profile-search {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.profile-search .el-input {
+  flex: 1;
+}
+
+.profile-quick-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dfe8f7;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.profile-quick-tabs button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.profile-quick-tabs button.active {
+  color: #fff;
+  background: #2563eb;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, .22);
+}
+
+.profile-advanced-filter {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.profile-advanced-filter label {
+  color: #6b7a90;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.profile-advanced-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.drawer-kv div {
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f7faff;
+}
+
+.drawer-kv dt {
+  display: block;
+  margin-bottom: 5px;
+  color: #8a98ad;
+  font-size: var(--biz-font-mini, 11px);
+}
+
+.drawer-kv dd {
+  margin: 0;
+  color: #172b4d;
+  font-size: var(--biz-font-small, 12px);
+  font-weight: 600;
+}
+
+.lawyer-compare {
+  display: grid;
+  grid-template-columns: 1fr 24px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lawyer-compare span {
+  padding: 10px;
+  border: 1px solid #dbe7ff;
+  border-radius: 10px;
+  color: #1d4ed8;
+  background: #f1f6ff;
+  text-align: center;
+  font-weight: 600;
+}
+
+.lawyer-compare i {
+  color: #1d4ed8;
+  text-align: center;
+}
+
+.approval-detail-text,
+.approval-result {
+  margin: 0;
+  color: #52627a;
+  font-size: var(--biz-font-small, 12px);
+  line-height: 1.6;
+}
+
+.approval-result {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  color: #1d4ed8;
+  background: #f1f6ff;
+}
+
+.approval-flow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.approval-flow span {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 999px;
+  color: #8a98ad;
+  background: #f1f5fb;
+  text-align: center;
+  font-size: var(--biz-font-mini, 11px);
+}
+
+.approval-flow .done {
+  color: #0f9f6e;
+  background: #eafaf3;
+}
+
+.approval-flow .active {
+  color: #1d4ed8;
+  background: #eaf1ff;
+}
+
+.approval-action-group {
+  margin-bottom: 12px;
+}
+
+.drawer-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid #edf1f8;
+  background: #fff;
+  box-shadow: 0 -8px 18px rgba(36, 73, 135, .06);
+}
+
+.case-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f6f9ff;
+  margin-bottom: 14px;
+}
+
+.case-summary span {
+  color: #708099;
+  font-size: var(--biz-font-small, 12px);
+}
+
+.case-summary b {
+  display: block;
+  margin-top: 4px;
+  color: #172b4d;
+}
+
+.assign-dialog-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 18px;
+}
+
+.lawyer-reference header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.lawyer-reference article {
+  padding: 12px;
+  border: 1px solid #edf1f8;
+  border-radius: 10px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.lawyer-reference article.active {
+  border-color: #2563eb;
+  background: #f5f8ff;
+}
+
+.reference-lawyer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.reference-lawyer-head .owner-cell {
+  min-width: 0;
+  font-weight: 700;
+}
+
+.reference-lawyer-head ::v-deep .el-tag {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.lawyer-reference .tag-pills.compact {
+  margin-bottom: 8px;
+}
+
+.lawyer-reference .el-progress {
+  margin-bottom: 6px;
+}
+
+.lawyer-reference small {
+  display: block;
+  color: #6b7a90;
+}
+
+.select-sub {
+  float: right;
+  color: #8492a6;
+  font-size: 12px;
+}
+
+@media (max-width: 1200px) {
+  .assign-dialog-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-search {
+    flex-wrap: wrap;
+  }
+
+  .lawyer-load-ring {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<style lang="scss">
+@import "../business/business-dialog.scss";
+
+.profile-filter-popover {
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(36, 73, 135, .16);
+}
+
+.case-profile-drawer {
+  .el-drawer__header {
+    margin-bottom: 14px;
+  }
+
+  .el-table {
+    font-size: var(--biz-font-small, 12px);
+  }
+
+  .el-table th,
+  .el-table td {
+    padding: 8px 0;
+  }
+
+  .el-table .cell {
+    line-height: 1.45;
+  }
+
+  .el-switch {
+    vertical-align: middle;
+  }
+}
+</style>

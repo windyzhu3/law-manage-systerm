@@ -1,4 +1,3 @@
-
 <template>
   <div class="biz-page matter-page" :class="'biz-size-' + appSize">
     <biz-page-header :title="pageTitle" :description="pageDescription">
@@ -116,9 +115,726 @@
         <el-table-column label="æ¡ˆä»¶ç¼–å·" prop="case_no" width="130" />
         <el-table-column label="æ¡ˆä»¶åç§°" prop="case_name" min-width="180" show-overflow-tooltip />
         <el-table-column label="å®¢æˆ·åç§°" prop="customer_name" min-width="160" show-overflow-tooltip />
-        <el-table-column label="å½’æ¡£çŠ¶æ€" width="110" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_archive_status" ÛÎ÷¶‰žËkºwµç@ô¥Ñ•´¹™¥•±‘Y…±Õ”ñð¥Ñ•´¹™¥•±‘}Ù…±Õ”ô¤(€€€€€•Ñ5…ÑÑ•É¥•±‘½¹™¥Ì¡…Í•QåÁ”¤¹Ñ¡•¸¡É•Ì€ôøì(€€€€€€€Ñ¡¥Ì¹™¥•±‘½¹™¥Ì€ô€¡É•Ì¹‘…Ñ„ñðmt¤¹µ…À¡¥Ñ•´€ôø€¡ì(€€€€€€€€€€¸¸¹¥Ñ•´°(€€€€€€€€€™¥•±‘Y…±Õ”èÙ…±Õ•5…Ám¥Ñ•´¹™¥•±‘}½‘•t€„ôôÕ¹‘•™¥¹•€üÙ…±Õ•5…Ám¥Ñ•´¹™¥•±‘}½‘•t€è€¡¥Ñ•´¹™¥•±‘}ÑåÁ”€ôôô€ÍÝ¥Ñ œ€ü€8œ€è€œœ¤(€€€€€€€ô¤¤(€€€€€ô¤(€€€ô°(€€€½±±•Ñ¥•±‘Y…±Õ•Ì ¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹™¥•±‘½¹™¥Ì¹µ…À¡¥Ñ•´€ôø€¡ì(€€€€€€€™¥•±‘½‘”è¥Ñ•´¹™¥•±‘}½‘”°(€€€€€€€™¥•±‘9…µ”è¥Ñ•´¹™¥•±‘}¹…µ”°(€€€€€€€™¥•±‘Y…±Õ”è¥Ñ•´¹™¥•±‘Y…±Õ”°(€€€€€€€½É‘•É9Õ´è¥Ñ•´¹½É‘•É}¹Õ´(€€€€€ô¤¤(€€€ô°(€€€Ù…±¥‘…Ñ•¥•±‘½¹™¥Ì ¤ì(€€€€€½¹ÍÐµ¥ÍÍ¥¹œ€ôÑ¡¥Ì¹™¥•±‘½¹™¥Ì¹™¥¹¡¥Ñ•´€ôø¥Ñ•´¹É•ÅÕ¥É•‘}™±…œ€ôôô€dœ€˜˜€¡¥Ñ•´¹™¥•±‘Y…±Õ”€ôôôÕ¹‘•™¥¹•ñð¥Ñ•´¹™¥•±‘Y…±Õ”€ôôô¹Õ±°ñðMÑÉ¥¹œ¡¥Ñ•´¹™¥•±‘Y…±Õ”¤¹ÑÉ¥´ ¤€ôôô€œœ¤¤(€€€€€¥˜€¡µ¥ÍÍ¥¹œ¤ì(€€€€€€€Ñ¡¥Ì¸‘µ½‘…°¹µÍÉÉ½È Ÿ¢¾ß–†¯–gš†#’îÛ’âO–Æ{’þ‡š¿¾òhœ€¬µ¥ÍÍ¥¹œ¹™¥•±‘}¹…µ”¤(€€€€€€€É•ÑÕÉ¸™…±Í”(€€€€€ô(€€€€€½¹ÍÐ¥¹Ù…±¥€ôÑ¡¥Ì¹™¥•±‘½¹™¥Ì¹™¥¹¡¥Ñ•´€ôø€…Ñ¡¥Ì¹¥ÍY…±¥‘¥•±‘Y…±Õ”¡¥Ñ•´¤¤(€€€€€¥˜€¡¥¹Ù…±¥¤ì(€€€€€€€Ñ¡¥Ì¸‘µ½‘…°¹µÍÉÉ½È Ÿš†#’îÛ’âO–Æ{’þ‡š¿š‚ó–ò?’â7š¶ž†»¾òhœ€¬¥¹Ù…±¥¹™¥•±‘}¹…µ”¤(€€€€€€€É•ÑÕÉ¸™…±Í”(€€€€€ô(€€€€€É•ÑÕÉ¸ÑÉÕ”(€€€ô°(€€€¥ÍY…±¥‘¥•±‘Y…±Õ”¡™¥•±¤ì(€€€€€½¹ÍÐÙ…±Õ”€ô™¥•±¹™¥•±‘Y…±Õ”(€€€€€¥˜€¡Ù…±Õ”€ôôôÕ¹‘•™¥¹•ñðÙ…±Õ”€ôôô¹Õ±°ñðMÑÉ¥¹œ¡Ù…±Õ”¤¹ÑÉ¥´ ¤€ôôô€œœ¤É•ÑÕÉ¸ÑÉÕ”(€€€€€½¹ÍÐÑ•áÐ€ôMÑÉ¥¹œ¡Ù…±Õ”¤¹ÑÉ¥´ ¤(€€€€€¥˜€¡™¥•±¹™¥•±‘}ÑåÁ”€ôôô€¹Õµ‰•Èœ¤É•ÑÕÉ¸€…9Õµ‰•È¹¥Í9…8¡9Õµ‰•È¡Ñ•áÐ¤¤(€€€€€¥˜€¡™¥•±¹™¥•±‘}ÑåÁ”€ôôô€‘…Ñ”œ¤É•ÑÕÉ¸€½yq‘ìÑôµq‘ìÉôµq‘ìÉô¼¹Ñ•ÍÐ¡Ñ•áÐ¤€˜˜€…9Õµ‰•È¹¥Í9…8¡¹•Ü…Ñ”¡Ñ•áÐ¤¹•ÑQ¥µ” ¤¤(€€€€€¥˜€¡™¥•±¹™¥•±‘}ÑåÁ”€ôôô€ÍÝ¥Ñ œ¤É•ÑÕÉ¸ldœ°€8t¹¥¹±Õ‘•Ì¡Ñ•áÐ¤(€€€€€É•ÑÕÉ¸ÑÉÕ”(€€€ô°(€€€½Á•¹•Ñ…¥°¡É½Ü¤ì•Ñ5…ÑÑ•È¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤¹Ñ¡•¸¡É•Ì€ôøìÑ¡¥Ì¹‘•Ñ…¥°€ôÉ•Ì¹‘…Ñ„ñðíôìÑ¡¥Ì¹‘•Ñ…¥±=Á•¸€ôÑÉÕ”ô¤ô°(€€€½Á•¹…Í•¥¹…¹”¡É½Ü€ôíô¤ì(€€€€€½¹ÍÐ…Í•%€ôÉ½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%(€€€€€¥˜€ ……Í•%¤ì(€€€€€€€Ñ¡¥Ì¸‘µ½‘…°¹µÍÉÉ½È Ÿ–öO–&7š†#’îÛžòë–ÂGš†#’îÙ%¾ò3š^ƒšÎWš&O–ò¢Ò‹–*‡¢ž–nøœ¤(€€€€€€€É•ÑÕÉ¸(€€€€€ô(€€€€€Ñ¡¥Ì¹…Í•¥¹…¹•…Í•%€ô…Í•%(€€€€€Ñ¡¥Ì¹…Í•¥¹…¹•=Á•¸€ôÑÉÕ”(€€€ô°(€€€Í•…É¡5…ÑÑ•É=ÁÑ¥½¹Ì¡­•åÝ½É¤ìÑ¡¥Ì¹µ…ÑÑ•ÉM•±•Ñ1½…‘¥¹œ€ôÑÉÕ”ì±¥ÍÑ5…ÑÑ•È¡ìÁ…•9Õ´è€Ä°Á…•M¥é”è€ÈÀ°­•åÝ½É°µ½‘”è€±¥ÍÐœô¤¹Ñ¡•¸¡É•Ì€ôøìÑ¡¥Ì¹µ…ÑÑ•É=ÁÑ¥½¹Ì€ôÉ•Ì¹É½ÝÌñðmtô¤¹™¥¹…±±ä  ¤€ôøìÑ¡¥Ì¹µ…ÑÑ•ÉM•±•Ñ1½…‘¥¹œ€ô™…±Í”ô¤ô°(€€€Í•…É¡½¹ÑÉ…ÑÌ¡­•åÝ½É¤ì(€€€€€Ñ¡¥Ì¹½¹ÑÉ…Ñ1½…‘¥¹œ€ôÑÉÕ”(€€€€€±¥ÍÑ½¹ÑÉ…Ð¡ìÁ…•9Õ´è€Ä°Á…•M¥é”è€ÈÀ°½¹ÑÉ…Ñ9…µ”è­•åÝ½É°…Õ‘¥ÑMÑ…ÑÕÌè€œÈœ°Í¥¹MÑ…ÑÕÌè€œÄœ°½¹ÑÉ…ÑMÑ…ÑÕÌè€œÄœô¤¹Ñ¡•¸¡É•Ì€ôøìÑ¡¥Ì¹½¹ÑÉ…Ñ=ÁÑ¥½¹Ì€ôÉ•Ì¹É½ÝÌñðmtô¤¹™¥¹…±±ä  ¤€ôøìÑ¡¥Ì¹½¹ÑÉ…Ñ1½…‘¥¹œ€ô™…±Í”ô¤(€€€ô°(€€€Í•±•Ñ½¹ÑÉ…Ð¡½¹ÑÉ…Ñ%¤ì(€€€€€½¹ÍÐ¥Ñ•´€ôÑ¡¥Ì¹½¹ÑÉ…Ñ=ÁÑ¥½¹Ì¹™¥¹¡½¹ÑÉ…Ð€ôø½¹ÑÉ…Ð¹½¹ÑÉ…Ñ%€ôôô½¹ÑÉ…Ñ%¤(€€€€€¥˜€¡¥Ñ•´¤ì(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•9…µ”€ôÑ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•9…µ”ñð¥Ñ•´¹½¹ÑÉ…Ñ9…µ”(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•QåÁ”€ô¥Ñ•´¹…Í•QåÁ”ñðÑ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•QåÁ”(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹‘¥ÍÁÕÑ•µ½Õ¹Ð€ô¥Ñ•´¹Í¥¹µ½Õ¹ÐñðÑ¡¥Ì¹µ…ÑÑ•É½É´¹‘¥ÍÁÕÑ•µ½Õ¹Ð(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ9¼€ô¥Ñ•´¹½¹ÑÉ…Ñ9¼(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹ÕÍÑ½µ•É%€ô¥Ñ•´¹ÕÍÑ½µ•É%(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹ÕÍÑ½µ•É9…µ”€ô¥Ñ•´¹ÕÍÑ½µ•É9…µ”(€€€€€€€Ñ¡¥Ì¹±½…‘¥•±‘½¹™¥Ì¡Ñ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•QåÁ”°Ñ¡¥Ì¹µ…ÑÑ•É½É´¹™¥•±‘Y…±Õ•Ì¤(€€€€€ô(€€€ô°(€€€¡…¹‘±•5…ÑÑ•ÉQåÁ•¡…¹”¡…Í•QåÁ”¤ìÑ¡¥Ì¹±½…‘¥•±‘½¹™¥Ì¡…Í•QåÁ”°Ñ¡¥Ì¹µ…ÑÑ•É½É´¹™¥•±‘Y…±Õ•Ì¤ô°(€€€½Á•¹5…ÑÑ•È¡É½Ü¤ì(€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´€ôÉ½Ü€üÑ¡¥Ì¹¹½Éµ…±¥é•I½Ü¡É½Ü¤€èì…Í•QåÁ”èÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}ÑåÁ”œ¤°…Í•MÑ…”èÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}ÍÑ…”œ¤°É¥Í­1•Ù•°èÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}É¥Í­}±•Ù•°œ¤°™¥•±‘Y…±Õ•Ìèmtô(€€€€€¥˜€ …É½Ü¤Ñ¡¥Ì¹Í•…É¡½¹ÑÉ…ÑÌ œœ¤(€€€€€¥˜€¡É½Ü€˜˜Ñ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ%€˜˜€…Ñ¡¥Ì¹½¹ÑÉ…Ñ=ÁÑ¥½¹Ì¹Í½µ”¡¥Ñ•´€ôø¥Ñ•´¹½¹ÑÉ…Ñ%€ôôôÑ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ%¤¤ì(€€€€€€€Ñ¡¥Ì¹½¹ÑÉ…Ñ=ÁÑ¥½¹Ì¹Õ¹Í¡¥™Ð¡ì(€€€€€€€€€½¹ÑÉ…Ñ%èÑ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ%°(€€€€€€€€€½¹ÑÉ…Ñ9…µ”èÑ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ9¼ñðÑ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•9…µ”ñð€Ÿšv—šêC–B#–B0œ°(€€€€€€€€€½¹ÑÉ…Ñ9¼èÑ¡¥Ì¹µ…ÑÑ•É½É´¹½¹ÑÉ…Ñ9¼°(€€€€€€€€€ÕÍÑ½µ•É9…µ”èÑ¡¥Ì¹µ…ÑÑ•É½É´¹ÕÍÑ½µ•É9…µ”°(€€€€€€€€€…Í•QåÁ”èÑ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•QåÁ”°(€€€€€€€€€Í¥¹µ½Õ¹ÐèÑ¡¥Ì¹µ…ÑÑ•É½É´¹‘¥ÍÁÕÑ•µ½Õ¹Ð(€€€€€€€ô¤(€€€€€ô(€€€€€Ñ¡¥Ì¹±½…‘¥•±‘½¹™¥Ì¡Ñ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•QåÁ”°Ñ¡¥Ì¹µ…ÑÑ•É½É´¹™¥•±‘Y…±Õ•Ì¤(€€€€€Ñ¡¥Ì¹µ…ÑÑ•É=Á•¸€ôÑÉÕ”(€€€€€Ñ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì€˜˜Ñ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì¹±•…È µ…ÑÑ•Èœ¤¤(€€€ô°(€€€Í…Ù•5…ÑÑ•È ¤ì(€€€€€Ñ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì¹Ù…±¥‘…Ñ” µ…ÑÑ•Èœ°Ù…±¥€ôøì(€€€€€€€¥˜€ …Ù…±¥ñð€…Ñ¡¥Ì¹Ù…±¥‘…Ñ•¥•±‘½¹™¥Ì ¤¤É•ÑÕÉ¸(€€€€€€€Ñ¡¥Ì¹µ…ÑÑ•É½É´¹™¥•±‘Y…±Õ•Ì€ôÑ¡¥Ì¹½±±•Ñ¥•±‘Y…±Õ•Ì ¤(€€€€€€€€ì¡Ñ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•%€üÕÁ‘…Ñ•5…ÑÑ•È€è…‘‘5…ÑÑ•È¤¡Ñ¡¥Ì¹µ…ÑÑ•É½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ’þw–¶cš"C–*|œ¤ìÑ¡¥Ì¹µ…ÑÑ•É=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹µ…ÑÑ•É½É´¹…Í•%ô¤ô¤(€€€€€ô¤(€€€ô°(€€€•¹ÍÕÉ•5…ÑÑ•É=ÁÑ¥½¸¡É½Ü¤ì½¹ÍÐ¥€ôÉ½Ü€˜˜€¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤ì½¹ÍÐ¹…µ”€ôÉ½Ü€˜˜€¡É½Ü¹…Í•}¹…µ”ñðÉ½Ü¹…Í•9…µ”¤ì¥˜€¡¥€˜˜¹…µ”€˜˜€…Ñ¡¥Ì¹µ…ÑÑ•É=ÁÑ¥½¹Ì¹Í½µ”¡¥Ñ•´€ôø¥Ñ•´¹…Í•}¥€ôôô¥¤¤Ñ¡¥Ì¹µ…ÑÑ•É=ÁÑ¥½¹Ì¹Õ¹Í¡¥™Ð¡ì…Í•}¥è¥°…Í•}¹…µ”è¹…µ”°…Í•}¹¼èÉ½Ü¹…Í•}¹¼ñðÉ½Ü¹…Í•9¼ô¤ô°(€€€½Á•¹AÉ½É•ÍÌ¡É½Ü¤ìÑ¡¥Ì¹•¹ÍÕÉ•5…ÑÑ•É=ÁÑ¥½¸¡É½Ü¤ìÑ¡¥Ì¹ÁÉ½É•ÍÍ½É´€ôÉ½Ü€˜˜€¡É½Ü¹ÁÉ½É•ÍÍ}¥ñðÉ½Ü¹ÁÉ½É•ÍÍ%¤€üÑ¡¥Ì¹¹½Éµ…±¥é•I½Ü¡É½Ü¤€èì…Í•%èÉ½Ü€˜˜€¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤°Íå¹ÕÍÑ½µ•Èè€8œôì¥˜€ …É½Ü¤Ñ¡¥Ì¹Í•…É¡5…ÑÑ•É=ÁÑ¥½¹Ì œœ¤ìÑ¡¥Ì¹ÁÉ½É•ÍÍ=Á•¸€ôÑÉÕ”ìÑ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì€˜˜Ñ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì¹±•…È ÁÉ½É•ÍÌœ¤¤ô°(€€€Í…Ù•AÉ½É•ÍÌ ¤ìÑ¡¥Ì¸‘É•™Ì¹½É•¥…±½Ì¹Ù…±¥‘…Ñ” ÁÉ½É•ÍÌœ°Ù…±¥€ôøì¥˜€ …Ù…±¥¤É•ÑÕÉ¸ì€¡Ñ¡¥Ì¹ÁÉ½É•ÍÍ½É´¹ÁÉ½É•ÍÍ%€üÕÁ‘…Ñ•AÉ½É•ÍÌ€è…‘‘AÉ½É•ÍÌ¤¡Ñ¡¥Ì¹ÁÉ½É•ÍÍ½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ’þw–¶cš"C–*|œ¤ìÑ¡¥Ì¹ÁÉ½É•ÍÍ=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹ÁÉ½É•ÍÍ½É´¹…Í•%ô¤ô¤ô¤ô°(€€€É•µ½Ù•AÉ½É•ÍÌ¡É½Ü¤ìÑ¡¥Ì¸‘µ½‘…°¹½¹™¥É´ Ÿž†»¢º“–"ƒ¦f“¢¾—¢þo–ê›¢ºÃ–öW–B_¾ò|œ¤¹Ñ¡•¸  ¤€ôø‘•±AÉ½É•ÍÌ¡É½Ü¹ÁÉ½É•ÍÍ}¥¤¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ–"ƒ¦f“š"C–*|œ¤ìÑ¡¥Ì¹±½…‘A…” ¤ô¤¹…Ñ   ¤€ôøíô¤ô°(€€€½Á•¹9½‘”¡É½Ü¤ì(€€€€€Ñ¡¥Ì¹•¹ÍÕÉ•5…ÑÑ•É=ÁÑ¥½¸¡É½Ü¤(€€€€€¥˜€¡É½Ü€˜˜€¡É½Ü¹¹½‘•}¥ñðÉ½Ü¹¹½‘•%¤¤ì(€€€€€€€Ñ¡¥Ì¹¹½‘•½É´€ôì€¸¸¹Ñ¡¥Ì¹¹½Éµ…±¥é•I½Ü¡É½Ü¤°µ…Ñ•É¥…±ÌèÑ¡¥Ì¹¹½Éµ…±¥é•5…Ñ•É¥…±Ì¡É½Ü¹µ…Ñ•É¥…±Ìñðmt¤ô(€€€€€ô•±Í”ì(€€€€€€€½¹ÍÐ…Í•QåÁ”€ôÑ¡¥Ì¹É•Í½±Ù•I½Ý…Í•QåÁ”¡É½Ü¤(€€€€€€€½¹ÍÐ¹½‘•QåÁ”€ôÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}¹½‘•}ÑåÁ”œ¤(€€€€€€€Ñ¡¥Ì¹¹½‘•½É´€ôì(€€€€€€€€€…Í•%èÉ½Ü€˜˜€¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤°(€€€€€€€€€…Í•QåÁ”°(€€€€€€€€€¹½‘•QåÁ”°(€€€€€€€€€¹½‘•9…µ”èÑ¡¥Ì¹‘•™…Õ±Ñ9½‘•9…µ”¡¹½‘•QåÁ”¤°(€€€€€€€€€¹½‘•MÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}¹½‘•}ÍÑ…ÑÕÌœ¤°(€€€€€€€€€µ…Ñ•É¥…±ÌèÑ¡¥Ì¹‘•™…Õ±Ñ9½‘•5…Ñ•É¥…±Ì¡…Í•QåÁ”°¹½‘•QåÁ”¤°(€€€€€€€€€}±…ÍÑ9½‘•QåÁ”è¹½‘•QåÁ”°(€€€€€€€€€}µ…Ñ•É¥…±Q•µÁ±…Ñ”èÑÉÕ”(€€€€€€€ô(€€€€€ô(€€€€€¥˜€ …É½Ü¤Ñ¡¥Ì¹Í•…É¡5…ÑÑ•É=ÁÑ¥½¹Ì œœ¤(€€€€€Ñ¡¥Ì¹¹½‘•=Á•¸€ôÑÉÕ”(€€€€€Ñ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ€˜˜Ñ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹±•…È ¹½‘”œ¤¤(€€€ô°(€€€¡…¹‘±•9½‘•QåÁ•¡…¹”¡¹½‘•QåÁ”¤ì(€€€€€¥˜€ …Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•9…µ”ñðÑ¡¥Ì¹¹½‘•½É´¹¹½‘•9…µ”€ôôôÑ¡¥Ì¹‘•™…Õ±Ñ9½‘•9…µ”¡Ñ¡¥Ì¹¹½‘•½É´¹}±…ÍÑ9½‘•QåÁ”¤¤ì(€€€€€€€Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•9…µ”€ôÑ¡¥Ì¹‘•™…Õ±Ñ9½‘•9…µ”¡¹½‘•QåÁ”¤(€€€€€ô(€€€€€¥˜€ …Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•%€˜˜Ñ¡¥Ì¹¹½‘•½É´¹}µ…Ñ•É¥…±Q•µÁ±…Ñ”¤ì(€€€€€€€Ñ¡¥Ì¹¹½‘•½É´¹µ…Ñ•É¥…±Ì€ôÑ¡¥Ì¹‘•™…Õ±Ñ9½‘•5…Ñ•É¥…±Ì¡Ñ¡¥Ì¹¹½‘•½É´¹…Í•QåÁ”°¹½‘•QåÁ”¤(€€€€€ô(€€€€€Ñ¡¥Ì¹¹½‘•½É´¹}±…ÍÑ9½‘•QåÁ”€ô¹½‘•QåÁ”(€€€ô°(€€€µ…É­9½‘•5…Ñ•É¥…±ÍÕÍÑ½´ ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹¹½‘•½É´€˜˜Ñ¡¥Ì¹¹½‘•½É´¹}ÍÕÁÁÉ•ÍÍ5…Ñ•É¥…±5…É¬¤ì(€€€€€€€Ñ¡¥Ì¹¹½‘•½É´¹}ÍÕÁÁÉ•ÍÍ5…Ñ•É¥…±5…É¬€ô™…±Í”(€€€€€€€É•ÑÕÉ¸(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹¹½‘•½É´¤Ñ¡¥Ì¹¹½‘•½É´¹}µ…Ñ•É¥…±Q•µÁ±…Ñ”€ô™…±Í”(€€€ô°(€€€Ù…±¥‘…Ñ•9½‘•	ÕÍ¥¹•ÍÌ ¤ì(€€€€€¥˜€¡Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•MÑ…ÑÕÌ€ôôô€‘½¹”œ€˜˜€…Ñ¡¥Ì¹¹½‘•½É´¹…ÑÕ…±…Ñ”¤ì(€€€€€€€Ñ¡¥Ì¸‘µ½‘…°¹µÍÉÉ½È Ÿ–ÞË–º3š"C¢*ž
-ç–þ¦†ï–†¯–g–º{¦fš^—šr|œ¤(€€€€€€€É•ÑÕÉ¸™…±Í”(€€€€€ô(€€€€€¥˜€¡Ñ¡¥Ì¹¹½‘•½É´¹…ÑÕ…±…Ñ”€˜˜lÁ•¹‘¥¹œœ°€ÕÉÉ•¹Ðt¹¥¹±Õ‘•Ì¡Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•MÑ…ÑÕÌ¤¤ì(€€€€€€€Ñ¡¥Ì¸‘µ½‘…°¹µÍÉÉ½È Ÿ–ÞË–†¯–g–º{¦fš^—šržj¢*ž
-ç’â7¢÷’þwš2–ú–ò–ž/š"[–öO–&7¢*ž
-çž*Ûšœ¤(€€€€€€€É•ÑÕÉ¸™…±Í”(€€€€€ô(€€€€€É•ÑÕÉ¸ÑÉÕ”(€€€ô°(€€€Í…Ù•9½‘” ¤ìÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹Ù…±¥‘…Ñ” ¹½‘”œ°Ù…±¥€ôøì¥˜€ …Ù…±¥ñð€…Ñ¡¥Ì¹Ù…±¥‘…Ñ•9½‘•	ÕÍ¥¹•ÍÌ ¤¤É•ÑÕÉ¸ì€¡Ñ¡¥Ì¹¹½‘•½É´¹¹½‘•%€üÕÁ‘…Ñ•9½‘”€è…‘‘9½‘”¤¡Ñ¡¥Ì¹¹½‘•½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ’þw–¶cš"C–*|œ¤ìÑ¡¥Ì¹¹½‘•=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹¹½‘•½É´¹…Í•%ô¤ô¤ô¤ô°(€€€É•µ½Ù•9½‘”¡É½Ü¤ìÑ¡¥Ì¸‘µ½‘…°¹½¹™¥É´ Ÿž†»¢º“–"ƒ¦f“¢¾—–Ï¦R»¢*ž
-ç–B_¾ò|œ¤¹Ñ¡•¸  ¤€ôø‘•±9½‘”¡É½Ü¹¹½‘•}¥¤¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ–"ƒ¦f“š"C–*|œ¤ìÑ¡¥Ì¹±½…‘A…” ¤ô¤¹…Ñ   ¤€ôøíô¤ô°(€€€½Á•¹áÁ•¹Í”¡É½Ü¤ìÑ¡¥Ì¹•¹ÍÕÉ•5…ÑÑ•É=ÁÑ¥½¸¡É½Ü¤ìÑ¡¥Ì¹•áÁ•¹Í•½É´€ôÉ½Ü€˜˜€¡É½Ü¹•áÁ•¹Í•}¥ñðÉ½Ü¹•áÁ•¹Í•%¤€üÑ¡¥Ì¹¹½Éµ…±¥é•I½Ü¡É½Ü¤€èì…Í•%èÉ½Ü€˜˜€¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤°•áÁ•¹Í•QåÁ”èÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}•áÁ•¹Í•}ÑåÁ”œ¤°Á…åMÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}Á…å}ÍÑ…ÑÕÌœ¤°É•¥µ‰ÕÉÍ•MÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}É•¥µ‰ÕÉÍ•}ÍÑ…ÑÕÌœ¤°Ù½Õ¡•ÉMÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}Ù½Õ¡•É}ÍÑ…ÑÕÌœ¤ôì¥˜€ …É½Ü¤Ñ¡¥Ì¹Í•…É¡5…ÑÑ•É=ÁÑ¥½¹Ì œœ¤ìÑ¡¥Ì¹•áÁ•¹Í•=Á•¸€ôÑÉÕ”ìÑ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì€˜˜Ñ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì¹±•…È •áÁ•¹Í”œ¤¤ô°(€€€Í…Ù•áÁ•¹Í” ¤ìÑ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì¹Ù…±¥‘…Ñ” •áÁ•¹Í”œ°Ù…±¥€ôøì¥˜€ …Ù…±¥¤É•ÑÕÉ¸ì€¡Ñ¡¥Ì¹•áÁ•¹Í•½É´¹•áÁ•¹Í•%€üÕÁ‘…Ñ•áÁ•¹Í”€è…‘‘áÁ•¹Í”¤¡Ñ¡¥Ì¹•áÁ•¹Í•½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ’þw–¶cš"C–*|œ¤ìÑ¡¥Ì¹•áÁ•¹Í•=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹•áÁ•¹Í•½É´¹…Í•%ô¤ô¤ô¤ô°(€€€É•µ½Ù•áÁ•¹Í”¡É½Ü¤ìÑ¡¥Ì¸‘µ½‘…°¹½¹™¥É´ Ÿž†»¢º“–"ƒ¦f“¢¾—¢ÒçžR£¢ºÃ–öW–B_¾ò|œ¤¹Ñ¡•¸  ¤€ôø‘•±áÁ•¹Í”¡É½Ü¹•áÁ•¹Í•}¥¤¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ–"ƒ¦f“š"C–*|œ¤ìÑ¡¥Ì¹±½…‘A…” ¤ô¤¹…Ñ   ¤€ôøíô¤ô°(€€€½Á•¹É¡¥Ù”¡É½Ü¤ì(€€€€€½¹ÍÐ…Í•%€ôÉ½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%(€€€€€Ñ¡¥Ì¹…É¡¥Ù•½É´€ôì…Í•%°…Í•MÑ…ÑÕÌèÉ½Ü¹…Í•}ÍÑ…ÑÕÌñðÉ½Ü¹…Í•MÑ…ÑÕÌ°±½Í•I•ÍÕ±ÐèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}±½Í•}É•ÍÕ±Ðœ¤°™••±•…ÉMÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}™••}±•…É}ÍÑ…ÑÕÌœ¤°É•…‘½¹±å±…œè€dœ°Í…Ñ¥Í™…Ñ¥½¸è€Ô°µ…Ñ•É¥…±ÌèÑ¡¥Ì¹‘•™…Õ±ÑÉ¡¥Ù•5…Ñ•É¥…±Ì ¤ô(€€€€€Ñ¡¥Ì¹…É¡¥Ù•=Á•¸€ôÑÉÕ”(€€€€€•ÑÉ¡¥Ù”¡…Í•%¤¹Ñ¡•¸¡É•Ì€ôøì(€€€€€€€¥˜€¡É•Ì¹‘…Ñ„¤ì(€€€€€€€€€Ñ¡¥Ì¹…É¡¥Ù•½É´€ôì(€€€€€€€€€€€€¸¸¹Ñ¡¥Ì¹…É¡¥Ù•½É´°(€€€€€€€€€€€€¸¸¹Ñ¡¥Ì¹¹½Éµ…±¥é•É¡¥Ù”¡É•Ì¹‘…Ñ„¤°(€€€€€€€€€€€…Í•%°(€€€€€€€€€€€µ…Ñ•É¥…±Ìè€¡É•Ì¹‘…Ñ„¹µ…Ñ•É¥…±Ì€˜˜É•Ì¹‘…Ñ„¹µ…Ñ•É¥…±Ì¹±•¹Ñ ¤€üÑ¡¥Ì¹¹½Éµ…±¥é•5…Ñ•É¥…±Ì¡É•Ì¹‘…Ñ„¹µ…Ñ•É¥…±Ì¤€èÑ¡¥Ì¹…É¡¥Ù•½É´¹µ…Ñ•É¥…±Ì(€€€€€€€€€ô(€€€€€€€ô(€€€€€ô¤¹™¥¹…±±ä  ¤€ôøÑ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ€˜˜Ñ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹±•…È …É¡¥Ù”œ¤¤¤(€€€ô°(€€€ÍÕ‰µ¥ÑÉ¡¥Ù” ¤ìÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹Ù…±¥‘…Ñ” …É¡¥Ù”œ°Ù…±¥€ôøì¥˜€ …Ù…±¥¤É•ÑÕÉ¸ì…ÁÁ±åÉ¡¥Ù”¡Ñ¡¥Ì¹…É¡¥Ù•½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ ŸžîOš†#žRÏ¢¾ß–ÞËš>C’êœ¤ìÑ¡¥Ì¹…É¡¥Ù•=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹…É¡¥Ù•½É´¹…Í•%ô¤ô¤ô¤ô°(€€€½¹™¥ÉµÉ¡¥Ù•MÕ‰µ¥Ð ¤ìÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹Ù…±¥‘…Ñ” …É¡¥Ù”œ°Ù…±¥€ôøì¥˜€ …Ù…±¥ñð€…Ñ¡¥Ì¹Ù…±¥‘…Ñ•É¡¥Ù•I•…‘å±¥•¹Ð ¤¤É•ÑÕÉ¸ì½¹™¥ÉµÉ¡¥Ù”¡Ñ¡¥Ì¹…É¡¥Ù•½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ–öKš†š"C–*|œ¤ìÑ¡¥Ì¹…É¡¥Ù•=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹…É¡¥Ù•½É´¹…Í•%ô¤ô¤ô¤ô°(€€€½¹™¥Éµ±½Í•MÕ‰µ¥Ð ¤ìÑ¡¥Ì¸‘É•™Ì¹Ý½É­™±½ÝÉ…Ý•ÉÌ¹Ù…±¥‘…Ñ” …É¡¥Ù”œ°Ù…±¥€ôøì¥˜€ …Ù…±¥ñð€…Ñ¡¥Ì¹Ù…±¥‘…Ñ•É¡¥Ù•••I•…‘å±¥•¹Ð ¤¤É•ÑÕÉ¸ì½¹™¥Éµ±½Í”¡Ñ¡¥Ì¹…É¡¥Ù•½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿž†»¢º“žîOš†#š"C–*|œ¤ìÑ¡¥Ì¹…É¡¥Ù•=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹…É¡¥Ù•½É´¹…Í•%ô¤ô¤ô¤ô°(€€€½Á•¹½Õµ•¹Ð¡É½Ü¤ìÑ¡¥Ì¹•¹ÍÕÉ•5…ÑÑ•É=ÁÑ¥½¸¡É½Ü¤ìÑ¡¥Ì¹‘½Õµ•¹Ñ½É´€ôì…Í•%èÉ½Ü€˜˜€¡É½Ü¹…Í•}¥ñðÉ½Ü¹…Í•%¤°‘½Õµ•¹ÑQåÁ”èÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}‘½Õµ•¹Ñ}ÑåÁ”œ¤ñð€…Í”œôì¥˜€ …É½Ü¤Ñ¡¥Ì¹Í•…É¡5…ÑÑ•É=ÁÑ¥½¹Ì œœ¤ìÑ¡¥Ì¹‘½Õµ•¹Ñ=Á•¸€ôÑÉÕ”ìÑ¡¥Ì¸‘¹•áÑQ¥¬  ¤€ôøÑ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì€˜˜Ñ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì¹±•…È ‘½Õµ•¹Ðœ¤¤ô°(€€€Í…Ù•½Õµ•¹Ð ¤ìÑ¡¥Ì¸‘É•™Ì¹É•Í½ÕÉ•¥…±½Ì¹Ù…±¥‘…Ñ” ‘½Õµ•¹Ðœ°Ù…±¥€ôøì¥˜€ …Ù…±¥¤É•ÑÕÉ¸ì…‘‘½Õµ•¹Ð¡Ñ¡¥Ì¹‘½Õµ•¹Ñ½É´¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ ŸšZš†’þw–¶cš"C–*|œ¤ìÑ¡¥Ì¹‘½Õµ•¹Ñ=Á•¸€ô™…±Í”ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÑ¡¥Ì¹‘½Õµ•¹Ñ½É´¹…Í•%ô¤ô¤ô¤ô°(€€€É•µ½Ù•½Õµ•¹Ð¡É½Ü¤ìÑ¡¥Ì¸‘µ½‘…°¹½¹™¥É´ Ÿž†»¢º“–"ƒ¦f“¢¾—š†#’îÛšZš†–B_¾ò|œ¤¹Ñ¡•¸  ¤€ôø‘•±½Õµ•¹Ð¡É½Ü¹‘½Õµ•¹Ñ}¥¤¤¹Ñ¡•¸  ¤€ôøìÑ¡¥Ì¸‘µ½‘…°¹µÍMÕ•ÍÌ Ÿ–"ƒ¦f“š"C–*|œ¤ìÑ¡¥Ì¹±½…‘A…” ¤ì¥˜€¡Ñ¡¥Ì¹‘•Ñ…¥±=Á•¸¤Ñ¡¥Ì¹½Á•¹•Ñ…¥°¡ì…Í•}¥èÉ½Ü¹…Í•}¥ñðÑ¡¥Ì¹‘•Ñ…¥°¹…Í•}¥ô¤ô¤¹…Ñ   ¤€ôøíô¤ô°(€€€Íå¹½Õµ•¹Ñ¥±”¡Ù…±Õ”¤ìÑ¡¥Ì¹‘½Õµ•¹Ñ½É´¹™¥±•9…µ”€ôÑ¡¥Ì¹‘½Õµ•¹Ñ½É´¹™¥±•9…µ”ñðÑ¡¥Ì¹™¥±•9…µ•É½µUÉ°¡Ù…±Õ”¤ô°(€€€¹½Éµ…±¥é•É¡¥Ù”¡É½Ü¤ì½¹ÍÐÉ•ÍÕ±Ð€ôì€¸¸¹É½Üôìml…É¡¥Ù•%œ°€…É¡¥Ù•}¥t°l±½Í•I•ÍÕ±Ðœ°€±½Í•}É•ÍÕ±Ðt°l±½Í•…Ñ”œ°€±½Í•}‘…Ñ”t°l…ÑÕ…±I••¥Ù•‘µ½Õ¹Ðœ°€…ÑÕ…±}É••¥Ù•‘}…µ½Õ¹Ðt°l™••±•…ÉMÑ…ÑÕÌœ°€™••}±•…É}ÍÑ…ÑÕÌt°lÉ•…‘½¹±å±…œœ°€É•…‘½¹±å}™±…œt°l…É¡¥Ù•MÑ…ÑÕÌœ°€…É¡¥Ù•}ÍÑ…ÑÕÌt°l…É¡¥Ù•9¼œ°€…É¡¥Ù•}¹¼ut¹™½É…  ¡m…µ•°°Í¹…­•t¤€ôøì¥˜€¡É•ÍÕ±Ñm…µ•±t€ôôôÕ¹‘•™¥¹•€˜˜É•ÍÕ±ÑmÍ¹…­•t€„ôôÕ¹‘•™¥¹•¤É•ÍÕ±Ñm…µ•±t€ôÉ•ÍÕ±ÑmÍ¹…­•tô¤ìÉ•ÑÕÉ¸É•ÍÕ±Ðô°(€€€¹½Éµ…±¥é•5…Ñ•É¥…±Ì¡±¥ÍÐ¤ìÉ•ÑÕÉ¸€¡±¥ÍÐñðmt¤¹µ…À¡¥Ñ•´€ôø€¡ì€¸¸¹¥Ñ•´°µ…Ñ•É¥…±9…µ”è¥Ñ•´¹µ…Ñ•É¥…±9…µ”ñð¥Ñ•´¹µ…Ñ•É¥…±}¹…µ”°µ…Ñ•É¥…±MÑ…ÑÕÌè¥Ñ•´¹µ…Ñ•É¥…±MÑ…ÑÕÌñð¥Ñ•´¹µ…Ñ•É¥…±}ÍÑ…ÑÕÌ°™¥±•UÉ°è¥Ñ•´¹™¥±•UÉ°ñð¥Ñ•´¹™¥±•}ÕÉ°°™¥±•9…µ”è¥Ñ•´¹™¥±•9…µ”ñð¥Ñ•´¹™¥±•}¹…µ”ô¤¤ô°(€€€‘•™…Õ±ÑÉ¡¥Ù•5…Ñ•É¥…±Ì ¤ìÉ•ÑÕÉ¸lŸžîOš†#š*—–F(œ°€Ÿ–"“–Ï’æ˜¿¢Ž–ºk’æ˜œ°€Ÿ–º‹š"ßž†»¢º“–6Tœ°€ŸšRÛ¢Òçž†»¢ºœ°€ŸžR×–¶C–6ß–º\œ°€Ÿžêã¢Ò£švCšZdt¹µ…À¡¹…µ”€ôø€¡ìµ…Ñ•É¥…±9…µ”è¹…µ”°µ…Ñ•É¥…±MÑ…ÑÕÌèÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}µ…Ñ•É¥…±}ÍÑ…ÑÕÌœ¤ñð€Á•¹‘¥¹œœô¤¤ô°(€€€É•Í½±Ù•I½Ý…Í•QåÁ”¡É½Ü¤ì(€€€€€É•ÑÕÉ¸É½Ü€˜˜€¡É½Ü¹…Í•}ÑåÁ”ñðÉ½Ü¹…Í•QåÁ”¤ñðÑ¡¥Ì¹‘•Ñ…¥°¹…Í•}ÑåÁ”ñðÑ¡¥Ì¹‘•Ñ…¥°¹…Í•QåÁ”ñðÑ¡¥Ì¹ÅÕ•Éä¹…Í•QåÁ”ñðÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}ÑåÁ”œ¤(€€€ô°(€€€‘•™…Õ±Ñ9½‘•9…µ”¡¹½‘•QåÁ”¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹‘¥Ñ1…‰•° ±…Ý}…Í•}¹½‘•}ÑåÁ”œ°¹½‘•QåÁ”¤ñð€Ÿ–Ï¦R»¢*ž
-äœ(€€€ô°(€€€µ…Ñ•É¥…±%Ñ•µÌ¡¹…µ•Ì¤ì(€€€€€½¹ÍÐÍÑ…ÑÕÌ€ôÑ¡¥Ì¹‘¥Ñ•™…Õ±Ð ±…Ý}…Í•}µ…Ñ•É¥…±}ÍÑ…ÑÕÌœ¤ñð€Á•¹‘¥¹œœ(€€€€€É•ÑÕÉ¸€¡¹…µ•Ìñðmt¤¹µ…À¡¹…µ”€ôø€¡ìµ…Ñ•É¥…±9…µ”è¹…µ”°µ…Ñ•É¥…±MÑ…ÑÕÌèÍÑ…ÑÕÌô¤¤(€€€ô°(€€€‘•™…Õ±Ñ9½‘•5…Ñ•É¥…±Ì¡…Í•QåÁ”°¹½‘•QåÁ”¤ì(€€€€€É•ÑÕÉ¸Ñ¡¥Ì¹µ…Ñ•É¥…±%Ñ•µÌ¡µ…Ñ•É¥…±AÉ•Í•Ð¡…Í•QåÁ”°¹½‘•QåÁ”¤¤(€€€ô°(€€€Íå¹AÉ½É•ÍÍ¥±”¡Ù…±Õ”¤ìÑ¡¥Ì¹ÁÉ½É•ÍÍ½É´¹…ÑÑ…¡µ•¹Ñ9…µ”€ôÑ¡¥Ì¹™¥±•9…µ•É½µUÉ°¡Ù…±Õ”¤ô°(€€€Íå¹áÁ•¹Í•¥±”¡Ù…±Õ”¤ìÑ¡¥Ì¹•áÁ•¹Í•½É´¹Ù½Õ¡•É9…µ”€ôÑ¡¥Ì¹™¥±•9…µ•É½µUÉ°¡Ù…±Õ”¤ìÑ¡¥Ì¹•áÁ•¹Í•½É´¹Ù½Õ¡•ÉMÑ…ÑÕÌ€ôÙ…±Õ”€ü€ÕÁ±½…‘•œ€è€µ¥ÍÍ¥¹œœô(€ô)ô(ð½ÍÉ¥ÁÐø((ñÍÑå±”Í½Á•±…¹œô‰ÍÍÌˆÍÉŒôˆ¸½µ…ÑÑ•ÈµÁ…”¹ÍÍÌˆøð½ÍÑå±”ø((ñÍÑå±”±…¹œô‰ÍÍÌˆø)¥µÁ½ÉÐ€ˆ¸¸½‰ÕÍ¥¹•ÍÌ½‰ÕÍ¥¹•ÍÌµ‘¥…±½œ¹ÍÍÌˆì(ð½ÍÑå±”ø(
+        <el-table-column label="å½’æ¡£çŠ¶æ€" width="110" align="center"><template slot-scope="{ row }"><dict-tag :options="dict.type.law_case_archive_status" :value="row.archive_status" /></template></el-table-column>
+        <el-table-column label="ææ–™" width="140" align="center">
+          <template slot-scope="{ row }">
+            <div class="material-progress">
+              <el-progress :percentage="rowMaterialStats(row).percent" :stroke-width="6" :show-text="false" />
+              <small>{{ rowMaterialStats(row).ready }}/{{ rowMaterialStats(row).total || 0 }}</small>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="æ‰¿åŠžå¾‹å¸ˆ" prop="main_lawyer_name" width="110" />
+        <el-table-column label="æ“ä½œ" width="180" align="center" class-name="small-padding fixed-width biz-operation-column" fixed="right"><template slot-scope="{ row }"><span class="action-buttons"><el-button v-hasPermi="['matter:query']" :size="controlSize" type="text" @click="openDetail(row)">æŸ¥çœ‹</el-button><el-button v-hasPermi="['matter:archive:apply', 'matter:archive:confirm']" :size="controlSize" type="text" :disabled="!canArchiveFlow(row)" @click="openArchive(row)">ç»“æ¡ˆ/å½’æ¡£</el-button></span></template></el-table-column>
+      </el-table>
+
+      <div v-else class="biz-timeline-list status-list">
+        <article v-for="item in statusList" :key="item.log_id || item.create_time"><i class="el-icon-time" /><div><h4>{{ dictLabel('law_case_status_action', item.action_type) }} <span>{{ item.caseName || item.case_name }}</span></h4><p>{{ item.content || '-' }}</p><small>{{ item.create_by || '-' }} Â· {{ item.create_time || '-' }}</small></div></article>
+        <el-empty v-if="!statusList.length" description="æš‚æ— çŠ¶æ€è®°å½•" />
+      </div>
+    </biz-table-card>
+
+    <matter-detail-drawer
+      :visible.sync="detailOpen"
+      :matter="detail"
+      :size-class="'biz-size-' + appSize"
+      @edit="openMatter"
+      @progress="openProgress"
+      @node="openNode"
+      @expense="openExpense"
+      @archive="openArchive"
+      @document="openDocument"
+      @finance="openCaseFinance"
+      @remove-document="removeDocument"
+      @open-file="openBusinessFile"
+    />
+
+    <case-finance-drawer
+      :visible.sync="caseFinanceOpen"
+      :case-id="caseFinanceCaseId"
+      :control-size="controlSize"
+      :size-class="'biz-size-' + appSize"
+      :dict-options="dict.type"
+    />
+
+    <el-dialog :title="matterForm.caseId ? 'ç¼–è¾‘æ¡ˆä»¶' : 'æ–°å¢žæ¡ˆä»¶'" :visible.sync="matterOpen" width="760px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="matterFormRef" :model="matterForm" :rules="matterRules" label-width="100px"><el-row :gutter="12">
+        <el-col :span="24" v-if="matterForm.contractId || matterForm.customerName || matterForm.contractNo">
+          <div class="system-info-strip">
+            <div><span>æ¥æºåˆåŒ</span><b>{{ matterForm.contractNo || '-' }}</b></div>
+            <div><span>å®¢æˆ·</span><b>{{ matterForm.customerName || '-' }}</b></div>
+            <div><span>æ¡ˆä»¶ç±»åž‹</span><b>{{ dictLabel('law_case_type', matterForm.caseType) || '-' }}</b></div>
+            <div><span>äº‰è®®/åˆåŒé‡‘é¢</span><b>{{ formatMoney(matterForm.disputeAmount) }}</b></div>
+          </div>
+        </el-col>
+        <el-col :span="12"><el-form-item label="æ¥æºåˆåŒ" prop="contractId"><el-select v-model="matterForm.contractId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢åˆåŒ" :remote-method="searchContracts" :loading="contractLoading" :disabled="!!matterForm.caseId" @change="selectContract"><el-option v-for="item in contractOptions" :key="item.contractId" :label="item.contractName" :value="item.contractId"><span>{{ item.contractName }}</span><span class="select-sub">{{ item.contractNo || item.customerName }}</span></el-option></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="æ¡ˆä»¶åç§°" prop="caseName"><el-input v-model="matterForm.caseName" :size="controlSize" /></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="æ¡ˆä»¶ç±»åž‹" prop="caseType"><el-select v-model="matterForm.caseType" :size="controlSize" :disabled="!!matterForm.contractId" @change="handleMatterTypeChange"><el-option v-for="item in dict.type.law_case_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="åŠžç†é˜¶æ®µ"><el-select v-model="matterForm.caseStage" :size="controlSize" disabled><el-option v-for="item in dict.type.law_case_stage" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="é£Žé™©ç­‰çº§"><el-select v-model="matterForm.riskLevel" :size="controlSize"><el-option v-for="item in dict.type.law_case_risk_level" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="æ¡ˆç”±"><el-select v-model="matterForm.cause" :size="controlSize" filterable clearable placeholder="è¯·é€‰æ‹©æ¡ˆç”±"><el-option v-for="item in dict.type.law_case_cause" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="äº‰è®®é‡‘é¢"><el-input-number v-model="matterForm.disputeAmount" :size="controlSize" :min="0" :precision="2" disabled /></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="æ³•é™¢/æœºæž„"><el-input v-model="matterForm.courtName" :size="controlSize" /></el-form-item></el-col>
+        <el-col :span="24"><el-form-item label="æ¡ˆä»¶æ¦‚å†µ"><el-input v-model="matterForm.caseSummary" :size="controlSize" type="textarea" :rows="3" /></el-form-item></el-col>
+        <el-col v-if="fieldConfigs.length" :span="24"><div class="form-section-title">ä¸“å±žä¿¡æ¯ <span>{{ dictLabel('law_case_type', matterForm.caseType) }}</span></div></el-col>
+        <el-col v-for="field in fieldConfigs" :key="field.field_code" :span="field.field_type === 'textarea' ? 24 : 12">
+          <el-form-item :label="field.field_name" :required="field.required_flag === 'Y'">
+            <el-input v-if="field.field_type === 'textarea'" v-model="field.fieldValue" :size="controlSize" type="textarea" :rows="3" :placeholder="field.placeholder || ('è¯·è¾“å…¥' + field.field_name)" />
+            <el-date-picker v-else-if="field.field_type === 'date'" v-model="field.fieldValue" :size="controlSize" value-format="yyyy-MM-dd" :placeholder="field.placeholder || ('è¯·é€‰æ‹©' + field.field_name)" />
+            <el-input-number v-else-if="field.field_type === 'number'" v-model="field.fieldValue" :size="controlSize" :min="0" :precision="2" />
+            <el-switch v-else-if="field.field_type === 'switch'" v-model="field.fieldValue" active-value="Y" inactive-value="N" />
+            <el-input v-else v-model="field.fieldValue" :size="controlSize" :placeholder="field.placeholder || ('è¯·è¾“å…¥' + field.field_name)" />
+            <div v-if="field.help_text" class="field-help">{{ field.help_text }}</div>
+          </el-form-item>
+        </el-col>
+      </el-row></el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="matterOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveMatter">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog :title="progressForm.progressId ? 'ç¼–è¾‘è¿›åº¦' : 'æ–°å¢žè¿›åº¦'" :visible.sync="progressOpen" width="620px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="progressFormRef" :model="progressForm" :rules="progressRules" label-width="100px">
+        <el-form-item label="æ‰€å±žæ¡ˆä»¶" prop="caseId"><el-select v-model="progressForm.caseId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢æ¡ˆä»¶" :remote-method="searchMatterOptions" :loading="matterSelectLoading"><el-option v-for="item in matterOptions" :key="item.case_id" :label="item.case_name" :value="item.case_id"><span>{{ item.case_name }}</span><span class="select-sub">{{ item.case_no }}</span></el-option></el-select></el-form-item>
+        <el-form-item label="è¿›å±•å†…å®¹" prop="content"><el-input v-model="progressForm.content" :size="controlSize" type="textarea" :rows="4" /></el-form-item>
+        <el-form-item label="ä¸‹ä¸€æ­¥è®¡åˆ’"><el-input v-model="progressForm.nextPlan" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
+        <el-form-item label="åŒæ­¥å®¢æˆ·"><el-switch v-model="progressForm.syncCustomer" active-value="Y" inactive-value="N" /></el-form-item>
+        <el-form-item label="é™„ä»¶"><file-upload v-model="progressForm.attachmentUrl" :limit="1" @input="syncProgressFile" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="progressOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveProgress">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-drawer :visible.sync="nodeOpen" size="560px" custom-class="matter-side-drawer" append-to-body>
+      <div slot="title" class="drawer-title" :class="'biz-size-' + appSize"><span>CASE NODE</span><strong>{{ nodeForm.nodeId ? 'ç¼–è¾‘èŠ‚ç‚¹' : 'æ–°å¢žèŠ‚ç‚¹' }}</strong></div>
+      <el-form ref="nodeFormRef" :model="nodeForm" :rules="nodeRules" label-width="100px" class="drawer-form">
+        <el-form-item label="æ‰€å±žæ¡ˆä»¶" prop="caseId"><el-select v-model="nodeForm.caseId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢æ¡ˆä»¶" :remote-method="searchMatterOptions" :loading="matterSelectLoading"><el-option v-for="item in matterOptions" :key="item.case_id" :label="item.case_name" :value="item.case_id" /></el-select></el-form-item>
+        <el-form-item label="èŠ‚ç‚¹åç§°" prop="nodeName"><el-input v-model="nodeForm.nodeName" :size="controlSize" /></el-form-item>
+        <el-form-item label="èŠ‚ç‚¹ç±»åž‹" prop="nodeType"><el-select v-model="nodeForm.nodeType" :size="controlSize" @change="handleNodeTypeChange"><el-option v-for="item in dict.type.law_case_node_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="èŠ‚ç‚¹çŠ¶æ€" prop="nodeStatus"><el-select v-model="nodeForm.nodeStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_node_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="è®¡åˆ’æ—¥æœŸ" prop="planDate"><el-date-picker v-model="nodeForm.planDate" :size="controlSize" value-format="yyyy-MM-dd" /></el-form-item>
+        <el-form-item label="å®žé™…æ—¥æœŸ"><el-date-picker v-model="nodeForm.actualDate" :size="controlSize" value-format="yyyy-MM-dd" /></el-form-item>
+        <el-form-item label="æ³•é™¢/åœ°ç‚¹"><el-input v-model="nodeForm.courtPlace" :size="controlSize" /></el-form-item>
+        <el-form-item label="æ³•åº­/åº­å·"><el-input v-model="nodeForm.courtRoom" :size="controlSize" /></el-form-item>
+        <el-form-item label="ææ–™æ¸…å•">
+          <matter-material-list v-model="nodeForm.materials" :options="dict.type.law_case_material_status" :control-size="controlSize" :default-status="dictDefault('law_case_material_status') || 'pending'" show-upload @input="markNodeMaterialsCustom" />
+        </el-form-item>
+        <el-form-item label="å¤‡æ³¨"><el-input v-model="nodeForm.remark" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
+      </el-form>
+      <div class="drawer-footer"><el-button :size="controlSize" @click="nodeOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveNode">ä¿å­˜</el-button></div>
+    </el-drawer>
+
+    <el-dialog :title="expenseForm.expenseId ? 'ç¼–è¾‘è´¹ç”¨' : 'æ–°å¢žè´¹ç”¨'" :visible.sync="expenseOpen" width="620px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="expenseFormRef" :model="expenseForm" :rules="expenseRules" label-width="100px">
+        <el-form-item label="æ‰€å±žæ¡ˆä»¶" prop="caseId"><el-select v-model="expenseForm.caseId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢æ¡ˆä»¶" :remote-method="searchMatterOptions" :loading="matterSelectLoading"><el-option v-for="item in matterOptions" :key="item.case_id" :label="item.case_name" :value="item.case_id" /></el-select></el-form-item>
+        <el-form-item label="è´¹ç”¨ç±»åž‹" prop="expenseType"><el-select v-model="expenseForm.expenseType" :size="controlSize"><el-option v-for="item in dict.type.law_case_expense_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="é‡‘é¢" prop="amount"><el-input-number v-model="expenseForm.amount" :size="controlSize" :min="0.01" :precision="2" /></el-form-item>
+        <el-form-item label="å‘ç”Ÿæ—¥æœŸ" prop="occurDate"><el-date-picker v-model="expenseForm.occurDate" :size="controlSize" value-format="yyyy-MM-dd" /></el-form-item>
+        <el-form-item label="ä»˜æ¬¾çŠ¶æ€"><el-select v-model="expenseForm.payStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_pay_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="æŠ¥é”€çŠ¶æ€"><el-select v-model="expenseForm.reimburseStatus" :size="controlSize"><el-option v-for="item in dict.type.law_case_reimburse_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="å‡­è¯"><file-upload v-model="expenseForm.voucherUrl" :limit="1" @input="syncExpenseFile" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="expenseOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveExpense">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-dialog title="æ¡ˆä»¶æ–‡æ¡£" :visible.sync="documentOpen" width="560px" :custom-class="dialogClass" append-to-body>
+      <el-form ref="documentFormRef" :model="documentForm" :rules="documentRules" label-width="100px">
+        <el-form-item label="æ‰€å±žæ¡ˆä»¶" prop="caseId"><el-select v-model="documentForm.caseId" :size="controlSize" filterable remote reserve-keyword placeholder="æœç´¢æ¡ˆä»¶" :remote-method="searchMatterOptions" :loading="matterSelectLoading"><el-option v-for="item in matterOptions" :key="item.case_id" :label="item.case_name" :value="item.case_id" /></el-select></el-form-item>
+        <el-form-item label="æ–‡æ¡£åç§°" prop="fileName"><el-input v-model="documentForm.fileName" :size="controlSize" /></el-form-item>
+        <el-form-item label="æ–‡æ¡£ç±»åž‹" prop="documentType"><el-select v-model="documentForm.documentType" :size="controlSize" placeholder="è¯·é€‰æ‹©æ–‡æ¡£ç±»åž‹"><el-option v-for="item in dict.type.law_case_document_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item label="æ–‡ä»¶ä¸Šä¼ " prop="fileUrl"><file-upload v-model="documentForm.fileUrl" :limit="1" @input="syncDocumentFile" /></el-form-item>
+        <el-form-item label="å¤‡æ³¨"><el-input v-model="documentForm.remark" :size="controlSize" type="textarea" :rows="3" /></el-form-item>
+      </el-form>
+      <div slot="footer"><el-button :size="controlSize" @click="documentOpen=false">å–æ¶ˆ</el-button><el-button :size="controlSize" type="primary" @click="saveDocument">ç¡®å®š</el-button></div>
+    </el-dialog>
+
+    <el-drawer :visible.sync="archiveOpen" size="560px" custom-class="matter-side-drawer" append-to-body>
+      <div slot="title" class="drawer-title" :class="'biz-size-' + appSize"><span>CASE ARCHIVE</span><strong>ç»“æ¡ˆå½’æ¡£</strong></div>
+      <el-form ref="archiveFormRef" :model="archiveForm" :rules="archiveRules" label-width="110px" class="drawer-form">
+        <el-form-item label="ç»“æ¡ˆç»“æžœ" prop="closeResult"><el-radio-group v-model="archiveForm.closeResult"><el-radio v-for="item in dict.type.law_case_close_result" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
+        <el-form-item label="ç»“æ¡ˆæ—¥æœŸ" prop="closeDate"><el-date-picker v-model="archiveForm.closeDate" :size="controlSize" value-format="yyyy-MM-dd" /></el-form-item>
+        <el-form-item label="å®žé™…å›žæ¬¾"><el-input-number v-model="archiveForm.actualReceivedAmount" :size="controlSize" :min="0" :precision="2" /></el-form-item>
+        <el-form-item label="è´¹ç”¨ç»“æ¸…"><el-radio-group v-model="archiveForm.feeClearStatus"><el-radio v-for="item in dict.type.law_case_fee_clear_status" :key="item.value" :label="item.value">{{ item.label }}</el-radio></el-radio-group></el-form-item>
+        <el-form-item label="å®¢æˆ·æ»¡æ„åº¦"><el-rate v-model="archiveForm.satisfaction" /></el-form-item>
+        <el-form-item label="åŠžæ¡ˆæ€»ç»“" prop="summary"><el-input v-model="archiveForm.summary" :size="controlSize" type="textarea" :rows="5" /></el-form-item>
+        <el-form-item label="å½’æ¡£èµ„æ–™">
+          <matter-material-list v-model="archiveForm.materials" :options="dict.type.law_case_material_status" :control-size="controlSize" :default-status="dictDefault('law_case_material_status') || 'pending'" show-upload />
+        </el-form-item>
+        <el-form-item v-if="archiveForm.caseStatus === 'closed'" label="å½’æ¡£æ£€æŸ¥">
+          <div class="archive-checklist">
+            <p :class="{ ok: archiveMaterialStats.total > 0 && archiveMaterialStats.missing === 0 }">
+              <span>å½’æ¡£èµ„æ–™</span><b>{{ archiveMaterialStats.ready }}/{{ archiveMaterialStats.total || 0 }}</b>
+            </p>
+            <p :class="{ ok: archiveForm.feeClearStatus === 'cleared' }">
+              <span>è´¹ç”¨ç»“æ¸…</span><b>{{ dictLabel('law_case_fee_clear_status', archiveForm.feeClearStatus) || '-' }}</b>
+            </p>
+            <small v-if="archiveMaterialStats.missing > 0">ä»æœ‰ {{ archiveMaterialStats.missing }} é¡¹èµ„æ–™æœªå‡†å¤‡å®Œæˆï¼Œç¡®è®¤å½’æ¡£å‰éœ€è¦è¡¥é½ã€‚</small>
+          </div>
+        </el-form-item>
+        <el-form-item label="æ˜¯å¦åªè¯»"><el-switch v-model="archiveForm.readonlyFlag" active-value="Y" inactive-value="N" /></el-form-item>
+      </el-form>
+      <div class="drawer-footer"><el-button :size="controlSize" @click="archiveOpen=false">å–æ¶ˆ</el-button><el-button v-if="archiveForm.caseStatus === 'processing'" v-hasPermi="['matter:archive:apply']" :size="controlSize" type="primary" @click="submitArchive">æäº¤ç»“æ¡ˆ</el-button><el-button v-if="archiveForm.caseStatus === 'closing'" v-hasPermi="['matter:archive:confirm']" :size="controlSize" type="warning" @click="confirmCloseSubmit">ç¡®è®¤ç»“æ¡ˆ</el-button><el-button v-if="archiveForm.caseStatus === 'closed'" v-hasPermi="['matter:archive:confirm']" :size="controlSize" type="success" @click="confirmArchiveSubmit">ç¡®è®¤å½’æ¡£</el-button></div>
+    </el-drawer>
+  </div>
+</template>
+
+<script>
+import BizHero from '@/views/business/components/BizHero'
+import BizMetrics from '@/views/business/components/BizMetrics'
+import BizPageHeader from '@/views/business/components/BizPageHeader'
+import BizTableCard from '@/views/business/components/BizTableCard'
+import MatterDetailDrawer from './components/MatterDetailDrawer'
+import MatterMaterialList from './components/MatterMaterialList'
+import CaseFinanceDrawer from '@/views/finance/components/CaseFinanceDrawer'
+import businessUi from '@/views/business/mixins/businessUi'
+import { listContract } from '@/api/contract'
+import { getMatterDashboard, listMatter, getMatter, getMatterFieldConfigs, addMatter, updateMatter, listProgress, addProgress, updateProgress, delProgress, listNode, addNode, updateNode, delNode, listExpense, addExpense, updateExpense, delExpense, listDocument, addDocument, delDocument, getArchive, applyArchive, confirmClose, confirmArchive, listMatterStatus } from '@/api/matter'
+
+export default {
+  name: 'Matter',
+  mixins: [businessUi],
+  components: { BizHero, BizMetrics, BizPageHeader, BizTableCard, MatterDetailDrawer, MatterMaterialList, CaseFinanceDrawer },
+  dicts: ['law_case_type', 'law_case_urgency', 'law_case_status', 'law_case_priority', 'law_case_risk_level', 'law_case_stage', 'law_case_cause', 'law_case_node_status', 'law_case_node_type', 'law_case_material_status', 'law_case_document_type', 'law_case_expense_type', 'law_case_pay_status', 'law_case_reimburse_status', 'law_case_voucher_status', 'law_case_fee_status', 'law_case_close_result', 'law_case_fee_clear_status', 'law_case_archive_status', 'law_case_status_action', 'law_finance_payment_method', 'law_finance_invoice_type'],
+  data() {
+    return {
+      mode: 'list',
+      showSearch: true,
+      loading: false,
+      total: 0,
+      query: { pageNum: 1, pageSize: 10, keyword: '' },
+      list: [],
+      progressList: [],
+      nodeList: [],
+      expenseList: [],
+      documentList: [],
+      statusList: [],
+      metrics: [],
+      typeStats: [],
+      reminders: [],
+      matterOptions: [],
+      contractOptions: [],
+      matterSelectLoading: false,
+      contractLoading: false,
+      detailOpen: false,
+      detail: {},
+      caseFinanceOpen: false,
+      caseFinanceCaseId: null,
+      matterOpen: false,
+      matterForm: {},
+      fieldConfigs: [],
+      progressOpen: false,
+      progressForm: {},
+      nodeOpen: false,
+      nodeForm: {},
+      expenseOpen: false,
+      expenseForm: {},
+      documentOpen: false,
+      documentForm: {},
+      archiveOpen: false,
+      archiveForm: {},
+      businessPageMeta: {
+        defaultTitle: 'æ¡ˆä»¶ä¸­å¿ƒ',
+        titles: { list: 'æ¡ˆä»¶åˆ—è¡¨', mine: 'æˆ‘çš„æ¡ˆä»¶', progress: 'è¿›åº¦è®°å½•', node: 'å…³é”®èŠ‚ç‚¹', expense: 'è´¹ç”¨ç®¡ç†', document: 'æ–‡æ¡£èµ„æ–™', archive: 'ç»“æ¡ˆå½’æ¡£', status: 'çŠ¶æ€è®°å½•' },
+        descriptions: {
+          list: 'å…¨é¢ç®¡ç†æ¡ˆä»¶å…¨ç”Ÿå‘½å‘¨æœŸï¼Œè¿›åº¦è·Ÿè¸ªã€å…³é”®èŠ‚ç‚¹ã€è´¹ç”¨ç®¡æŽ§ä¸Žç»“æ¡ˆå½’æ¡£ä¸€ä½“åŒ–ã€‚',
+          mine: 'èšç„¦å½“å‰å¾‹å¸ˆæ‰¿åŠžå’ŒååŠžçš„åœ¨åŠžæ¡ˆä»¶ã€‚',
+          progress: 'æ²‰æ·€æ¡ˆä»¶åŠžç†è¿‡ç¨‹ä¸Žä¸‹ä¸€æ­¥è®¡åˆ’ã€‚',
+          node: 'ç®¡ç†ç«‹æ¡ˆã€ä¸¾è¯ã€å¼€åº­ã€åˆ¤å†³ã€æ‰§è¡Œå’Œå½’æ¡£ç­‰å…³é”®èŠ‚ç‚¹ã€‚',
+          expense: 'è®°å½•æ¡ˆä»¶æ”¯å‡ºã€ä»˜æ¬¾ã€æŠ¥é”€ä¸Žå‡­è¯çŠ¶æ€ã€‚',
+          document: 'é›†ä¸­ç»´æŠ¤æ¡ˆä»¶æ–‡ä¹¦ã€è¯æ®ã€ææ–™å’Œå½’æ¡£å‰èµ„æ–™ã€‚',
+          archive: 'å¤„ç†ç»“æ¡ˆç”³è¯·ã€å½’æ¡£æ¸…å•å’Œåªè¯»å½’æ¡£ã€‚',
+          status: 'è¿½è¸ªæ¡ˆä»¶å…¨æµç¨‹çŠ¶æ€å˜åŒ–ã€‚'
+        }
+      },
+      metricConfig: [
+        { key: 'active', label: 'åœ¨åŠžæ¡ˆä»¶', hint: 'åŠžç†ä¸­/ç»“æ¡ˆä¸­', icon: 'documentation', color: 'blue' },
+        { key: 'todayProgress', label: 'ä»Šæ—¥æ–°å¢žè¿›åº¦', hint: 'ä»Šæ—¥è®°å½•', icon: 'time', color: 'cyan' },
+        { key: 'dueNodes', label: 'ä¸´æœŸèŠ‚ç‚¹', hint: '7æ—¥å†…åˆ°æœŸ', icon: 'date', color: 'orange' },
+        { key: 'closing', label: 'å¾…ç»“æ¡ˆä»¶', hint: 'ç»“æ¡ˆç”³è¯·ä¸­', icon: 'folder', color: 'violet' },
+        { key: 'monthArchived', label: 'æœ¬æœˆå½’æ¡£', hint: 'å·²å½’æ¡£æ¡ˆä»¶', icon: 'validCode', color: 'green' }
+      ],
+      matterRules: {
+        contractId: [{ required: true, message: 'è¯·é€‰æ‹©æ¥æºåˆåŒ', trigger: 'change' }],
+        caseName: [{ required: true, message: 'è¯·è¾“å…¥æ¡ˆä»¶åç§°', trigger: 'blur' }],
+        caseType: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶ç±»åž‹', trigger: 'change' }]
+      },
+      progressRules: {
+        caseId: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶', trigger: 'change' }],
+        content: [{ required: true, message: 'è¯·è¾“å…¥è¿›å±•å†…å®¹', trigger: 'blur' }]
+      },
+      nodeRules: {
+        caseId: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶', trigger: 'change' }],
+        nodeName: [{ required: true, message: 'è¯·è¾“å…¥èŠ‚ç‚¹åç§°', trigger: 'blur' }],
+        nodeType: [{ required: true, message: 'è¯·é€‰æ‹©èŠ‚ç‚¹ç±»åž‹', trigger: 'change' }],
+        nodeStatus: [{ required: true, message: 'è¯·é€‰æ‹©èŠ‚ç‚¹çŠ¶æ€', trigger: 'change' }],
+        planDate: [{ required: true, message: 'è¯·é€‰æ‹©è®¡åˆ’æ—¥æœŸ', trigger: 'change' }]
+      },
+      expenseRules: {
+        caseId: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶', trigger: 'change' }],
+        expenseType: [{ required: true, message: 'è¯·é€‰æ‹©è´¹ç”¨ç±»åž‹', trigger: 'change' }],
+        amount: [{ required: true, message: 'è¯·è¾“å…¥é‡‘é¢', trigger: 'blur' }],
+        occurDate: [{ required: true, message: 'è¯·é€‰æ‹©å‘ç”Ÿæ—¥æœŸ', trigger: 'change' }]
+      },
+      documentRules: {
+        caseId: [{ required: true, message: 'è¯·é€‰æ‹©æ¡ˆä»¶', trigger: 'change' }],
+        documentType: [{ required: true, message: 'è¯·é€‰æ‹©æ–‡æ¡£ç±»åž‹', trigger: 'change' }],
+        fileName: [{ required: true, message: 'è¯·è¾“å…¥æ–‡æ¡£åç§°', trigger: 'blur' }],
+        fileUrl: [{ required: true, message: 'è¯·ä¸Šä¼ æ–‡æ¡£', trigger: 'change' }]
+      },
+      archiveRules: {
+        closeResult: [{ required: true, message: 'è¯·é€‰æ‹©ç»“æ¡ˆç»“æžœ', trigger: 'change' }],
+        closeDate: [{ required: true, message: 'è¯·é€‰æ‹©ç»“æ¡ˆæ—¥æœŸ', trigger: 'change' }],
+        summary: [{ required: true, message: 'è¯·è¾“å…¥åŠžæ¡ˆæ€»ç»“', trigger: 'blur' }]
+      }
+    }
+  },
+  computed: {
+    isMatterList() { return ['list', 'mine'].includes(this.mode) },
+    matterQueryPerms() { return this.mode === 'mine' ? ['matter:mine:query'] : ['matter:query'] },
+    canQueryMatter() { return this.$auth.hasPermiOr(this.matterQueryPerms) },
+    heroMeta() {
+      return {
+        eyebrow: 'MATTER CENTER',
+        title: this.mode === 'node' ? 'ç²¾å‡†ç®¡ç†å…³é”®èŠ‚ç‚¹ï¼Œç¡®ä¿æ¡ˆä»¶æŒ‰èŠ‚å¥æŽ¨è¿›' : this.mode === 'archive' ? 'è§„èŒƒå®Œæˆç»“æ¡ˆå½’æ¡£ï¼Œå½¢æˆæ¡ˆä»¶é—­çŽ¯' : 'å…¨æµç¨‹æŽŒæŽ§æ¡ˆä»¶åŠžç†è¿›åº¦ä¸Žç»“æžœ',
+        description: 'å¤ç”¨åˆåŒã€å®¢æˆ·å’Œæ¡ˆç®¡é“¾è·¯ï¼Œç»Ÿä¸€ç®¡ç†å¾‹å¸ˆåŠžæ¡ˆè¿‡ç¨‹ã€æ–‡æ¡£èµ„æ–™å’ŒçŠ¶æ€è®°å½•ã€‚'
+      }
+    },
+    archiveMaterialStats() {
+      const list = this.archiveForm.materials || []
+      const ready = this.readyMaterialCount(list)
+      const total = list.length
+      return {
+        total,
+        ready,
+        missing: Math.max(total - ready, 0),
+        percent: total ? Math.round((ready / total) * 100) : 0
+      }
+    }
+  },
+  watch: {
+    '$route.query.module': {
+      immediate: true,
+      handler(value) {
+        this.mode = value || 'list'
+        this.resetQuery()
+        this.loadPage()
+      }
+    }
+  },
+  methods: {
+    loadPage() {
+      this.loadDashboard()
+      if (this.isMatterList || this.mode === 'archive') return this.loadMatters()
+      if (this.mode === 'progress') return this.loadProgress()
+      if (this.mode === 'node') return this.loadNodes()
+      if (this.mode === 'expense') return this.loadExpenses()
+      if (this.mode === 'document') return this.loadDocuments()
+      if (this.mode === 'status') return this.loadStatuses()
+    },
+    loadDashboard() { getMatterDashboard().then(res => { const data = res.data || {}; this.metrics = data.cards || []; this.typeStats = data.types || []; this.reminders = data.reminders || [] }) },
+    loadMatters() { this.loading = true; listMatter({ ...this.query, mode: this.mode }).then(res => { this.list = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    loadProgress() { this.loading = true; listProgress(this.query).then(res => { this.progressList = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    loadNodes() { this.loading = true; listNode(this.query).then(res => { this.nodeList = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    loadExpenses() { this.loading = true; listExpense(this.query).then(res => { this.expenseList = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    loadDocuments() { this.loading = true; listDocument(this.query).then(res => { this.documentList = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    loadStatuses() { this.loading = true; listMatterStatus(this.query).then(res => { this.statusList = res.rows || []; this.total = res.total || 0 }).finally(() => { this.loading = false }) },
+    search() { this.query.pageNum = 1; this.loadPage() },
+    reset() { this.resetQuery(); this.loadPage() },
+    resetQuery() {
+      this.query = {
+        pageNum: 1,
+        pageSize: 10,
+        keyword: '',
+        customerId: this.$route.query.customerId,
+        contractId: this.$route.query.contractId
+      }
+    },
+    isOverdue(date) { return date && new Date(date).getTime() < Date.now() },
+    rowStatus(row = {}) { return row.case_status || row.caseStatus },
+    isArchived(row) { return row && ['archived', 'terminated'].includes(this.rowStatus(row)) },
+    canOperate(row) { return row && this.rowStatus(row) === 'processing' },
+    canArchiveFlow(row) { return row && ['processing', 'closing', 'closed'].includes(this.rowStatus(row)) },
+    canConfirmClose(row) { return row && this.rowStatus(row) === 'closing' },
+    canConfirmArchive(row) { return row && this.rowStatus(row) === 'closed' },
+    readyMaterialCount(list = []) {
+      return (list || []).filter(item => {
+        const status = String(item.materialStatus || item.material_status || '').toLowerCase()
+        return ['ready', 'completed', 'done', 'uploaded'].includes(status)
+      }).length
+    },
+    validateArchiveReadyClient() {
+      if (!this.validateArchiveFeeReadyClient()) return false
+      const materials = this.archiveForm.materials || []
+      if (!materials.length) {
+        this.$modal.msgError('è¯·ç»´æŠ¤å½’æ¡£èµ„æ–™æ¸…å•åŽå†ç¡®è®¤å½’æ¡£')
+        return false
+      }
+      if (this.readyMaterialCount(materials) < materials.length) {
+        this.$modal.msgError('ä»æœ‰æœªå‡†å¤‡å®Œæˆçš„å½’æ¡£èµ„æ–™ï¼Œä¸èƒ½ç¡®è®¤å½’æ¡£')
+        return false
+      }
+      return true
+    },
+    validateArchiveFeeReadyClient() {
+      if (this.archiveForm.feeClearStatus !== 'cleared') {
+        this.$modal.msgError('è´¹ç”¨æœªç»“æ¸…ï¼Œä¸èƒ½ç¡®è®¤ç»“æ¡ˆæˆ–å½’æ¡£')
+        return false
+      }
+      return true
+    },
+    rowMaterialStats(row = {}) {
+      const nodeTotal = Number(row.nodeMaterialTotal || row.node_material_total || 0)
+      const nodeReady = Number(row.nodeMaterialReady || row.node_material_ready || 0)
+      const archiveTotal = Number(row.archiveMaterialTotal || row.archive_material_total || 0)
+      const archiveReady = Number(row.archiveMaterialReady || row.archive_material_ready || 0)
+      const total = nodeTotal + archiveTotal
+      const ready = nodeReady + archiveReady
+      return {
+        total,
+        ready,
+        percent: total ? Math.round((ready / total) * 100) : 0
+      }
+    },
+    normalizeRow(row) {
+      const result = { ...row }
+      ;[['caseId', 'case_id'], ['caseName', 'case_name'], ['customerId', 'customer_id'], ['customerName', 'customer_name'], ['contractId', 'contract_id'], ['contractNo', 'contract_no'], ['caseType', 'case_type'], ['caseStage', 'case_stage'], ['riskLevel', 'risk_level'], ['disputeAmount', 'dispute_amount'], ['courtName', 'court_name'], ['caseFilingNo', 'case_filing_no'], ['caseSummary', 'case_summary'], ['expenseId', 'expense_id'], ['progressId', 'progress_id'], ['nodeId', 'node_id'], ['nodeName', 'node_name'], ['nodeType', 'node_type'], ['nodeStatus', 'node_status'], ['planDate', 'plan_date'], ['actualDate', 'actual_date'], ['courtPlace', 'court_place'], ['courtRoom', 'court_room'], ['expenseType', 'expense_type'], ['occurDate', 'occur_date'], ['payStatus', 'pay_status'], ['reimburseStatus', 'reimburse_status'], ['voucherStatus', 'voucher_status']].forEach(([camel, snake]) => { if (result[camel] === undefined && result[snake] !== undefined) result[camel] = result[snake] })
+      return result
+    },
+    loadFieldConfigs(caseType, values = []) {
+      if (!caseType) {
+        this.fieldConfigs = []
+        return
+      }
+      const valueMap = {}
+      ;(values || []).forEach(item => { valueMap[item.fieldCode || item.field_code] = item.fieldValue || item.field_value })
+      getMatterFieldConfigs(caseType).then(res => {
+        this.fieldConfigs = (res.data || []).map(item => ({
+          ...item,
+          fieldValue: valueMap[item.field_code] !== undefined ? valueMap[item.field_code] : (item.field_type === 'switch' ? 'N' : '')
+        }))
+      })
+    },
+    collectFieldValues() {
+      return this.fieldConfigs.map(item => ({
+        fieldCode: item.field_code,
+        fieldName: item.field_name,
+        fieldValue: item.fieldValue,
+        orderNum: item.order_num
+      }))
+    },
+    validateFieldConfigs() {
+      const missing = this.fieldConfigs.find(item => item.required_flag === 'Y' && (item.fieldValue === undefined || item.fieldValue === null || String(item.fieldValue).trim() === ''))
+      if (missing) {
+        this.$modal.msgError('è¯·å¡«å†™æ¡ˆä»¶ä¸“å±žä¿¡æ¯ï¼š' + missing.field_name)
+        return false
+      }
+      const invalid = this.fieldConfigs.find(item => !this.isValidFieldValue(item))
+      if (invalid) {
+        this.$modal.msgError('æ¡ˆä»¶ä¸“å±žä¿¡æ¯æ ¼å¼ä¸æ­£ç¡®ï¼š' + invalid.field_name)
+        return false
+      }
+      return true
+    },
+    isValidFieldValue(field) {
+      const value = field.fieldValue
+      if (value === undefined || value === null || String(value).trim() === '') return true
+      const text = String(value).trim()
+      if (field.field_type === 'number') return !Number.isNaN(Number(text))
+      if (field.field_type === 'date') return /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(new Date(text).getTime())
+      if (field.field_type === 'switch') return ['Y', 'N'].includes(text)
+      return true
+    },
+    openDetail(row) { getMatter(row.case_id || row.caseId).then(res => { this.detail = res.data || {}; this.detailOpen = true }) },
+    openCaseFinance(row = {}) {
+      const caseId = row.case_id || row.caseId
+      if (!caseId) {
+        this.$modal.msgError('å½“å‰æ¡ˆä»¶ç¼ºå°‘æ¡ˆä»¶IDï¼Œæ— æ³•æ‰“å¼€è´¢åŠ¡è§†å›¾')
+        return
+      }
+      this.caseFinanceCaseId = caseId
+      this.caseFinanceOpen = true
+    },
+    searchMatterOptions(keyword) { this.matterSelectLoading = true; listMatter({ pageNum: 1, pageSize: 20, keyword, mode: 'list' }).then(res => { this.matterOptions = res.rows || [] }).finally(() => { this.matterSelectLoading = false }) },
+    searchContracts(keyword) {
+      this.contractLoading = true
+      listContract({ pageNum: 1, pageSize: 20, contractName: keyword, auditStatus: '2', signStatus: '1', contractStatus: '1' }).then(res => { this.contractOptions = res.rows || [] }).finally(() => { this.contractLoading = false })
+    },
+    selectContract(contractId) {
+      const item = this.contractOptions.find(contract => contract.contractId === contractId)
+      if (item) {
+        this.matterForm.caseName = this.matterForm.caseName || item.contractName
+        this.matterForm.caseType = item.caseType || this.matterForm.caseType
+        this.matterForm.disputeAmount = item.signAmount || this.matterForm.disputeAmount
+        this.matterForm.contractNo = item.contractNo
+        this.matterForm.customerId = item.customerId
+        this.matterForm.customerName = item.customerName
+        this.loadFieldConfigs(this.matterForm.caseType, this.matterForm.fieldValues)
+      }
+    },
+    handleMatterTypeChange(caseType) { this.loadFieldConfigs(caseType, this.matterForm.fieldValues) },
+    openMatter(row) {
+      this.matterForm = row ? this.normalizeRow(row) : { caseType: this.dictDefault('law_case_type'), caseStage: this.dictDefault('law_case_stage'), riskLevel: this.dictDefault('law_case_risk_level'), fieldValues: [] }
+      if (!row) this.searchContracts('')
+      if (row && this.matterForm.contractId && !this.contractOptions.some(item => item.contractId === this.matterForm.contractId)) {
+        this.contractOptions.unshift({
+          contractId: this.matterForm.contractId,
+          contractName: this.matterForm.contractNo || this.matterForm.caseName || 'æ¥æºåˆåŒ',
+          contractNo: this.matterForm.contractNo,
+          customerName: this.matterForm.customerName,
+          caseType: this.matterForm.caseType,
+          signAmount: this.matterForm.disputeAmount
+        })
+      }
+      this.loadFieldConfigs(this.matterForm.caseType, this.matterForm.fieldValues)
+      this.matterOpen = true
+      this.$nextTick(() => this.$refs.matterFormRef && this.$refs.matterFormRef.clearValidate())
+    },
+    saveMatter() {
+      this.$refs.matterFormRef.validate(valid => {
+        if (!valid || !this.validateFieldConfigs()) return
+        this.matterForm.fieldValues = this.collectFieldValues()
+        ;(this.matterForm.caseId ? updateMatter : addMatter)(this.matterForm).then(() => { this.$modal.msgSuccess('ä¿å­˜æˆåŠŸ'); this.matterOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.matterForm.caseId }) })
+      })
+    },
+    ensureMatterOption(row) { const id = row && (row.case_id || row.caseId); const name = row && (row.case_name || row.caseName); if (id && name && !this.matterOptions.some(item => item.case_id === id)) this.matterOptions.unshift({ case_id: id, case_name: name, case_no: row.case_no || row.caseNo }) },
+    openProgress(row) { this.ensureMatterOption(row); this.progressForm = row && (row.progress_id || row.progressId) ? this.normalizeRow(row) : { caseId: row && (row.case_id || row.caseId), syncCustomer: 'N' }; if (!row) this.searchMatterOptions(''); this.progressOpen = true; this.$nextTick(() => this.$refs.progressFormRef && this.$refs.progressFormRef.clearValidate()) },
+    saveProgress() { this.$refs.progressFormRef.validate(valid => { if (!valid) return; (this.progressForm.progressId ? updateProgress : addProgress)(this.progressForm).then(() => { this.$modal.msgSuccess('ä¿å­˜æˆåŠŸ'); this.progressOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.progressForm.caseId }) }) }) },
+    removeProgress(row) { this.$modal.confirm('ç¡®è®¤åˆ é™¤è¯¥è¿›åº¦è®°å½•å—ï¼Ÿ').then(() => delProgress(row.progress_id)).then(() => { this.$modal.msgSuccess('åˆ é™¤æˆåŠŸ'); this.loadPage() }).catch(() => {}) },
+    openNode(row) {
+      this.ensureMatterOption(row)
+      if (row && (row.node_id || row.nodeId)) {
+        this.nodeForm = { ...this.normalizeRow(row), materials: this.normalizeMaterials(row.materials || []) }
+      } else {
+        const caseType = this.resolveRowCaseType(row)
+        const nodeType = this.dictDefault('law_case_node_type')
+        this.nodeForm = {
+          caseId: row && (row.case_id || row.caseId),
+          caseType,
+          nodeType,
+          nodeName: this.defaultNodeName(nodeType),
+          nodeStatus: this.dictDefault('law_case_node_status'),
+          materials: this.defaultNodeMaterials(caseType, nodeType),
+          _lastNodeType: nodeType,
+          _materialTemplate: true
+        }
+      }
+      if (!row) this.searchMatterOptions('')
+      this.nodeOpen = true
+      this.$nextTick(() => this.$refs.nodeFormRef && this.$refs.nodeFormRef.clearValidate())
+    },
+    handleNodeTypeChange(nodeType) {
+      if (!this.nodeForm.nodeName || this.nodeForm.nodeName === this.defaultNodeName(this.nodeForm._lastNodeType)) {
+        this.nodeForm.nodeName = this.defaultNodeName(nodeType)
+      }
+      if (!this.nodeForm.nodeId && this.nodeForm._materialTemplate) {
+        this.nodeForm.materials = this.defaultNodeMaterials(this.nodeForm.caseType, nodeType)
+      }
+      this.nodeForm._lastNodeType = nodeType
+    },
+    markNodeMaterialsCustom() {
+      if (this.nodeForm && this.nodeForm._suppressMaterialMark) {
+        this.nodeForm._suppressMaterialMark = false
+        return
+      }
+      if (this.nodeForm) this.nodeForm._materialTemplate = false
+    },
+    validateNodeBusiness() {
+      if (this.nodeForm.nodeStatus === 'done' && !this.nodeForm.actualDate) {
+        this.$modal.msgError('å·²å®ŒæˆèŠ‚ç‚¹å¿…é¡»å¡«å†™å®žé™…æ—¥æœŸ')
+        return false
+      }
+      if (this.nodeForm.actualDate && ['pending', 'current'].includes(this.nodeForm.nodeStatus)) {
+        this.$modal.msgError('å·²å¡«å†™å®žé™…æ—¥æœŸçš„èŠ‚ç‚¹ä¸èƒ½ä¿æŒå¾…å¼€å§‹æˆ–å½“å‰èŠ‚ç‚¹çŠ¶æ€')
+        return false
+      }
+      return true
+    },
+    saveNode() { this.$refs.nodeFormRef.validate(valid => { if (!valid || !this.validateNodeBusiness()) return; (this.nodeForm.nodeId ? updateNode : addNode)(this.nodeForm).then(() => { this.$modal.msgSuccess('ä¿å­˜æˆåŠŸ'); this.nodeOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.nodeForm.caseId }) }) }) },
+    removeNode(row) { this.$modal.confirm('ç¡®è®¤åˆ é™¤è¯¥å…³é”®èŠ‚ç‚¹å—ï¼Ÿ').then(() => delNode(row.node_id)).then(() => { this.$modal.msgSuccess('åˆ é™¤æˆåŠŸ'); this.loadPage() }).catch(() => {}) },
+    openExpense(row) { this.ensureMatterOption(row); this.expenseForm = row && (row.expense_id || row.expenseId) ? this.normalizeRow(row) : { caseId: row && (row.case_id || row.caseId), expenseType: this.dictDefault('law_case_expense_type'), payStatus: this.dictDefault('law_case_pay_status'), reimburseStatus: this.dictDefault('law_case_reimburse_status'), voucherStatus: this.dictDefault('law_case_voucher_status') }; if (!row) this.searchMatterOptions(''); this.expenseOpen = true; this.$nextTick(() => this.$refs.expenseFormRef && this.$refs.expenseFormRef.clearValidate()) },
+    saveExpense() { this.$refs.expenseFormRef.validate(valid => { if (!valid) return; (this.expenseForm.expenseId ? updateExpense : addExpense)(this.expenseForm).then(() => { this.$modal.msgSuccess('ä¿å­˜æˆåŠŸ'); this.expenseOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.expenseForm.caseId }) }) }) },
+    removeExpense(row) { this.$modal.confirm('ç¡®è®¤åˆ é™¤è¯¥è´¹ç”¨è®°å½•å—ï¼Ÿ').then(() => delExpense(row.expense_id)).then(() => { this.$modal.msgSuccess('åˆ é™¤æˆåŠŸ'); this.loadPage() }).catch(() => {}) },
+    openArchive(row) {
+      const caseId = row.case_id || row.caseId
+      this.archiveForm = { caseId, caseStatus: row.case_status || row.caseStatus, closeResult: this.dictDefault('law_case_close_result'), feeClearStatus: this.dictDefault('law_case_fee_clear_status'), readonlyFlag: 'Y', satisfaction: 5, materials: this.defaultArchiveMaterials() }
+      this.archiveOpen = true
+      getArchive(caseId).then(res => {
+        if (res.data) {
+          this.archiveForm = {
+            ...this.archiveForm,
+            ...this.normalizeArchive(res.data),
+            caseId,
+            materials: (res.data.materials && res.data.materials.length) ? this.normalizeMaterials(res.data.materials) : this.archiveForm.materials
+          }
+        }
+      }).finally(() => this.$nextTick(() => this.$refs.archiveFormRef && this.$refs.archiveFormRef.clearValidate()))
+    },
+    submitArchive() { this.$refs.archiveFormRef.validate(valid => { if (!valid) return; applyArchive(this.archiveForm).then(() => { this.$modal.msgSuccess('ç»“æ¡ˆç”³è¯·å·²æäº¤'); this.archiveOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.archiveForm.caseId }) }) }) },
+    confirmArchiveSubmit() { this.$refs.archiveFormRef.validate(valid => { if (!valid || !this.validateArchiveReadyClient()) return; confirmArchive(this.archiveForm).then(() => { this.$modal.msgSuccess('å½’æ¡£æˆåŠŸ'); this.archiveOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.archiveForm.caseId }) }) }) },
+    confirmCloseSubmit() { this.$refs.archiveFormRef.validate(valid => { if (!valid || !this.validateArchiveFeeReadyClient()) return; confirmClose(this.archiveForm).then(() => { this.$modal.msgSuccess('ç¡®è®¤ç»“æ¡ˆæˆåŠŸ'); this.archiveOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.archiveForm.caseId }) }) }) },
+    openDocument(row) { this.ensureMatterOption(row); this.documentForm = { caseId: row && (row.case_id || row.caseId), documentType: this.dictDefault('law_case_document_type') || 'case' }; if (!row) this.searchMatterOptions(''); this.documentOpen = true; this.$nextTick(() => this.$refs.documentFormRef && this.$refs.documentFormRef.clearValidate()) },
+    saveDocument() { this.$refs.documentFormRef.validate(valid => { if (!valid) return; addDocument(this.documentForm).then(() => { this.$modal.msgSuccess('æ–‡æ¡£ä¿å­˜æˆåŠŸ'); this.documentOpen = false; this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: this.documentForm.caseId }) }) }) },
+    removeDocument(row) { this.$modal.confirm('ç¡®è®¤åˆ é™¤è¯¥æ¡ˆä»¶æ–‡æ¡£å—ï¼Ÿ').then(() => delDocument(row.document_id)).then(() => { this.$modal.msgSuccess('åˆ é™¤æˆåŠŸ'); this.loadPage(); if (this.detailOpen) this.openDetail({ case_id: row.case_id || this.detail.case_id }) }).catch(() => {}) },
+    syncDocumentFile(value) { this.documentForm.fileName = this.documentForm.fileName || this.fileNameFromUrl(value) },
+    normalizeArchive(row) { const result = { ...row }; [['archiveId', 'archive_id'], ['closeResult', 'close_result'], ['closeDate', 'close_date'], ['actualReceivedAmount', 'actual_received_amount'], ['feeClearStatus', 'fee_clear_status'], ['readonlyFlag', 'readonly_flag'], ['archiveStatus', 'archive_status'], ['archiveNo', 'archive_no']].forEach(([camel, snake]) => { if (result[camel] === undefined && result[snake] !== undefined) result[camel] = result[snake] }); return result },
+    normalizeMaterials(list) { return (list || []).map(item => ({ ...item, materialName: item.materialName || item.material_name, materialStatus: item.materialStatus || item.material_status, fileUrl: item.fileUrl || item.file_url, fileName: item.fileName || item.file_name })) },
+    defaultArchiveMaterials() { return ['ç»“æ¡ˆæŠ¥å‘Š', 'åˆ¤å†³ä¹¦/è£å®šä¹¦', 'å®¢æˆ·ç¡®è®¤å•', 'æ”¶è´¹ç¡®è®¤', 'ç”µå­å·å®—', 'çº¸è´¨ææ–™'].map(name => ({ materialName: name, materialStatus: this.dictDefault('law_case_material_status') || 'pending' })) },
+    resolveRowCaseType(row) {
+      return row && (row.case_type || row.caseType) || this.detail.case_type || this.detail.caseType || this.query.caseType || this.dictDefault('law_case_type')
+    },
+    defaultNodeName(nodeType) {
+      return this.dictLabel('law_case_node_type', nodeType) || 'å…³é”®èŠ‚ç‚¹'
+    },
+    materialItems(names) {
+      const status = this.dictDefault('law_case_material_status') || 'pending'
+      return (names || []).map(name => ({ materialName: name, materialStatus: status }))
+    },
+    defaultNodeMaterials(caseType, nodeType) {
+      const common = {
+        filing: ['å§”æ‰˜æ‰‹ç»­', 'ä¸»ä½“èº«ä»½è¯æ˜Ž', 'èµ·è¯‰/ç”³è¯·ææ–™', 'è¯æ®ç›®å½•'],
+        evidence: ['è¯æ®ç›®å½•', 'æ ¸å¿ƒè¯æ®åŽŸä»¶/å¤å°ä»¶', 'è¯æ®è¯´æ˜Ž', 'è¡¥å……ææ–™æ¸…å•'],
+        hearing: ['åº­å®¡æçº²', 'ä»£ç†è¯/è¾©æŠ¤è¯', 'è¯æ®äº¤æ¢è®°å½•', 'å¼€åº­ä¼ ç¥¨/é€šçŸ¥'],
+        judgment: ['è£åˆ¤æ–‡ä¹¦', 'é€è¾¾å›žè¯', 'å±¥è¡Œ/ä¸Šè¯‰æœŸé™è®°å½•', 'å®¢æˆ·å‘ŠçŸ¥è®°å½•'],
+        execution: ['æ‰§è¡Œç”³è¯·ä¹¦', 'ç”Ÿæ•ˆè¯æ˜Ž', 'è´¢äº§çº¿ç´¢', 'æ‰§è¡Œè¿›å±•è®°å½•'],
+        archive: ['ç»“æ¡ˆæŠ¥å‘Š', 'è£åˆ¤/è°ƒè§£/å’Œè§£æ–‡ä¹¦', 'è´¹ç”¨ç»“æ¸…ç¡®è®¤', 'ç”µå­å·å®—']
+      }
+      const byCase = {
+        criminal: {
+          filing: ['å§”æ‰˜æ‰‹ç»­', 'å®¶å±žæŽˆæƒææ–™', 'å«Œç–‘äºº/è¢«å‘Šäººèº«ä»½ä¿¡æ¯', 'æ¡ˆä»¶å—ç†/æ‹˜ç•™é€šçŸ¥'],
+          evidence: ['é˜…å·ææ–™ç›®å½•', 'ä¼šè§ç¬”å½•', 'è¯æ®æ‘˜å½•', 'è¾©æŠ¤æ„è§è¦ç‚¹'],
+          hearing: ['è¾©æŠ¤è¯', 'è´¨è¯æ„è§', 'å‘é—®æçº²', 'é‡åˆ‘æƒ…èŠ‚ææ–™'],
+          judgment: ['åˆ¤å†³/è£å®šä¹¦', 'ä¸Šè¯‰æœŸé™è®°å½•', 'å®¶å±žå‘ŠçŸ¥è®°å½•', 'åŽç»­æ•‘æµŽæ–¹æ¡ˆ']
+        },
+        labor: {
+          filing: ['åŠ³åŠ¨åˆåŒ/ç”¨å·¥è¯æ˜Ž', 'å·¥èµ„æµæ°´', 'ç¤¾ä¿/è€ƒå‹¤è®°å½•', 'ä»²è£ç”³è¯·ä¹¦'],
+          evidence: ['å·¥èµ„æµæ°´', 'è€ƒå‹¤è®°å½•', 'èŠå¤©/é€šçŸ¥è®°å½•', 'è§£é™¤/ç¦»èŒææ–™'],
+          hearing: ['ä»²è£åº­å®¡æçº²', 'è¯æ®æ¸…å•', 'ä»£ç†æ„è§', 'è°ƒè§£æ–¹æ¡ˆ'],
+          judgment: ['ä»²è£è£å†³/åˆ¤å†³ä¹¦', 'å±¥è¡ŒæœŸé™è®°å½•', 'å¼ºåˆ¶æ‰§è¡Œè¯„ä¼°', 'å®¢æˆ·å‘ŠçŸ¥è®°å½•']
+        },
+        ip: {
+          filing: ['æƒå±žè¯æ˜Ž', 'æŽˆæƒå§”æ‰˜ä¹¦', 'ä¾µæƒçº¿ç´¢', 'ä¿å…¨/å…¬è¯è®¡åˆ’'],
+          evidence: ['å…¬è¯ææ–™', 'ä¾µæƒé¡µé¢/æ ·å“', 'è´­ä¹°å–è¯è®°å½•', 'æŸå¤±è®¡ç®—ææ–™'],
+          hearing: ['æƒå±žè¯´æ˜Ž', 'ä¾µæƒæ¯”å¯¹æ„è§', 'èµ”å¿è®¡ç®—è¯´æ˜Ž', 'è´¨è¯æ„è§']
+        },
+        advisor: {
+          filing: ['é¡¾é—®åˆåŒ', 'æœåŠ¡èŒƒå›´ç¡®è®¤', 'å®¢æˆ·å¯¹æŽ¥äººæ¸…å•', 'å¹´åº¦æœåŠ¡è®¡åˆ’'],
+          evidence: ['åˆåŒå®¡æŸ¥è®°å½•', 'å’¨è¯¢ç­”å¤è®°å½•', 'åŸ¹è®­ææ–™', 'åˆè§„é—®é¢˜æ¸…å•'],
+          archive: ['æœˆåº¦/å¹´åº¦æœåŠ¡æŠ¥å‘Š', 'å®¢æˆ·ç¡®è®¤è®°å½•', 'ç»­çº¦å»ºè®®', 'æœåŠ¡æˆæžœå½’æ¡£']
+        },
+        company: {
+          filing: ['å…¬å¸ä¸»ä½“èµ„æ–™', 'ç« ç¨‹/è‚¡ä¸œåå†Œ', 'æŽˆæƒæ–‡ä»¶', 'ä¸šåŠ¡äº‹é¡¹è¯´æ˜Ž'],
+          evidence: ['è‚¡ä¸œä¼š/è‘£äº‹ä¼šæ–‡ä»¶', 'äº¤æ˜“æ–‡ä»¶', 'å·¥å•†æ¡£æ¡ˆ', 'å¾€æ¥æ²Ÿé€šè®°å½•'],
+          hearing: ['äº‰è®®ç„¦ç‚¹æ¢³ç†', 'å…¬å¸æ²»ç†æ–‡ä»¶', 'ä»£ç†æ„è§', 'å’Œè§£æ–¹æ¡ˆ']
+        },
+        finance: {
+          filing: ['äº¤æ˜“åˆåŒ', 'æ”¾æ¬¾/æŠ•èµ„å‡­è¯', 'æ‹…ä¿æ–‡ä»¶', 'è¿çº¦è¯´æ˜Ž'],
+          evidence: ['æµæ°´å‡­è¯', 'å‚¬æ”¶è®°å½•', 'æ‹…ä¿ç‰©èµ„æ–™', 'é£Žé™©æµ‹ç®—è¡¨'],
+          execution: ['è´¢äº§çº¿ç´¢', 'æ‹…ä¿ç‰©å¤„ç½®ææ–™', 'æ‰§è¡Œç”³è¯·ä¹¦', 'å›žæ¬¾è®°å½•']
+        },
+        admin_litigation: {
+          filing: ['è¡Œæ”¿æ–‡ä¹¦', 'é€è¾¾ææ–™', 'å¤è®®ææ–™', 'èµ·è¯‰çŠ¶'],
+          evidence: ['è¡Œæ”¿è¡Œä¸ºè¯æ®', 'ç¨‹åºè¿æ³•çº¿ç´¢', 'æŸå®³åŽæžœææ–™', 'æ³•å¾‹ä¾æ®æ¸…å•'],
+          hearing: ['ä»£ç†è¯', 'è´¨è¯æ„è§', 'è¡Œæ”¿ç¨‹åºå®¡æŸ¥æ¸…å•', 'åº­å®¡æçº²']
+        }
+      }
+      return this.materialItems((byCase[caseType] && byCase[caseType][nodeType]) || common[nodeType] || ['èŠ‚ç‚¹ææ–™æ¸…å•'])
+    },
+    syncProgressFile(value) { this.progressForm.attachmentName = this.fileNameFromUrl(value) },
+    syncExpenseFile(value) { this.expenseForm.voucherName = this.fileNameFromUrl(value); this.expenseForm.voucherStatus = value ? 'uploaded' : 'missing' }
+  }
+}
+</script>
+
+<style scoped lang="scss">
+@import "../business/business.scss";
+@import "../business/detail-drawer.scss";
+
+.matter-page {
+  --biz-filter-input-width: 250px;
+  --biz-filter-select-width: 132px;
+}
+
+.overdue {
+  color: #ef4444;
+}
+
+.drawer-form {
+  padding: 16px 20px 80px;
+}
+
+.form-section-title {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f6f9ff;
+  color: #1e3a8a;
+  font-weight: 600;
+
+  span {
+    margin-left: 8px;
+    color: #64748b;
+    font-size: var(--biz-font-small);
+    font-weight: 400;
+  }
+}
+
+.system-info-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid #e8edf6;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fbff, #f4f7ff);
+
+  div {
+    min-width: 0;
+  }
+
+  span,
+  b {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    color: #64748b;
+    font-size: var(--biz-font-mini);
+  }
+
+  b {
+    margin-top: 5px;
+    color: #102a6b;
+    font-size: var(--biz-font-small);
+  }
+}
+
+.field-help {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: var(--biz-font-mini);
+  line-height: 1.4;
+}
+
+.drawer-footer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid #edf1f7;
+  background: #fff;
+}
+
+.status-list {
+  min-height: 360px;
+}
+
+</style>
+
+<style lang="scss">
+@import "../business/business-dialog.scss";
+</style>

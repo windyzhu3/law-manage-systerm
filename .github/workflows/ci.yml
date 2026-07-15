@@ -36,6 +36,8 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Verify Todo UI contract
         run: npm run test:todo
+      - name: Verify frontend source encoding
+        run: npm run test:encoding
       - name: Build production bundle
         run: npm run build:prod
 
