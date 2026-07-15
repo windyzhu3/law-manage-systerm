@@ -7,7 +7,6 @@ import java.util.Map;
 import org.springframework.stereotype.Service;
 import com.law.business.security.ContractPermissions;
 import com.ruoyi.common.annotation.DataScope;
-import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.mapper.BizContractMapper;
@@ -16,10 +15,12 @@ import com.ruoyi.system.mapper.BizContractMapper;
 public class ContractQueryService
 {
     private final BizContractMapper contractMapper;
+    private final ContractAccessPolicy accessPolicy;
 
-    public ContractQueryService(BizContractMapper contractMapper)
+    public ContractQueryService(BizContractMapper contractMapper, ContractAccessPolicy accessPolicy)
     {
         this.contractMapper = contractMapper;
+        this.accessPolicy = accessPolicy;
     }
 
     @DataScope(deptAlias = "c", userAlias = "c", userField = "owner_id")
@@ -30,10 +31,7 @@ public class ContractQueryService
 
     public BizContract contract(Long contractId)
     {
-        BizContract contract = contractMapper.selectContractById(contractId);
-        if (contract == null || "2".equals(contract.getDelFlag())) throw new ServiceException("合同不存在或已删除");
-        requireAccess(contractId);
-        return contract;
+        return accessPolicy.requireReadable(contractId);
     }
 
     public Map<String, Object> dashboard()
@@ -47,10 +45,25 @@ public class ContractQueryService
         return result;
     }
 
-    public List<Map<String, Object>> approvals(Map<String, Object> params) { return contractMapper.selectApprovals(scope(params)); }
-    public List<Map<String, Object>> feePlans(Map<String, Object> params) { return contractMapper.selectFeePlans(scope(params)); }
-    public List<Map<String, Object>> attachments(Map<String, Object> params) { return contractMapper.selectAttachments(scope(params)); }
-    public List<Map<String, Object>> statusLogs(Map<String, Object> params) { return contractMapper.selectStatusLogs(scope(params)); }
+    public List<Map<String, Object>> approvals(Map<String, Object> params)
+    {
+        return contractMapper.selectApprovals(scope(params));
+    }
+
+    public List<Map<String, Object>> feePlans(Map<String, Object> params)
+    {
+        return contractMapper.selectFeePlans(scope(params));
+    }
+
+    public List<Map<String, Object>> attachments(Map<String, Object> params)
+    {
+        return contractMapper.selectAttachments(scope(params));
+    }
+
+    public List<Map<String, Object>> statusLogs(Map<String, Object> params)
+    {
+        return contractMapper.selectStatusLogs(scope(params));
+    }
 
     private Map<String, Object> scope(Map<String, Object> params)
     {
@@ -61,13 +74,5 @@ public class ContractQueryService
         scoped.put("dataScope", !SecurityUtils.isAdmin());
         scoped.put("permissions", ContractPermissions.DATA_SCOPE);
         return scoped;
-    }
-
-    private void requireAccess(Long contractId)
-    {
-        if (contractId == null) throw new ServiceException("合同不存在或已删除");
-        if (!SecurityUtils.isAdmin() && contractMapper.countContractInDataScope(contractId,
-                SecurityUtils.getUserId(), SecurityUtils.getDeptId(), ContractPermissions.DATA_SCOPE) == 0)
-            throw new ServiceException("无权访问该合同");
     }
 }
