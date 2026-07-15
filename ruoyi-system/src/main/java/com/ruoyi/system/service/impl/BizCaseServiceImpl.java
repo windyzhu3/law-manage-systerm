@@ -108,14 +108,14 @@ public class BizCaseServiceImpl implements IBizCaseService
     @Transactional
     public int assignCase(CaseAssignmentCommand assignment)
     {
-        return caseAssignmentService.assign(assignmentMap(assignment));
+        return caseAssignmentService.assign(assignment);
     }
 
     @Override
     @Transactional
     public int batchAssignCases(CaseBatchAssignmentCommand assignment)
     {
-        return caseAssignmentService.batchAssign(batchAssignmentMap(assignment));
+        return caseAssignmentService.batchAssign(assignment);
     }
 
     @Override
@@ -172,40 +172,6 @@ public class BizCaseServiceImpl implements IBizCaseService
     public List<Map<String, Object>> selectStatusLogs(Map<String, Object> params)
     {
         return queryService.statusLogs(params);
-    }
-
-    private Map<String,Object> assignmentMap(CaseAssignmentCommand command)
-    {
-        Map<String,Object> values = assignmentValues(command.getMainLawyerId(), command.getAssignMethod(),
-                command.getPriority(), command.getAssignReason(), command.getEstimatedWorkload(),
-                command.getEstimatedCycle(), command.getPlanStartDate(), command.getNotifyFlag(),
-                command.getAssistantLawyerIds(), command.getAssistantLawyerNames(), command.getRemark());
-        values.put("caseId", command.getCaseId());
-        return values;
-    }
-
-    private Map<String,Object> batchAssignmentMap(CaseBatchAssignmentCommand command)
-    {
-        Map<String,Object> values = assignmentValues(command.getMainLawyerId(), command.getAssignMethod(),
-                command.getPriority(), command.getAssignReason(), command.getEstimatedWorkload(),
-                command.getEstimatedCycle(), command.getPlanStartDate(), command.getNotifyFlag(),
-                command.getAssistantLawyerIds(), command.getAssistantLawyerNames(), command.getRemark());
-        values.put("caseIds", command.getCaseIds());
-        return values;
-    }
-
-    private Map<String,Object> assignmentValues(Long lawyerId, String method, String priority, String reason,
-            Object workload, Object cycle, Object startDate, String notifyFlag, String assistantIds,
-            String assistantNames, String remark)
-    {
-        Map<String,Object> values = new HashMap<>();
-        values.put("mainLawyerId", lawyerId); values.put("assignMethod", method);
-        values.put("priority", priority); values.put("assignReason", reason);
-        values.put("estimatedWorkload", workload); values.put("estimatedCycle", cycle);
-        values.put("planStartDate", startDate); values.put("notifyFlag", notifyFlag);
-        values.put("assistantLawyerIds", assistantIds); values.put("assistantLawyerNames", assistantNames);
-        values.put("remark", remark);
-        return values;
     }
 
 }

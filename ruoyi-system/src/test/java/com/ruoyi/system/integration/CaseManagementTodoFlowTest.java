@@ -15,7 +15,7 @@ class CaseManagementTodoFlowTest
 {
     @Test void assignmentAndAcceptanceHandlersMapStablePayloads()
     {
-        CaseAssignmentService assignments=mock(CaseAssignmentService.class);CaseAssignmentTodoHandler assign=new CaseAssignmentTodoHandler(assignments);assign.complete(todo("CASE_ASSIGN"),Map.of("lawyerId",12L),1L,"admin");verify(assignments).assign(argThat(row->Long.valueOf(12L).equals(row.get("mainLawyerId"))&&"Y".equals(row.get("notifyFlag"))),any());
+        CaseAssignmentService assignments=mock(CaseAssignmentService.class);CaseAssignmentTodoHandler assign=new CaseAssignmentTodoHandler(assignments);assign.complete(todo("CASE_ASSIGN"),Map.of("lawyerId",12L),1L,"admin");verify(assignments).assign(argThat(command->Long.valueOf(12L).equals(command.getMainLawyerId())&&"Y".equals(command.getNotifyFlag())),any());
         CaseConfirmationService confirmations=mock(CaseConfirmationService.class);TodoMapper todos=mock(TodoMapper.class);TodoInstance accept=todo("CASE_ACCEPT");accept.setTodoId(9L);new CaseAcceptanceTodoHandler(confirmations,todos).complete(accept,Map.of("confirmId",33L,"accepted",true,"reason","同意"),12L,"lawyer");verify(confirmations).handle(argThat(row->"accepted".equals(row.get("confirmResult"))),any());verify(todos).cancelActiveByBusiness("CASE",8L,9L,"lawyer");
     }
     @Test void validatorRejectsStaleAssignment()
