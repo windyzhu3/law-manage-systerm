@@ -1,17 +1,25 @@
 package com.ruoyi.system.service.contract;
 
+import static com.ruoyi.system.support.BusinessFixtures.actor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import java.util.Map;
+
+import java.math.BigDecimal;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.event.BusinessEventPublisher;
+import com.law.business.shared.status.ContractStatus;
+import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.mapper.BizContractMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
@@ -19,25 +27,58 @@ import com.ruoyi.system.service.ISysDictTypeService;
 @ExtendWith(MockitoExtension.class)
 class ContractInvoiceServiceTest
 {
-    @Mock BizContractMapper mapper; @Mock ContractQueryService queryService;
-    @Mock ISysDictTypeService dictionaries; @Mock BusinessEventPublisher publisher;
-    @Mock ContractActionLogService actionLogs;
-    @InjectMocks ContractInvoiceService service;
+    @Mock private BizContractMapper mapper;
+    @Mock private ContractAccessPolicy access;
+    @Mock private ISysDictTypeService dictionaries;
+    @Mock private BusinessEventPublisher events;
+    @Mock private ContractActionLogService logs;
+    private ContractInvoiceService service;
 
-    @Test void rejectsInvoiceBeforePaymentConfirmation()
+    @BeforeEach
+    void setUp()
     {
-        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","0","invoice_status","0"));
-        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"1",null,null));
-        assertEquals("STATE_CONFLICT",e.getBusinessCode()); verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());
+        service = new ContractInvoiceService(mapper, access, dictionaries, events, logs);
     }
 
-    @Test void partialInvoiceCanOnlyAdvanceToCompleted()
+    @Test
+    void invoiceUsesPlanAndPersistedLogIdentity()
     {
-        when(mapper.selectFeePlanById(1L)).thenReturn(Map.of("contract_id",2L,"contractStatus","3","confirm_status","1","invoice_status","2"));
-        when(dictionaries.selectDictDataByType("law_contract_invoice_status")).thenReturn(java.util.List.of(dict("2")));
-        ServiceException e=assertThrows(ServiceException.class,()->service.invoice(1L,"2",null,null));
-        assertEquals("STATE_CONFLICT",e.getBusinessCode()); verify(mapper,never()).updateFeePlanStatus(org.mockito.ArgumentMatchers.anyMap());
+        when(access.requireFeePlanOperable(21L)).thenReturn(context("1", "0"));
+        when(dictionaries.selectDictDataByType("law_finance_invoice_type")).thenReturn(List.of(dict("normal")));
+        when(dictionaries.selectDictDataByType("law_contract_invoice_status")).thenReturn(List.of(dict("1")));
+        when(dictionaries.selectDictDataByType("law_contract_status_action")).thenReturn(List.of(dict("fee_invoice")));
+        when(mapper.updateFeePlanStatus(any())).thenReturn(1);
+        when(logs.record(eq(10L), eq("0"), eq("1"), eq("fee_invoice"), any(), eq(actor()))).thenReturn(94L);
+
+        service.invoice(21L, "1", null, "normal", null, null, actor());
+
+        verify(events).publish(argThat(event ->
+                "INVOICE_HANDLED:10:21:94".equals(event.getIdempotencyKey())
+                        && Long.valueOf(21L).equals(event.getPayload().get("planId"))));
     }
 
-    private com.ruoyi.common.core.domain.entity.SysDictData dict(String value){com.ruoyi.common.core.domain.entity.SysDictData d=new com.ruoyi.common.core.domain.entity.SysDictData();d.setDictValue(value);return d;}
+    @Test
+    void rejectsInvoiceBeforePaymentConfirmation()
+    {
+        when(access.requireFeePlanOperable(21L)).thenReturn(context("0", "0"));
+
+        ServiceException exception = assertThrows(ServiceException.class,
+                () -> service.invoice(21L, "1", null, null, null, null, actor()));
+
+        assertEquals("STATE_CONFLICT", exception.getBusinessCode());
+        verify(mapper, never()).updateFeePlanStatus(any());
+    }
+
+    private ContractFeePlanContext context(String confirm, String invoice)
+    {
+        return new ContractFeePlanContext(21L, 10L, "HT-10", confirm, invoice,
+                ContractStatus.PERFORMING.code(), new BigDecimal("100"), new BigDecimal("100"));
+    }
+
+    private SysDictData dict(String value)
+    {
+        SysDictData data = new SysDictData();
+        data.setDictValue(value);
+        return data;
+    }
 }

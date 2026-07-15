@@ -2,6 +2,9 @@ package com.ruoyi.system.service;
 
 import java.util.List;
 import java.util.Map;
+import com.law.business.contract.dto.FeeConfirmCommand;
+import com.law.business.contract.dto.FeeInvoiceCommand;
+import com.law.business.contract.dto.FeeRejectCommand;
 import com.ruoyi.system.domain.BizContract;
 
 public interface IBizContractService
@@ -30,10 +33,13 @@ public interface IBizContractService
     int insertFeePlan(Map<String, Object> plan);
     int updateFeePlan(Map<String, Object> plan);
     int deleteFeePlan(Long planId);
+    int confirmFeePlan(FeeConfirmCommand command);
     int confirmFeePlan(Long planId, String receivedAmount);
     int confirmFeePlan(Long planId, String receivedAmount, String remark);
     int confirmFeePlan(Long planId, String receivedAmount, String remark, String paymentMethod);
+    int rejectFeePlan(FeeRejectCommand command);
     int rejectFeePlan(Long planId, String reason);
+    int invoiceFeePlan(FeeInvoiceCommand command);
     int invoiceFeePlan(Long planId, String invoiceStatus);
     int invoiceFeePlan(Long planId, String invoiceStatus, String remark);
     int invoiceFeePlan(Long planId, String invoiceStatus, String remark, String invoiceType);

@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import com.law.business.contract.dto.FeeConfirmCommand;
+import com.law.business.contract.dto.FeeInvoiceCommand;
+import com.law.business.contract.dto.FeeRejectCommand;
 import com.ruoyi.system.domain.BizContract;
 import com.ruoyi.system.service.IBizContractService;
 import com.ruoyi.system.service.contract.ContractAttachmentService;
@@ -96,6 +99,7 @@ public class BizContractServiceImpl implements IBizContractService
     @Override public int insertFeePlan(Map<String, Object> plan) { return feePlanService.create(plan); }
     @Override public int updateFeePlan(Map<String, Object> plan) { return feePlanService.update(plan); }
     @Override public int deleteFeePlan(Long planId) { return feePlanService.delete(planId); }
+    @Override public int confirmFeePlan(FeeConfirmCommand command) { return paymentService.confirm(command); }
     @Override public int confirmFeePlan(Long planId, String receivedAmount)
     {
         return paymentService.confirm(planId, receivedAmount, null, null);
@@ -108,7 +112,9 @@ public class BizContractServiceImpl implements IBizContractService
     {
         return paymentService.confirm(planId, receivedAmount, remark, paymentMethod);
     }
+    @Override public int rejectFeePlan(FeeRejectCommand command) { return paymentService.reject(command); }
     @Override public int rejectFeePlan(Long planId, String reason) { return paymentService.reject(planId, reason); }
+    @Override public int invoiceFeePlan(FeeInvoiceCommand command) { return invoiceService.invoice(command); }
     @Override public int invoiceFeePlan(Long planId, String invoiceStatus)
     {
         return invoiceService.invoice(planId, invoiceStatus, null, null);

@@ -6,6 +6,9 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.law.business.contract.dto.FeeConfirmCommand;
+import com.law.business.contract.dto.FeeInvoiceCommand;
+import com.law.business.contract.dto.FeeRejectCommand;
 import com.law.business.finance.dto.ExpenseUpdateCommand;
 import com.law.business.finance.dto.InvoiceHandleCommand;
 import com.law.business.finance.dto.PaymentConfirmCommand;
@@ -37,19 +40,30 @@ public class FinanceCommandService
 
     public int confirmPayment(PaymentConfirmCommand command)
     {
-        return contractService.confirmFeePlan(command.getPlanId(), command.getReceivedAmount(),
-                command.getReason(), command.getPaymentMethod());
+        FeeConfirmCommand contractCommand = new FeeConfirmCommand();
+        contractCommand.setPlanId(command.getPlanId());
+        contractCommand.setReceivedAmount(command.getReceivedAmount());
+        contractCommand.setRemark(command.getReason());
+        contractCommand.setPaymentMethod(command.getPaymentMethod());
+        return contractService.confirmFeePlan(contractCommand);
     }
 
     public int rejectPayment(PaymentRejectCommand command)
     {
-        return contractService.rejectFeePlan(command.getPlanId(), command.getReason());
+        FeeRejectCommand contractCommand = new FeeRejectCommand();
+        contractCommand.setPlanId(command.getPlanId());
+        contractCommand.setReason(command.getReason());
+        return contractService.rejectFeePlan(contractCommand);
     }
 
     public int handleInvoice(InvoiceHandleCommand command)
     {
-        return contractService.invoiceFeePlan(command.getPlanId(), command.getInvoiceStatus(),
-                command.getReason(), command.getInvoiceType());
+        FeeInvoiceCommand contractCommand = new FeeInvoiceCommand();
+        contractCommand.setPlanId(command.getPlanId());
+        contractCommand.setInvoiceStatus(command.getInvoiceStatus());
+        contractCommand.setRemark(command.getReason());
+        contractCommand.setInvoiceType(command.getInvoiceType());
+        return contractService.invoiceFeePlan(contractCommand);
     }
 
     @Transactional
