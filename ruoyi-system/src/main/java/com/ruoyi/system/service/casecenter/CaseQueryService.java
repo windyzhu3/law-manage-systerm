@@ -13,20 +13,19 @@ import com.ruoyi.system.mapper.BizCaseMapper;
 public class CaseQueryService
 {
     private final BizCaseMapper mapper;
+    private final CaseAccessPolicy access;
 
-    public CaseQueryService(BizCaseMapper mapper)
+    public CaseQueryService(BizCaseMapper mapper, CaseAccessPolicy access)
     {
         this.mapper = mapper;
+        this.access = access;
     }
 
     public List<Map<String, Object>> cases(Map<String, Object> params) { return mapper.selectCaseList(scope(params)); }
 
     public Map<String, Object> caseDetail(Long caseId)
     {
-        requireAccess(caseId);
-        Map<String, Object> entity = mapper.selectCaseById(caseId);
-        if (entity == null) throw new ServiceException("案件不存在或已删除", "DATA_NOT_FOUND");
-        return entity;
+        return access.requireReadable(caseId);
     }
 
     public Map<String, Object> dashboard()
@@ -57,10 +56,7 @@ public class CaseQueryService
 
     public void requireAccess(Long caseId)
     {
-        if (caseId == null) throw new ServiceException("案件不存在或已删除", "DATA_NOT_FOUND");
-        if (!SecurityUtils.isAdmin() && mapper.countCaseInDataScope(caseId, SecurityUtils.getUserId(),
-                SecurityUtils.getDeptId(), true, CasePermissions.DATA_SCOPE) == 0)
-            throw new ServiceException("无权访问该案件", "ACCESS_DENIED");
+        access.requireReadable(caseId);
     }
 
     private Map<String, Object> scope(Map<String, Object> source)
