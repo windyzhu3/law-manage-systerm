@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -78,7 +79,8 @@ class TodoExtensionServiceTest
     {
         when(mapper.insertExtensionActionIfAbsent(anyMap())).thenReturn(0);
         when(mapper.selectExtensionActionForUpdate("approve-1")).thenReturn(action("APPROVE","APPLIED",31L,"APPROVED"));
-        when(mapper.selectExtensionById(31L)).thenReturn(extension(APPROVED,REQUESTED,"approve-1"));
+        when(mapper.selectExtensionById(31L)).thenReturn(extension(PENDING,null,null));
+        when(mapper.selectExtensionByIdForUpdate(31L)).thenReturn(extension(APPROVED,REQUESTED,"approve-1"));
 
         ExtensionView value=service().approve(31L,new DecisionCommand("approve-1","ignored"),approver);
 
@@ -86,6 +88,8 @@ class TodoExtensionServiceTest
         verify(mapper,never()).decideExtensionConditionally(anyMap());
         verify(mapper,never()).applyApprovedExtension(anyMap());
         verify(mapper,never()).selectExtensionActionById("approve-1");
+        verify(mapper,times(1)).selectExtensionById(31L);
+        verify(mapper).selectExtensionByIdForUpdate(31L);
     }
 
     @Test void concurrentDecisionCannotOverwritePriorDecision()

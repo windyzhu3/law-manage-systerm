@@ -62,6 +62,7 @@ public interface TodoMapper
     int insertStationNotification(Map<String,Object> notification);
     Map<String,Object> selectExtensionContext(Long todoId);
     Map<String,Object> selectExtensionById(Long extensionId);
+    Map<String,Object> selectExtensionByIdForUpdate(Long extensionId);
     Map<String,Object> selectExtensionByActionId(String actionId);
     int countApprovedExtensions(@Param("todoId") Long todoId,@Param("policyVersionId") Long policyVersionId);
     int insertExtensionRequest(Map<String,Object> extension);

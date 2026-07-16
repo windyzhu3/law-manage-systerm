@@ -85,6 +85,15 @@
       join todo_sla_policy_version p on p.policy_version_id=e.policy_version_id
     where e.extension_id=#{extensionId}
   </select>
+  <select id="selectExtensionByIdForUpdate" resultType="java.util.Map">
+    select e.*,s.start_at,s.due_at effective_due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
+      c.work_days,c.work_start,c.work_end,c.exception_json,
+      p.max_extension_count,p.max_extension_value,p.max_extension_unit,p.proof_required,p.pending_sla_mode
+    from todo_extension_request e join todo_sla_record s on s.todo_id=e.todo_id
+      join todo_work_calendar c on c.calendar_id=s.calendar_id
+      join todo_sla_policy_version p on p.policy_version_id=e.policy_version_id
+    where e.extension_id=#{extensionId} for update
+  </select>
   <select id="selectExtensionByActionId" resultType="java.util.Map">
     select e.*,s.start_at,s.due_at effective_due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
       c.work_days,c.work_start,c.work_end,c.exception_json,
