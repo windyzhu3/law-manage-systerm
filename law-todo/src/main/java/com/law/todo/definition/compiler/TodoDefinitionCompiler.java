@@ -16,6 +16,7 @@ import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.expression.ConditionValidator;
+import com.law.todo.definition.validation.TodoFormValidator;
 
 @Component
 public class TodoDefinitionCompiler
@@ -62,6 +63,8 @@ public class TodoDefinitionCompiler
         }
 
         validateStructure(definition, errors);
+        for (TodoFormValidator.ValidationIssue formIssue : new TodoFormValidator().validateDefinition(definition))
+            errors.add(issue(formIssue.code(), formIssue.path(), formIssue.message()));
         for (String code : decisions.unresolvedBlockingDecisions(definition.decisionRefs()))
             errors.add(issue("TODO_DECISION_UNRESOLVED", "decisionRefs",
                     "Decision is missing or unresolved: " + code));

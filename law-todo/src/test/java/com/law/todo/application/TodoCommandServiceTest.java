@@ -74,7 +74,42 @@ class TodoCommandServiceTest
         verify(mapper,never()).updateStatusConditionally(2L,"SUBMITTED","COMPLETED",null,"alice");
     }
 
+    @Test void strongActionCommandPreservesPresentNullAndLegacyPayloadAlias()
+    {
+        Map<String,Object> fields=new java.util.HashMap<>();fields.put("result",null);
+        ActionCommand command=new ActionCommand("a",null,fields,List.of(11L));
+        assertEquals(true,command.fields().containsKey("result"));
+        assertEquals(command.fields(),command.payload());
+        assertEquals(List.of(11L),command.fileObjectIds());
+    }
+
+    @Test void completionValidatesStrongFieldsFromVersionedDefinition()
+    {
+        TodoInstance todo=todo(6L,"SUBMITTED",7L);todo.setTemplateVersionId(10L);todo.setBusinessType("LEAD");
+        when(mapper.selectById(6L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(10L)).thenReturn(Map.of("compiled_json",
+                "{\"schemaVersion\":1,\"templateCode\":\"T\",\"dod\":{\"config\":{\"requiredFields\":[\"contactResult\"]}},\"ui\":{\"config\":{\"fields\":[\"contactResult\"]}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(),null);
+
+        TodoException error=assertThrows(TodoException.class,()->guarded.complete(6L,
+                new ActionCommand("done-2",null,Map.of(),List.of()),new Actor(7L,"alice",3L)));
+
+        assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+    }
+
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
+    @Test void returnValidatesActionSpecificRule()
+    {
+        TodoInstance todo=todo(7L,"SUBMITTED",8L);todo.setTemplateVersionId(11L);
+        when(mapper.selectById(7L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(11L)).thenReturn(Map.of("compiled_json",
+                "{\"schemaVersion\":1,\"templateCode\":\"T\",\"dod\":{\"config\":{\"actions\":{\"RETURN\":{\"requiredFields\":[\"reason\"]}}}},\"ui\":{\"config\":{\"fields\":[\"reason\"]}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
+
+        TodoException error=assertThrows(TodoException.class,()->service.returnTodo(7L,
+                new ActionCommand("back-2",null,Map.of(),List.of()),new Actor(7L,"alice",3L)));
+
+        assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+    }
     @Test void terminalTodoCannotTransfer(){TodoInstance todo=todo(4L,"COMPLETED",7L);when(mapper.selectById(4L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);TodoException e=assertThrows(TodoException.class,()->service.transfer(4L,new ActionCommand("move-1",null,Map.of("targetOwnerId",9L)),new Actor(7L,"alice",3L)));assertEquals("TODO_TERMINAL",e.getBusinessCode());}
 
     @Test void writesValidJsonPayloadToAuditLog()

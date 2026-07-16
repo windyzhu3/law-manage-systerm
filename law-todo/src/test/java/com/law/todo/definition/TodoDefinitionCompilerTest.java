@@ -35,6 +35,14 @@ import com.law.todo.expression.ConditionValidator;
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionCompilerTest
 {
+    @Test void compilerRejectsDodFieldThatRuntimeFormCannotRender()
+    {
+        TodoDefinitionDocument source=valid();
+        TodoDefinitionDocument mismatched=new TodoDefinitionDocument(source.schemaVersion(),source.templateCode(),source.event(),source.owner(),
+                new DodRule(Map.of("requiredFields",List.of("notInUi"))),source.sla(),source.ui(),source.routing(),source.autoActions(),source.decisionRefs(),source.acceptanceRefs());
+
+        assertEquals("TODO_DOD_FIELD_NOT_RENDERABLE",compiler.compile(mismatched).errors().get(0).code());
+    }
     @Mock TodoMapper mapper;
     private TodoDefinitionCompiler compiler;
 
