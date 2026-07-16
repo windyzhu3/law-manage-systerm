@@ -20,6 +20,7 @@ public interface TodoMapper
     int insertRelation(Map<String,Object> relation);
     Map<String,Object> selectTemplateVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo);
     int insertTemplateVersion(Map<String,Object> version);
+    int updateDefinitionDocument(Map<String,Object> version);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
     List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);
