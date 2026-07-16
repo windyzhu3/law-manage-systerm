@@ -140,20 +140,24 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
     {
         if (document == null || document.isEmpty())
             throw new IllegalArgumentException("Condition object cannot be empty");
-        if (document.containsKey("expressionVersion") || document.containsKey("root"))
+        if (document.containsKey("$expression"))
             return new DecodedCondition(decodeEnvelope(document), true);
         return new DecodedCondition(legacy(document), false);
     }
 
     private static ConditionExpression decodeEnvelope(Map<String, ?> document)
     {
-        requireKeys(document, Set.of("expressionVersion", "root"));
-        Object version = document.get("expressionVersion");
+        requireKeys(document, Set.of("$expression"));
+        if (!(document.get("$expression") instanceof Map<?, ?> rawEnvelope))
+            throw new IllegalArgumentException("Condition expression envelope must be an object");
+        Map<String, Object> envelope = stringMap(rawEnvelope);
+        requireKeys(envelope, Set.of("version", "root"));
+        Object version = envelope.get("version");
         if (!(version instanceof Byte || version instanceof Short || version instanceof Integer
                 || version instanceof Long || version instanceof java.math.BigInteger)
                 || ((Number) version).longValue() != 1L)
             throw new IllegalArgumentException("Unsupported condition expression version: " + version);
-        if (!(document.get("root") instanceof Map<?, ?> root))
+        if (!(envelope.get("root") instanceof Map<?, ?> root))
             throw new IllegalArgumentException("Condition expression root must be an object");
         return decodeExpressionNode(stringMap(root));
     }

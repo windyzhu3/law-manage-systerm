@@ -108,14 +108,15 @@ class TodoEventServiceTest
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
         conditional.put("condition_json","""
-                {"expressionVersion":1,"root":
-                  {"type":"AND","conditions":[
-                    {"field":"amount","operator":"GTE","value":100},
-                    {"type":"OR","conditions":[
-                      {"field":"type","operator":"EQ","value":"A"},
-                      {"field":"type","operator":"EQ","value":"B"}
+                {"$expression":{"version":1,"root":
+                    {"type":"AND","conditions":[
+                      {"field":"amount","operator":"GTE","value":100},
+                      {"type":"OR","conditions":[
+                        {"field":"type","operator":"EQ","value":"A"},
+                        {"field":"type","operator":"EQ","value":"B"}
+                      ]}
                     ]}
-                  ]}
+                  }
                 }
                 """);
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
@@ -131,7 +132,7 @@ class TodoEventServiceTest
     @Test void canonicalConditionWithUndeclaredFieldFailsClosed()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
-        conditional.put("condition_json","{\"expressionVersion\":1,\"root\":{\"field\":\"class.classLoader\",\"operator\":\"EQ\",\"value\":\"x\"}}");
+        conditional.put("condition_json","{\"$expression\":{\"version\":1,\"root\":{\"field\":\"class.classLoader\",\"operator\":\"EQ\",\"value\":\"x\"}}}");
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
         when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());
 
@@ -144,7 +145,7 @@ class TodoEventServiceTest
     @Test void malformedCanonicalEnvelopeFailsClosed()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
-        conditional.put("condition_json","{\"expressionVersion\":2,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}");
+        conditional.put("condition_json","{\"$expression\":{\"version\":2,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}}");
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
 
         List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
@@ -156,7 +157,7 @@ class TodoEventServiceTest
     @Test void canonicalConditionWithoutActiveCatalogFailsClosed()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
-        conditional.put("condition_json","{\"expressionVersion\":1,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}");
+        conditional.put("condition_json","{\"$expression\":{\"version\":1,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}}");
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
 
         List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());

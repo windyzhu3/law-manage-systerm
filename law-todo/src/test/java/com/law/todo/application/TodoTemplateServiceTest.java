@@ -51,7 +51,7 @@ class TodoTemplateServiceTest
     @Test void triggerSaveRejectsInvalidTypedPredicate()
     {
         when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());
-        String condition="{\"expressionVersion\":1,\"root\":{\"field\":\"amount\",\"operator\":\"GT\",\"value\":true}}";
+        String condition="{\"$expression\":{\"version\":1,\"root\":{\"field\":\"amount\",\"operator\":\"GT\",\"value\":true}}}";
         TodoException error=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(new TriggerCommand(null,
                         "LEAD_ASSIGNED",1L,2L,"LEAD","Y",condition)));
@@ -61,7 +61,7 @@ class TodoTemplateServiceTest
     @Test void triggerSaveRejectsMalformedExpressionEnvelope()
     {
         when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());
-        String condition="{\"expressionVersion\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1},\"extra\":true}";
+        String condition="{\"$expression\":{\"version\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1},\"extra\":true}}";
         TodoException error=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(trigger(condition)));
         assertEquals("TODO_CONDITION_INVALID",error.getBusinessCode());

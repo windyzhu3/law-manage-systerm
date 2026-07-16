@@ -120,22 +120,27 @@ class ConditionEvaluatorTest
     void expressionJsonIsDecodedButUnknownShapesAreRejected()
     {
         String json = """
-                {"expressionVersion":1,"root":
-                  {"type":"AND","conditions":[
-                    {"field":"amount","operator":"GTE","value":100},
-                    {"type":"OR","conditions":[
-                      {"field":"type","operator":"EQ","value":"A"},
-                      {"field":"type","operator":"EQ","value":"B"}
+                {"$expression":{"version":1,"root":
+                    {"type":"AND","conditions":[
+                      {"field":"amount","operator":"GTE","value":100},
+                      {"type":"OR","conditions":[
+                        {"field":"type","operator":"EQ","value":"A"},
+                        {"field":"type","operator":"EQ","value":"B"}
+                      ]}
                     ]}
-                  ]}
+                  }
                 }
                 """;
 
         assertTrue(evaluator.evaluate(ConditionExpression.fromJson(json), payload()));
         assertThrows(IllegalArgumentException.class,
-                () -> ConditionExpression.fromJson("{\"expressionVersion\":2,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1}}"));
+                () -> ConditionExpression.fromJson("{\"$expression\":{\"version\":2,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1}}}"));
         assertThrows(IllegalArgumentException.class,
-                () -> ConditionExpression.fromJson("{\"expressionVersion\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1},\"script\":\"x\"}"));
+                () -> ConditionExpression.fromJson("{\"$expression\":{\"version\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1}},\"extra\":true}"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConditionExpression.fromJson("{\"$expression\":{\"version\":1}}"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConditionExpression.fromJson("{\"$expression\":{\"version\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1},\"extra\":true}}"));
     }
 
     @Test
@@ -156,14 +161,22 @@ class ConditionEvaluatorTest
         assertTrue(evaluator.evaluate(
                 ConditionExpression.fromJson("{\"type\":\"AND\",\"conditions\":\"READY\"}"),
                 Map.of("type", "AND", "conditions", "READY")));
+        assertTrue(evaluator.evaluate(ConditionExpression.fromJson("{\"root\":\"READY\"}"),
+                Map.of("root", "READY")));
+        assertTrue(evaluator.evaluate(ConditionExpression.fromJson("{\"expressionVersion\":1}"),
+                Map.of("expressionVersion", 1)));
+        assertTrue(evaluator.evaluate(
+                ConditionExpression.fromJson("{\"expressionVersion\":1,\"root\":\"READY\"}"),
+                Map.of("expressionVersion", 1, "root", "READY")));
     }
 
     @Test
     void objectLiteralNullIsPreservedForValidation()
     {
         ConditionExpression expression = ConditionExpression.fromJson("""
-                {"expressionVersion":1,"root":
-                  {"field":"amount","operator":"EQ","value":{"optional":null}}}
+                {"$expression":{"version":1,"root":
+                    {"field":"amount","operator":"EQ","value":{"optional":null}}}
+                }
                 """);
 
         assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",

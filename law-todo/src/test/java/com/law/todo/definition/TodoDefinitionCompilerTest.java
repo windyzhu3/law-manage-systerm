@@ -117,8 +117,8 @@ class TodoDefinitionCompilerTest
                 "payload_schema_json", "{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"}}}",
                 "status", "ACTIVE"));
         TodoDefinitionDocument definition = definition("LEAD_CREATED", List.of(),
-                Map.of("expressionVersion", 1, "root",
-                        Map.of("field", "class.classLoader", "operator", "EQ", "value", "x")));
+                Map.of("$expression", Map.of("version", 1, "root",
+                        Map.of("field", "class.classLoader", "operator", "EQ", "value", "x"))));
 
         DefinitionValidationReport report = compiler.compile(definition);
 
@@ -136,8 +136,8 @@ class TodoDefinitionCompilerTest
         Map<String,Object> objectLiteral = new java.util.LinkedHashMap<>();
         objectLiteral.put("optional", null);
         TodoDefinitionDocument definition = definition("LEAD_CREATED", List.of(),
-                Map.of("expressionVersion", 1, "root",
-                        Map.of("field", "amount", "operator", "EQ", "value", objectLiteral)));
+                Map.of("$expression", Map.of("version", 1, "root",
+                        Map.of("field", "amount", "operator", "EQ", "value", objectLiteral))));
 
         DefinitionValidationReport report = assertDoesNotThrow(() -> compiler.compile(definition));
 
