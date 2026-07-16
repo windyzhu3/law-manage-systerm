@@ -18,6 +18,10 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.domain.service.WorkingTimeCalculator;
 import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
+import com.law.todo.extension.TodoExtensionCommands.CycleOccurrence;
+import com.law.todo.extension.TodoExtensionCommands.CyclePolicy;
+import com.law.todo.extension.TodoExtensionCommands.DurationPolicy;
+import com.law.todo.extension.TodoExtensionCommands.DurationUnit;
 
 @Service
 public class TodoSlaService
@@ -27,6 +31,34 @@ public class TodoSlaService
     @Transactional public int scanAndEscalate(LocalDateTime now){List<Map<String,Object>> items=mapper.selectSlaScanItems(now);int changed=0;if(items==null)return 0;for(Map<String,Object> item:items){Long id=Long.valueOf(String.valueOf(value(item,"todo_id","todoId")));int percent=percent(item,now);if(percent>=80)changed+=mark(id,"REMINDED_80",now);if(percent>=100)changed+=mark(id,"OVERDUE_100",now);if(percent>=150)changed+=mark(id,"ESCALATED_150",now);}return changed;}
     @Transactional public boolean pause(Long todoId,Long userId,LocalDateTime now){requireOwner(todoId,userId);return mapper.pauseSla(todoId,now)>0;}
     @Transactional public boolean resume(Long todoId,Long userId,LocalDateTime now){requireOwner(todoId,userId);return mapper.resumeSla(todoId,now)>0;}
+    public LocalDateTime addDuration(LocalDateTime start,DurationPolicy policy,WorkCalendar calendar)
+    {
+        if(start==null||policy==null)throw new IllegalArgumentException("start and policy are required");
+        return switch(policy.unit())
+        {
+            case MINUTES -> start.plusMinutes(policy.value());
+            case HOURS -> start.plusHours(policy.value());
+            case CALENDAR_DAYS -> start.plusDays(policy.value());
+            case WORKING_DAYS -> addWorkingDays(start,policy.value(),calendar);
+        };
+    }
+    public List<CycleOccurrence> occurrences(String cycleKey,LocalDateTime anchor,CyclePolicy policy,WorkCalendar calendar)
+    {
+        if(cycleKey==null||cycleKey.isBlank())throw new IllegalArgumentException("cycleKey is required");
+        List<CycleOccurrence> result=new java.util.ArrayList<>();LocalDateTime due=anchor;
+        DurationPolicy duration=new DurationPolicy(policy.policyVersionId(),policy.interval(),policy.unit());
+        for(int occurrence=1;occurrence<=policy.maxOccurrences();occurrence++)
+        {due=addDuration(due,duration,calendar);result.add(new CycleOccurrence(cycleKey+":"+occurrence,occurrence,due,policy.policyVersionId()));}
+        return List.copyOf(result);
+    }
+    private LocalDateTime addWorkingDays(LocalDateTime start,long days,WorkCalendar calendar)
+    {
+        if(calendar==null)throw new IllegalArgumentException("calendar is required for WORKING_DAYS");
+        LocalDate date=start.toLocalDate();long remaining=days;
+        while(remaining>0){date=date.plusDays(1);if(calendar.working(date))remaining--;}
+        LocalTime time=start.toLocalTime();if(time.isBefore(calendar.workStart()))time=calendar.workStart();if(time.isAfter(calendar.workEnd()))time=calendar.workEnd();
+        return LocalDateTime.of(date,time);
+    }
     private Object value(Map<String,Object> m,String a,String b){return m.containsKey(a)?m.get(a):m.get(b);}
     private int mark(Long id,String threshold,LocalDateTime now){int changed=mapper.markSlaThreshold(id,threshold,now);if(changed>0){mapper.insertSlaNotification(id,threshold,now);if("ESCALATED_150".equals(threshold))mapper.insertSupervisorEscalationNotification(id,now);}return changed;}
     private void requireOwner(Long todoId,Long userId){TodoInstance todo=mapper.selectById(todoId);if(todo==null)throw new TodoException("TODO_NOT_FOUND","待办不存在");if(!access.canOperate(todo,userId))throw new TodoException("TODO_ACCESS_DENIED","无权控制该待办的SLA计时");}

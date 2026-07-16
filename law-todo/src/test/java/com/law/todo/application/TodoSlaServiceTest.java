@@ -23,6 +23,8 @@ import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.TodoAccessPolicy;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.extension.TodoExtensionCommands.CyclePolicy;
+import com.law.todo.extension.TodoExtensionCommands.DurationUnit;
 
 @ExtendWith(MockitoExtension.class)
 class TodoSlaServiceTest
@@ -85,5 +87,16 @@ class TodoSlaServiceTest
     {
         TodoInstance todo=new TodoInstance();todo.setTodoId(1L);when(mapper.selectById(1L)).thenReturn(todo);when(access.canOperate(todo,9L)).thenReturn(false);
         assertThrows(TodoException.class,()->new TodoSlaService(mapper,access).pause(1L,9L,LocalDateTime.MIN));
+    }
+
+    @Test void producesBoundedWorkingDayCycleOccurrences()
+    {
+        WorkCalendar c=new WorkCalendar(Set.of(DayOfWeek.MONDAY,DayOfWeek.TUESDAY,DayOfWeek.WEDNESDAY,DayOfWeek.THURSDAY,DayOfWeek.FRIDAY),LocalTime.of(9,0),LocalTime.of(18,0),Map.of());
+        CyclePolicy policy=new CyclePolicy(17L,1,DurationUnit.WORKING_DAYS,3);
+
+        var values=new TodoSlaService(mapper,access).occurrences("cycle-a",LocalDateTime.of(2026,7,10,9,0),policy,c);
+
+        assertEquals(List.of("cycle-a:1","cycle-a:2","cycle-a:3"),values.stream().map(value->value.occurrenceKey()).toList());
+        assertEquals(LocalDateTime.of(2026,7,13,9,0),values.get(0).dueAt());
     }
 }

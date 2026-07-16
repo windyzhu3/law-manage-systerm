@@ -22,14 +22,14 @@
   <select id="selectDecisionByCode" resultType="java.util.Map">select * from todo_decision where decision_code=#{decisionCode}</select>
   <update id="updateTemplateCurrentVersion">update todo_template set current_version=#{versionNo},update_by=#{operator},update_time=sysdate() where template_id=#{templateId} and current_version &lt; #{versionNo}</update>
   <select id="selectTriggerRules" resultType="java.util.Map">select r.*,t.template_code,t.template_name,v.owner_rule_json,v.dod_rule_json,v.sla_rule_json,v.next_rule_json from todo_trigger_rule r join todo_template t on t.template_id=r.template_id join todo_template_version v on v.version_id=r.template_version_id where r.event_type=#{eventType} and r.business_type=#{businessType} and r.enabled='Y' and t.status='0' and v.status='PUBLISHED'</select>
-  <select id="selectSlaScanItems" resultType="java.util.Map">select s.todo_id,s.start_at,s.due_at,c.work_days,c.work_start,c.work_end,c.exception_json from todo_sla_record s join todo_instance t on t.todo_id=s.todo_id join todo_work_calendar c on c.calendar_id=s.calendar_id where s.status='RUNNING' and t.status not in ('COMPLETED','CANCELLED')</select>
+  <select id="selectSlaScanItems" resultType="java.util.Map">select s.todo_id,s.start_at,s.due_at,s.remind80_due_at,s.overdue100_due_at,s.escalate150_due_at,c.work_days,c.work_start,c.work_end,c.exception_json from todo_sla_record s join todo_instance t on t.todo_id=s.todo_id join todo_work_calendar c on c.calendar_id=s.calendar_id where s.status='RUNNING' and t.status not in ('COMPLETED','CANCELLED')</select>
   <update id="markSlaThreshold">
     update todo_sla_record s join todo_instance t on t.todo_id=s.todo_id
     <set><choose><when test="threshold == 'REMINDED_80'">s.remind80_at=#{now},t.sla_status='REMINDED'</when><when test="threshold == 'OVERDUE_100'">s.overdue100_at=#{now},t.sla_status='OVERDUE'</when><otherwise>s.escalate150_at=#{now},t.sla_status='ESCALATED'</otherwise></choose></set>
     where s.todo_id=#{todoId} <choose><when test="threshold == 'REMINDED_80'">and s.remind80_at is null</when><when test="threshold == 'OVERDUE_100'">and s.overdue100_at is null</when><otherwise>and s.escalate150_at is null</otherwise></choose>
   </update>
   <update id="pauseSla">update todo_sla_record set paused_at=#{now},status='PAUSED',version=version+1 where todo_id=#{todoId} and status='RUNNING'</update>
-  <update id="resumeSla">update todo_sla_record set paused_seconds=paused_seconds+timestampdiff(second,paused_at,#{now}),due_at=date_add(due_at,interval timestampdiff(second,paused_at,#{now}) second),paused_at=null,status='RUNNING',version=version+1 where todo_id=#{todoId} and status='PAUSED'</update>
+  <update id="resumeSla">update todo_sla_record set paused_seconds=paused_seconds+timestampdiff(second,paused_at,#{now}),due_at=date_add(due_at,interval timestampdiff(second,paused_at,#{now}) second),remind80_due_at=case when remind80_at is null then date_add(remind80_due_at,interval timestampdiff(second,paused_at,#{now}) second) else remind80_due_at end,overdue100_due_at=case when overdue100_at is null then date_add(overdue100_due_at,interval timestampdiff(second,paused_at,#{now}) second) else overdue100_due_at end,escalate150_due_at=case when escalate150_at is null then date_add(escalate150_due_at,interval timestampdiff(second,paused_at,#{now}) second) else escalate150_due_at end,paused_at=null,status='RUNNING',version=version+1 where todo_id=#{todoId} and status='PAUSED'</update>
   <sql id="candidateTodoPredicate">exists(select 1 from todo_candidate c where c.todo_id=t.todo_id and ((c.candidate_type='USER' and c.candidate_value=#{currentUserId}) or (c.candidate_type='DEPT' and c.candidate_value=#{currentDeptId}) or (c.candidate_type='ROLE' and exists(select 1 from sys_user_role ur where ur.user_id=#{currentUserId} and ur.role_id=c.candidate_value)) or (c.candidate_type='POST' and exists(select 1 from sys_user_post up where up.user_id=#{currentUserId} and up.post_id=c.candidate_value))))</sql>
   <sql id="visibleTodoPredicate">(t.owner_id=#{currentUserId} or t.owner_dept_id=#{currentDeptId} or <include refid="candidateTodoPredicate"/> or exists(select 1 from todo_cc cc where cc.todo_id=t.todo_id and cc.user_id=#{currentUserId}) or exists(select 1 from sys_dept owner_dept join sys_user viewer on viewer.user_id=#{currentUserId} and viewer.status='0' and viewer.del_flag='0' join sys_dept led_dept on led_dept.leader=viewer.user_name and (led_dept.dept_id=owner_dept.dept_id or find_in_set(led_dept.dept_id,owner_dept.ancestors)) where owner_dept.dept_id=t.owner_dept_id))</sql>
   <select id="selectDashboard" resultType="java.util.Map">select (select count(*) from todo_instance t where t.owner_id=#{userId} and t.status not in ('COMPLETED','CANCELLED')) mine,(select count(*) from todo_instance t where t.owner_id is null and t.status='CREATED' and exists(select 1 from todo_candidate c where c.todo_id=t.todo_id and ((c.candidate_type='USER' and c.candidate_value=#{userId}) or (c.candidate_type='DEPT' and c.candidate_value=#{deptId}) or (c.candidate_type='ROLE' and exists(select 1 from sys_user_role ur where ur.user_id=#{userId} and ur.role_id=c.candidate_value)) or (c.candidate_type='POST' and exists(select 1 from sys_user_post up where up.user_id=#{userId} and up.post_id=c.candidate_value))))) candidate,(select count(*) from todo_instance t where t.sla_status in ('OVERDUE','ESCALATED') and t.status not in ('COMPLETED','CANCELLED') and (t.owner_id=#{userId} or t.owner_dept_id=#{deptId} or exists(select 1 from todo_cc cc where cc.todo_id=t.todo_id and cc.user_id=#{userId}) or exists(select 1 from sys_dept owner_dept join sys_user viewer on viewer.user_id=#{userId} and viewer.status='0' and viewer.del_flag='0' join sys_dept led_dept on led_dept.leader=viewer.user_name and (led_dept.dept_id=owner_dept.dept_id or find_in_set(led_dept.dept_id,owner_dept.ancestors)) where owner_dept.dept_id=t.owner_dept_id))) overdue</select>
@@ -61,6 +61,55 @@
   <select id="selectRelations" resultType="java.util.Map">select * from todo_relation where todo_id=#{todoId}</select>
   <select id="selectNotifications" resultType="java.util.Map">select * from todo_notification where user_id=#{userId}<if test="status != null and status != ''"> and status=#{status}</if> order by create_time desc,notification_id desc</select>
   <update id="markNotificationRead">update todo_notification set status='READ',read_time=sysdate() where notification_id=#{notificationId} and user_id=#{userId} and status='UNREAD'</update>
+  <insert id="insertStationNotification">insert ignore into todo_notification(todo_id,user_id,notification_type,source_id,delivery_key,title,content,status,create_time) values(#{todoId},#{recipientUserId},#{type},#{idempotencyKey},#{idempotencyKey},#{title},#{content},#{status},sysdate())</insert>
+  <select id="selectExtensionContext" resultType="java.util.Map">
+    select t.todo_id,t.status todo_status,t.owner_id,s.start_at,s.due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
+      c.calendar_id,c.work_days,c.work_start,c.work_end,c.exception_json,
+      p.policy_version_id,p.max_extension_count,p.max_extension_value,p.max_extension_unit,p.proof_required,p.pending_sla_mode
+    from todo_instance t join todo_sla_record s on s.todo_id=t.todo_id
+      join todo_work_calendar c on c.calendar_id=s.calendar_id
+      join todo_sla_policy_version p on p.template_version_id=t.template_version_id and p.status='ACTIVE'
+    where t.todo_id=#{todoId}
+  </select>
+  <select id="selectExtensionById" resultType="java.util.Map">
+    select e.*,s.start_at,s.due_at effective_due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
+      c.work_days,c.work_start,c.work_end,c.exception_json,
+      p.max_extension_count,p.max_extension_value,p.max_extension_unit,p.proof_required,p.pending_sla_mode
+    from todo_extension_request e join todo_sla_record s on s.todo_id=e.todo_id
+      join todo_work_calendar c on c.calendar_id=s.calendar_id
+      join todo_sla_policy_version p on p.policy_version_id=e.policy_version_id
+    where e.extension_id=#{extensionId}
+  </select>
+  <select id="selectExtensionByActionId" resultType="java.util.Map">
+    select e.*,s.start_at,s.due_at effective_due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
+      c.work_days,c.work_start,c.work_end,c.exception_json,
+      p.max_extension_count,p.max_extension_value,p.max_extension_unit,p.proof_required,p.pending_sla_mode
+    from todo_extension_request e join todo_sla_record s on s.todo_id=e.todo_id
+      join todo_work_calendar c on c.calendar_id=s.calendar_id
+      join todo_sla_policy_version p on p.policy_version_id=e.policy_version_id
+    where e.request_action_id=#{actionId} or e.decision_action_id=#{actionId} limit 1
+  </select>
+  <select id="countApprovedExtensions" resultType="int">select count(*) from todo_extension_request where todo_id=#{todoId} and policy_version_id=#{policyVersionId} and status='APPROVED'</select>
+  <insert id="insertExtensionRequest" useGeneratedKeys="true" keyProperty="extensionId">
+    insert into todo_extension_request(todo_id,request_action_id,status,original_due_at,requested_due_at,request_reason,proof_file_ids_json,requester_id,requester_name,requester_dept_id,policy_version_id,pending_sla_mode)
+    select #{todoId},#{requestActionId},'PENDING',#{originalDueAt},#{requestedDueAt},#{reason},#{proofFileIdsJson},#{requesterId},#{requesterName},#{requesterDeptId},#{policyVersionId},#{pendingSlaMode}
+    where not exists(select 1 from todo_extension_request existing where existing.todo_id=#{todoId} and existing.status='PENDING')
+  </insert>
+  <update id="decideExtensionConditionally">
+    update todo_extension_request set status=#{toStatus},decision_action_id=#{decisionActionId},decision_reason=#{decisionReason},
+      decision_actor_id=#{decisionActorId},decision_actor_name=#{decisionActorName},decision_actor_dept_id=#{decisionActorDeptId},
+      decided_at=sysdate(),approved_due_at=#{approvedDueAt},version=version+1
+    where extension_id=#{extensionId} and status=#{fromStatus} and decision_action_id is null
+  </update>
+  <update id="applyApprovedExtension">
+    update todo_sla_record s join todo_instance t on t.todo_id=s.todo_id set
+      s.original_due_at=coalesce(s.original_due_at,s.due_at),s.due_at=#{approvedDueAt},
+      s.remind80_due_at=case when s.remind80_at is null then #{remind80DueAt} else s.remind80_due_at end,
+      s.overdue100_due_at=case when s.overdue100_at is null then #{overdue100DueAt} else s.overdue100_due_at end,
+      s.escalate150_due_at=case when s.escalate150_at is null then #{escalate150DueAt} else s.escalate150_due_at end,
+      s.version=s.version+1,t.due_at=#{approvedDueAt},t.version=t.version+1,t.update_time=sysdate()
+    where s.todo_id=#{todoId} and s.due_at=#{expectedDueAt} and s.status in ('RUNNING','PAUSED')
+  </update>
   <select id="selectTemplateById" resultType="java.util.Map">select * from todo_template where template_id=#{templateId}</select>
   <select id="selectTemplateVersions" resultType="java.util.Map">select * from todo_template_version where template_id=#{templateId} order by version_no desc</select>
   <update id="updateTemplateVersionDraft">update todo_template_version set owner_rule_json=#{ownerRuleJson},dod_rule_json=#{dodRuleJson},sla_rule_json=#{slaRuleJson},next_rule_json=#{nextRuleJson},ui_schema_json=#{uiSchemaJson},definition_json=null,compiled_json=null,definition_hash=null,validation_report_json=null where version_id=#{versionId} and status='DRAFT'</update>

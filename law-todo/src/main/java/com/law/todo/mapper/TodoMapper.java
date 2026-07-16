@@ -59,6 +59,14 @@ public interface TodoMapper
     List<Map<String,Object>> selectRelations(Long todoId);
     List<Map<String,Object>> selectNotifications(@Param("userId") Long userId,@Param("status") String status);
     int markNotificationRead(@Param("notificationId") Long notificationId,@Param("userId") Long userId);
+    int insertStationNotification(Map<String,Object> notification);
+    Map<String,Object> selectExtensionContext(Long todoId);
+    Map<String,Object> selectExtensionById(Long extensionId);
+    Map<String,Object> selectExtensionByActionId(String actionId);
+    int countApprovedExtensions(@Param("todoId") Long todoId,@Param("policyVersionId") Long policyVersionId);
+    int insertExtensionRequest(Map<String,Object> extension);
+    int decideExtensionConditionally(Map<String,Object> decision);
+    int applyApprovedExtension(Map<String,Object> extension);
     Map<String,Object> selectTemplateById(Long templateId);
     List<Map<String,Object>> selectTemplateVersions(Long templateId);
     int updateTemplateVersionDraft(Map<String,Object> version);
