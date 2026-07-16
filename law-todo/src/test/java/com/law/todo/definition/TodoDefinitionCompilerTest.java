@@ -1,6 +1,7 @@
 package com.law.todo.definition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
@@ -74,6 +75,23 @@ class TodoDefinitionCompilerTest
 
         assertTrue(report.errors().stream()
                 .anyMatch(error -> error.code().equals("TODO_EVENT_CATALOG_NOT_FOUND")));
+    }
+
+    @Test
+    void onlyExactActiveEventCatalogEntriesCompile()
+    {
+        for (String status : List.of("DRAFT", "DISABLED", "RETIRED", "INVALID", "active"))
+        {
+            when(mapper.selectEventCatalog("LEAD_CREATED", 1)).thenReturn(Map.of(
+                    "event_type", "LEAD_CREATED", "payload_version", 1,
+                    "payload_schema_json", "{\"type\":\"object\"}", "status", status));
+
+            DefinitionValidationReport report = compiler.compile(valid());
+
+            assertTrue(report.errors().stream()
+                    .anyMatch(error -> error.code().equals("TODO_EVENT_CATALOG_NOT_FOUND")), status);
+            assertNull(new TodoEventCatalogService(mapper).payloadSchema("LEAD_CREATED", 1), status);
+        }
     }
 
     @Test

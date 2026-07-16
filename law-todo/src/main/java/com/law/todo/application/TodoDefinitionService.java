@@ -94,11 +94,18 @@ public class TodoDefinitionService
         target.put("versionNo", command.newVersionNo());
         target.put("status", DRAFT);
         target.put("sourceVersionId", longValue(value(source, "version_id", "versionId")));
-        copyRule(source, target, "owner_rule_json", "ownerRuleJson");
-        copyRule(source, target, "dod_rule_json", "dodRuleJson");
-        copyRule(source, target, "sla_rule_json", "slaRuleJson");
-        copyRule(source, target, "next_rule_json", "nextRuleJson");
-        copyRule(source, target, "ui_schema_json", "uiSchemaJson");
+        TodoDefinitionDocument copiedDefinition = definition(source);
+        Object sourceSchemaVersion = value(source, "definition_schema_version",
+                "definitionSchemaVersion");
+        String sourceDefinitionJson = text(value(source, "definition_json", "definitionJson"));
+        target.put("definitionSchemaVersion", sourceSchemaVersion == null
+                ? copiedDefinition.schemaVersion() : sourceSchemaVersion);
+        target.put("definitionJson", sourceDefinitionJson == null || sourceDefinitionJson.isBlank()
+                ? codec.canonicalJson(copiedDefinition) : sourceDefinitionJson);
+        target.put("compiledJson", null);
+        target.put("definitionHash", null);
+        target.put("validationReportJson", null);
+        projectLegacyRules(copiedDefinition, target);
         if (mapper.insertTemplateVersion(target) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_COPY_FAILED", "Template version copy failed");
         Long id = longValue(target.get("versionId"));
@@ -288,10 +295,13 @@ public class TodoDefinitionService
                     "Definition action idempotency key conflict");
     }
 
-    private void copyRule(Map<String, Object> source, Map<String, Object> target, String snake,
-            String camel)
+    private void projectLegacyRules(TodoDefinitionDocument definition, Map<String, Object> target)
     {
-        target.put(camel, value(source, snake, camel));
+        target.put("ownerRuleJson", JSON.toJSONString(definition.owner().config()));
+        target.put("dodRuleJson", JSON.toJSONString(definition.dod().config()));
+        target.put("slaRuleJson", JSON.toJSONString(definition.sla().config()));
+        target.put("nextRuleJson", JSON.toJSONString(definition.routing().config()));
+        target.put("uiSchemaJson", JSON.toJSONString(definition.ui().config()));
     }
 
     private Object value(Map<String, Object> map, String snake, String camel)

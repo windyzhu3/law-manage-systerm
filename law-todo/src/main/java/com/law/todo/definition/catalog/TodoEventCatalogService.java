@@ -19,7 +19,8 @@ public class TodoEventCatalogService
     public String payloadSchema(String eventType, int payloadVersion)
     {
         Map<String, Object> entry = mapper.selectEventCatalog(eventType, payloadVersion);
-        if (entry == null || entry.isEmpty() || "RETIRED".equals(text(value(entry, "status", "status"))))
+        if (entry == null || entry.isEmpty()
+                || !"ACTIVE".equals(text(value(entry, "status", "status"))))
             return null;
         return text(value(entry, "payload_schema_json", "payloadSchemaJson"));
     }

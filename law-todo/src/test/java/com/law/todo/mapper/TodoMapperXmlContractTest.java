@@ -56,4 +56,37 @@ class TodoMapperXmlContractTest
             assertTrue(update.contains("where version_id=#{versionId} and status in ('DRAFT','BLOCKED')"));
         }
     }
+
+    @Test
+    void legacyDefinitionReadsUseTheSmallestEnabledTriggerAndPayloadVersionOne() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            for (String statementId : new String[] { "selectTemplateVersion", "selectTemplateVersionById" })
+            {
+                int start = xml.indexOf("<select id=\"" + statementId + "\"");
+                int end = xml.indexOf("</select>", start);
+                assertTrue(start >= 0 && end > start, statementId);
+                String select = xml.substring(start, end);
+                assertTrue(select.contains("legacy_trigger.event_type"), statementId);
+                assertTrue(select.contains("legacy_trigger.condition_json"), statementId);
+                assertTrue(select.contains("1 payload_version"), statementId);
+                assertTrue(select.contains("min(candidate.trigger_rule_id)"), statementId);
+                assertTrue(select.contains("candidate.enabled='Y'"), statementId);
+            }
+        }
+    }
+
+    @Test
+    void eventCatalogLookupIsActiveOnly() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            int start = xml.indexOf("<select id=\"selectEventCatalog\"");
+            int end = xml.indexOf("</select>", start);
+            assertTrue(xml.substring(start, end).contains("status='ACTIVE'"));
+        }
+    }
 }

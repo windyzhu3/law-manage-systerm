@@ -10,6 +10,7 @@ create table todo_event_catalog (
   producer varchar(100) null,
   sample_payload_json json null,
   status varchar(20) not null default 'ACTIVE',
+  constraint chk_todo_event_catalog_status check (status in ('ACTIVE','DRAFT','DISABLED','RETIRED')),
   create_by varchar(64) null,
   create_time datetime not null default current_timestamp,
   update_by varchar(64) null,

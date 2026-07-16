@@ -18,10 +18,14 @@ import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
 /** Converts the five legacy template-version JSON columns into schema version one. */
 public final class LegacyDefinitionAdapter
 {
+    /** Legacy trigger rows predate payload schema versioning; compatibility is fixed at version one. */
+    private static final int LEGACY_PAYLOAD_VERSION = 1;
+
     public TodoDefinitionDocument fromLegacy(Map<String, Object> row)
     {
         String eventType = text(value(row, "event_type", "eventType"));
-        int payloadVersion = intValue(value(row, "payload_version", "payloadVersion"), 1);
+        int payloadVersion = intValue(value(row, "payload_version", "payloadVersion"),
+                LEGACY_PAYLOAD_VERSION);
         EventRule event = new EventRule(eventType, payloadVersion,
                 object(value(row, "condition_json", "conditionJson")));
 

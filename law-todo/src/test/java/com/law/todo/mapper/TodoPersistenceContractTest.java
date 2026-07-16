@@ -24,4 +24,12 @@ class TodoPersistenceContractTest
         assertTrue(sql.contains("idx_todo_sla_queue"));
         assertTrue(sql.contains("idx_todo_business_relation"));
     }
+
+    @Test void eventCatalogMigrationLimitsSupportedStatuses() throws Exception
+    {
+        Path migration = Path.of("..", "ruoyi-admin", "src", "main", "resources", "db", "migration",
+                "V0_20_2__todo_catalog_and_decisions.sql");
+        String sql = Files.readString(migration).toLowerCase().replaceAll("\\s+", " ");
+        assertTrue(sql.contains("check (status in ('active','draft','disabled','retired'))"));
+    }
 }
