@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -181,6 +182,26 @@ class TodoEventServiceTest
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(version));
         TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
         assertEquals("{\"requiredFields\":[\"contactResult\"]}",created.getDodSnapshotJson());
+    }
+
+    @Test void snapshotsGraphPositionOnTriggeredRootTodo()
+    {
+        Map<String,Object> version=new java.util.HashMap<>(rule());
+        version.put("compiled_json","""
+                {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "routing":{"config":{"start":"review","nodes":[{"key":"review","type":"TASK","templateVersionId":22},{"key":"end","type":"END"}],
+                 "edges":[{"key":"done","from":"review","to":"end"}]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        version.put("definition_hash","abc123");version.put("ui_schema_json","{}");version.put("sla_rule_json","{}");version.put("payload_version",1);
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(version));
+        doAnswer(invocation->{TodoInstance todo=invocation.getArgument(0);todo.setTodoId(41L);return 1;}).when(mapper).insertInstance(any());
+
+        TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
+
+        assertEquals(41L,created.getRootTodoId());assertEquals("review",created.getRouteNodeKey());
+        assertEquals("41:review:LEAD:7:0",created.getOccurrenceKey());assertEquals("abc123",created.getDefinitionHash());
+        assertTrue(created.getRouteToken().contains("\"rootTodoId\":41"));
+        verify(mapper).updateInitialRouteSnapshot(41L,41L,created.getRouteToken(),created.getOccurrenceKey());
     }
 
     private Map<String,Object> rule(){return Map.of("template_id",3L,"template_version_id",22L,"template_name","首联","owner_rule_json","ROLE:5");}

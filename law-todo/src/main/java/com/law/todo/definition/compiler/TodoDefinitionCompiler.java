@@ -17,6 +17,7 @@ import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIss
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.validation.TodoFormValidator;
+import com.law.todo.routing.RoutingGraphValidator;
 
 @Component
 public class TodoDefinitionCompiler
@@ -65,6 +66,8 @@ public class TodoDefinitionCompiler
         validateStructure(definition, errors);
         for (TodoFormValidator.ValidationIssue formIssue : new TodoFormValidator().validateDefinition(definition))
             errors.add(issue(formIssue.code(), formIssue.path(), formIssue.message()));
+        if (definition.routing() != null && !definition.routing().config().isEmpty())
+            errors.addAll(new RoutingGraphValidator(conditionValidator).validate(definition.routing()));
         for (String code : decisions.unresolvedBlockingDecisions(definition.decisionRefs()))
             errors.add(issue("TODO_DECISION_UNRESOLVED", "decisionRefs",
                     "Decision is missing or unresolved: " + code));

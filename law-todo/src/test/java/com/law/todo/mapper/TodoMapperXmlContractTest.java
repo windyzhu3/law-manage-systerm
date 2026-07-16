@@ -109,4 +109,19 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,original_due_at,remind80_due_at,overdue100_due_at,escalate150_due_at,status)"));
         }
     }
+
+    @Test void routingPersistenceUsesDatabaseUniquenessAndLockedJoinClaims() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            assertTrue(xml.contains("definition_hash,ui_schema_snapshot,sla_snapshot,route_node_key,route_token,occurrence_key,payload_schema_version"));
+            assertTrue(xml.contains("#{definitionHash},#{uiSchemaSnapshot},#{slaSnapshot},#{routeNodeKey},#{routeToken},#{occurrenceKey},#{payloadSchemaVersion}"));
+            assertTrue(xml.contains("insert ignore into todo_route_token"));
+            assertTrue(xml.contains("insert ignore into todo_route_join"));
+            assertTrue(xml.contains("selectRouteJoinForUpdate"));
+            assertTrue(xml.contains("for update"));
+            assertTrue(xml.contains("status='WAITING'"));
+        }
+    }
 }

@@ -42,6 +42,15 @@ public final class ConditionValidator
         }
     }
 
+    /** Runtime decode for a condition already schema-checked as part of an immutable definition. */
+    public ConditionExpression decodeCanonical(Map<String, ?> document)
+    {
+        DecodedCondition decoded = ConditionExpression.decodeMap(document);
+        if (!decoded.canonical())
+            throw new IllegalArgumentException("Runtime route conditions must use the canonical $expression envelope");
+        return decoded.expression();
+    }
+
     private ValidationResult validate(DecodedCondition decoded, String schemaJson,
             boolean allowLegacyWithoutSchema)
     {

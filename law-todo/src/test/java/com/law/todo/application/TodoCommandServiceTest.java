@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.command.TodoActionCommands.ActionCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -20,12 +21,15 @@ import com.law.todo.domain.TodoAccessPolicy;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.spi.TodoCompletionHandler;
 
 @ExtendWith(MockitoExtension.class)
 class TodoCommandServiceTest
 {
     @Mock TodoMapper mapper;
     @Mock TodoAccessPolicy access;
+    @Mock TodoCompletionHandler completionHandler;
+    @Mock TodoRoutingService routing;
     TodoCommandService service;
 
     @BeforeEach void setUp(){service=new TodoCommandService(mapper,access);}
@@ -117,6 +121,22 @@ class TodoCommandServiceTest
         TodoInstance todo=todo(5L,"IN_PROGRESS",7L);when(mapper.selectById(5L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);when(mapper.updateStatusConditionally(5L,"IN_PROGRESS","IN_PROGRESS",9L,"alice")).thenReturn(1);when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
         service.transfer(5L,new ActionCommand("move-2",null,Map.of("targetOwnerId",9L)),new Actor(7L,"alice",3L));
         ArgumentCaptor<Map<String,Object>> log=ArgumentCaptor.forClass(Map.class);verify(mapper).insertActionIfAbsent(log.capture());assertEquals("{\"targetOwnerId\":9}",log.getValue().get("payloadJson"));
+    }
+
+    @Test void completionHandlerAndGraphRoutingShareCompletionFlowInThatOrder()
+    {
+        TodoInstance todo=todo(8L,"SUBMITTED",7L);todo.setTemplateVersionId(12L);
+        when(mapper.selectById(8L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(12L)).thenReturn(Map.of());
+        when(mapper.updateStatusConditionally(8L,"SUBMITTED","COMPLETED",null,"alice")).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);when(completionHandler.supports(todo)).thenReturn(true);
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(completionHandler),routing);
+
+        guarded.complete(8L,new ActionCommand("done-8",null,Map.of("approved",true)),new Actor(7L,"alice",3L));
+
+        InOrder order=org.mockito.Mockito.inOrder(completionHandler,routing);
+        order.verify(completionHandler).complete(todo,Map.of("approved",true),7L,"alice");
+        order.verify(routing).advance(todo,Map.of("approved",true));
     }
 
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}

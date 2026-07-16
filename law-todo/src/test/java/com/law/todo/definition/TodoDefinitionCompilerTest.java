@@ -43,6 +43,17 @@ class TodoDefinitionCompilerTest
 
         assertEquals("TODO_DOD_FIELD_NOT_RENDERABLE",compiler.compile(mismatched).errors().get(0).code());
     }
+    @Test void compilerRejectsUnboundedCanonicalRoutingLoop()
+    {
+        TodoDefinitionDocument source=valid();
+        RoutingGraph routing=new RoutingGraph(Map.of("start","loop",
+                "nodes",List.of(Map.of("key","loop","type","LOOP"),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","body","from","loop","to","end","branchKey","BODY"))));
+        TodoDefinitionDocument invalid=new TodoDefinitionDocument(source.schemaVersion(),source.templateCode(),source.event(),source.owner(),
+                source.dod(),source.sla(),source.ui(),routing,source.autoActions(),source.decisionRefs(),source.acceptanceRefs());
+
+        assertTrue(compiler.compile(invalid).errors().stream().anyMatch(issue->"TODO_ROUTE_LOOP_UNBOUNDED".equals(issue.code())));
+    }
     @Mock TodoMapper mapper;
     private TodoDefinitionCompiler compiler;
 

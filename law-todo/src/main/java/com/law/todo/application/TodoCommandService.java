@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,7 @@ public class TodoCommandService
     @Transactional public TodoInstance claim(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=require(id);if(!access.canClaim(t,a.userId(),a.deptId()))deny();validateAction(t,c,"CLAIM");return transition(t,TodoStatus.CLAIMED,a.userId(),"CLAIM",c,a);}
     @Transactional public TodoInstance start(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);validateAction(t,c,"START");return transition(t,TodoStatus.IN_PROGRESS,null,"START",c,a);}
     @Transactional public TodoInstance submit(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);validateAction(t,c,"SUBMIT");return transition(t,TodoStatus.SUBMITTED,null,"SUBMIT",c,a);}
-    @Transactional public TodoInstance complete(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);validateAction(t,c,"COMPLETE");TodoInstance completed=transition(t,TodoStatus.COMPLETED,null,"COMPLETE",c,a);for(TodoCompletionHandler h:completionHandlers)if(h.supports(completed))h.complete(completed,c.payload(),a.userId(),a.userName());createNext(completed);return completed;}
+    @Transactional public TodoInstance complete(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);validateAction(t,c,"COMPLETE");TodoInstance completed=transition(t,TodoStatus.COMPLETED,null,"COMPLETE",c,a);for(TodoCompletionHandler h:completionHandlers)if(h.supports(completed))h.complete(completed,c.payload(),a.userId(),a.userName());if(routing!=null)routing.advance(completed,c.payload());return completed;}
     @Transactional public TodoInstance returnTodo(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=require(id);if(!access.canReview(t,a.userId()))deny();validateAction(t,c,"RETURN");return transition(t,TodoStatus.RETURNED,null,"RETURN",c,a);}
     @Transactional public TodoInstance transfer(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);TodoStatus current=TodoStatus.fromCode(t.getStatus());if(current.isTerminal())throw new TodoException("TODO_TERMINAL","终态待办不能转派");validateAction(t,c,"TRANSFER");Object targetValue=c.payload().get("targetOwnerId");if(targetValue==null)throw new TodoException("TODO_TRANSFER_OWNER_REQUIRED","新负责人不能为空");Long target=Long.valueOf(String.valueOf(targetValue));return transition(t,current,target,"TRANSFER",c,a);}
     @Transactional public TodoInstance cancel(Long id,ActionCommand c,Actor a){if(repeated(id,c))return mapper.selectById(id);TodoInstance t=requireOwner(id,a);validateAction(t,c,"CANCEL");return transition(t,TodoStatus.CANCELLED,null,"CANCEL",c,a);}
@@ -70,6 +69,5 @@ public class TodoCommandService
             if(legacyTypes!=null&&!legacyTypes.isEmpty())dod.validate(todo,List.of(),legacyTypes,command.fields(),mapper.selectAttachmentTypes(todo.getTodoId()));
         }
     }
-    private void createNext(TodoInstance todo){if(routing==null)return;Map<String,Object> version=mapper.selectTemplateVersionById(todo.getTemplateVersionId());if(version==null)return;String json=text(value(version,"next_rule_json","nextRuleJson"));if(json==null||json.isBlank())return;JSONObject next=JSON.parseObject(json);Long versionId=next.getLong("templateVersionId");if(versionId!=null)routing.createNext(todo,versionId,next.getString("title"),next.getString("businessType")==null?todo.getBusinessType():next.getString("businessType"),todo.getBusinessId());}
     private Object value(Map<String,Object> map,String a,String b){return map.containsKey(a)?map.get(a):map.get(b);}private String text(Object value){return value==null?null:String.valueOf(value);}
 }

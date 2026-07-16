@@ -27,6 +27,10 @@ import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
 import com.law.todo.expression.ConditionEvaluator;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.definition.codec.TodoDefinitionCodec;
+import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.routing.RouteToken;
+import com.law.todo.routing.RouteTokenStatus;
 
 @Service
 public class TodoEventService
@@ -63,8 +67,10 @@ public class TodoEventService
             todo.setStatus("CREATED");todo.setPriority("NORMAL");todo.setSlaStatus("NORMAL");
             todo.setCreatedAt(LocalDateTime.now());todo.setTriggerEventId(event.eventId());todo.setTriggerIdempotencyKey(key);
             todo.setDodSnapshotJson(text(value(rule,"dod_rule_json","dodRuleJson")));
+            snapshotGraph(todo,rule);
             applySla(todo,text(value(rule,"sla_rule_json","slaRuleJson")));
             try{mapper.insertInstance(todo);}catch(DuplicateKeyException duplicate){TodoInstance concurrent=mapper.selectByTriggerKey(key);if(concurrent!=null){result.add(concurrent);continue;}throw duplicate;}
+            initializeRootRoute(todo);
             createRelation(todo);
             createSla(todo,rule);
             if(assignment.candidateType()!=null){Map<String,Object> c=new HashMap<>();c.put("todoId",todo.getTodoId());c.put("candidateType",assignment.candidateType());c.put("candidateValue",assignment.candidateValue());mapper.insertCandidate(c);}
@@ -79,4 +85,25 @@ public class TodoEventService
     private void createSla(TodoInstance todo,Map<String,Object> rule){if(todo.getDueAt()==null)return;String json=text(value(rule,"sla_rule_json","slaRuleJson"));JSONObject r=JSON.parseObject(json);Map<String,Object> calendar=mapper.selectCalendarByCode(r.getString("calendarCode"));TodoSlaService.ThresholdPlan plan=new TodoSlaService(mapper,null).planThresholds(todo.getCreatedAt(),todo.getDueAt(),calendar(calendar));Map<String,Object> record=new HashMap<>();record.put("todoId",todo.getTodoId());record.put("calendarId",longValue(value(calendar,"calendar_id","calendarId")));record.put("startAt",todo.getCreatedAt());record.put("dueAt",todo.getDueAt());record.put("remind80DueAt",plan.remind80DueAt());record.put("overdue100DueAt",plan.overdue100DueAt());record.put("escalate150DueAt",plan.escalate150DueAt());mapper.insertSlaRecord(record);}
     private WorkCalendar calendar(Map<String,Object> value){Set<DayOfWeek> days=EnumSet.noneOf(DayOfWeek.class);for(String d:text(value(value,"work_days","workDays")).split(","))days.add(DayOfWeek.of(Integer.parseInt(d)));LocalTime start=time(value(value,"work_start","workStart")),end=time(value(value,"work_end","workEnd"));Map<LocalDate,Boolean> exceptions=new HashMap<>();String json=text(value(value,"exception_json","exceptionJson"));if(json!=null&&!json.isBlank())for(Map.Entry<String,Object> e:JSON.parseObject(json).entrySet())exceptions.put(LocalDate.parse(e.getKey()),Boolean.valueOf(String.valueOf(e.getValue())));return new WorkCalendar(days,start,end,exceptions);}
     private LocalTime time(Object value){String s=String.valueOf(value);return LocalTime.parse(s.length()>=8?s.substring(0,8):s);}
+    private void snapshotGraph(TodoInstance todo,Map<String,Object> version)
+    {
+        String compiled=text(value(version,"compiled_json","compiledJson"));if(compiled==null||compiled.isBlank())compiled=text(value(version,"definition_json","definitionJson"));
+        if(compiled==null||compiled.isBlank())return;
+        TodoDefinitionDocument definition=new TodoDefinitionCodec().read(compiled);
+        if(definition.routing()==null||!definition.routing().config().containsKey("nodes"))return;
+        todo.setDefinitionHash(text(value(version,"definition_hash","definitionHash")));
+        todo.setUiSchemaSnapshot(text(value(version,"ui_schema_json","uiSchemaJson")));
+        todo.setSlaSnapshot(text(value(version,"sla_rule_json","slaRuleJson")));
+        todo.setRouteNodeKey(text(definition.routing().config().get("start")));
+        todo.setPayloadSchemaVersion(definition.event()==null?Integer.valueOf(String.valueOf(value(version,"payload_version","payloadVersion"))):definition.event().payloadVersion());
+    }
+    private void initializeRootRoute(TodoInstance todo)
+    {
+        if(todo.getRouteNodeKey()==null||todo.getTodoId()==null)return;
+        todo.setRootTodoId(todo.getTodoId());
+        RouteToken token=new RouteToken(todo.getTodoId(),todo.getRouteNodeKey(),null,0,RouteTokenStatus.ACTIVE);
+        todo.setRouteToken(JSON.toJSONString(token));
+        todo.setOccurrenceKey(todo.getTodoId()+":"+todo.getRouteNodeKey()+":"+todo.getBusinessType()+":"+todo.getBusinessId()+":0");
+        mapper.updateInitialRouteSnapshot(todo.getTodoId(),todo.getTodoId(),todo.getRouteToken(),todo.getOccurrenceKey());
+    }
 }

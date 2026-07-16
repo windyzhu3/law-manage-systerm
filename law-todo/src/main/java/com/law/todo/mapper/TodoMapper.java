@@ -97,4 +97,10 @@ public interface TodoMapper
     List<Map<String,Object>> selectOperationsDashboard();
     int insertRegeneratedTodo(Map<String,Object> value);
     int cancelActiveByBusiness(@Param("businessType") String businessType,@Param("businessId") Long businessId,@Param("exceptTodoId") Long exceptTodoId,@Param("operator") String operator);
+    int insertRouteTokenIfAbsent(Map<String,Object> token);
+    int insertRouteJoinIfAbsent(Map<String,Object> join);
+    Map<String,Object> selectRouteJoinForUpdate(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
+    List<String> selectRouteTokenArrivals(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
+    int advanceRouteJoinConditionally(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
+    int updateInitialRouteSnapshot(@Param("todoId") Long todoId,@Param("rootTodoId") Long rootTodoId,@Param("routeToken") String routeToken,@Param("occurrenceKey") String occurrenceKey);
 }

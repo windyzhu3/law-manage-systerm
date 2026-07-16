@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,22 +23,73 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.domain.service.WorkingTimeCalculator;
 import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.routing.TodoRoutingEngine.NextTask;
+import com.law.todo.routing.TodoRoutingEngine;
+import com.law.todo.routing.TodoRoutingEngine.RouteContext;
+import com.law.todo.routing.TodoRoutingEngine.RouteStatus;
+import com.law.todo.routing.TodoRoutingEngine.RoutingResult;
+import com.law.todo.routing.RouteToken;
+import com.law.todo.routing.RouteTokenStatus;
+import com.law.todo.definition.codec.TodoDefinitionCodec;
+import com.law.todo.definition.model.TodoDefinitionDocument;
 
 @Service
 public class TodoRoutingService
 {
     private final TodoMapper mapper;
     private final TodoAssignmentResolver resolver;
+    private final TodoRoutingEngine engine;
 
     public TodoRoutingService(TodoMapper mapper)
     {
-        this(mapper, new TodoAssignmentResolver());
+        this(mapper, new TodoAssignmentResolver(), new TodoRoutingEngine(mapper));
     }
 
     public TodoRoutingService(TodoMapper mapper, TodoAssignmentResolver resolver)
     {
+        this(mapper, resolver, new TodoRoutingEngine(mapper));
+    }
+
+    @Autowired
+    public TodoRoutingService(TodoMapper mapper, TodoAssignmentResolver resolver, TodoRoutingEngine engine)
+    {
         this.mapper = mapper;
         this.resolver = resolver;
+        this.engine = engine;
+    }
+
+    /** Compatibility boundary: canonical graphs are executed, otherwise legacy single-next is preserved. */
+    @Transactional
+    public RoutingResult advance(TodoInstance previous, Map<String, Object> payload)
+    {
+        Map<String, Object> version = mapper.selectTemplateVersionById(previous.getTemplateVersionId());
+        if (version == null || version.isEmpty()) return new RoutingResult(RouteStatus.ENDED, java.util.List.of());
+        String compiled = text(value(version, "compiled_json", "compiledJson"));
+        if (compiled == null || compiled.isBlank()) compiled = text(value(version, "definition_json", "definitionJson"));
+        if (compiled != null && !compiled.isBlank())
+        {
+            TodoDefinitionDocument definition = new TodoDefinitionCodec().read(compiled);
+            if (definition.routing() != null && definition.routing().config().containsKey("nodes"))
+            {
+                String start = text(definition.routing().config().get("start"));
+                Long root = previous.getRootTodoId() == null ? previous.getTodoId() : previous.getRootTodoId();
+                RouteToken token = previous.getRouteToken() == null || previous.getRouteToken().isBlank()
+                        ? new RouteToken(root, previous.getRouteNodeKey() == null ? start : previous.getRouteNodeKey(), null, 0, RouteTokenStatus.ACTIVE)
+                        : JSON.parseObject(previous.getRouteToken(), RouteToken.class);
+                int schemaVersion = previous.getPayloadSchemaVersion() != null ? previous.getPayloadSchemaVersion()
+                        : definition.event() == null ? 1 : definition.event().payloadVersion();
+                String hash = previous.getDefinitionHash() == null ? text(value(version, "definition_hash", "definitionHash")) : previous.getDefinitionHash();
+                RoutingResult result = engine.advance(new RouteContext(definition.routing(), hash, schemaVersion, previous, token, payload));
+                for (NextTask task : result.tasks()) createNext(previous, task, hash, schemaVersion);
+                return result;
+            }
+        }
+        String nextJson = text(value(version, "next_rule_json", "nextRuleJson"));
+        if (nextJson == null || nextJson.isBlank()) return new RoutingResult(RouteStatus.ENDED, java.util.List.of());
+        JSONObject next = JSON.parseObject(nextJson);Long versionId = next.getLong("templateVersionId");
+        if (versionId == null) return new RoutingResult(RouteStatus.ENDED, java.util.List.of());
+        createNext(previous, versionId, next.getString("title"), next.getString("businessType") == null ? previous.getBusinessType() : next.getString("businessType"), previous.getBusinessId());
+        return new RoutingResult(RouteStatus.ADVANCED, java.util.List.of());
     }
 
     @Transactional
@@ -66,6 +118,34 @@ public class TodoRoutingService
         insertCandidate(next, assignment);
         insertSla(next, version);
         return next;
+    }
+
+    /** Graph-routing facade. The occurrence identity is intentionally independent of template version. */
+    @Transactional
+    public TodoInstance createNext(TodoInstance previous, NextTask task, String definitionHash, int payloadSchemaVersion)
+    {
+        String businessType = previous.getBusinessType();Long businessId = previous.getBusinessId();
+        String key = task.token().rootTodoId() + ":" + task.nodeKey() + ":" + businessType + ":" + businessId + ":" + task.token().occurrence();
+        TodoInstance existing = mapper.selectByNextKey(key);
+        if (existing != null) return existing;
+        Map<String, Object> version = mapper.selectTemplateVersionById(task.templateVersionId());
+        if (version == null || version.isEmpty()) throw new TodoException("TODO_NEXT_TEMPLATE_NOT_FOUND", "Next Todo template version does not exist");
+        if (!"PUBLISHED".equals(text(version.get("status"))))
+            throw new TodoException("TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED", "TASK must reference a published template version");
+        Assignment assignment = assignment(version, previous);
+        TodoInstance next = build(previous, version, assignment, task.templateVersionId(), null, businessType, businessId, key);
+        next.setDefinitionHash(definitionHash);
+        next.setUiSchemaSnapshot(text(value(version, "ui_schema_json", "uiSchemaJson")));
+        next.setSlaSnapshot(text(value(version, "sla_rule_json", "slaRuleJson")));
+        next.setRouteNodeKey(task.nodeKey());next.setRouteToken(JSON.toJSONString(task.token()));
+        next.setOccurrenceKey(key);next.setPayloadSchemaVersion(payloadSchemaVersion);
+        applySla(next, next.getSlaSnapshot());
+        try { mapper.insertInstance(next); }
+        catch (DuplicateKeyException duplicate)
+        {
+            TodoInstance concurrent = mapper.selectByNextKey(key);if (concurrent != null) return concurrent;throw duplicate;
+        }
+        insertRelation(next);insertCandidate(next, assignment);insertSla(next, version);return next;
     }
 
     private TodoInstance build(TodoInstance previous, Map<String, Object> version, Assignment assignment, Long versionId,
@@ -111,7 +191,8 @@ public class TodoRoutingService
     private void applySla(TodoInstance todo, String json)
     {
         if (json == null || json.isBlank()) return;
-        JSONObject rule = JSON.parseObject(json);Map<String, Object> calendar = mapper.selectCalendarByCode(rule.getString("calendarCode"));
+        JSONObject rule = JSON.parseObject(json);if (rule.getLongValue("minutes") <= 0 || rule.getString("calendarCode") == null) return;
+        Map<String, Object> calendar = mapper.selectCalendarByCode(rule.getString("calendarCode"));
         if (calendar == null || calendar.isEmpty()) throw new TodoException("TODO_SLA_CALENDAR_NOT_FOUND", "下一待办的SLA工作日历不存在");
         todo.setDueAt(new WorkingTimeCalculator().addWorkingMinutes(todo.getCreatedAt(), rule.getLongValue("minutes"), calendar(calendar)));
     }

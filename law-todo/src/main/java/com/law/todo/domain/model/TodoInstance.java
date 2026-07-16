@@ -9,7 +9,9 @@ public class TodoInstance
     private Long ownerId; private Long ownerDeptId; private String status; private String priority; private String slaStatus;
     private LocalDateTime createdAt; private LocalDateTime dueAt; private LocalDateTime completedAt;
     private Long previousTodoId; private Long rootTodoId; private String triggerEventId; private String triggerIdempotencyKey;
-    private String nextIdempotencyKey; private String dodSnapshotJson; private Integer version;
+    private String nextIdempotencyKey; private String dodSnapshotJson; private Integer version; private String routeNodeKey;
+    private String definitionHash; private String uiSchemaSnapshot; private String slaSnapshot; private String routeToken;
+    private String occurrenceKey; private Integer payloadSchemaVersion;
     public Long getTodoId(){return todoId;} public void setTodoId(Long v){todoId=v;}
     public String getTodoNo(){return todoNo;} public void setTodoNo(String v){todoNo=v;}
     public Long getTemplateId(){return templateId;} public void setTemplateId(Long v){templateId=v;}
@@ -34,4 +36,11 @@ public class TodoInstance
     public String getNextIdempotencyKey(){return nextIdempotencyKey;} public void setNextIdempotencyKey(String v){nextIdempotencyKey=v;}
     public String getDodSnapshotJson(){return dodSnapshotJson;} public void setDodSnapshotJson(String v){dodSnapshotJson=v;}
     public Integer getVersion(){return version;} public void setVersion(Integer v){version=v;}
+    public String getRouteNodeKey(){return routeNodeKey;} public void setRouteNodeKey(String v){routeNodeKey=v;}
+    public String getDefinitionHash(){return definitionHash;} public void setDefinitionHash(String v){definitionHash=v;}
+    public String getUiSchemaSnapshot(){return uiSchemaSnapshot;} public void setUiSchemaSnapshot(String v){uiSchemaSnapshot=v;}
+    public String getSlaSnapshot(){return slaSnapshot;} public void setSlaSnapshot(String v){slaSnapshot=v;}
+    public String getRouteToken(){return routeToken;} public void setRouteToken(String v){routeToken=v;}
+    public String getOccurrenceKey(){return occurrenceKey;} public void setOccurrenceKey(String v){occurrenceKey=v;}
+    public Integer getPayloadSchemaVersion(){return payloadSchemaVersion;} public void setPayloadSchemaVersion(Integer v){payloadSchemaVersion=v;}
 }
