@@ -81,6 +81,32 @@ class TodoDefinitionCodecTest
     }
 
     @Test
+    void legacyScalarOwnerRulesBecomeTypeAndOperand()
+    {
+        assertLegacyOwner("\"PAYLOAD:toOwnerId\"", "PAYLOAD", "toOwnerId");
+        assertLegacyOwner("\"PAYLOAD:mainLawyerId\"", "PAYLOAD", "mainLawyerId");
+        assertLegacyOwner("\"ROLE:7\"", "ROLE", "7");
+        assertLegacyOwner("\"USER:8\"", "USER", "8");
+        assertLegacyOwner("\"DEPT:9\"", "DEPT", "9");
+        assertLegacyOwner("\"POST:10\"", "POST", "10");
+    }
+
+    @Test
+    void nestedArraysCannotChangeCanonicalJsonAfterConstruction()
+    {
+        String[] candidates = { "alice" };
+        int[] levels = { 1, 2 };
+        TodoDefinitionDocument definition = fixture("TD-001",
+                Map.of("candidates", candidates, "levels", levels));
+        String canonical = codec.canonicalJson(definition);
+
+        candidates[0] = "bob";
+        levels[0] = 99;
+
+        assertEquals(canonical, codec.canonicalJson(definition));
+    }
+
+    @Test
     void persistenceStoresTheVersionedDocumentAndCompilationArtifacts() throws Exception
     {
         String mapper = Files.readString(Path.of("src", "main", "resources", "mapper", "todo",
@@ -129,5 +155,13 @@ class TodoDefinitionCodecTest
         row.put("next_rule_json", "{\"templateVersionId\":2}");
         row.put("ui_schema_json", "{\"type\":\"form\"}");
         return row;
+    }
+
+    private void assertLegacyOwner(String json, String type, String operand)
+    {
+        TodoDefinitionDocument definition = adapter.fromLegacy(
+                Map.of("template_code", "TD-LEGACY", "owner_rule_json", json));
+        assertEquals(type, definition.owner().config().get("type"));
+        assertEquals(operand, definition.owner().config().get("operand"));
     }
 }

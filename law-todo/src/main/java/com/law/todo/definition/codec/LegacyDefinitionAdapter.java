@@ -28,7 +28,7 @@ public final class LegacyDefinitionAdapter
         return new TodoDefinitionDocument(1,
                 text(value(row, "template_code", "templateCode")),
                 event,
-                new OwnerRule(object(value(row, "owner_rule_json", "ownerRuleJson"))),
+                ownerRule(value(row, "owner_rule_json", "ownerRuleJson")),
                 new DodRule(object(value(row, "dod_rule_json", "dodRuleJson"))),
                 new SlaRule(object(value(row, "sla_rule_json", "slaRuleJson"))),
                 new UiSchema(object(value(row, "ui_schema_json", "uiSchemaJson"))),
@@ -36,6 +36,24 @@ public final class LegacyDefinitionAdapter
                 actionRules(value(row, "auto_actions_json", "autoActionsJson")),
                 strings(value(row, "decision_refs_json", "decisionRefsJson")),
                 strings(value(row, "acceptance_refs_json", "acceptanceRefsJson")));
+    }
+
+    private static OwnerRule ownerRule(Object value)
+    {
+        Object parsed = parsed(value);
+        if (parsed instanceof String scalar)
+        {
+            String[] parts = scalar.split(":", 2);
+            if (parts.length == 2 && ownerType(parts[0]) && !parts[1].isBlank())
+                return new OwnerRule(Map.of("type", parts[0], "operand", parts[1]));
+        }
+        return new OwnerRule(objectValue(parsed));
+    }
+
+    private static boolean ownerType(String value)
+    {
+        return "PAYLOAD".equals(value) || "USER".equals(value) || "ROLE".equals(value)
+                || "DEPT".equals(value) || "POST".equals(value);
     }
 
     private static List<AutoActionRule> actionRules(Object value)
@@ -58,7 +76,11 @@ public final class LegacyDefinitionAdapter
 
     private static Map<String, Object> object(Object value)
     {
-        Object parsed = parsed(value);
+        return objectValue(parsed(value));
+    }
+
+    private static Map<String, Object> objectValue(Object parsed)
+    {
         if (parsed == null)
             return Map.of();
         if (parsed instanceof Map<?, ?> map)

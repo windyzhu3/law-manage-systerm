@@ -37,4 +37,23 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("<include refid=\"visibleTodoPredicate\"/>"));
         }
     }
+
+    @Test
+    void definitionUpdateAtomicallyPersistsCanonicalAndLegacyProjections() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            int start = xml.indexOf("<update id=\"updateDefinitionDocument\">");
+            int end = xml.indexOf("</update>", start);
+            assertTrue(start >= 0 && end > start);
+            String update = xml.substring(start, end);
+            assertTrue(update.contains("owner_rule_json=#{ownerRuleJson}"));
+            assertTrue(update.contains("dod_rule_json=#{dodRuleJson}"));
+            assertTrue(update.contains("sla_rule_json=#{slaRuleJson}"));
+            assertTrue(update.contains("next_rule_json=#{nextRuleJson}"));
+            assertTrue(update.contains("ui_schema_json=#{uiSchemaJson}"));
+            assertTrue(update.contains("where version_id=#{versionId} and status in ('DRAFT','BLOCKED')"));
+        }
+    }
 }

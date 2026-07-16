@@ -1,5 +1,6 @@
 package com.law.todo.definition.model;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -99,17 +100,36 @@ public record TodoDefinitionDocument(
     {
         if (value instanceof Map<?, ?> map)
         {
-            Map<Object, Object> copy = new LinkedHashMap<>();
-            map.forEach((key, entry) -> copy.put(key, immutableJsonValue(entry)));
+            Map<String, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, entry) -> {
+                if (!(key instanceof String text))
+                    throw new IllegalArgumentException("JSON object keys must be strings");
+                copy.put(text, immutableJsonValue(entry));
+            });
             return Collections.unmodifiableMap(copy);
         }
-        if (value instanceof List<?> list)
+        if (value != null && value.getClass().isArray())
         {
-            List<Object> copy = new java.util.ArrayList<>(list.size());
-            list.forEach(entry -> copy.add(immutableJsonValue(entry)));
+            int length = java.lang.reflect.Array.getLength(value);
+            List<Object> copy = new java.util.ArrayList<>(length);
+            for (int index = 0; index < length; index++)
+                copy.add(immutableJsonValue(java.lang.reflect.Array.get(value, index)));
             return Collections.unmodifiableList(copy);
         }
-        return value;
+        if (value instanceof Collection<?> collection)
+        {
+            List<Object> copy = new java.util.ArrayList<>(collection.size());
+            collection.forEach(entry -> copy.add(immutableJsonValue(entry)));
+            return Collections.unmodifiableList(copy);
+        }
+        if (value == null || value instanceof String || value instanceof Boolean
+                || value instanceof Byte || value instanceof Short || value instanceof Integer
+                || value instanceof Long || value instanceof Float || value instanceof Double
+                || value instanceof java.math.BigInteger || value instanceof java.math.BigDecimal)
+            return value;
+        if (value instanceof Character character)
+            return character.toString();
+        throw new IllegalArgumentException("Unsupported JSON value type: " + value.getClass().getName());
     }
 
     private static <T> List<T> immutableList(List<T> value)
