@@ -5,11 +5,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.domain.TodoAccessPolicy;
 import com.law.todo.domain.TodoException;
+import com.law.todo.domain.TodoStatus;
+import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
@@ -33,5 +37,28 @@ class TodoQueryServiceTest
 
         assertEquals("COMPLETE",form.action());assertEquals("abc",form.definitionHash());
         assertEquals("OK",form.defaults().get("result"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "CREATED,CLAIM,CLAIMED",
+        "CLAIMED,START,IN_PROGRESS",
+        "RETURNED,START,IN_PROGRESS",
+        "IN_PROGRESS,SUBMIT,SUBMITTED",
+        "SUBMITTED,COMPLETE,COMPLETED"
+    })
+    void formAdvertisesOnlyLegalNextAction(String currentStatus,String expectedAction,
+            String targetStatus)
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(3L);todo.setStatus(currentStatus);
+        todo.setTemplateVersionId(9L);
+        when(mapper.selectById(3L)).thenReturn(todo);when(access.canView(todo,7L,3L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of("dod_rule_json","{}","ui_schema_json","{}"));
+
+        var form=new TodoQueryService(mapper,access).form(3L,new Actor(7L,"alice",3L));
+
+        assertEquals(expectedAction,form.action());
+        assertEquals(true,TodoStatusTransitions.canTransition(TodoStatus.fromCode(currentStatus),
+                TodoStatus.fromCode(targetStatus)));
     }
 }
