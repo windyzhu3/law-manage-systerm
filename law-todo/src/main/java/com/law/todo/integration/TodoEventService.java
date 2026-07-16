@@ -22,11 +22,14 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.service.WorkingTimeCalculator;
 import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
+import com.law.todo.expression.ConditionEvaluator;
+import com.law.todo.expression.ConditionExpression;
 
 @Service
 public class TodoEventService
 {
     private final TodoMapper mapper;private final TodoAssignmentResolver resolver;
+    private final ConditionEvaluator conditionEvaluator = new ConditionEvaluator();
     public TodoEventService(TodoMapper mapper,TodoAssignmentResolver resolver){this.mapper=mapper;this.resolver=resolver;}
     public boolean supports(String eventType,String aggregateType){List<Map<String,Object>> rules=mapper.selectTriggerRules(eventType,aggregateType);return rules!=null&&!rules.isEmpty();}
     @Transactional public List<TodoInstance> handle(TodoEvent event)
@@ -63,7 +66,7 @@ public class TodoEventService
         }
         return result;
     }
-    private boolean matches(Map<String,Object> rule,Map<String,Object> payload){String json=text(value(rule,"condition_json","conditionJson"));if(json==null||json.isBlank())return true;JSONObject conditions=JSON.parseObject(json);for(Map.Entry<String,Object> condition:conditions.entrySet()){Object actual=payload.get(condition.getKey());if(actual==null||!String.valueOf(actual).equals(String.valueOf(condition.getValue())))return false;}return true;}
+    private boolean matches(Map<String,Object> rule,Map<String,Object> payload){String json=text(value(rule,"condition_json","conditionJson"));if(json==null||json.isBlank())return true;ConditionExpression condition=ConditionExpression.fromJson(json);return conditionEvaluator.evaluate(condition,payload);}
     private void createRelation(TodoInstance todo){Map<String,Object> relation=new HashMap<>();relation.put("todoId",todo.getTodoId());relation.put("businessType",todo.getBusinessType());relation.put("businessId",todo.getBusinessId());relation.put("businessNo",todo.getBusinessNo());relation.put("relationType","PRIMARY");mapper.insertRelation(relation);}
     private Object value(Map<String,Object> map,String a,String b){return map.containsKey(a)?map.get(a):map.get(b);}private Long longValue(Object v){return v==null?null:Long.valueOf(String.valueOf(v));}private String text(Object v){return v==null?null:String.valueOf(v);}
     private void applySla(TodoInstance todo,String json){if(json==null||json.isBlank())return;JSONObject rule=JSON.parseObject(json);Map<String,Object> calendar=mapper.selectCalendarByCode(rule.getString("calendarCode"));if(calendar==null||calendar.isEmpty())return;LocalDateTime start=todo.getCreatedAt();WorkCalendar c=calendar(calendar);todo.setDueAt(new WorkingTimeCalculator().addWorkingMinutes(start,rule.getLongValue("minutes"),c));}

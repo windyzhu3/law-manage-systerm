@@ -15,6 +15,9 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.expression.ConditionExpression;
+import com.law.todo.expression.ConditionTypeChecker;
+import com.law.todo.expression.ConditionTypeChecker.JsonSchema;
 
 @Component
 public class TodoDefinitionCompiler
@@ -22,6 +25,7 @@ public class TodoDefinitionCompiler
     private final TodoDefinitionCodec codec;
     private final TodoEventCatalogService eventCatalog;
     private final TodoDecisionService decisions;
+    private final ConditionTypeChecker conditionTypeChecker = new ConditionTypeChecker();
 
     @Autowired
     public TodoDefinitionCompiler(TodoEventCatalogService eventCatalog, TodoDecisionService decisions)
@@ -71,17 +75,38 @@ public class TodoDefinitionCompiler
             if (definition.event().payloadVersion() <= 0)
                 errors.add(issue("TODO_EVENT_PAYLOAD_VERSION_INVALID", "event.payloadVersion",
                         "Payload version must be positive"));
-            if (!blank(definition.event().eventType()) && definition.event().payloadVersion() > 0
-                    && eventCatalog.payloadSchema(definition.event().eventType(),
-                            definition.event().payloadVersion()) == null)
-                errors.add(issue("TODO_EVENT_CATALOG_NOT_FOUND", "event",
-                        "Event payload schema is not registered"));
+            if (!blank(definition.event().eventType()) && definition.event().payloadVersion() > 0)
+            {
+                String payloadSchema = eventCatalog.payloadSchema(definition.event().eventType(),
+                        definition.event().payloadVersion());
+                if (payloadSchema == null)
+                    errors.add(issue("TODO_EVENT_CATALOG_NOT_FOUND", "event",
+                            "Event payload schema is not registered"));
+                else
+                    validateCondition(definition.event(), payloadSchema, errors);
+            }
         }
         requireSection(definition.owner(), "owner", errors);
         requireSection(definition.dod(), "dod", errors);
         requireSection(definition.sla(), "sla", errors);
         requireSection(definition.ui(), "ui", errors);
         requireSection(definition.routing(), "routing", errors);
+    }
+
+    private void validateCondition(TodoDefinitionDocument.EventRule event, String payloadSchema,
+            List<ValidationIssue> errors)
+    {
+        if (event.condition().isEmpty())
+            return;
+        try
+        {
+            ConditionExpression expression = ConditionExpression.fromMap(event.condition());
+            errors.addAll(conditionTypeChecker.check(expression, JsonSchema.parse(payloadSchema)));
+        }
+        catch (IllegalArgumentException invalid)
+        {
+            errors.add(issue("TODO_CONDITION_INVALID", "event.condition", invalid.getMessage()));
+        }
     }
 
     private static void requireSection(Object section, String path, List<ValidationIssue> errors)

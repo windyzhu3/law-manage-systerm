@@ -91,6 +91,27 @@ class TodoEventServiceTest
         verify(mapper,times(1)).insertInstance(any());
     }
 
+    @Test void createsTodoWhenNestedConditionTreeMatches()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","""
+                {"type":"AND","conditions":[
+                  {"field":"amount","operator":"GTE","value":100},
+                  {"type":"OR","conditions":[
+                    {"field":"type","operator":"EQ","value":"A"},
+                    {"field":"type","operator":"EQ","value":"B"}
+                  ]}
+                ]}
+                """);
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        TodoEvent matching=new TodoEvent("evt-3","LEAD_ASSIGNED","LEAD",9L,"L-9",Map.of("amount",100,"type","B"));
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(matching);
+
+        assertEquals(1,result.size());
+        verify(mapper).insertInstance(any());
+    }
+
     @Test void createsSlaRecordFromTemplateRule()
     {
         Map<String,Object> slaRule=new java.util.HashMap<>(rule());slaRule.put("sla_rule_json","{\"calendarCode\":\"DEFAULT\",\"minutes\":60}");

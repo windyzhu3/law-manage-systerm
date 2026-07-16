@@ -108,6 +108,22 @@ class TodoDefinitionCompilerTest
     }
 
     @Test
+    void preflightRejectsConditionFieldsMissingFromTheEventSchema()
+    {
+        when(mapper.selectEventCatalog("LEAD_CREATED", 1)).thenReturn(Map.of(
+                "event_type", "LEAD_CREATED", "payload_version", 1,
+                "payload_schema_json", "{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"}}}",
+                "status", "ACTIVE"));
+        TodoDefinitionDocument definition = definition("LEAD_CREATED", List.of(),
+                Map.of("field", "class.classLoader", "operator", "EQ", "value", "x"));
+
+        DefinitionValidationReport report = compiler.compile(definition);
+
+        assertTrue(report.errors().stream()
+                .anyMatch(error -> error.code().equals("TODO_CONDITION_FIELD_UNKNOWN")));
+    }
+
+    @Test
     void springConstructorIsExplicitWhenCompilerHasMultipleConstructors() throws Exception
     {
         assertTrue(TodoDefinitionCompiler.class
@@ -127,8 +143,14 @@ class TodoDefinitionCompilerTest
 
     private TodoDefinitionDocument definition(String eventType, List<String> decisions)
     {
+        return definition(eventType, decisions, Map.of());
+    }
+
+    private TodoDefinitionDocument definition(String eventType, List<String> decisions,
+            Map<String, Object> condition)
+    {
         return new TodoDefinitionDocument(1, "TD-001",
-                new EventRule(eventType, 1, Map.of()),
+                new EventRule(eventType, 1, condition),
                 new OwnerRule(Map.of("type", "USER", "userId", 7)),
                 new DodRule(Map.of("requiredFields", List.of("summary"))),
                 new SlaRule(Map.of()), new UiSchema(Map.of("fields", List.of("summary"))),
