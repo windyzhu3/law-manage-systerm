@@ -92,6 +92,12 @@ public class TodoDefinitionCompiler
         Object rawNodes = definition.routing().config().get("nodes");
         if (!(rawNodes instanceof List<?> nodes))
             return;
+        String start = String.valueOf(definition.routing().config().get("start"));
+        Map<?, ?> startNode = nodes.stream().filter(Map.class::isInstance).map(Map.class::cast)
+                .filter(node -> start.equals(String.valueOf(node.get("key")))).findFirst().orElse(null);
+        if (startNode != null && !"TASK".equals(String.valueOf(startNode.get("type"))))
+            errors.add(issue("TODO_ROUTE_START_TASK_REQUIRED", "routing.start",
+                    "Routing start must be a TASK owned by the definition being compiled"));
         boolean hasTask = nodes.stream().filter(Map.class::isInstance).map(Map.class::cast)
                 .anyMatch(node -> "TASK".equals(String.valueOf(node.get("type"))));
         if (!hasTask)
@@ -102,7 +108,6 @@ public class TodoDefinitionCompiler
                     "TASK reference validation requires an explicit compilation context"));
             return;
         }
-        String start = String.valueOf(definition.routing().config().get("start"));
         Map<Long, TemplateVersion> resolved = new HashMap<>();
         for (int index = 0; index < nodes.size(); index++)
         {

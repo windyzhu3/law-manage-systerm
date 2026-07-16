@@ -196,6 +196,42 @@ class TodoRoutingEngineTest
         assertTrue(new RoutingGraphValidator().validate(graph).stream().noneMatch(issue->"TODO_ROUTE_FORK_RECONVERGENCE_INVALID".equals(issue.code())));
     }
 
+    @Test void joinBranchesMustMatchTokensThatCanActuallyArrive()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("a","TASK",Map.of("templateVersionId",10L)),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("join","JOIN",Map.of("joinMode","ALL","branches",List.of("a","c"))),
+                node("end","END",Map.of())),List.of(edge("fork-a","fork","a","a",10),edge("fork-b","fork","b","b",0),
+                edge("a-join","a","join",null,0),edge("b-join","b","join",null,0),edge("join-end","join","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .anyMatch(issue->"TODO_ROUTE_JOIN_BRANCH_FLOW_INVALID".equals(issue.code())));
+    }
+
+    @Test void nestedForkTokensAreValidatedAtTheirActualJoin()
+    {
+        RoutingGraph graph=graph(List.of(node("outer","FORK",Map.of()),node("nested","FORK",Map.of()),
+                node("x","TASK",Map.of("templateVersionId",10L)),node("y","TASK",Map.of("templateVersionId",11L)),
+                node("innerJoin","JOIN",Map.of("joinMode","ALL","branches",List.of("x","y"))),node("end","END",Map.of())),
+                List.of(edge("outer-nested","outer","nested","a",10),edge("outer-end","outer","end","b",0),
+                        edge("nested-x","nested","x","x",10),edge("nested-y","nested","y","y",0),
+                        edge("x-join","x","innerJoin",null,0),edge("y-join","y","innerJoin",null,0),
+                        edge("join-end","innerJoin","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .noneMatch(issue->"TODO_ROUTE_JOIN_BRANCH_FLOW_INVALID".equals(issue.code())));
+    }
+
+    @Test void forkBranchesMayShareAnEndNodeWithoutReconvergenceFailure()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("a","TASK",Map.of("templateVersionId",10L)),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("end","END",Map.of())),
+                List.of(edge("fork-a","fork","a","a",10),edge("fork-b","fork","b","b",0),
+                        edge("a-end","a","end",null,0),edge("b-end","b","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .noneMatch(issue->"TODO_ROUTE_FORK_RECONVERGENCE_INVALID".equals(issue.code())));
+    }
+
     private RouteContext context(RoutingGraph graph, RouteToken token, Map<String, Object> payload)
     {
         TodoInstance todo = new TodoInstance();

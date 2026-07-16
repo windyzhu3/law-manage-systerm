@@ -46,6 +46,7 @@ public final class RoutingGraphValidator
         validateReachability(start, byKey, outgoing, issues);
         validateCycles(byKey, outgoing, issues);
         validateForkReconvergence(byKey, outgoing, issues);
+        validateJoinBranchFlow(start, byKey, outgoing, issues);
         return List.copyOf(issues);
     }
 
@@ -204,11 +205,53 @@ public final class RoutingGraphValidator
     private void collectUntilJoin(String key,Map<String,Map<String,Object>> nodes,
             Map<String,List<Map<String,Object>>> outgoing,Set<String> result,Set<String> visited)
     {
-        if(!visited.add(key)||!nodes.containsKey(key)||"JOIN".equals(text(nodes.get(key).get("type"))))return;
+        if(!visited.add(key)||!nodes.containsKey(key))return;
+        String type=text(nodes.get(key).get("type"));
+        if("JOIN".equals(type)||"END".equals(type))return;
         result.add(key);
         for(Map<String,Object> edge:outgoing.getOrDefault(key,List.of()))
             collectUntilJoin(text(edge.get("to")),nodes,outgoing,result,visited);
     }
+
+    private void validateJoinBranchFlow(String start,Map<String,Map<String,Object>> nodes,
+            Map<String,List<Map<String,Object>>> outgoing,List<ValidationIssue> issues)
+    {
+        if(!nodes.containsKey(start)||"JOIN".equals(text(nodes.get(start).get("type"))))return;
+        final String noBranch="\u0000";
+        Map<String,Set<String>> arrivals=new HashMap<>();
+        ArrayDeque<BranchFlow> queue=new ArrayDeque<>();
+        Set<BranchFlow> visited=new HashSet<>();
+        queue.add(new BranchFlow(start,noBranch));
+        while(!queue.isEmpty())
+        {
+            BranchFlow flow=queue.remove();
+            if(!visited.add(flow)||!nodes.containsKey(flow.nodeKey()))continue;
+            String type=text(nodes.get(flow.nodeKey()).get("type"));
+            if("END".equals(type))continue;
+            if("JOIN".equals(type))
+            {
+                arrivals.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(flow.branchKey());
+                for(Map<String,Object> edge:outgoing.getOrDefault(flow.nodeKey(),List.of()))
+                    queue.add(new BranchFlow(text(edge.get("to")),noBranch));
+                continue;
+            }
+            for(Map<String,Object> edge:outgoing.getOrDefault(flow.nodeKey(),List.of()))
+            {
+                String branch="FORK".equals(type)?text(edge.get("branchKey")):flow.branchKey();
+                queue.add(new BranchFlow(text(edge.get("to")),blank(branch)?noBranch:branch));
+            }
+        }
+        nodes.forEach((key,node)->{
+            if(!"JOIN".equals(text(node.get("type")))||key.equals(start))return;
+            Set<String> expected=new HashSet<>(strings(node.get("branches")));
+            Set<String> actual=arrivals.getOrDefault(key,Set.of());
+            if(!actual.equals(expected))
+                issues.add(issue("TODO_ROUTE_JOIN_BRANCH_FLOW_INVALID","routing.nodes."+key+".branches",
+                        "JOIN branches must exactly match the branch tokens that can arrive"));
+        });
+    }
+
+    private record BranchFlow(String nodeKey,String branchKey) { }
 
     @SuppressWarnings("unchecked")
     private void validateCondition(Object value, String path, List<ValidationIssue> issues)
