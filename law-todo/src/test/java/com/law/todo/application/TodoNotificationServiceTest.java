@@ -2,6 +2,8 @@ package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +16,9 @@ import com.law.todo.mapper.TodoMapper;
 import com.law.todo.notification.StationNotificationAdapter;
 import com.law.todo.notification.TodoNotificationPort.NotificationCommand;
 import com.law.todo.notification.TodoNotificationPort;
+import org.mockito.ArgumentCaptor;
+import java.util.List;
+import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
 class TodoNotificationServiceTest
@@ -38,16 +43,31 @@ class TodoNotificationServiceTest
         assertFalse(new TodoNotificationService(mapper).read(9L, 7L));
     }
 
-    @Test void stationAdapterUsesCommandIdempotencyKeyAndMinimumPayload()
+    @Test void stationAdapterSeparatesSourceIdentityFromDerivedDeliveryIdentity()
     {
         NotificationCommand command=new NotificationCommand("extension:31:approved",9L,7L,"EXTENSION_APPROVED","Extension approved","Due date updated");
-        when(mapper.insertStationNotification(org.mockito.ArgumentMatchers.anyMap())).thenReturn(1,0);
         StationNotificationAdapter adapter=new StationNotificationAdapter(mapper);
 
-        adapter.send(command);adapter.send(command);
+        adapter.send(command);
 
-        verify(mapper,org.mockito.Mockito.times(2)).insertStationNotification(org.mockito.ArgumentMatchers.argThat(row ->
-            row.size()==7 && "extension:31:approved".equals(row.get("idempotencyKey"))));
+        verify(mapper).insertStationNotification(org.mockito.ArgumentMatchers.argThat(row ->
+            row.size()==8 && "extension:31:approved".equals(row.get("sourceId"))
+                && !row.get("sourceId").equals(row.get("deliveryKey"))));
+    }
+
+    @Test void deliveryIdentityUsesTheWholeRequiredTupleAndExactTupleReplays()
+    {
+        StationNotificationAdapter adapter=new StationNotificationAdapter(mapper);
+        adapter.send(new NotificationCommand("same-source",9L,7L,"TYPE_A","one",null));
+        adapter.send(new NotificationCommand("same-source",9L,8L,"TYPE_A","two",null));
+        adapter.send(new NotificationCommand("same-source",9L,7L,"TYPE_B","three",null));
+        adapter.send(new NotificationCommand("same-source",10L,7L,"TYPE_A","four",null));
+        adapter.send(new NotificationCommand("same-source",9L,7L,"TYPE_A","replay",null));
+        ArgumentCaptor<Map<String,Object>> captor=ArgumentCaptor.forClass(Map.class);
+        verify(mapper,org.mockito.Mockito.times(5)).insertStationNotification(captor.capture());
+        List<String> keys=captor.getAllValues().stream().map(row->String.valueOf(row.get("deliveryKey"))).toList();
+        assertNotEquals(keys.get(0),keys.get(1));assertNotEquals(keys.get(0),keys.get(2));assertNotEquals(keys.get(0),keys.get(3));
+        assertEquals(keys.get(0),keys.get(4));
     }
 
     @Test void notificationServiceDelegatesTypedCommandToPort()

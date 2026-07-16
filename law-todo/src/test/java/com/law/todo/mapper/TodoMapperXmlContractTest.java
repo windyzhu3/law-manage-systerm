@@ -89,4 +89,18 @@ class TodoMapperXmlContractTest
             assertTrue(xml.substring(start, end).contains("status='ACTIVE'"));
         }
     }
+
+    @Test void notificationAndThresholdWritesCarryRaceSafeIdentity() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            assertTrue(xml.contains("insertSlaNotification"));assertTrue(xml.contains("delivery_key"));
+            assertTrue(xml.contains("#{sourceId},#{deliveryKey}"));
+            assertTrue(xml.contains("s.version=#{expectedVersion}"));
+            assertTrue(xml.contains("s.remind80_due_at=#{plannedDueAt}"));
+            assertTrue(xml.contains("s.remind80_due_at&lt;=#{now}"));
+            assertTrue(xml.contains("insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,original_due_at,remind80_due_at,overdue100_due_at,escalate150_due_at,status)"));
+        }
+    }
 }

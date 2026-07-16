@@ -34,6 +34,7 @@ import com.law.todo.notification.TodoNotificationPort;
 import com.law.todo.notification.TodoNotificationPort.NotificationCommand;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,8 +51,9 @@ public class TodoExtensionService
     @Transactional public ExtensionView request(Long todoId,RequestCommand command,Actor actor)
     {
         requireAction(command==null?null:command.actionId());requireActor(actor);requireProofIds(command.proofFileObjectIds());
-        Map<String,Object> prior=mapper.selectExtensionByActionId(command.actionId());
-        if(present(prior)){requireRequestReplay(todoId,command.actionId(),prior);return view(prior);}
+        Map<String,Object> prior=mapper.selectExtensionActionById(command.actionId());
+        if(present(prior))return replayRequest(todoId,prior);
+        Map<String,Object> claimed=claim(command.actionId(),"REQUEST",todoId,null,actor);if(present(claimed))return replayRequest(todoId,claimed);
         Map<String,Object> context=mapper.selectExtensionContext(todoId);requireContext(todoId,context,actor);
         Policy policy=policy(context);LocalDateTime current=date(value(context,"due_at","dueAt"));
         requireLater(current,command.requestedDueAt());
@@ -67,13 +69,14 @@ public class TodoExtensionService
         row.put("proofFileIdsJson",JSON.toJSONString(command.proofFileObjectIds()));row.put("requesterId",actor.userId());
         row.put("requesterName",actor.userName());row.put("requesterDeptId",actor.deptId());row.put("policyVersionId",policy.versionId());
         row.put("pendingSlaMode",policy.pendingMode().name());
-        if(mapper.insertExtensionRequest(row)<=0)
+        try
         {
-            prior=mapper.selectExtensionByActionId(command.actionId());if(present(prior)){requireRequestReplay(todoId,command.actionId(),prior);return view(prior);}
-            fail("TODO_EXTENSION_PENDING_EXISTS","A pending extension request already exists");
+            if(mapper.insertExtensionRequest(row)<=0)pendingConflict(todoId);
         }
+        catch(DuplicateKeyException ex){pendingConflict(todoId);}
         Long extensionId=number(row.get("extensionId"));Map<String,Object> saved=mapper.selectExtensionById(extensionId);
         if(!present(saved))fail("TODO_EXTENSION_WRITE_FAILED","Extension request was not persisted");
+        completeAction(command.actionId(),extensionId,PENDING.name());
         notifications.send(new NotificationCommand("extension:"+extensionId+":requested",todoId,actor.userId(),
             "EXTENSION_REQUESTED","Extension requested","Extension request is pending approval"));
         return view(saved);
@@ -88,9 +91,11 @@ public class TodoExtensionService
     private ExtensionView decide(Long extensionId,DecisionCommand command,Actor actor,ExtensionStatus target)
     {
         requireAction(command==null?null:command.actionId());requireActor(actor);
-        Map<String,Object> prior=mapper.selectExtensionByActionId(command.actionId());
-        if(present(prior)){requireDecisionReplay(extensionId,command.actionId(),prior);return view(prior);}
+        String actionType=target==APPROVED?"APPROVE":"REJECT";Map<String,Object> prior=mapper.selectExtensionActionById(command.actionId());
+        if(present(prior))return replayDecision(extensionId,actionType,prior);
         Map<String,Object> current=mapper.selectExtensionById(extensionId);if(!present(current))fail("TODO_EXTENSION_NOT_FOUND","Extension request does not exist");
+        Long todoId=number(value(current,"todo_id","todoId"));Map<String,Object> claimed=claim(command.actionId(),actionType,todoId,extensionId,actor);
+        if(present(claimed))return replayDecision(extensionId,actionType,claimed);
         if(status(current)!=PENDING)fail("TODO_EXTENSION_ALREADY_DECIDED","Extension request has already been decided");
         if(target==APPROVED)validateApprovalStillAllowed(current);
         Map<String,Object> decision=new HashMap<>();decision.put("extensionId",extensionId);decision.put("fromStatus",PENDING.name());
@@ -99,15 +104,14 @@ public class TodoExtensionService
         if(target==APPROVED)decision.put("approvedDueAt",date(value(current,"requested_due_at","requestedDueAt")));
         if(mapper.decideExtensionConditionally(decision)<=0)
         {
-            Map<String,Object> replay=mapper.selectExtensionByActionId(command.actionId());
-            if(present(replay)){requireDecisionReplay(extensionId,command.actionId(),replay);return view(replay);}
             Map<String,Object> winner=mapper.selectExtensionById(extensionId);
             if(present(winner)&&status(winner)!=PENDING)fail("TODO_EXTENSION_ALREADY_DECIDED","Extension request has already been decided");
             fail("TODO_CONCURRENT_MODIFICATION","Extension request changed concurrently");
         }
         if(target==APPROVED)applyApproved(current);
         Map<String,Object> saved=mapper.selectExtensionById(extensionId);if(!present(saved))fail("TODO_EXTENSION_NOT_FOUND","Extension request does not exist");
-        Long todoId=number(value(saved,"todo_id","todoId")),recipient=number(value(saved,"requester_id","requesterId"));
+        completeAction(command.actionId(),extensionId,target.name());
+        Long recipient=number(value(saved,"requester_id","requesterId"));
         if(recipient!=null)notifications.send(new NotificationCommand("extension:"+extensionId+":"+target.name().toLowerCase(),todoId,recipient,
             "EXTENSION_"+target.name(),"Extension "+target.name().toLowerCase(),target==APPROVED?"Due date updated":"Due date unchanged"));
         return view(saved);
@@ -128,12 +132,12 @@ public class TodoExtensionService
         LocalDateTime start=date(value(extension,"start_at","startAt"));LocalDateTime original=date(value(extension,"original_due_at","originalDueAt"));
         LocalDateTime effective=date(value(extension,"effective_due_at","effectiveDueAt"));if(effective==null)effective=original;
         LocalDateTime requested=date(value(extension,"requested_due_at","requestedDueAt"));WorkCalendar calendar=calendar(extension);
-        long total=Math.max(1,new WorkingTimeCalculator().workingMinutesBetween(start,requested,calendar));
+        TodoSlaService.ThresholdPlan plan=new TodoSlaService(mapper,null).planThresholds(start,requested,calendar);
         Map<String,Object> update=new HashMap<>();update.put("todoId",number(value(extension,"todo_id","todoId")));
         update.put("expectedDueAt",effective);update.put("approvedDueAt",requested);
-        update.put("remind80DueAt",fired(extension,"remind80")?null:new WorkingTimeCalculator().addWorkingMinutes(start,total*80/100,calendar));
-        update.put("overdue100DueAt",fired(extension,"overdue100")?null:new WorkingTimeCalculator().addWorkingMinutes(start,total,calendar));
-        update.put("escalate150DueAt",fired(extension,"escalate150")?null:new WorkingTimeCalculator().addWorkingMinutes(start,total*150/100,calendar));
+        update.put("remind80DueAt",fired(extension,"remind80")?null:plan.remind80DueAt());
+        update.put("overdue100DueAt",fired(extension,"overdue100")?null:plan.overdue100DueAt());
+        update.put("escalate150DueAt",fired(extension,"escalate150")?null:plan.escalate150DueAt());
         if(mapper.applyApprovedExtension(update)<=0)fail("TODO_CONCURRENT_MODIFICATION","SLA changed concurrently");
     }
 
@@ -183,16 +187,28 @@ public class TodoExtensionService
             pending==null?PendingSlaMode.CONTINUE:PendingSlaMode.valueOf(String.valueOf(pending)));
     }
 
-    private void requireRequestReplay(Long todoId,String actionId,Map<String,Object> prior)
+    private Map<String,Object> claim(String actionId,String actionType,Long todoId,Long extensionId,Actor actor)
     {
-        if(!actionId.equals(string(value(prior,"request_action_id","requestActionId")))||!todoId.equals(number(value(prior,"todo_id","todoId"))))
-            fail("TODO_ACTION_ID_CONFLICT","Action id is already used by another extension action");
+        Map<String,Object> row=new HashMap<>();row.put("actionId",actionId);row.put("actionType",actionType);row.put("todoId",todoId);row.put("extensionId",extensionId);
+        row.put("actorId",actor.userId());row.put("actorName",actor.userName());row.put("actorDeptId",actor.deptId());
+        try{if(mapper.insertExtensionActionIfAbsent(row)>0)return null;}catch(DuplicateKeyException ignored){ }
+        Map<String,Object> winner=mapper.selectExtensionActionById(actionId);if(!present(winner))fail("TODO_EXTENSION_ACTION_CONFLICT","Extension action could not be claimed");return winner;
     }
-    private void requireDecisionReplay(Long extensionId,String actionId,Map<String,Object> prior)
+    private ExtensionView replayRequest(Long todoId,Map<String,Object> action)
     {
-        if(!extensionId.equals(number(value(prior,"extension_id","extensionId")))||!actionId.equals(string(value(prior,"decision_action_id","decisionActionId"))))
-            fail("TODO_ACTION_ID_CONFLICT","Action id is already used by another extension action");
+        if(!"REQUEST".equals(string(value(action,"action_type","actionType")))||!todoId.equals(number(value(action,"todo_id","todoId")))||!"APPLIED".equals(string(value(action,"action_status","actionStatus"))))
+            fail("TODO_EXTENSION_ACTION_CONFLICT","actionId belongs to a different extension action");
+        Map<String,Object> saved=mapper.selectExtensionById(number(value(action,"extension_id","extensionId")));if(!present(saved))fail("TODO_EXTENSION_ACTION_CONFLICT","Recorded extension result is missing");return view(saved);
     }
+    private ExtensionView replayDecision(Long extensionId,String actionType,Map<String,Object> action)
+    {
+        if(!actionType.equals(string(value(action,"action_type","actionType")))||!extensionId.equals(number(value(action,"extension_id","extensionId")))||!"APPLIED".equals(string(value(action,"action_status","actionStatus"))))
+            fail("TODO_EXTENSION_ACTION_CONFLICT","actionId belongs to a different extension decision");
+        String expectedStatus="APPROVE".equals(actionType)?APPROVED.name():REJECTED.name();
+        Map<String,Object> saved=mapper.selectExtensionById(extensionId);if(!expectedStatus.equals(string(value(action,"result_status","resultStatus")))||!present(saved)||!expectedStatus.equals(status(saved).name()))fail("TODO_EXTENSION_ACTION_CONFLICT","Recorded decision result does not match");return view(saved);
+    }
+    private void completeAction(String actionId,Long extensionId,String resultStatus){Map<String,Object> row=new HashMap<>();row.put("actionId",actionId);row.put("extensionId",extensionId);row.put("resultStatus",resultStatus);if(mapper.completeExtensionAction(row)<=0)fail("TODO_EXTENSION_ACTION_CONFLICT","Extension action result could not be recorded");}
+    private void pendingConflict(Long todoId){Map<String,Object> pending=mapper.selectPendingExtensionByTodoId(todoId);if(present(pending))fail("TODO_EXTENSION_PENDING_EXISTS","A pending extension request already exists");fail("TODO_EXTENSION_ACTION_CONFLICT","Extension request collided with another action");}
     private void requireProofIds(List<Long> ids){if(ids!=null&&ids.stream().anyMatch(id->id==null||id<=0))fail("TODO_EXTENSION_PROOF_INVALID","Proof fileObjectIds must be positive");}
     private void requireLater(LocalDateTime current,LocalDateTime requested){if(current==null||requested==null||!requested.isAfter(current))fail("TODO_EXTENSION_DUE_INVALID","Requested due time must be later than the current effective due time");}
     private void requireAction(String value){if(value==null||value.isBlank()||value.length()>64)fail("TODO_ACTION_ID_INVALID","actionId is required and limited to 64 characters");}

@@ -54,27 +54,40 @@ class TodoSlaServiceTest
     @Test void weekendDoesNotAdvanceSlaThreshold()
     {
         LocalDateTime now=LocalDateTime.of(2026,7,11,12,0);
-        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"start_at",LocalDateTime.of(2026,7,10,17,0),"due_at",LocalDateTime.of(2026,7,13,10,0),"work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}")));
+        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"version",3,"remind80_due_at",LocalDateTime.of(2026,7,13,9,36),"overdue100_due_at",LocalDateTime.of(2026,7,13,10,0),"escalate150_due_at",LocalDateTime.of(2026,7,13,11,0))));
 
         assertEquals(0,new TodoSlaService(mapper,access).scanAndEscalate(now));
-        verify(mapper,never()).markSlaThreshold(any(),any(),any());
+        verify(mapper,never()).markSlaThreshold(any(),any(),any(),any(),any());
     }
 
     @Test void scanMarksReachedThresholdsOnce()
     {
         LocalDateTime now=LocalDateTime.of(2026,7,12,12,0);
-        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"percent",151)));
-        when(mapper.markSlaThreshold(1L,"REMINDED_80",now)).thenReturn(1);
-        when(mapper.markSlaThreshold(1L,"OVERDUE_100",now)).thenReturn(1);
-        when(mapper.markSlaThreshold(1L,"ESCALATED_150",now)).thenReturn(1);
+        LocalDateTime p80=now.minusHours(3),p100=now.minusHours(2),p150=now.minusHours(1);
+        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"version",4,"remind80_due_at",p80,"overdue100_due_at",p100,"escalate150_due_at",p150)));
+        when(mapper.markSlaThreshold(1L,"REMINDED_80",p80,4,now)).thenReturn(1);
+        when(mapper.markSlaThreshold(1L,"OVERDUE_100",p100,5,now)).thenReturn(1);
+        when(mapper.markSlaThreshold(1L,"ESCALATED_150",p150,6,now)).thenReturn(1);
         new TodoSlaService(mapper,access).scanAndEscalate(now);
-        verify(mapper).markSlaThreshold(1L,"REMINDED_80",now);
-        verify(mapper).markSlaThreshold(1L,"OVERDUE_100",now);
-        verify(mapper).markSlaThreshold(1L,"ESCALATED_150",now);
+        verify(mapper).markSlaThreshold(1L,"REMINDED_80",p80,4,now);
+        verify(mapper).markSlaThreshold(1L,"OVERDUE_100",p100,5,now);
+        verify(mapper).markSlaThreshold(1L,"ESCALATED_150",p150,6,now);
         verify(mapper).insertSlaNotification(1L,"REMINDED_80",now);
         verify(mapper).insertSlaNotification(1L,"OVERDUE_100",now);
         verify(mapper).insertSlaNotification(1L,"ESCALATED_150",now);
         verify(mapper).insertSupervisorEscalationNotification(1L,now);
+    }
+
+    @Test void staleScanCannotFireAfterApprovalReplansThreshold()
+    {
+        LocalDateTime now=LocalDateTime.of(2026,7,12,12,0),oldPlan=now.minusMinutes(1);
+        when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"version",4,
+            "remind80_due_at",oldPlan,"overdue100_due_at",now.plusHours(1),"escalate150_due_at",now.plusHours(2))));
+        when(mapper.markSlaThreshold(1L,"REMINDED_80",oldPlan,4,now)).thenReturn(0);
+
+        assertEquals(0,new TodoSlaService(mapper,access).scanAndEscalate(now));
+
+        verify(mapper,never()).insertSlaNotification(any(),any(),any());
     }
 
     @Test void ownerCanPauseSla()
@@ -98,5 +111,14 @@ class TodoSlaServiceTest
 
         assertEquals(List.of("cycle-a:1","cycle-a:2","cycle-a:3"),values.stream().map(value->value.occurrenceKey()).toList());
         assertEquals(LocalDateTime.of(2026,7,13,9,0),values.get(0).dueAt());
+    }
+
+    @Test void plansAllThresholdsOverTheWorkingCalendarInterval()
+    {
+        WorkCalendar c=new WorkCalendar(Set.of(DayOfWeek.MONDAY,DayOfWeek.TUESDAY,DayOfWeek.WEDNESDAY,DayOfWeek.THURSDAY,DayOfWeek.FRIDAY),LocalTime.of(9,0),LocalTime.of(18,0),Map.of());
+        var plan=new TodoSlaService(mapper,access).planThresholds(LocalDateTime.of(2026,7,10,17,0),LocalDateTime.of(2026,7,13,10,0),c);
+        assertEquals(LocalDateTime.of(2026,7,13,9,36),plan.remind80DueAt());
+        assertEquals(LocalDateTime.of(2026,7,13,10,0),plan.overdue100DueAt());
+        assertEquals(LocalDateTime.of(2026,7,13,11,0),plan.escalate150DueAt());
     }
 }

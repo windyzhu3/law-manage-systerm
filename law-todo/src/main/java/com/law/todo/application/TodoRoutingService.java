@@ -120,7 +120,8 @@ public class TodoRoutingService
     {
         if (todo.getDueAt() == null) return;
         JSONObject rule = JSON.parseObject(text(value(version, "sla_rule_json", "slaRuleJson")));Map<String, Object> calendar = mapper.selectCalendarByCode(rule.getString("calendarCode"));
-        Map<String, Object> record = new HashMap<>();record.put("todoId", todo.getTodoId());record.put("calendarId", longValue(value(calendar, "calendar_id", "calendarId")));record.put("startAt", todo.getCreatedAt());record.put("dueAt", todo.getDueAt());mapper.insertSlaRecord(record);
+        TodoSlaService.ThresholdPlan plan=new TodoSlaService(mapper,null).planThresholds(todo.getCreatedAt(),todo.getDueAt(),calendar(calendar));
+        Map<String, Object> record = new HashMap<>();record.put("todoId", todo.getTodoId());record.put("calendarId", longValue(value(calendar, "calendar_id", "calendarId")));record.put("startAt", todo.getCreatedAt());record.put("dueAt", todo.getDueAt());record.put("remind80DueAt",plan.remind80DueAt());record.put("overdue100DueAt",plan.overdue100DueAt());record.put("escalate150DueAt",plan.escalate150DueAt());mapper.insertSlaRecord(record);
     }
 
     private WorkCalendar calendar(Map<String, Object> value)

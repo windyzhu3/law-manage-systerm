@@ -27,7 +27,7 @@ public interface TodoMapper
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
     List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);
-    int markSlaThreshold(@Param("todoId") Long todoId,@Param("threshold") String threshold,@Param("now") LocalDateTime now);
+    int markSlaThreshold(@Param("todoId") Long todoId,@Param("threshold") String threshold,@Param("plannedDueAt") LocalDateTime plannedDueAt,@Param("expectedVersion") Integer expectedVersion,@Param("now") LocalDateTime now);
     int pauseSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
     int resumeSla(@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
     Map<String,Object> selectDashboard(@Param("userId") Long userId,@Param("deptId") Long deptId);
@@ -67,6 +67,10 @@ public interface TodoMapper
     int insertExtensionRequest(Map<String,Object> extension);
     int decideExtensionConditionally(Map<String,Object> decision);
     int applyApprovedExtension(Map<String,Object> extension);
+    int insertExtensionActionIfAbsent(Map<String,Object> action);
+    Map<String,Object> selectExtensionActionById(String actionId);
+    int completeExtensionAction(Map<String,Object> action);
+    Map<String,Object> selectPendingExtensionByTodoId(Long todoId);
     Map<String,Object> selectTemplateById(Long templateId);
     List<Map<String,Object>> selectTemplateVersions(Long templateId);
     int updateTemplateVersionDraft(Map<String,Object> version);

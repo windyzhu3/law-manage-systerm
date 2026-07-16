@@ -43,7 +43,11 @@ alter table todo_sla_record
   add column remind80_due_at datetime null after paused_seconds,
   add column overdue100_due_at datetime null after remind80_at,
   add column escalate150_due_at datetime null after overdue100_at;
-update todo_sla_record set original_due_at=due_at where original_due_at is null;
+update todo_sla_record set original_due_at=due_at,
+  remind80_due_at=date_add(start_at,interval floor(timestampdiff(second,start_at,due_at)*0.8) second),
+  overdue100_due_at=due_at,
+  escalate150_due_at=date_add(start_at,interval floor(timestampdiff(second,start_at,due_at)*1.5) second)
+where original_due_at is null or remind80_due_at is null or overdue100_due_at is null or escalate150_due_at is null;
 
 create table todo_extension_request (
   extension_id bigint not null auto_increment,
@@ -79,9 +83,30 @@ create table todo_extension_request (
   constraint chk_todo_extension_due check (requested_due_at>original_due_at)
 ) engine=innodb comment='Governed normal extension request and decision audit';
 
+create table todo_extension_action (
+  action_id varchar(64) not null,
+  action_type varchar(16) not null,
+  action_status varchar(16) not null default 'CLAIMED',
+  todo_id bigint not null,
+  extension_id bigint null,
+  result_status varchar(16) null,
+  actor_id bigint not null,
+  actor_name varchar(64) not null,
+  actor_dept_id bigint null,
+  create_time datetime not null default current_timestamp,
+  applied_time datetime null,
+  primary key (action_id),
+  key idx_todo_extension_action_result (extension_id,action_type),
+  constraint chk_todo_extension_action_type check (action_type in ('REQUEST','APPROVE','REJECT')),
+  constraint chk_todo_extension_action_status check (action_status in ('CLAIMED','APPLIED'))
+) engine=innodb comment='Single idempotency namespace for all governed extension actions';
+
 alter table todo_notification add column delivery_key varchar(128) null after source_id;
-update todo_notification set delivery_key=concat('legacy:',notification_id) where delivery_key is null;
+update todo_notification set delivery_key=sha2(concat(length(cast(todo_id as char)),':',todo_id,'|',
+  length(cast(user_id as char)),':',user_id,'|',length(notification_type),':',notification_type,'|',
+  length(source_id),':',source_id,'|'),256) where delivery_key is null;
 alter table todo_notification modify column delivery_key varchar(128) not null,modify column source_id varchar(128) not null;
+-- Preserve the previous composite uniqueness contract: uk_todo_notification_source(todo_id,user_id,notification_type,source_id).
 alter table todo_notification add unique key uk_todo_notification_delivery (delivery_key);
 
 set @todo_menu=(select menu_id from sys_menu where perms='todo:list' order by menu_id limit 1);
