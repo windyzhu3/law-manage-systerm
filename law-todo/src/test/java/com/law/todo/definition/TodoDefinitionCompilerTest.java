@@ -1,0 +1,119 @@
+package com.law.todo.definition;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import com.law.todo.definition.catalog.TodoDecisionService;
+import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.definition.codec.TodoDefinitionCodec;
+import com.law.todo.definition.compiler.DefinitionValidationReport;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.definition.model.TodoDefinitionDocument.DodRule;
+import com.law.todo.definition.model.TodoDefinitionDocument.EventRule;
+import com.law.todo.definition.model.TodoDefinitionDocument.OwnerRule;
+import com.law.todo.definition.model.TodoDefinitionDocument.RoutingGraph;
+import com.law.todo.definition.model.TodoDefinitionDocument.SlaRule;
+import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
+import com.law.todo.mapper.TodoMapper;
+
+@ExtendWith(MockitoExtension.class)
+class TodoDefinitionCompilerTest
+{
+    @Mock TodoMapper mapper;
+    private TodoDefinitionCompiler compiler;
+
+    @BeforeEach
+    void setUp()
+    {
+        lenient().when(mapper.selectEventCatalog("LEAD_CREATED", 1)).thenReturn(Map.of(
+                "event_type", "LEAD_CREATED", "payload_version", 1,
+                "payload_schema_json", "{\"type\":\"object\"}", "status", "ACTIVE"));
+        compiler = new TodoDefinitionCompiler(new TodoDefinitionCodec(),
+                new TodoEventCatalogService(mapper), new TodoDecisionService(mapper));
+    }
+
+    @Test
+    void unresolvedBlockingDecisionPreventsPublish()
+    {
+        when(mapper.selectDecisionByCode("Q-001")).thenReturn(
+                Map.of("decision_code", "Q-001", "status", "OPEN", "blocking", "Y"));
+
+        DefinitionValidationReport report = compiler.compile(definitionWithDecision("Q-001"));
+
+        assertTrue(report.errors().stream()
+                .anyMatch(error -> error.code().equals("TODO_DECISION_UNRESOLVED")));
+        assertTrue(!report.publishable());
+    }
+
+    @Test
+    void compiledHashIsRepeatable()
+    {
+        assertEquals(compiler.compile(valid()).definitionHash(),
+                compiler.compile(valid()).definitionHash());
+    }
+
+    @Test
+    void missingEventCatalogEntryIsAStructuralError()
+    {
+        TodoDefinitionDocument definition = definition("UNKNOWN_EVENT", List.of());
+
+        DefinitionValidationReport report = compiler.compile(definition);
+
+        assertTrue(report.errors().stream()
+                .anyMatch(error -> error.code().equals("TODO_EVENT_CATALOG_NOT_FOUND")));
+    }
+
+    @Test
+    void catalogsExposePayloadSchemaAndBlockingDecisionState()
+    {
+        TodoEventCatalogService events = new TodoEventCatalogService(mapper);
+        TodoDecisionService decisions = new TodoDecisionService(mapper);
+        when(mapper.selectDecisionByCode("Q-002")).thenReturn(
+                Map.of("decision_code", "Q-002", "status", "RESOLVED", "blocking", "Y"));
+
+        assertEquals("{\"type\":\"object\"}", events.payloadSchema("LEAD_CREATED", 1));
+        assertEquals(List.of("Q-MISSING"),
+                decisions.unresolvedBlockingDecisions(List.of("Q-002", "Q-MISSING")));
+    }
+
+    @Test
+    void springConstructorIsExplicitWhenCompilerHasMultipleConstructors() throws Exception
+    {
+        assertTrue(TodoDefinitionCompiler.class
+                .getConstructor(TodoEventCatalogService.class,TodoDecisionService.class)
+                .isAnnotationPresent(Autowired.class));
+    }
+
+    private TodoDefinitionDocument valid()
+    {
+        return definition("LEAD_CREATED", List.of());
+    }
+
+    private TodoDefinitionDocument definitionWithDecision(String decisionCode)
+    {
+        return definition("LEAD_CREATED", List.of(decisionCode));
+    }
+
+    private TodoDefinitionDocument definition(String eventType, List<String> decisions)
+    {
+        return new TodoDefinitionDocument(1, "TD-001",
+                new EventRule(eventType, 1, Map.of()),
+                new OwnerRule(Map.of("type", "USER", "userId", 7)),
+                new DodRule(Map.of("requiredFields", List.of("summary"))),
+                new SlaRule(Map.of()), new UiSchema(Map.of("fields", List.of("summary"))),
+                new RoutingGraph(Map.of()), List.of(), decisions, List.of("AC-001"));
+    }
+}

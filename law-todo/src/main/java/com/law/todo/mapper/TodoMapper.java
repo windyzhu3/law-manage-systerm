@@ -21,6 +21,9 @@ public interface TodoMapper
     Map<String,Object> selectTemplateVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo);
     int insertTemplateVersion(Map<String,Object> version);
     int updateDefinitionDocument(Map<String,Object> version);
+    int updateDefinitionCompilation(Map<String,Object> version);
+    Map<String,Object> selectEventCatalog(@Param("eventType") String eventType,@Param("payloadVersion") int payloadVersion);
+    Map<String,Object> selectDecisionByCode(String decisionCode);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
     List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);
@@ -59,7 +62,7 @@ public interface TodoMapper
     Map<String,Object> selectTemplateById(Long templateId);
     List<Map<String,Object>> selectTemplateVersions(Long templateId);
     int updateTemplateVersionDraft(Map<String,Object> version);
-    int publishTemplateVersionConditionally(@Param("versionId") Long versionId,@Param("operator") String operator);
+    int publishTemplateVersionConditionally(@Param("versionId") Long versionId,@Param("definitionHash") String definitionHash,@Param("operator") String operator);
     int insertDefinitionActionIfAbsent(Map<String,Object> action);
     Map<String,Object> selectDefinitionActionById(String actionId);
     int updateDefinitionActionEntity(@Param("actionId") String actionId,@Param("entityId") Long entityId);
