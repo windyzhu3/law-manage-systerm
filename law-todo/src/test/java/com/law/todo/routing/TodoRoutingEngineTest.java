@@ -232,6 +232,43 @@ class TodoRoutingEngineTest
                 .noneMatch(issue->"TODO_ROUTE_FORK_RECONVERGENCE_INVALID".equals(issue.code())));
     }
 
+    @Test void outputsOfDifferentJoinsCannotSilentlyCollapseIntoOneTask()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),
+                node("aJoin","JOIN",Map.of("joinMode","ALL","branches",List.of("a"))),
+                node("bJoin","JOIN",Map.of("joinMode","ALL","branches",List.of("b"))),
+                node("shared","TASK",Map.of("templateVersionId",10L)),node("end","END",Map.of())),
+                List.of(edge("fork-a","fork","aJoin","a",10),edge("fork-b","fork","bJoin","b",0),
+                        edge("a-shared","aJoin","shared",null,0),edge("b-shared","bJoin","shared",null,0),
+                        edge("shared-end","shared","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .anyMatch(issue->"TODO_ROUTE_TOKEN_RECONVERGENCE_INVALID".equals(issue.code())));
+    }
+
+    @Test void allJoinRejectsConditionalForkBranches()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("a","TASK",Map.of("templateVersionId",10L)),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("join","JOIN",Map.of("joinMode","ALL","branches",List.of("a","b"))),
+                node("end","END",Map.of())),List.of(conditionalEdge("fork-a","fork","a",10,eq("useA",true)),
+                        edge("fork-b","fork","b","b",0),edge("a-join","a","join",null,0),
+                        edge("b-join","b","join",null,0),edge("join-end","join","end",null,0)));
+        assertTrue(new RoutingGraphValidator().validate(withBranchKey(graph,"fork-a","a")).stream()
+                .anyMatch(issue->"TODO_ROUTE_JOIN_ALL_NOT_GUARANTEED".equals(issue.code())));
+    }
+
+    @Test void allJoinRejectsBranchThatCanBypassTheJoin()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("decision","DECISION",Map.of()),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("join","JOIN",Map.of("joinMode","ALL","branches",List.of("a","b"))),
+                node("end","END",Map.of())),List.of(edge("fork-a","fork","decision","a",10),edge("fork-b","fork","b","b",0),
+                        conditionalEdge("a-join","decision","join",10,eq("continue",true)),defaultEdge("a-end","decision","end",0),
+                        edge("b-join","b","join",null,0),edge("join-end","join","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .anyMatch(issue->"TODO_ROUTE_JOIN_ALL_NOT_GUARANTEED".equals(issue.code())));
+    }
+
     private RouteContext context(RoutingGraph graph, RouteToken token, Map<String, Object> payload)
     {
         TodoInstance todo = new TodoInstance();
@@ -273,6 +310,19 @@ class TodoRoutingEngineTest
     {
         java.util.Map<String, Object> edge = new java.util.LinkedHashMap<>(edge(key, from, to, null, priority));
         edge.put("default", true);return edge;
+    }
+
+    @SuppressWarnings("unchecked")
+    private RoutingGraph withBranchKey(RoutingGraph graph,String edgeKey,String branchKey)
+    {
+        List<Map<String,Object>> edges=new java.util.ArrayList<>();
+        for(Map<String,Object> source:(List<Map<String,Object>>)(List<?>)graph.config().get("edges"))
+        {
+            Map<String,Object> copy=new java.util.LinkedHashMap<>(source);
+            if(edgeKey.equals(copy.get("key")))copy.put("branchKey",branchKey);
+            edges.add(copy);
+        }
+        return new RoutingGraph(Map.of("start",graph.config().get("start"),"nodes",graph.config().get("nodes"),"edges",edges));
     }
 
     private Map<String, Object> eq(String field, Object value)

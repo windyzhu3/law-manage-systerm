@@ -218,10 +218,11 @@ public final class RoutingGraphValidator
     {
         if(!nodes.containsKey(start)||"JOIN".equals(text(nodes.get(start).get("type"))))return;
         final String noBranch="\u0000";
-        Map<String,Set<String>> arrivals=new HashMap<>();
+        Map<String,Set<JoinArrival>> arrivals=new HashMap<>();
+        Map<String,Set<String>> provenancesByNode=new HashMap<>();
         ArrayDeque<BranchFlow> queue=new ArrayDeque<>();
         Set<BranchFlow> visited=new HashSet<>();
-        queue.add(new BranchFlow(start,noBranch));
+        queue.add(new BranchFlow(start,noBranch,"ROOT",null,null));
         while(!queue.isEmpty())
         {
             BranchFlow flow=queue.remove();
@@ -230,28 +231,74 @@ public final class RoutingGraphValidator
             if("END".equals(type))continue;
             if("JOIN".equals(type))
             {
-                arrivals.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(flow.branchKey());
+                arrivals.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(new JoinArrival(
+                        flow.branchKey(),flow.provenance(),flow.sourceForkKey(),flow.sourceEdgeKey()));
                 for(Map<String,Object> edge:outgoing.getOrDefault(flow.nodeKey(),List.of()))
-                    queue.add(new BranchFlow(text(edge.get("to")),noBranch));
+                    queue.add(new BranchFlow(text(edge.get("to")),noBranch,"JOIN:"+flow.nodeKey(),null,null));
                 continue;
             }
+            provenancesByNode.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(flow.provenance());
             for(Map<String,Object> edge:outgoing.getOrDefault(flow.nodeKey(),List.of()))
             {
-                String branch="FORK".equals(type)?text(edge.get("branchKey")):flow.branchKey();
-                queue.add(new BranchFlow(text(edge.get("to")),blank(branch)?noBranch:branch));
+                boolean fork="FORK".equals(type);
+                String branch=fork?text(edge.get("branchKey")):flow.branchKey();
+                String provenance=fork?flow.provenance()+"|"+flow.nodeKey()+":"+text(edge.get("key")):flow.provenance();
+                queue.add(new BranchFlow(text(edge.get("to")),blank(branch)?noBranch:branch,provenance,
+                        fork?flow.nodeKey():flow.sourceForkKey(),fork?text(edge.get("key")):flow.sourceEdgeKey()));
             }
         }
+        provenancesByNode.forEach((key,provenances)->{
+            if(provenances.size()>1)
+                issues.add(issue("TODO_ROUTE_TOKEN_RECONVERGENCE_INVALID","routing.nodes."+key,
+                        "Concurrent route tokens may reconverge only at an explicit JOIN"));
+        });
         nodes.forEach((key,node)->{
             if(!"JOIN".equals(text(node.get("type")))||key.equals(start))return;
             Set<String> expected=new HashSet<>(strings(node.get("branches")));
-            Set<String> actual=arrivals.getOrDefault(key,Set.of());
-            if(!actual.equals(expected))
+            Set<JoinArrival> reachable=arrivals.getOrDefault(key,Set.of());
+            Set<String> actual=new HashSet<>();
+            reachable.forEach(arrival->actual.add(arrival.branchKey()));
+            boolean duplicated=expected.stream().anyMatch(branch->reachable.stream()
+                    .filter(arrival->branch.equals(arrival.branchKey())).map(JoinArrival::provenance).distinct().count()!=1);
+            Set<String> sourceForks=new HashSet<>();
+            reachable.stream().map(JoinArrival::sourceForkKey).forEach(sourceForks::add);
+            if(!actual.equals(expected)||duplicated||sourceForks.size()!=1||sourceForks.contains(null))
                 issues.add(issue("TODO_ROUTE_JOIN_BRANCH_FLOW_INVALID","routing.nodes."+key+".branches",
                         "JOIN branches must exactly match the branch tokens that can arrive"));
+            if("ALL".equals(text(node.get("joinMode")))&&reachable.stream().anyMatch(arrival->
+                    !arrivalGuaranteed(arrival,key,nodes,outgoing)))
+                issues.add(issue("TODO_ROUTE_JOIN_ALL_NOT_GUARANTEED","routing.nodes."+key+".branches",
+                        "Every ALL JOIN branch must be unconditional and must reach this JOIN on every path"));
         });
     }
 
-    private record BranchFlow(String nodeKey,String branchKey) { }
+    private boolean arrivalGuaranteed(JoinArrival arrival,String joinKey,Map<String,Map<String,Object>> nodes,
+            Map<String,List<Map<String,Object>>> outgoing)
+    {
+        if(arrival.sourceForkKey()==null||arrival.sourceEdgeKey()==null)return false;
+        Map<String,Object> source=outgoing.getOrDefault(arrival.sourceForkKey(),List.of()).stream()
+                .filter(edge->arrival.sourceEdgeKey().equals(text(edge.get("key")))).findFirst().orElse(null);
+        return source!=null&&!source.containsKey("condition")&&allPathsReachJoin(text(source.get("to")),joinKey,
+                nodes,outgoing,new HashSet<>(),new HashMap<>());
+    }
+
+    private boolean allPathsReachJoin(String current,String joinKey,Map<String,Map<String,Object>> nodes,
+            Map<String,List<Map<String,Object>>> outgoing,Set<String> visiting,Map<String,Boolean> memo)
+    {
+        if(joinKey.equals(current))return true;
+        if(memo.containsKey(current))return memo.get(current);
+        Map<String,Object> node=nodes.get(current);
+        if(node==null||"END".equals(text(node.get("type")))||"JOIN".equals(text(node.get("type")))
+                ||"FORK".equals(text(node.get("type"))))return false;
+        if(!visiting.add(current))return true;
+        List<Map<String,Object>> edges=outgoing.getOrDefault(current,List.of());
+        boolean result=!edges.isEmpty()&&edges.stream().allMatch(edge->allPathsReachJoin(text(edge.get("to")),joinKey,
+                nodes,outgoing,visiting,memo));
+        visiting.remove(current);memo.put(current,result);return result;
+    }
+
+    private record BranchFlow(String nodeKey,String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey) { }
+    private record JoinArrival(String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey) { }
 
     @SuppressWarnings("unchecked")
     private void validateCondition(Object value, String path, List<ValidationIssue> issues)
