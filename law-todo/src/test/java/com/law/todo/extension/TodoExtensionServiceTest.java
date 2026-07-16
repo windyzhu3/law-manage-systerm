@@ -76,7 +76,8 @@ class TodoExtensionServiceTest
 
     @Test void duplicateDecisionActionReturnsItsPriorResultWithoutOverwritingDecision()
     {
-        when(mapper.selectExtensionActionById("approve-1")).thenReturn(action("APPROVE","APPLIED",31L,"APPROVED"));
+        when(mapper.insertExtensionActionIfAbsent(anyMap())).thenReturn(0);
+        when(mapper.selectExtensionActionForUpdate("approve-1")).thenReturn(action("APPROVE","APPLIED",31L,"APPROVED"));
         when(mapper.selectExtensionById(31L)).thenReturn(extension(APPROVED,REQUESTED,"approve-1"));
 
         ExtensionView value=service().approve(31L,new DecisionCommand("approve-1","ignored"),approver);
@@ -84,6 +85,7 @@ class TodoExtensionServiceTest
         assertEquals(APPROVED,value.status());
         verify(mapper,never()).decideExtensionConditionally(anyMap());
         verify(mapper,never()).applyApprovedExtension(anyMap());
+        verify(mapper,never()).selectExtensionActionById("approve-1");
     }
 
     @Test void concurrentDecisionCannotOverwritePriorDecision()
@@ -134,23 +136,27 @@ class TodoExtensionServiceTest
 
     @Test void approveCannotReplayARejectActionAsSuccess()
     {
-        when(mapper.selectExtensionActionById("decision-1")).thenReturn(action("REJECT","APPLIED",31L,"REJECTED"));
+        when(mapper.insertExtensionActionIfAbsent(anyMap())).thenReturn(0);
+        when(mapper.selectExtensionActionForUpdate("decision-1")).thenReturn(action("REJECT","APPLIED",31L,"REJECTED"));
+        when(mapper.selectExtensionById(31L)).thenReturn(extension(PENDING,null,null));
 
         TodoException error=assertThrows(TodoException.class,
             ()->service().approve(31L,new DecisionCommand("decision-1","approve"),approver));
 
         assertEquals("TODO_EXTENSION_ACTION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).selectExtensionActionById("decision-1");
     }
 
     @Test void concurrentSameRequestActionReplaysCommittedWinner()
     {
-        when(mapper.selectExtensionActionById("same-request")).thenReturn(null,action("REQUEST","APPLIED",31L,"PENDING"));
         when(mapper.insertExtensionActionIfAbsent(anyMap())).thenReturn(0);
+        when(mapper.selectExtensionActionForUpdate("same-request")).thenReturn(action("REQUEST","APPLIED",31L,"PENDING"));
         when(mapper.selectExtensionById(31L)).thenReturn(extension(PENDING,null,null));
 
         ExtensionView value=service().request(9L,new RequestCommand("same-request",REQUESTED,"reason",List.of(1L)),requester);
 
         assertEquals(31L,value.extensionId());
+        verify(mapper,never()).selectExtensionActionById("same-request");
     }
 
     @Test void competingRequestForExistingPendingReturnsStableConflict()

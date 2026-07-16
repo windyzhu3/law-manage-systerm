@@ -33,12 +33,13 @@ class TodoPersistenceContractTest
         assertTrue(sql.contains("check (status in ('active','draft','disabled','retired'))"));
     }
 
-    @Test void extensionMigrationBackfillsSchedulesAndUsesOneActionNamespace() throws Exception
+    @Test void extensionMigrationPreservesLegacySchedulesAndUsesOneActionNamespace() throws Exception
     {
         Path migration=Path.of("..","ruoyi-admin","src","main","resources","db","migration","V0_20_3__todo_extension_and_notification.sql");
         String sql=Files.readString(migration).toLowerCase().replaceAll("\\s+"," ");
         assertTrue(sql.contains("update todo_sla_record set original_due_at=due_at"));
-        assertTrue(sql.contains("remind80_due_at="));assertTrue(sql.contains("overdue100_due_at="));assertTrue(sql.contains("escalate150_due_at="));
+        assertTrue(!sql.contains("timestampdiff(second,start_at,due_at)"));
+        assertTrue(!sql.contains("remind80_due_at=date_add"));assertTrue(!sql.contains("overdue100_due_at=due_at"));assertTrue(!sql.contains("escalate150_due_at=date_add"));
         assertTrue(sql.contains("create table todo_extension_action"));
         assertTrue(sql.contains("primary key (action_id)"));assertTrue(sql.contains("action_type"));
         assertTrue(sql.indexOf("update todo_notification set delivery_key=")<sql.indexOf("modify column delivery_key"));

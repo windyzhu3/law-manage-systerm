@@ -51,8 +51,6 @@ public class TodoExtensionService
     @Transactional public ExtensionView request(Long todoId,RequestCommand command,Actor actor)
     {
         requireAction(command==null?null:command.actionId());requireActor(actor);requireProofIds(command.proofFileObjectIds());
-        Map<String,Object> prior=mapper.selectExtensionActionById(command.actionId());
-        if(present(prior))return replayRequest(todoId,prior);
         Map<String,Object> claimed=claim(command.actionId(),"REQUEST",todoId,null,actor);if(present(claimed))return replayRequest(todoId,claimed);
         Map<String,Object> context=mapper.selectExtensionContext(todoId);requireContext(todoId,context,actor);
         Policy policy=policy(context);LocalDateTime current=date(value(context,"due_at","dueAt"));
@@ -91,8 +89,7 @@ public class TodoExtensionService
     private ExtensionView decide(Long extensionId,DecisionCommand command,Actor actor,ExtensionStatus target)
     {
         requireAction(command==null?null:command.actionId());requireActor(actor);
-        String actionType=target==APPROVED?"APPROVE":"REJECT";Map<String,Object> prior=mapper.selectExtensionActionById(command.actionId());
-        if(present(prior))return replayDecision(extensionId,actionType,prior);
+        String actionType=target==APPROVED?"APPROVE":"REJECT";
         Map<String,Object> current=mapper.selectExtensionById(extensionId);if(!present(current))fail("TODO_EXTENSION_NOT_FOUND","Extension request does not exist");
         Long todoId=number(value(current,"todo_id","todoId"));Map<String,Object> claimed=claim(command.actionId(),actionType,todoId,extensionId,actor);
         if(present(claimed))return replayDecision(extensionId,actionType,claimed);
@@ -192,7 +189,7 @@ public class TodoExtensionService
         Map<String,Object> row=new HashMap<>();row.put("actionId",actionId);row.put("actionType",actionType);row.put("todoId",todoId);row.put("extensionId",extensionId);
         row.put("actorId",actor.userId());row.put("actorName",actor.userName());row.put("actorDeptId",actor.deptId());
         try{if(mapper.insertExtensionActionIfAbsent(row)>0)return null;}catch(DuplicateKeyException ignored){ }
-        Map<String,Object> winner=mapper.selectExtensionActionById(actionId);if(!present(winner))fail("TODO_EXTENSION_ACTION_CONFLICT","Extension action could not be claimed");return winner;
+        Map<String,Object> winner=mapper.selectExtensionActionForUpdate(actionId);if(!present(winner))fail("TODO_EXTENSION_ACTION_CONFLICT","Extension action could not be claimed");return winner;
     }
     private ExtensionView replayRequest(Long todoId,Map<String,Object> action)
     {

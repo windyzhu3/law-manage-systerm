@@ -43,11 +43,7 @@ alter table todo_sla_record
   add column remind80_due_at datetime null after paused_seconds,
   add column overdue100_due_at datetime null after remind80_at,
   add column escalate150_due_at datetime null after overdue100_at;
-update todo_sla_record set original_due_at=due_at,
-  remind80_due_at=date_add(start_at,interval floor(timestampdiff(second,start_at,due_at)*0.8) second),
-  overdue100_due_at=due_at,
-  escalate150_due_at=date_add(start_at,interval floor(timestampdiff(second,start_at,due_at)*1.5) second)
-where original_due_at is null or remind80_due_at is null or overdue100_due_at is null or escalate150_due_at is null;
+update todo_sla_record set original_due_at=due_at where original_due_at is null;
 
 create table todo_extension_request (
   extension_id bigint not null auto_increment,

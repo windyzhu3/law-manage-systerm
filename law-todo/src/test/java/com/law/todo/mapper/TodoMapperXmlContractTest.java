@@ -100,6 +100,10 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("s.version=#{expectedVersion}"));
             assertTrue(xml.contains("s.remind80_due_at=#{plannedDueAt}"));
             assertTrue(xml.contains("s.remind80_due_at&lt;=#{now}"));
+            assertTrue(xml.contains("s.remind80_due_at is null and s.due_at=#{expectedDueAt}"));
+            assertTrue(xml.contains("s.start_at,s.due_at,c.work_days,c.work_start,c.work_end,c.exception_json"));
+            assertTrue(xml.contains("selectExtensionActionForUpdate"));
+            assertTrue(xml.contains("where action_id=#{actionId} for update"));
             assertTrue(xml.contains("insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,original_due_at,remind80_due_at,overdue100_due_at,escalate150_due_at,status)"));
         }
     }
