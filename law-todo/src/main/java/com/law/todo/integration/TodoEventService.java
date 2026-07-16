@@ -92,6 +92,7 @@ public class TodoEventService
         TodoDefinitionDocument definition=new TodoDefinitionCodec().read(compiled);
         if(definition.routing()==null||!definition.routing().config().containsKey("nodes"))return;
         todo.setDefinitionHash(text(value(version,"definition_hash","definitionHash")));
+        todo.setRouteDefinitionVersionId(longValue(value(version,"template_version_id","templateVersionId")));
         todo.setUiSchemaSnapshot(text(value(version,"ui_schema_json","uiSchemaJson")));
         todo.setSlaSnapshot(text(value(version,"sla_rule_json","slaRuleJson")));
         todo.setRouteNodeKey(text(definition.routing().config().get("start")));

@@ -45,6 +45,7 @@ public final class RoutingGraphValidator
         validateNodeEdges(byKey, outgoing, issues);
         validateReachability(start, byKey, outgoing, issues);
         validateCycles(byKey, outgoing, issues);
+        validateForkReconvergence(byKey, outgoing, issues);
         return List.copyOf(issues);
     }
 
@@ -163,6 +164,7 @@ public final class RoutingGraphValidator
         index.put(node, next[0]);low.put(node, next[0]++);stack.push(node);onStack.add(node);
         for (Map<String, Object> edge : outgoing.getOrDefault(node, List.of()))
         {
+            if ("LOOP".equals(text(nodes.get(node).get("type"))) && "BODY".equals(text(edge.get("branchKey")))) continue;
             String target = text(edge.get("to"));if (!nodes.containsKey(target)) continue;
             if (!index.containsKey(target)) { strong(target, nodes, outgoing, index, low, stack, onStack, next, issues);low.put(node, Math.min(low.get(node), low.get(target))); }
             else if (onStack.contains(target)) low.put(node, Math.min(low.get(node), index.get(target)));
@@ -170,9 +172,42 @@ public final class RoutingGraphValidator
         if (!low.get(node).equals(index.get(node))) return;
         List<String> component = new ArrayList<>();String current;
         do { current = stack.pop();onStack.remove(current);component.add(current); } while (!current.equals(node));
-        boolean self = outgoing.getOrDefault(node, List.of()).stream().anyMatch(edge -> node.equals(text(edge.get("to"))));
-        if ((component.size() > 1 || self) && component.stream().noneMatch(key -> "LOOP".equals(text(nodes.get(key).get("type")))))
+        boolean self = outgoing.getOrDefault(node, List.of()).stream()
+                .filter(edge -> !("LOOP".equals(text(nodes.get(node).get("type"))) && "BODY".equals(text(edge.get("branchKey")))))
+                .anyMatch(edge -> node.equals(text(edge.get("to"))));
+        if (component.size() > 1 || self)
             issues.add(issue("TODO_ROUTE_CYCLE_UNCONTROLLED", "routing", "Cycles must be controlled by a LOOP node"));
+    }
+
+    private void validateForkReconvergence(Map<String, Map<String, Object>> nodes,
+            Map<String, List<Map<String, Object>>> outgoing, List<ValidationIssue> issues)
+    {
+        nodes.forEach((key,node)->{
+            if(!"FORK".equals(text(node.get("type"))))return;
+            Set<String> claimed=new HashSet<>();
+            for(Map<String,Object> edge:outgoing.getOrDefault(key,List.of()))
+            {
+                Set<String> branchNodes=new HashSet<>();
+                collectUntilJoin(text(edge.get("to")),nodes,outgoing,branchNodes,new HashSet<>());
+                Set<String> intersection=new HashSet<>(branchNodes);intersection.retainAll(claimed);
+                if(!intersection.isEmpty())
+                {
+                    issues.add(issue("TODO_ROUTE_FORK_RECONVERGENCE_INVALID","routing.nodes."+key,
+                            "FORK branches may reconverge only at an explicit JOIN"));
+                    return;
+                }
+                claimed.addAll(branchNodes);
+            }
+        });
+    }
+
+    private void collectUntilJoin(String key,Map<String,Map<String,Object>> nodes,
+            Map<String,List<Map<String,Object>>> outgoing,Set<String> result,Set<String> visited)
+    {
+        if(!visited.add(key)||!nodes.containsKey(key)||"JOIN".equals(text(nodes.get(key).get("type"))))return;
+        result.add(key);
+        for(Map<String,Object> edge:outgoing.getOrDefault(key,List.of()))
+            collectUntilJoin(text(edge.get("to")),nodes,outgoing,result,visited);
     }
 
     @SuppressWarnings("unchecked")

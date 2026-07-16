@@ -22,6 +22,8 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.CompilationContext;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.definition.model.TodoDefinitionDocument.DodRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.EventRule;
@@ -53,6 +55,39 @@ class TodoDefinitionCompilerTest
                 source.dod(),source.sla(),source.ui(),routing,source.autoActions(),source.decisionRefs(),source.acceptanceRefs());
 
         assertTrue(compiler.compile(invalid).errors().stream().anyMatch(issue->"TODO_ROUTE_LOOP_UNBOUNDED".equals(issue.code())));
+    }
+    @Test void preflightRejectsMissingDownstreamTaskVersion()
+    {
+        TodoDefinitionDocument definition=withRouting(route(9L,22L));
+        CompilationContext context=new CompilationContext(9L,true,id->id==9L?new TemplateVersion(9L,"DRAFT"):null);
+
+        assertTrue(compiler.compile(definition,context).errors().stream().anyMatch(issue->"TODO_ROUTE_TASK_VERSION_NOT_FOUND".equals(issue.code())));
+    }
+
+    @Test void preflightRejectsDraftDownstreamTaskVersion()
+    {
+        TodoDefinitionDocument definition=withRouting(route(9L,22L));
+        CompilationContext context=new CompilationContext(9L,true,id->new TemplateVersion(id,"DRAFT"));
+
+        assertTrue(compiler.compile(definition,context).errors().stream().anyMatch(issue->"TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
+    }
+
+    @Test void preflightRejectsStartTaskPointingAtAnotherDraft()
+    {
+        TodoDefinitionDocument definition=withRouting(route(10L,null));
+        CompilationContext context=new CompilationContext(9L,true,id->new TemplateVersion(id,"DRAFT"));
+
+        assertTrue(compiler.compile(definition,context).errors().stream().anyMatch(issue->"TODO_ROUTE_START_TASK_VERSION_INVALID".equals(issue.code())));
+    }
+
+    @Test void currentDraftStartIsAllowedOnlyInGuardedPublishPreflight()
+    {
+        TodoDefinitionDocument definition=withRouting(route(9L,null));
+        CompilationContext guarded=new CompilationContext(9L,true,id->new TemplateVersion(id,"DRAFT"));
+        CompilationContext ordinary=new CompilationContext(9L,false,id->new TemplateVersion(id,"DRAFT"));
+
+        assertTrue(compiler.compile(definition,guarded).errors().stream().noneMatch(issue->issue.code().startsWith("TODO_ROUTE_TASK_VERSION")||issue.code().startsWith("TODO_ROUTE_START_TASK")));
+        assertTrue(compiler.compile(definition,ordinary).errors().stream().anyMatch(issue->"TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
     }
     @Mock TodoMapper mapper;
     private TodoDefinitionCompiler compiler;
@@ -176,6 +211,20 @@ class TodoDefinitionCompilerTest
     private TodoDefinitionDocument valid()
     {
         return definition("LEAD_CREATED", List.of());
+    }
+
+    private TodoDefinitionDocument withRouting(RoutingGraph routing)
+    {
+        TodoDefinitionDocument source=valid();return new TodoDefinitionDocument(source.schemaVersion(),source.templateCode(),source.event(),source.owner(),source.dod(),source.sla(),source.ui(),routing,source.autoActions(),source.decisionRefs(),source.acceptanceRefs());
+    }
+
+    private RoutingGraph route(Long startVersion,Long downstreamVersion)
+    {
+        List<Map<String,Object>> nodes=new java.util.ArrayList<>();List<Map<String,Object>> edges=new java.util.ArrayList<>();
+        nodes.add(Map.of("key","start","type","TASK","templateVersionId",startVersion));
+        if(downstreamVersion!=null){nodes.add(Map.of("key","next","type","TASK","templateVersionId",downstreamVersion));edges.add(Map.of("key","start-next","from","start","to","next"));edges.add(Map.of("key","next-end","from","next","to","end"));}
+        else edges.add(Map.of("key","start-end","from","start","to","end"));
+        nodes.add(Map.of("key","end","type","END"));return new RoutingGraph(Map.of("start","start","nodes",nodes,"edges",edges));
     }
 
     private TodoDefinitionDocument definitionWithDecision(String decisionCode)

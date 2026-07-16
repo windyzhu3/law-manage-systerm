@@ -115,11 +115,14 @@ class TodoMapperXmlContractTest
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
         {
             String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
-            assertTrue(xml.contains("definition_hash,ui_schema_snapshot,sla_snapshot,route_node_key,route_token,occurrence_key,payload_schema_version"));
-            assertTrue(xml.contains("#{definitionHash},#{uiSchemaSnapshot},#{slaSnapshot},#{routeNodeKey},#{routeToken},#{occurrenceKey},#{payloadSchemaVersion}"));
+            assertTrue(xml.contains("definition_hash,route_definition_version_id,ui_schema_snapshot,sla_snapshot,route_node_key,route_token,occurrence_key,payload_schema_version"));
+            assertTrue(xml.contains("#{definitionHash},#{routeDefinitionVersionId},#{uiSchemaSnapshot},#{slaSnapshot},#{routeNodeKey},#{routeToken},#{occurrenceKey},#{payloadSchemaVersion}"));
             assertTrue(xml.contains("insert ignore into todo_route_token"));
             assertTrue(xml.contains("insert ignore into todo_route_join"));
             assertTrue(xml.contains("selectRouteJoinForUpdate"));
+            int arrivals=xml.indexOf("selectRouteTokenArrivalsForUpdate");
+            assertTrue(arrivals>=0);
+            assertTrue(xml.substring(arrivals,xml.indexOf("</select>",arrivals)).contains("for update"));
             assertTrue(xml.contains("for update"));
             assertTrue(xml.contains("status='WAITING'"));
         }

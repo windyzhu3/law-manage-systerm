@@ -199,6 +199,7 @@ class TodoEventServiceTest
         TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
 
         assertEquals(41L,created.getRootTodoId());assertEquals("review",created.getRouteNodeKey());
+        assertEquals(22L,created.getRouteDefinitionVersionId());
         assertEquals("41:review:LEAD:7:0",created.getOccurrenceKey());assertEquals("abc123",created.getDefinitionHash());
         assertTrue(created.getRouteToken().contains("\"rootTodoId\":41"));
         verify(mapper).updateInitialRouteSnapshot(41L,41L,created.getRouteToken(),created.getOccurrenceKey());

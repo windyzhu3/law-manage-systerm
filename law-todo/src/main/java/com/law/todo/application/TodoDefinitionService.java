@@ -21,6 +21,8 @@ import com.law.todo.definition.codec.LegacyDefinitionAdapter;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.CompilationContext;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
@@ -149,7 +151,7 @@ public class TodoDefinitionService
                 text(value(current, "sla_rule_json", "slaRuleJson")),
                 text(value(current, "next_rule_json", "nextRuleJson")),
                 text(value(current, "ui_schema_json", "uiSchemaJson")));
-        PreflightResult preflight = preflight(command.versionId());
+        PreflightResult preflight = preflight(command.versionId(), true);
         if (!preflight.publishable())
             throw new PreflightFailedException();
         claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,
@@ -164,9 +166,19 @@ public class TodoDefinitionService
     @Transactional
     public PreflightResult preflight(long versionId)
     {
+        return preflight(versionId, false);
+    }
+
+    private PreflightResult preflight(long versionId, boolean guardedPublishPreflight)
+    {
         Map<String, Object> current = requireVersion(versionId);
         TodoDefinitionDocument definition = definition(current);
-        DefinitionValidationReport report = compiler.compile(definition);
+        CompilationContext context = new CompilationContext(versionId, guardedPublishPreflight, id -> {
+            Map<String, Object> target = mapper.selectTemplateVersionById(id);
+            return target == null || target.isEmpty() ? null
+                    : new TemplateVersion(id, text(value(target, "status", "status")));
+        });
+        DefinitionValidationReport report = compiler.compile(definition, context);
         Map<String, Object> persisted = new HashMap<>();
         persisted.put("versionId", versionId);
         persisted.put("definitionSchemaVersion", definition.schemaVersion());

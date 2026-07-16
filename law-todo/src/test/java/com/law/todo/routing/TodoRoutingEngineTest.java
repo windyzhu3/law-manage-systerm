@@ -34,7 +34,7 @@ class TodoRoutingEngineTest
                         node("next", "TASK", Map.of("templateVersionId", 22L)), node("end", "END", Map.of())),
                 List.of(edge("join-next", "join", "next", null, 0), edge("next-end", "next", "end", null, 0)));
         when(mapper.selectRouteJoinForUpdate(1L, "join", 0)).thenReturn(Map.of("status", "WAITING"));
-        when(mapper.selectRouteTokenArrivals(1L, "join", 0))
+        when(mapper.selectRouteTokenArrivalsForUpdate(1L, "join", 0))
                 .thenReturn(List.of("legal"), List.of("legal", "finance"));
         when(mapper.advanceRouteJoinConditionally(1L, "join", 0)).thenReturn(1);
         TodoRoutingEngine engine = new TodoRoutingEngine(mapper);
@@ -59,7 +59,7 @@ class TodoRoutingEngineTest
                 List.of(edge("join-next", "join", "next", null, 0), edge("next-end", "next", "end", null, 0)));
         when(mapper.selectRouteJoinForUpdate(1L, "join", 0))
                 .thenReturn(Map.of("status", "WAITING"), Map.of("status", "ADVANCED"));
-        when(mapper.selectRouteTokenArrivals(1L, "join", 0)).thenReturn(List.of("a"));
+        when(mapper.selectRouteTokenArrivalsForUpdate(1L, "join", 0)).thenReturn(List.of("a"));
         when(mapper.advanceRouteJoinConditionally(1L, "join", 0)).thenReturn(1);
         TodoRoutingEngine engine = new TodoRoutingEngine(mapper);
 
@@ -93,11 +93,11 @@ class TodoRoutingEngineTest
         RoutingGraph graph = graph(
                 List.of(node("fork", "FORK", Map.of()),
                         node("legalTask", "TASK", Map.of("templateVersionId", 10L)),
-                        node("financeTask", "TASK", Map.of("templateVersionId", 20L)), node("end", "END", Map.of())),
+                        node("financeTask", "TASK", Map.of("templateVersionId", 20L)), node("legalEnd", "END", Map.of()),node("financeEnd", "END", Map.of())),
                 List.of(
                         edge("finance", "fork", "financeTask", "finance", 10),
                         edge("legal", "fork", "legalTask", "legal", 20),
-                        edge("legal-end", "legalTask", "end", null, 0), edge("finance-end", "financeTask", "end", null, 0)));
+                        edge("legal-end", "legalTask", "legalEnd", null, 0), edge("finance-end", "financeTask", "financeEnd", null, 0)));
 
         var result = new TodoRoutingEngine(mapper).advance(context(graph,
                 new RouteToken(1L, "fork", null, 2, RouteTokenStatus.ACTIVE), Map.of()));
@@ -154,6 +154,46 @@ class TodoRoutingEngineTest
                 new RouteToken(1L,"end",null,0,RouteTokenStatus.ACTIVE),payload);
 
         assertTrue(context.payload().containsKey("decision"));
+    }
+
+    @Test void loopExitBackEdgeRemainsAnUncontrolledCycle()
+    {
+        RoutingGraph graph=graph(List.of(
+                node("loop","LOOP",Map.of("maxOccurrences",3)),node("body","TASK",Map.of("templateVersionId",10L)),
+                node("exitTask","TASK",Map.of("templateVersionId",11L)),node("end","END",Map.of())),List.of(
+                edge("body-edge","loop","body","BODY",10),edge("exit-edge","loop","exitTask","EXIT",0),
+                edge("body-back","body","loop",null,0),edge("exit-back","exitTask","loop",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream().anyMatch(issue->"TODO_ROUTE_CYCLE_UNCONTROLLED".equals(issue.code())));
+    }
+
+    @Test void decisionAndTaskCycleIsRejected()
+    {
+        RoutingGraph graph=graph(List.of(node("decision","DECISION",Map.of()),node("task","TASK",Map.of("templateVersionId",10L)),node("end","END",Map.of())),List.of(
+                defaultEdge("default","decision","task",0),conditionalEdge("finish","decision","end",10,eq("done",true)),
+                edge("back","task","decision",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream().anyMatch(issue->"TODO_ROUTE_CYCLE_UNCONTROLLED".equals(issue.code())));
+    }
+
+    @Test void forkBranchesCannotReconvergeBeforeJoin()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("a","TASK",Map.of("templateVersionId",10L)),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("shared","TASK",Map.of("templateVersionId",12L)),node("end","END",Map.of())),List.of(
+                edge("fork-a","fork","a","a",10),edge("fork-b","fork","b","b",0),edge("a-shared","a","shared",null,0),
+                edge("b-shared","b","shared",null,0),edge("shared-end","shared","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream().anyMatch(issue->"TODO_ROUTE_FORK_RECONVERGENCE_INVALID".equals(issue.code())));
+    }
+
+    @Test void joinMayBeFirstSharedNodeOfForkBranches()
+    {
+        RoutingGraph graph=graph(List.of(node("fork","FORK",Map.of()),node("a","TASK",Map.of("templateVersionId",10L)),
+                node("b","TASK",Map.of("templateVersionId",11L)),node("join","JOIN",Map.of("joinMode","ALL","branches",List.of("a","b"))),
+                node("end","END",Map.of())),List.of(edge("fork-a","fork","a","a",10),edge("fork-b","fork","b","b",0),
+                edge("a-join","a","join",null,0),edge("b-join","b","join",null,0),edge("join-end","join","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream().noneMatch(issue->"TODO_ROUTE_FORK_RECONVERGENCE_INVALID".equals(issue.code())));
     }
 
     private RouteContext context(RoutingGraph graph, RouteToken token, Map<String, Object> payload)

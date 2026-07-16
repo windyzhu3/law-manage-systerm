@@ -1,14 +1,16 @@
 alter table todo_instance
   modify column next_idempotency_key varchar(300) null,
   add column definition_hash char(64) null after dod_snapshot_json,
-  add column ui_schema_snapshot json null after definition_hash,
+  add column route_definition_version_id bigint null after definition_hash,
+  add column ui_schema_snapshot json null after route_definition_version_id,
   add column sla_snapshot json null after ui_schema_snapshot,
   add column route_node_key varchar(96) null after sla_snapshot,
   add column route_token json null after route_node_key,
   add column occurrence_key varchar(300) null after route_token,
   add column payload_schema_version int null after occurrence_key,
   add unique key uk_todo_route_occurrence (occurrence_key),
-  add key idx_todo_route_root_node (root_todo_id,route_node_key,todo_id);
+  add key idx_todo_route_root_node (root_todo_id,route_node_key,todo_id),
+  add key idx_todo_route_definition (route_definition_version_id,root_todo_id);
 
 create table todo_route_token (
   route_token_id bigint not null auto_increment,

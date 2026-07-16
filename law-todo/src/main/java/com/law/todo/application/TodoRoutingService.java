@@ -62,8 +62,12 @@ public class TodoRoutingService
     @Transactional
     public RoutingResult advance(TodoInstance previous, Map<String, Object> payload)
     {
-        Map<String, Object> version = mapper.selectTemplateVersionById(previous.getTemplateVersionId());
+        Long routeVersionId = previous.getRouteDefinitionVersionId() == null ? previous.getTemplateVersionId() : previous.getRouteDefinitionVersionId();
+        Map<String, Object> version = mapper.selectTemplateVersionById(routeVersionId);
         if (version == null || version.isEmpty()) return new RoutingResult(RouteStatus.ENDED, java.util.List.of());
+        String loadedHash = text(value(version, "definition_hash", "definitionHash"));
+        if (previous.getDefinitionHash() != null && !previous.getDefinitionHash().equals(loadedHash))
+            throw new TodoException("TODO_ROUTE_DEFINITION_HASH_MISMATCH", "Routing definition snapshot does not match the persisted definition");
         String compiled = text(value(version, "compiled_json", "compiledJson"));
         if (compiled == null || compiled.isBlank()) compiled = text(value(version, "definition_json", "definitionJson"));
         if (compiled != null && !compiled.isBlank())
@@ -135,6 +139,7 @@ public class TodoRoutingService
         Assignment assignment = assignment(version, previous);
         TodoInstance next = build(previous, version, assignment, task.templateVersionId(), null, businessType, businessId, key);
         next.setDefinitionHash(definitionHash);
+        next.setRouteDefinitionVersionId(previous.getRouteDefinitionVersionId() == null ? previous.getTemplateVersionId() : previous.getRouteDefinitionVersionId());
         next.setUiSchemaSnapshot(text(value(version, "ui_schema_json", "uiSchemaJson")));
         next.setSlaSnapshot(text(value(version, "sla_rule_json", "slaRuleJson")));
         next.setRouteNodeKey(task.nodeKey());next.setRouteToken(JSON.toJSONString(task.token()));

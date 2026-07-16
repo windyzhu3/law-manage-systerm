@@ -67,7 +67,7 @@ class TodoTemplateAndRoutingTest
 
     @Test void graphRoutingSnapshotsDefinitionAndUsesExactOccurrenceIdentity()
     {
-        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setBusinessNo("L-7");
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setBusinessNo("L-7");previous.setRouteDefinitionVersionId(9L);
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","FOLLOW_UP","template_name","Follow up",
                 "owner_rule_json","OWNER","dod_rule_json","{}","ui_schema_json","{\"type\":\"form\"}",
@@ -80,6 +80,7 @@ class TodoTemplateAndRoutingTest
         assertEquals("1:review:LEAD:7:3",next.getNextIdempotencyKey());
         assertEquals("1:review:LEAD:7:3",next.getOccurrenceKey());
         assertEquals("abc123",next.getDefinitionHash());
+        assertEquals(9L,next.getRouteDefinitionVersionId());
         assertEquals("{\"type\":\"form\"}",next.getUiSchemaSnapshot());
         assertEquals("{}",next.getSlaSnapshot());
         assertEquals("review",next.getRouteNodeKey());
@@ -87,9 +88,9 @@ class TodoTemplateAndRoutingTest
         assertTrue(next.getRouteToken().contains("\"branchKey\":\"legal\""));
     }
 
-    @Test void advanceReadsCompiledImmutableGraphInsteadOfLegacyNextRule()
+    @Test void downstreamTemplateContinuesGraphOwnedByOriginalDefinition()
     {
-        TodoInstance previous=todo();previous.setTemplateVersionId(9L);previous.setRouteNodeKey("review");
+        TodoInstance previous=todo();previous.setTemplateVersionId(22L);previous.setRouteDefinitionVersionId(9L);previous.setDefinitionHash("hash");previous.setRouteNodeKey("review");
         previous.setRouteToken("{\"rootTodoId\":1,\"nodeKey\":\"review\",\"occurrence\":0,\"status\":\"ACTIVE\"}");
         when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of("compiled_json","""
                 {"schemaVersion":1,"templateCode":"T","routing":{"config":{"start":"review","nodes":[
@@ -105,6 +106,18 @@ class TodoTemplateAndRoutingTest
         verify(engine).advance(org.mockito.ArgumentMatchers.argThat(context ->
                 "hash".equals(context.definitionHash()) && "review".equals(context.token().nodeKey())));
         verify(mapper,never()).selectByNextKey("1:9");
+        verify(mapper).selectTemplateVersionById(9L);
+        verify(mapper,never()).selectTemplateVersionById(22L);
+    }
+
+    @Test void tamperedRouteDefinitionHashIsRejected()
+    {
+        TodoInstance previous=todo();previous.setTemplateVersionId(22L);previous.setRouteDefinitionVersionId(9L);previous.setDefinitionHash("tampered");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of("definition_hash","actual","compiled_json","{}"));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper).advance(previous,Map.of()));
+
+        assertEquals("TODO_ROUTE_DEFINITION_HASH_MISMATCH",error.getBusinessCode());
     }
 
     @Test void graphTaskCannotCreateFromDraftTemplateVersion()

@@ -141,7 +141,7 @@ public class TodoRoutingEngine
         mapper.insertRouteTokenIfAbsent(arrival);
         if (locked != null && "ADVANCED".equals(text(value(locked, "status", "join_status")))) return Outcome.WAITING;
 
-        Set<String> arrivals = new HashSet<>(mapper.selectRouteTokenArrivals(token.rootTodoId(), node.key, token.occurrence()));
+        Set<String> arrivals = new HashSet<>(mapper.selectRouteTokenArrivalsForUpdate(token.rootTodoId(), node.key, token.occurrence()));
         boolean ready = "ANY".equals(text(node.config.get("joinMode"))) ? !arrivals.isEmpty() : arrivals.containsAll(required);
         if (!ready || mapper.advanceRouteJoinConditionally(token.rootTodoId(), node.key, token.occurrence()) <= 0)
             return Outcome.WAITING;

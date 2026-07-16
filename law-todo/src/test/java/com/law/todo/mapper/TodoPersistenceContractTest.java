@@ -45,4 +45,14 @@ class TodoPersistenceContractTest
         assertTrue(sql.indexOf("update todo_notification set delivery_key=")<sql.indexOf("modify column delivery_key"));
         assertTrue(sql.contains("uk_todo_notification_source"));
     }
+
+    @Test void routingMigrationFreezesOwningDefinitionAndConcurrencyIdentity() throws Exception
+    {
+        Path migration=Path.of("..","ruoyi-admin","src","main","resources","db","migration","V0_20_4__todo_routing_runtime.sql");
+        String sql=Files.readString(migration).toLowerCase().replaceAll("\\s+"," ");
+        assertTrue(sql.contains("route_definition_version_id bigint"));
+        assertTrue(sql.contains("uk_todo_route_occurrence"));
+        assertTrue(sql.contains("uk_todo_route_token_arrival"));
+        assertTrue(sql.contains("primary key (root_todo_id,node_key,occurrence)"));
+    }
 }

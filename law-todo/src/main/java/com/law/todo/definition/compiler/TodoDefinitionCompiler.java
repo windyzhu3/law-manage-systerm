@@ -4,7 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.springframework.stereotype.Component;
@@ -56,6 +58,11 @@ public class TodoDefinitionCompiler
 
     public DefinitionValidationReport compile(TodoDefinitionDocument definition)
     {
+        return compile(definition, null);
+    }
+
+    public DefinitionValidationReport compile(TodoDefinitionDocument definition, CompilationContext context)
+    {
         List<ValidationIssue> errors = new ArrayList<>();
         if (definition == null)
         {
@@ -67,13 +74,95 @@ public class TodoDefinitionCompiler
         for (TodoFormValidator.ValidationIssue formIssue : new TodoFormValidator().validateDefinition(definition))
             errors.add(issue(formIssue.code(), formIssue.path(), formIssue.message()));
         if (definition.routing() != null && !definition.routing().config().isEmpty())
+        {
             errors.addAll(new RoutingGraphValidator(conditionValidator).validate(definition.routing()));
+            validateTaskReferences(definition, context, errors);
+        }
         for (String code : decisions.unresolvedBlockingDecisions(definition.decisionRefs()))
             errors.add(issue("TODO_DECISION_UNRESOLVED", "decisionRefs",
                     "Decision is missing or unresolved: " + code));
 
         String compiledJson = codec.canonicalJson(definition);
         return new DefinitionValidationReport(errors, List.of(), compiledJson, sha256(compiledJson));
+    }
+
+    private void validateTaskReferences(TodoDefinitionDocument definition, CompilationContext context,
+            List<ValidationIssue> errors)
+    {
+        Object rawNodes = definition.routing().config().get("nodes");
+        if (!(rawNodes instanceof List<?> nodes))
+            return;
+        boolean hasTask = nodes.stream().filter(Map.class::isInstance).map(Map.class::cast)
+                .anyMatch(node -> "TASK".equals(String.valueOf(node.get("type"))));
+        if (!hasTask)
+            return;
+        if (context == null)
+        {
+            errors.add(issue("TODO_ROUTE_TASK_COMPILATION_CONTEXT_REQUIRED", "routing.nodes",
+                    "TASK reference validation requires an explicit compilation context"));
+            return;
+        }
+        String start = String.valueOf(definition.routing().config().get("start"));
+        Map<Long, TemplateVersion> resolved = new HashMap<>();
+        for (int index = 0; index < nodes.size(); index++)
+        {
+            if (!(nodes.get(index) instanceof Map<?, ?> node)
+                    || !"TASK".equals(String.valueOf(node.get("type"))))
+                continue;
+            Long versionId = longValue(node.get("templateVersionId"));
+            if (versionId == null)
+                continue;
+            TemplateVersion version = resolved.containsKey(versionId) ? resolved.get(versionId)
+                    : context.resolver().resolve(versionId);
+            resolved.putIfAbsent(versionId, version);
+            String path = "routing.nodes[" + index + "].templateVersionId";
+            boolean startTask = start.equals(String.valueOf(node.get("key")));
+            if (startTask && !versionId.equals(context.currentVersionId()))
+            {
+                errors.add(issue("TODO_ROUTE_START_TASK_VERSION_INVALID", path,
+                        "Start TASK must reference the definition version being compiled"));
+                continue;
+            }
+            if (version == null)
+            {
+                errors.add(issue("TODO_ROUTE_TASK_VERSION_NOT_FOUND", path, "TASK template version does not exist"));
+                continue;
+            }
+            boolean guardedCurrentStart = startTask && versionId.equals(context.currentVersionId())
+                    && context.guardedPublishPreflight() && "DRAFT".equals(version.status());
+            if (!"PUBLISHED".equals(version.status()) && !guardedCurrentStart)
+                errors.add(issue("TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED", path,
+                        "TASK template version must be published"));
+        }
+    }
+
+    private static Long longValue(Object value)
+    {
+        try
+        {
+            return value == null ? null : Long.valueOf(String.valueOf(value));
+        }
+        catch (NumberFormatException invalid)
+        {
+            return null;
+        }
+    }
+
+    @FunctionalInterface
+    public interface TemplateVersionResolver
+    {
+        TemplateVersion resolve(long versionId);
+    }
+
+    public record TemplateVersion(long versionId, String status) { }
+
+    public record CompilationContext(long currentVersionId, boolean guardedPublishPreflight,
+            TemplateVersionResolver resolver)
+    {
+        public CompilationContext
+        {
+            Objects.requireNonNull(resolver, "resolver");
+        }
     }
 
     private void validateStructure(TodoDefinitionDocument definition, List<ValidationIssue> errors)

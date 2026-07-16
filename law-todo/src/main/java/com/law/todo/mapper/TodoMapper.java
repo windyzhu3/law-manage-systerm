@@ -100,7 +100,7 @@ public interface TodoMapper
     int insertRouteTokenIfAbsent(Map<String,Object> token);
     int insertRouteJoinIfAbsent(Map<String,Object> join);
     Map<String,Object> selectRouteJoinForUpdate(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
-    List<String> selectRouteTokenArrivals(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
+    List<String> selectRouteTokenArrivalsForUpdate(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
     int advanceRouteJoinConditionally(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
     int updateInitialRouteSnapshot(@Param("todoId") Long todoId,@Param("rootTodoId") Long rootTodoId,@Param("routeToken") String routeToken,@Param("occurrenceKey") String occurrenceKey);
 }
