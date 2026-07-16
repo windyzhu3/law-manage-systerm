@@ -10,7 +10,9 @@ import com.law.todo.expression.ConditionExpression.GroupCondition;
 import com.law.todo.expression.ConditionExpression.GroupOperator;
 import com.law.todo.expression.ConditionExpression.NotCondition;
 import com.law.todo.expression.ConditionExpression.PredicateCondition;
+import org.springframework.stereotype.Component;
 
+@Component
 public final class ConditionEvaluator
 {
     public boolean evaluate(ConditionExpression expression, Map<String, Object> payload)

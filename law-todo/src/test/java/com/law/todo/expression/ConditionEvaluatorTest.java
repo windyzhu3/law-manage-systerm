@@ -101,21 +101,41 @@ class ConditionEvaluatorTest
     }
 
     @Test
+    void orderedLiteralMustMatchAnOrderedMemberOfAUnionSchema()
+    {
+        JsonSchema union = JsonSchema.parse("""
+                {"type":"object","properties":{
+                  "numberOrBoolean":{"type":["number","boolean"]},
+                  "numberOrNull":{"type":["number","null"]}
+                }}
+                """);
+
+        assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",
+                checker.check(predicate("numberOrBoolean", GT, true), union).get(0).code());
+        assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",
+                checker.check(predicate("numberOrNull", GT, null), union).get(0).code());
+    }
+
+    @Test
     void expressionJsonIsDecodedButUnknownShapesAreRejected()
     {
         String json = """
-                {"type":"AND","conditions":[
-                  {"field":"amount","operator":"GTE","value":100},
-                  {"type":"OR","conditions":[
-                    {"field":"type","operator":"EQ","value":"A"},
-                    {"field":"type","operator":"EQ","value":"B"}
+                {"expressionVersion":1,"root":
+                  {"type":"AND","conditions":[
+                    {"field":"amount","operator":"GTE","value":100},
+                    {"type":"OR","conditions":[
+                      {"field":"type","operator":"EQ","value":"A"},
+                      {"field":"type","operator":"EQ","value":"B"}
+                    ]}
                   ]}
-                ]}
+                }
                 """;
 
         assertTrue(evaluator.evaluate(ConditionExpression.fromJson(json), payload()));
         assertThrows(IllegalArgumentException.class,
-                () -> ConditionExpression.fromJson("{\"field\":\"amount\",\"operator\":\"SCRIPT\",\"value\":1}"));
+                () -> ConditionExpression.fromJson("{\"expressionVersion\":2,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1}}"));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConditionExpression.fromJson("{\"expressionVersion\":1,\"root\":{\"field\":\"amount\",\"operator\":\"EQ\",\"value\":1},\"script\":\"x\"}"));
     }
 
     @Test
@@ -130,6 +150,24 @@ class ConditionEvaluatorTest
                 Map.of("source", "OFFLINE", "priority", 2)));
         assertTrue(evaluator.evaluate(ConditionExpression.fromJson("{\"type\":\"AND\"}"),
                 Map.of("type", "AND")));
+        assertTrue(evaluator.evaluate(
+                ConditionExpression.fromJson("{\"field\":\"status\",\"operator\":\"EQ\"}"),
+                Map.of("field", "status", "operator", "EQ")));
+        assertTrue(evaluator.evaluate(
+                ConditionExpression.fromJson("{\"type\":\"AND\",\"conditions\":\"READY\"}"),
+                Map.of("type", "AND", "conditions", "READY")));
+    }
+
+    @Test
+    void objectLiteralNullIsPreservedForValidation()
+    {
+        ConditionExpression expression = ConditionExpression.fromJson("""
+                {"expressionVersion":1,"root":
+                  {"field":"amount","operator":"EQ","value":{"optional":null}}}
+                """);
+
+        assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",
+                checker.check(expression, schema()).get(0).code());
     }
 
     private Map<String, Object> payload()

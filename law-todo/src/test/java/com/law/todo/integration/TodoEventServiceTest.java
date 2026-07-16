@@ -2,6 +2,7 @@ package com.law.todo.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.never;
@@ -19,11 +20,23 @@ import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.expression.ConditionValidator;
+import com.law.todo.expression.ConditionEvaluator;
 
 @ExtendWith(MockitoExtension.class)
 class TodoEventServiceTest
 {
     @Mock TodoMapper mapper;
+
+    @Test void springConstructorExplicitlyInjectsConditionValidationDependencies() throws Exception
+    {
+        assertTrue(TodoEventService.class.getConstructor(TodoMapper.class,
+                TodoAssignmentResolver.class,ConditionEvaluator.class,
+                ConditionValidator.class,TodoEventCatalogService.class)
+                .isAnnotationPresent(Autowired.class));
+    }
 
     @Test void duplicateEventReturnsExistingTodo()
     {
@@ -78,7 +91,7 @@ class TodoEventServiceTest
         verify(mapper,never()).insertInstance(any());
     }
 
-    @Test void createsTodoWhenAllPayloadConditionsMatch()
+    @Test void createsTodoForTrustedLegacyFlatConditionWithoutCatalog()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
         conditional.put("condition_json","{\"source\":\"ONLINE\",\"priority\":2}");
@@ -95,21 +108,61 @@ class TodoEventServiceTest
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
         conditional.put("condition_json","""
-                {"type":"AND","conditions":[
-                  {"field":"amount","operator":"GTE","value":100},
-                  {"type":"OR","conditions":[
-                    {"field":"type","operator":"EQ","value":"A"},
-                    {"field":"type","operator":"EQ","value":"B"}
+                {"expressionVersion":1,"root":
+                  {"type":"AND","conditions":[
+                    {"field":"amount","operator":"GTE","value":100},
+                    {"type":"OR","conditions":[
+                      {"field":"type","operator":"EQ","value":"A"},
+                      {"field":"type","operator":"EQ","value":"B"}
+                    ]}
                   ]}
-                ]}
+                }
                 """);
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());
         TodoEvent matching=new TodoEvent("evt-3","LEAD_ASSIGNED","LEAD",9L,"L-9",Map.of("amount",100,"type","B"));
 
         List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(matching);
 
         assertEquals(1,result.size());
         verify(mapper).insertInstance(any());
+    }
+
+    @Test void canonicalConditionWithUndeclaredFieldFailsClosed()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","{\"expressionVersion\":1,\"root\":{\"field\":\"class.classLoader\",\"operator\":\"EQ\",\"value\":\"x\"}}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
+
+        assertEquals(0,result.size());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void malformedCanonicalEnvelopeFailsClosed()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","{\"expressionVersion\":2,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
+
+        assertEquals(0,result.size());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void canonicalConditionWithoutActiveCatalogFailsClosed()
+    {
+        Map<String,Object> conditional=new java.util.HashMap<>(rule());
+        conditional.put("condition_json","{\"expressionVersion\":1,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+
+        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
+
+        assertEquals(0,result.size());
+        verify(mapper,never()).insertInstance(any());
     }
 
     @Test void createsSlaRecordFromTemplateRule()
@@ -131,4 +184,5 @@ class TodoEventServiceTest
 
     private Map<String,Object> rule(){return Map.of("template_id",3L,"template_version_id",22L,"template_name","首联","owner_rule_json","ROLE:5");}
     private TodoEvent event(){return new TodoEvent("evt-1","LEAD_ASSIGNED","LEAD",7L,"L-7",Map.of("ownerId",8L));}
+    private Map<String,Object> catalog(){return Map.of("status","ACTIVE","payload_schema_json","{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"},\"type\":{\"type\":\"string\"},\"ownerId\":{\"type\":\"integer\"}}}");}
 }

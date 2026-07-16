@@ -2,6 +2,7 @@ package com.law.todo.expression;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +71,7 @@ public final class ConditionTypeChecker
                 if (!field.types().isEmpty() && field.types().stream().noneMatch(ORDERED_TYPES::contains))
                     issues.add(issue("TODO_CONDITION_OPERATOR_TYPE_INVALID", path,
                             "Ordered comparison is not supported for the field type"));
-                else if (!field.accepts(predicate.value()))
+                else if (!field.acceptsOrdered(predicate.value()))
                     issues.add(issue("TODO_CONDITION_VALUE_TYPE_INVALID", path,
                             "Condition value does not match the event field type"));
             }
@@ -99,7 +100,7 @@ public final class ConditionTypeChecker
         {
             if (document == null)
                 throw new IllegalArgumentException("JSON schema document is required");
-            document = Map.copyOf(document);
+            document = Collections.unmodifiableMap(new LinkedHashMap<>(document));
         }
 
         public static JsonSchema parse(String json)
@@ -166,6 +167,18 @@ public final class ConditionTypeChecker
 
     private record FieldSchema(Set<String> types)
     {
+        private boolean acceptsOrdered(Object value)
+        {
+            if (value instanceof String)
+                return types.isEmpty() || types.contains("string");
+            if (value instanceof Byte || value instanceof Short || value instanceof Integer
+                    || value instanceof Long || value instanceof java.math.BigInteger)
+                return types.isEmpty() || types.contains("integer") || types.contains("number");
+            if (value instanceof Number)
+                return types.isEmpty() || types.contains("number");
+            return false;
+        }
+
         private boolean accepts(Object value)
         {
             if (types.isEmpty())

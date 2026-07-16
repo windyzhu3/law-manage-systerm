@@ -2,6 +2,7 @@ package com.law.todo.expression;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -61,6 +62,14 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
         }
     }
 
+    record DecodedCondition(ConditionExpression expression, boolean canonical)
+    {
+        public DecodedCondition
+        {
+            Objects.requireNonNull(expression, "expression");
+        }
+    }
+
     static ConditionExpression and(ConditionExpression... conditions)
     {
         return new GroupCondition(GroupOperator.AND, Arrays.asList(conditions));
@@ -99,6 +108,11 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
 
     static ConditionExpression fromJson(String json)
     {
+        return decodeJson(json).expression();
+    }
+
+    static DecodedCondition decodeJson(String json)
+    {
         if (json == null || json.isBlank())
             throw new IllegalArgumentException("Condition JSON is required");
         Map<String, Object> document;
@@ -113,29 +127,44 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
         }
         if (document == null)
             throw new IllegalArgumentException("Condition must be a JSON object");
-        return fromMap(document);
+        return decodeMap(document);
     }
 
     /** Decodes either the safe tree form or, when no tree markers exist, a flat legacy map. */
     static ConditionExpression fromMap(Map<String, ?> document)
     {
-        if (document == null || document.isEmpty())
-            throw new IllegalArgumentException("Condition object cannot be empty");
-        if (document.containsKey("field") && document.containsKey("operator"))
-            return decodePredicate(document);
-        if (treeNode(document))
-            return decodeNode(document);
-        return legacy(document);
+        return decodeMap(document).expression();
     }
 
-    private static boolean treeNode(Map<String, ?> document)
+    static DecodedCondition decodeMap(Map<String, ?> document)
     {
-        Object value = document.get("type");
-        if (!(value instanceof String text))
-            return false;
-        String type = text.toUpperCase(Locale.ROOT);
-        return (type.equals("AND") || type.equals("OR")) && document.containsKey("conditions")
-                || type.equals("NOT") && document.containsKey("condition");
+        if (document == null || document.isEmpty())
+            throw new IllegalArgumentException("Condition object cannot be empty");
+        if (document.containsKey("expressionVersion") || document.containsKey("root"))
+            return new DecodedCondition(decodeEnvelope(document), true);
+        return new DecodedCondition(legacy(document), false);
+    }
+
+    private static ConditionExpression decodeEnvelope(Map<String, ?> document)
+    {
+        requireKeys(document, Set.of("expressionVersion", "root"));
+        Object version = document.get("expressionVersion");
+        if (!(version instanceof Byte || version instanceof Short || version instanceof Integer
+                || version instanceof Long || version instanceof java.math.BigInteger)
+                || ((Number) version).longValue() != 1L)
+            throw new IllegalArgumentException("Unsupported condition expression version: " + version);
+        if (!(document.get("root") instanceof Map<?, ?> root))
+            throw new IllegalArgumentException("Condition expression root must be an object");
+        return decodeExpressionNode(stringMap(root));
+    }
+
+    private static ConditionExpression decodeExpressionNode(Map<String, ?> node)
+    {
+        if (node.containsKey("field") || node.containsKey("operator"))
+            return decodePredicate(node);
+        if (node.containsKey("type"))
+            return decodeNode(node);
+        throw new IllegalArgumentException("Unsupported condition node shape");
     }
 
     private static ConditionExpression decodeNode(Map<String, ?> node)
@@ -159,7 +188,7 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
         {
             if (!(child instanceof Map<?, ?> map))
                 throw new IllegalArgumentException("Condition group children must be objects");
-            decoded.add(fromMap(stringMap(map)));
+            decoded.add(decodeExpressionNode(stringMap(map)));
         }
         return new GroupCondition(operator, decoded);
     }
@@ -169,7 +198,7 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
         requireKeys(node, Set.of("type", "condition"));
         if (!(node.get("condition") instanceof Map<?, ?> map))
             throw new IllegalArgumentException("NOT requires a condition object");
-        return not(fromMap(stringMap(map)));
+        return not(decodeExpressionNode(stringMap(map)));
     }
 
     private static ConditionExpression decodePredicate(Map<String, ?> node)
@@ -218,7 +247,11 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
     private static Object copyJsonValue(Object value)
     {
         if (value instanceof Map<?, ?> map)
-            return Map.copyOf(stringMap(map));
+        {
+            Map<String, Object> copy = new LinkedHashMap<>();
+            stringMap(map).forEach((key, entry) -> copy.put(key, copyJsonValue(entry)));
+            return Collections.unmodifiableMap(copy);
+        }
         if (value instanceof List<?> list)
             return list.stream().map(ConditionExpression::copyJsonValue).toList();
         return value;

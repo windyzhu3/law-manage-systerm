@@ -15,9 +15,7 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.definition.model.TodoDefinitionDocument;
-import com.law.todo.expression.ConditionExpression;
-import com.law.todo.expression.ConditionTypeChecker;
-import com.law.todo.expression.ConditionTypeChecker.JsonSchema;
+import com.law.todo.expression.ConditionValidator;
 
 @Component
 public class TodoDefinitionCompiler
@@ -25,20 +23,33 @@ public class TodoDefinitionCompiler
     private final TodoDefinitionCodec codec;
     private final TodoEventCatalogService eventCatalog;
     private final TodoDecisionService decisions;
-    private final ConditionTypeChecker conditionTypeChecker = new ConditionTypeChecker();
+    private final ConditionValidator conditionValidator;
 
-    @Autowired
     public TodoDefinitionCompiler(TodoEventCatalogService eventCatalog, TodoDecisionService decisions)
     {
-        this(new TodoDefinitionCodec(), eventCatalog, decisions);
+        this(new TodoDefinitionCodec(), eventCatalog, decisions, new ConditionValidator());
+    }
+
+    @Autowired
+    public TodoDefinitionCompiler(TodoEventCatalogService eventCatalog, TodoDecisionService decisions,
+            ConditionValidator conditionValidator)
+    {
+        this(new TodoDefinitionCodec(), eventCatalog, decisions, conditionValidator);
     }
 
     public TodoDefinitionCompiler(TodoDefinitionCodec codec, TodoEventCatalogService eventCatalog,
             TodoDecisionService decisions)
     {
+        this(codec, eventCatalog, decisions, new ConditionValidator());
+    }
+
+    public TodoDefinitionCompiler(TodoDefinitionCodec codec, TodoEventCatalogService eventCatalog,
+            TodoDecisionService decisions, ConditionValidator conditionValidator)
+    {
         this.codec = Objects.requireNonNull(codec, "codec");
         this.eventCatalog = Objects.requireNonNull(eventCatalog, "eventCatalog");
         this.decisions = Objects.requireNonNull(decisions, "decisions");
+        this.conditionValidator = Objects.requireNonNull(conditionValidator, "conditionValidator");
     }
 
     public DefinitionValidationReport compile(TodoDefinitionDocument definition)
@@ -98,15 +109,7 @@ public class TodoDefinitionCompiler
     {
         if (event.condition().isEmpty())
             return;
-        try
-        {
-            ConditionExpression expression = ConditionExpression.fromMap(event.condition());
-            errors.addAll(conditionTypeChecker.check(expression, JsonSchema.parse(payloadSchema)));
-        }
-        catch (IllegalArgumentException invalid)
-        {
-            errors.add(issue("TODO_CONDITION_INVALID", "event.condition", invalid.getMessage()));
-        }
+        errors.addAll(conditionValidator.validate(event.condition(), payloadSchema, false).issues());
     }
 
     private static void requireSection(Object section, String path, List<ValidationIssue> errors)

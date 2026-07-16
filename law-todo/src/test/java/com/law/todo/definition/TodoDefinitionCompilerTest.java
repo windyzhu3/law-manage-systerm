@@ -1,6 +1,7 @@
 package com.law.todo.definition;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
@@ -29,6 +30,7 @@ import com.law.todo.definition.model.TodoDefinitionDocument.RoutingGraph;
 import com.law.todo.definition.model.TodoDefinitionDocument.SlaRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.expression.ConditionValidator;
 
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionCompilerTest
@@ -115,7 +117,8 @@ class TodoDefinitionCompilerTest
                 "payload_schema_json", "{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"}}}",
                 "status", "ACTIVE"));
         TodoDefinitionDocument definition = definition("LEAD_CREATED", List.of(),
-                Map.of("field", "class.classLoader", "operator", "EQ", "value", "x"));
+                Map.of("expressionVersion", 1, "root",
+                        Map.of("field", "class.classLoader", "operator", "EQ", "value", "x")));
 
         DefinitionValidationReport report = compiler.compile(definition);
 
@@ -124,10 +127,30 @@ class TodoDefinitionCompilerTest
     }
 
     @Test
+    void objectLiteralWithJsonNullProducesAValidationIssueInsteadOfThrowing()
+    {
+        when(mapper.selectEventCatalog("LEAD_CREATED", 1)).thenReturn(Map.of(
+                "event_type", "LEAD_CREATED", "payload_version", 1,
+                "payload_schema_json", "{\"type\":\"object\",\"properties\":{\"amount\":{\"type\":\"number\"}}}",
+                "status", "ACTIVE"));
+        Map<String,Object> objectLiteral = new java.util.LinkedHashMap<>();
+        objectLiteral.put("optional", null);
+        TodoDefinitionDocument definition = definition("LEAD_CREATED", List.of(),
+                Map.of("expressionVersion", 1, "root",
+                        Map.of("field", "amount", "operator", "EQ", "value", objectLiteral)));
+
+        DefinitionValidationReport report = assertDoesNotThrow(() -> compiler.compile(definition));
+
+        assertTrue(report.errors().stream()
+                .anyMatch(error -> error.code().equals("TODO_CONDITION_VALUE_TYPE_INVALID")));
+    }
+
+    @Test
     void springConstructorIsExplicitWhenCompilerHasMultipleConstructors() throws Exception
     {
         assertTrue(TodoDefinitionCompiler.class
-                .getConstructor(TodoEventCatalogService.class,TodoDecisionService.class)
+                .getConstructor(TodoEventCatalogService.class,TodoDecisionService.class,
+                        ConditionValidator.class)
                 .isAnnotationPresent(Autowired.class));
     }
 
