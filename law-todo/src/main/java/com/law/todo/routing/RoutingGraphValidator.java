@@ -222,7 +222,7 @@ public final class RoutingGraphValidator
         Map<String,Set<String>> provenancesByNode=new HashMap<>();
         ArrayDeque<BranchFlow> queue=new ArrayDeque<>();
         Set<BranchFlow> visited=new HashSet<>();
-        queue.add(new BranchFlow(start,noBranch,"ROOT",null,null));
+        queue.add(new BranchFlow(start,noBranch,"ROOT",null,null,null));
         while(!queue.isEmpty())
         {
             BranchFlow flow=queue.remove();
@@ -232,9 +232,11 @@ public final class RoutingGraphValidator
             if("JOIN".equals(type))
             {
                 arrivals.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(new JoinArrival(
-                        flow.branchKey(),flow.provenance(),flow.sourceForkKey(),flow.sourceEdgeKey()));
+                        flow.branchKey(),flow.provenance(),flow.sourceForkKey(),flow.sourceEdgeKey(),flow.sourceParentProvenance()));
+                String outputProvenance=completeParallelBlock(flow,nodes.get(flow.nodeKey()),flow.nodeKey(),nodes,outgoing)
+                        ?flow.sourceParentProvenance():"JOIN:"+flow.nodeKey();
                 for(Map<String,Object> edge:outgoing.getOrDefault(flow.nodeKey(),List.of()))
-                    queue.add(new BranchFlow(text(edge.get("to")),noBranch,"JOIN:"+flow.nodeKey(),null,null));
+                    queue.add(new BranchFlow(text(edge.get("to")),noBranch,outputProvenance,null,null,null));
                 continue;
             }
             provenancesByNode.computeIfAbsent(flow.nodeKey(),ignored->new HashSet<>()).add(flow.provenance());
@@ -244,7 +246,8 @@ public final class RoutingGraphValidator
                 String branch=fork?text(edge.get("branchKey")):flow.branchKey();
                 String provenance=fork?flow.provenance()+"|"+flow.nodeKey()+":"+text(edge.get("key")):flow.provenance();
                 queue.add(new BranchFlow(text(edge.get("to")),blank(branch)?noBranch:branch,provenance,
-                        fork?flow.nodeKey():flow.sourceForkKey(),fork?text(edge.get("key")):flow.sourceEdgeKey()));
+                        fork?flow.nodeKey():flow.sourceForkKey(),fork?text(edge.get("key")):flow.sourceEdgeKey(),
+                        fork?flow.provenance():flow.sourceParentProvenance()));
             }
         }
         provenancesByNode.forEach((key,provenances)->{
@@ -282,6 +285,18 @@ public final class RoutingGraphValidator
                 nodes,outgoing,new HashSet<>(),new HashMap<>());
     }
 
+    private boolean completeParallelBlock(BranchFlow flow,Map<String,Object> join,String joinKey,
+            Map<String,Map<String,Object>> nodes,Map<String,List<Map<String,Object>>> outgoing)
+    {
+        if(flow.sourceForkKey()==null||flow.sourceParentProvenance()==null)return false;
+        List<Map<String,Object>> sourceEdges=outgoing.getOrDefault(flow.sourceForkKey(),List.of());
+        Set<String> produced=new HashSet<>();
+        sourceEdges.stream().map(edge->text(edge.get("branchKey"))).filter(branch->!blank(branch)).forEach(produced::add);
+        Set<String> expected=new HashSet<>(strings(join.get("branches")));
+        return !sourceEdges.isEmpty()&&produced.equals(expected)&&sourceEdges.stream().allMatch(edge->
+                allPathsReachJoin(text(edge.get("to")),joinKey,nodes,outgoing,new HashSet<>(),new HashMap<>()));
+    }
+
     private boolean allPathsReachJoin(String current,String joinKey,Map<String,Map<String,Object>> nodes,
             Map<String,List<Map<String,Object>>> outgoing,Set<String> visiting,Map<String,Boolean> memo)
     {
@@ -297,8 +312,10 @@ public final class RoutingGraphValidator
         visiting.remove(current);memo.put(current,result);return result;
     }
 
-    private record BranchFlow(String nodeKey,String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey) { }
-    private record JoinArrival(String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey) { }
+    private record BranchFlow(String nodeKey,String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey,
+            String sourceParentProvenance) { }
+    private record JoinArrival(String branchKey,String provenance,String sourceForkKey,String sourceEdgeKey,
+            String sourceParentProvenance) { }
 
     @SuppressWarnings("unchecked")
     private void validateCondition(Object value, String path, List<ValidationIssue> issues)

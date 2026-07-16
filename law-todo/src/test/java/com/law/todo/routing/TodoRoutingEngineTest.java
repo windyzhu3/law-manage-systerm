@@ -269,6 +269,20 @@ class TodoRoutingEngineTest
                 .anyMatch(issue->"TODO_ROUTE_JOIN_ALL_NOT_GUARANTEED".equals(issue.code())));
     }
 
+    @Test void completeParallelBlockRestoresParentTokenBeforeExclusivePathMerge()
+    {
+        RoutingGraph graph=graph(List.of(node("start","TASK",Map.of("templateVersionId",9L)),node("decision","DECISION",Map.of()),
+                node("fork","FORK",Map.of()),node("join","JOIN",Map.of("joinMode","ALL","branches",List.of("a","b"))),
+                node("shared","TASK",Map.of("templateVersionId",10L)),node("end","END",Map.of())),
+                List.of(edge("start-decision","start","decision",null,0),
+                        conditionalEdge("parallel","decision","fork",10,eq("parallel",true)),defaultEdge("direct","decision","shared",0),
+                        edge("fork-a","fork","join","a",10),edge("fork-b","fork","join","b",0),
+                        edge("join-shared","join","shared",null,0),edge("shared-end","shared","end",null,0)));
+
+        assertTrue(new RoutingGraphValidator().validate(graph).stream()
+                .noneMatch(issue->"TODO_ROUTE_TOKEN_RECONVERGENCE_INVALID".equals(issue.code())));
+    }
+
     private RouteContext context(RoutingGraph graph, RouteToken token, Map<String, Object> payload)
     {
         TodoInstance todo = new TodoInstance();
