@@ -108,6 +108,7 @@ public interface TodoMapper
     Map<String,Object> selectAutoActionExecution(String executionKey);
     int claimAutoActionRetry(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("now") LocalDateTime now);
     int claimStaleAutoActionExecution(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("staleBefore") LocalDateTime staleBefore,@Param("now") LocalDateTime now);
+    int finalizeStaleAutoActionDead(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("finalAttempt") int finalAttempt,@Param("staleBefore") LocalDateTime staleBefore,@Param("now") LocalDateTime now,@Param("errorCode") String errorCode,@Param("errorMessage") String errorMessage);
     int completeAutoActionExecution(Map<String,Object> outcome);
     int insertAutoActionAudit(Map<String,Object> audit);
     int returnToPoolConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("operator") String operator);

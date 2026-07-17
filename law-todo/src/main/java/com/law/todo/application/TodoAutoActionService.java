@@ -78,18 +78,8 @@ public class TodoAutoActionService
     public AutoActionResult execute(AutoActionRule rule, TodoInstance todo, LocalDateTime now)
     {
         Objects.requireNonNull(rule, "rule");Objects.requireNonNull(todo, "todo");Objects.requireNonNull(now, "now");
-        Map<String,Object> config = rule.config();
-        String actionType = text(first(config, "actionType", "action"));
-        if (!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(actionType))
-            throw new TodoException("TODO_AUTO_ACTION_NOT_ALLOWED", "Auto action is not allow-listed: " + actionType);
-        TodoAutoActionCapability capability = capabilities.get(actionType);
-        if (capability == null)
-            throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISSING", "No registered capability for: " + actionType);
-        String declaredCapability = text(config.get("capability"));
-        if (declaredCapability == null || !actionType.equals(declaredCapability))
-            throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISMATCH", "Declared capability does not match action type");
-
-        String ruleKey = requiredRuleKey(config);
+        Map<String,Object> config = rule.config();RuntimeRule runtime=validateRuntimeRule(config);
+        String actionType=runtime.actionType();String ruleKey=runtime.ruleKey();TodoAutoActionCapability capability=runtime.capability();
         String executionKey = executionKey(todo.getTodoId(), ruleKey);
         int maxAttempts = positiveInt(config.get("maxAttempts"), DEFAULT_MAX_ATTEMPTS, "maxAttempts");
         int retryMinutes = positiveInt(config.get("retryDelayMinutes"), DEFAULT_RETRY_MINUTES, "retryDelayMinutes");
@@ -113,6 +103,16 @@ public class TodoAutoActionService
         else if ("CLAIMED".equals(status)&&inserted==0)
         {
             int currentAttempt=number(value(execution,"attempt_count","attemptCount"));
+            if(currentAttempt+1>=maxAttempts)
+            {
+                int finalAttempt=Math.max(currentAttempt,maxAttempts);String code="TODO_AUTO_ACTION_STALE_MAX_ATTEMPTS",message="Stale execution reached maximum attempts";
+                Map<String,Object> audit=audit(executionKey,todo,ruleKey,actionType,finalAttempt,AutoActionResult.dead(code,message),now);
+                if(recorder.finalizeStaleDead(executionKey,currentAttempt,finalAttempt,now.minusMinutes(claimTimeoutMinutes),now,code,message,audit))
+                    return AutoActionResult.dead(code,message);
+                Map<String,Object> winner=mapper.selectAutoActionExecution(executionKey);String winnerStatus=text(value(winner,"status","status"));
+                if("DEAD".equals(winnerStatus))return AutoActionResult.dead(text(value(winner,"last_error_code","lastErrorCode")),text(value(winner,"last_error_message","lastErrorMessage")));
+                return AutoActionResult.retry("TODO_AUTO_ACTION_ALREADY_CLAIMED","Execution is already claimed");
+            }
             if(mapper.claimStaleAutoActionExecution(executionKey,currentAttempt,now.minusMinutes(claimTimeoutMinutes),now)<=0)
                 return AutoActionResult.retry("TODO_AUTO_ACTION_ALREADY_CLAIMED","Execution is already claimed");
             execution=mapper.selectAutoActionExecution(executionKey);
@@ -157,8 +157,21 @@ public class TodoAutoActionService
             TodoDefinitionDocument definition;
             try { definition = codec.read(json); }
             catch (RuntimeException invalid) { continue; }
-            for (AutoActionRule rule : definition.autoActions())
-                if (due(rule, row, todo, now)) { execute(rule, todo, now);executed++; }
+            for (int index=0;index<definition.autoActions().size();index++)
+            {
+                AutoActionRule rule=definition.autoActions().get(index);
+                try { validateRuntimeRule(rule.config()); }
+                catch(RuntimeException invalid)
+                {
+                    try{recordInvalidRule(todo,rule,index,invalid,now);executed++;}catch(RuntimeException ignored){/* isolate malformed published snapshots */}
+                    continue;
+                }
+                try
+                {
+                    if(due(rule,row,todo,now)){execute(rule,todo,now);executed++;}
+                }
+                catch(RuntimeException ignored){/* isolate one execution without misclassifying a valid published rule */}
+            }
         }
         return executed;
     }
@@ -169,10 +182,35 @@ public class TodoAutoActionService
         Map<String,Object> outcome = new HashMap<>();outcome.put("executionKey",key);outcome.put("attemptNo",attempt);
         outcome.put("status",result.status().name());outcome.put("errorCode",result.errorCode());outcome.put("errorMessage",result.errorMessage());
         outcome.put("nextRetryAt",result.status()==AutoActionStatus.RETRY?now.plusMinutes(retryMinutes):null);outcome.put("now",now);
-        Map<String,Object> audit = new HashMap<>(outcome);audit.put("todoId",todo.getTodoId());audit.put("ruleKey",ruleKey);audit.put("actionType",actionType);
-        audit.put("serviceActorId",SERVICE_ACTOR.userId());audit.put("serviceActorName",SERVICE_ACTOR.userName());
+        Map<String,Object> audit=audit(key,todo,ruleKey,actionType,attempt,result,now);
         recorder.record(outcome,audit);
         return result;
+    }
+
+    private Map<String,Object> audit(String key,TodoInstance todo,String ruleKey,String actionType,int attempt,AutoActionResult result,LocalDateTime now)
+    {
+        Map<String,Object> audit=new HashMap<>();audit.put("executionKey",key);audit.put("attemptNo",attempt);audit.put("todoId",todo.getTodoId());audit.put("ruleKey",ruleKey);audit.put("actionType",actionType);audit.put("status",result.status().name());audit.put("errorCode",result.errorCode());audit.put("errorMessage",result.errorMessage());audit.put("serviceActorId",SERVICE_ACTOR.userId());audit.put("serviceActorName",SERVICE_ACTOR.userName());audit.put("now",now);return audit;
+    }
+
+    private void recordInvalidRule(TodoInstance todo,AutoActionRule rule,int index,RuntimeException invalid,LocalDateTime now)
+    {
+        String raw=text(rule.config().get("ruleKey"));String suffix=raw!=null&&!raw.isBlank()&&raw.length()<=70?raw:"INDEX-"+index;
+        String ruleKey="INVALID:"+suffix,executionKey=executionKey(todo.getTodoId(),ruleKey),actionType="INVALID_RULE";
+        Map<String,Object> claim=new HashMap<>();claim.put("executionKey",executionKey);claim.put("todoId",todo.getTodoId());claim.put("ruleKey",ruleKey);claim.put("actionType",actionType);claim.put("now",now);
+        int inserted=mapper.insertAutoActionExecutionIfAbsent(claim);Map<String,Object> execution=mapper.selectAutoActionExecution(executionKey);requireIdentity(execution,todo.getTodoId(),ruleKey,actionType);
+        if(inserted==0)return;String code=invalid instanceof TodoException business?business.getBusinessCode():"TODO_AUTO_ACTION_RULE_INVALID";
+        record(executionKey,todo,ruleKey,actionType,number(value(execution,"attempt_count","attemptCount")),AutoActionResult.dead(code,invalid.getMessage()),now,DEFAULT_RETRY_MINUTES);
+    }
+
+    private RuntimeRule validateRuntimeRule(Map<String,Object> config)
+    {
+        String actionType=text(first(config,"actionType","action"));if(!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(actionType))throw new TodoException("TODO_AUTO_ACTION_NOT_ALLOWED","Auto action is not allow-listed: "+actionType);
+        TodoAutoActionCapability capability=capabilities.get(actionType);if(capability==null)throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISSING","No registered capability for: "+actionType);
+        String declared=text(config.get("capability"));if(!actionType.equals(declared))throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISMATCH","Declared capability does not match action type");
+        String ruleKey=requiredRuleKey(config);String trigger=text(config.get("triggerAt"));if(!java.util.Set.of("DUE","SLA_80","SLA_100","SLA_150").contains(trigger))throw new TodoException("TODO_AUTO_ACTION_TRIGGER_INVALID","triggerAt must use a governed due time");
+        if("TRANSFER".equals(actionType))positiveLong(config.get("targetOwnerId"),"TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID","targetOwnerId must be a positive integer");
+        positiveInt(config.get("maxAttempts"),DEFAULT_MAX_ATTEMPTS,"maxAttempts");positiveInt(config.get("retryDelayMinutes"),DEFAULT_RETRY_MINUTES,"retryDelayMinutes");positiveInt(config.get("claimTimeoutMinutes"),15,"claimTimeoutMinutes");
+        return new RuntimeRule(actionType,ruleKey,capability);
     }
 
     @SuppressWarnings("unchecked")
@@ -222,6 +260,7 @@ public class TodoAutoActionService
         if (key == null || key.isBlank() || key.length() > 96) throw new TodoException("TODO_AUTO_ACTION_RULE_KEY_INVALID", "ruleKey is required and limited to 96 characters");
         return key;
     }
+    private Long positiveLong(Object raw,String code,String message){try{Long value=raw==null?null:Long.valueOf(String.valueOf(raw));if(value==null||value<=0)throw new NumberFormatException();return value;}catch(NumberFormatException invalid){throw new TodoException(code,message);}}
     private String executionKey(Long todoId,String ruleKey){return "AUTO:"+todoId+":"+ruleKey;}
     private int positiveInt(Object raw,int fallback,String field){if(raw==null)return fallback;int value=number(raw);if(value<=0)throw new TodoException("TODO_AUTO_ACTION_RULE_INVALID",field+" must be positive");return value;}
     private int number(Object raw){return Integer.parseInt(String.valueOf(raw));}
@@ -230,5 +269,6 @@ public class TodoAutoActionService
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private Object first(Map<String,Object> row,String first,String second){return row.containsKey(first)?row.get(first):row.get(second);}
     private String text(Object raw){return raw==null?null:String.valueOf(raw);}
+    private record RuntimeRule(String actionType,String ruleKey,TodoAutoActionCapability capability) { }
 
 }

@@ -96,10 +96,10 @@ public class TodoDefinitionCompiler
             Map<String,Object> config=definition.autoActions().get(index).config();String path="autoActions["+index+"]";
             String type=text(config.containsKey("actionType")?config.get("actionType"):config.get("action"));
             if(!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(type))errors.add(issue("TODO_AUTO_ACTION_NOT_ALLOWED",path+".actionType","Auto action is not allow-listed"));
-            String key=text(config.get("ruleKey"));if(blank(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_REQUIRED",path+".ruleKey","ruleKey is required"));else if(!keys.add(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_DUPLICATE",path+".ruleKey","ruleKey must be unique"));
+            String key=text(config.get("ruleKey"));if(blank(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_REQUIRED",path+".ruleKey","ruleKey is required"));else if(key.length()>96)errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_INVALID",path+".ruleKey","ruleKey is limited to 96 characters"));else if(!keys.add(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_DUPLICATE",path+".ruleKey","ruleKey must be unique"));
             String trigger=text(config.get("triggerAt"));if(!java.util.Set.of("DUE","SLA_80","SLA_100","SLA_150").contains(trigger))errors.add(issue("TODO_AUTO_ACTION_TRIGGER_INVALID",path+".triggerAt","triggerAt must use a governed SLA time"));
             String capability=text(config.get("capability"));if(capability==null||!capability.equals(type))errors.add(issue("TODO_AUTO_ACTION_CAPABILITY_MISMATCH",path+".capability","Capability is required and must match actionType"));
-            if("TRANSFER".equals(type)&&config.get("targetOwnerId")==null)errors.add(issue("TODO_AUTO_ACTION_TRANSFER_OWNER_REQUIRED",path+".targetOwnerId","TRANSFER requires targetOwnerId"));
+            if("TRANSFER".equals(type))positiveLong(config.get("targetOwnerId"),path+".targetOwnerId",errors);
             positive(config.get("maxAttempts"),path+".maxAttempts",errors);positive(config.get("retryDelayMinutes"),path+".retryDelayMinutes",errors);positive(config.get("claimTimeoutMinutes"),path+".claimTimeoutMinutes",errors);
             if(config.get("precondition")!=null)
             {
@@ -109,6 +109,7 @@ public class TodoDefinitionCompiler
         }
     }
     private void positive(Object value,String path,List<ValidationIssue> errors){if(value==null)return;try{if(Integer.parseInt(String.valueOf(value))<=0)throw new NumberFormatException();}catch(NumberFormatException invalid){errors.add(issue("TODO_AUTO_ACTION_NUMBER_INVALID",path,"Value must be a positive integer"));}}
+    private void positiveLong(Object value,String path,List<ValidationIssue> errors){try{if(value==null||Long.parseLong(String.valueOf(value))<=0)throw new NumberFormatException();}catch(NumberFormatException invalid){errors.add(issue("TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID",path,"targetOwnerId must be a positive integer"));}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
 
     private void validateTaskReferences(TodoDefinitionDocument definition, CompilationContext context,

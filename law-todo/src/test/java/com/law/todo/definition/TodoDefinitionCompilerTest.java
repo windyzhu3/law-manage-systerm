@@ -45,6 +45,15 @@ class TodoDefinitionCompilerTest
         var codes=compiler.compile(invalid).errors().stream().map(issue->issue.code()).toList();
         assertTrue(codes.contains("TODO_AUTO_ACTION_NOT_ALLOWED"));assertTrue(codes.contains("TODO_AUTO_ACTION_CAPABILITY_MISMATCH"));
     }
+    @Test void compilerRejectsOversizedRuleKeyAndNonPositiveTransferOwner()
+    {
+        TodoDefinitionDocument source=valid();
+        TodoDefinitionDocument invalid=new TodoDefinitionDocument(source.schemaVersion(),source.templateCode(),source.event(),source.owner(),source.dod(),source.sla(),source.ui(),source.routing(),List.of(
+                new AutoActionRule(Map.of("ruleKey","x".repeat(97),"actionType","COMPLETE_DEFAULT","capability","COMPLETE_DEFAULT","triggerAt","DUE")),
+                new AutoActionRule(Map.of("ruleKey","transfer","actionType","TRANSFER","capability","TRANSFER","triggerAt","SLA_100","targetOwnerId",0))),source.decisionRefs(),source.acceptanceRefs());
+        var codes=compiler.compile(invalid).errors().stream().map(issue->issue.code()).toList();
+        assertTrue(codes.contains("TODO_AUTO_ACTION_RULE_KEY_INVALID"));assertTrue(codes.contains("TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID"));
+    }
     @Test void compilerRejectsDodFieldThatRuntimeFormCannotRender()
     {
         TodoDefinitionDocument source=valid();

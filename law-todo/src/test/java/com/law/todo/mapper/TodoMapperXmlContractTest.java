@@ -134,8 +134,11 @@ class TodoMapperXmlContractTest
         {
             String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
             assertTrue(xml.contains("insert ignore into todo_auto_action_execution"));
+            assertTrue(xml.contains("action_type,action_source,from_status"));
             assertTrue(xml.contains("status='RETRY' and attempt_count=#{expectedAttempt}"));
             assertTrue(xml.contains("status='CLAIMED' and attempt_count=#{attemptNo}"));
+            assertTrue(xml.contains("finalizeStaleAutoActionDead"));
+            assertTrue(xml.contains("status='CLAIMED' and attempt_count=#{expectedAttempt} and claimed_at&lt;=#{staleBefore}"));
             assertTrue(xml.contains("insert into todo_auto_action_audit"));
             assertTrue(xml.contains("not exists(select 1 from todo_sla_record paused"));
             assertTrue(xml.contains("returnToPoolConditionally"));

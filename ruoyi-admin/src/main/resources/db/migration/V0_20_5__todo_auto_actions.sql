@@ -1,3 +1,5 @@
+alter table todo_action_log add column action_source varchar(16) not null default 'HUMAN' after action_type;
+
 create table todo_auto_action_execution (
   execution_key varchar(300) not null,
   todo_id bigint not null,
@@ -15,7 +17,7 @@ create table todo_auto_action_execution (
   primary key (execution_key),
   key idx_todo_auto_action_due (status,next_retry_at),
   key idx_todo_auto_action_todo (todo_id,rule_key),
-  constraint chk_todo_auto_action_type check (action_type in ('COMPLETE_DEFAULT','RETURN_DEFAULT','ESCALATE','TRANSFER','RETURN_POOL')),
+  constraint chk_todo_auto_action_type check (action_type in ('COMPLETE_DEFAULT','RETURN_DEFAULT','ESCALATE','TRANSFER','RETURN_POOL','INVALID_RULE')),
   constraint chk_todo_auto_action_execution_status check (status in ('CLAIMED','SUCCESS','RETRY','DEAD')),
   constraint chk_todo_auto_action_attempt check (attempt_count > 0)
 ) engine=innodb comment='Idempotent controlled auto-action execution claim';

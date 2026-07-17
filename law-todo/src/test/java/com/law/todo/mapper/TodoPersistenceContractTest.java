@@ -60,7 +60,9 @@ class TodoPersistenceContractTest
     {
         Path migration=Path.of("..","ruoyi-admin","src","main","resources","db","migration","V0_20_5__todo_auto_actions.sql");
         String sql=Files.readString(migration).toLowerCase().replaceAll("\\s+"," ");
+        assertTrue(sql.contains("add column action_source varchar(16) not null default 'human'"));
         assertTrue(sql.contains("primary key (execution_key)"));assertTrue(sql.contains("unique key uk_todo_auto_action_audit_attempt"));
+        assertTrue(sql.contains("rule_key varchar(96) not null"));assertTrue(sql.contains("'invalid_rule'"));
         assertTrue(sql.contains("check (status in ('success','retry','dead'))"));
         int audit=sql.indexOf("create table todo_auto_action_audit");assertTrue(audit>=0);String auditDdl=sql.substring(audit);
         assertTrue(!auditDdl.contains("on update"));assertTrue(!auditDdl.contains("update todo_auto_action_audit"));assertTrue(!auditDdl.contains("delete from todo_auto_action_audit"));

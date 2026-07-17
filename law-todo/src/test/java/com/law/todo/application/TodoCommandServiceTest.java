@@ -79,6 +79,25 @@ class TodoCommandServiceTest
         verify(mapper,never()).updateStatusConditionally(2L,"SUBMITTED","COMPLETED",null,"alice");
     }
 
+    @Test void humanCommandsCannotClaimReservedAutoActionNamespace()
+    {
+        TodoException error=assertThrows(TodoException.class,()->service.claim(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),new Actor(7L,"alice",3L)));
+        assertEquals("TODO_ACTION_ID_RESERVED",error.getBusinessCode());verify(mapper,never()).selectActionById("AUTO:1:rule");
+    }
+
+    @Test void autoReplayRejectsActionTypeOrSourceCollision()
+    {
+        when(mapper.selectActionById("AUTO:1:rule")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE","action_source","HUMAN","operator_id",7L,"operator_name","alice"));
+        TodoException error=assertThrows(TodoException.class,()->service.autoComplete(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));
+        assertEquals("TODO_AUTO_ACTION_REPLAY_CONFLICT",error.getBusinessCode());verify(mapper,never()).selectById(1L);
+    }
+
+    @Test void autoReplayAcceptsOnlyMatchingSystemAction()
+    {
+        TodoInstance done=todo(1L,"COMPLETED",7L);when(mapper.selectActionById("AUTO:1:rule")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.selectById(1L)).thenReturn(done);
+        assertEquals(done,service.autoComplete(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));verify(mapper,never()).updateStatusConditionally(any(),any(),any(),any(),any());
+    }
+
     @Test void strongActionCommandPreservesPresentNullAndLegacyPayloadAlias()
     {
         Map<String,Object> fields=new java.util.HashMap<>();fields.put("result",null);
