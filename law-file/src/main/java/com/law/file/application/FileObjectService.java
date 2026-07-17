@@ -173,7 +173,7 @@ public class FileObjectService
         Scope scope=scope(visibility,actor);
         String fingerprint=relationFingerprint(fileObjectId,businessType,businessId,materialType,scope);
         RelationAction prior=repository.findRelationAction(actor.userId(),actionId);
-        if(prior!=null)return replayRelation(prior,"RELATE",fingerprint);
+        if(prior!=null)return replayRelation(prior,"RELATE",fingerprint,fileObjectId);
         access.requireCanWrite(fileObjectId,actor);access.requireCanWrite(businessType,businessId,actor);
         FileBusinessRelation relation=repository.findRelation(fileObjectId,businessType,businessId,materialType,
             scope.visibility(),scope.deptId(),scope.userId());
@@ -191,9 +191,9 @@ public class FileObjectService
     @Transactional public FileBusinessRelation revokeRelation(Long fileObjectId,Long relationId,String actionId,FileActor actor)
     {
         if(invalidText(actionId,128))throw new FileException("FILE_ACTION_ID_REQUIRED","actionId is required");
-        String fingerprint=relationActionFingerprint("REVOKE",relationId);
+        String fingerprint=relationActionFingerprint("REVOKE",fileObjectId,relationId);
         RelationAction prior=repository.findRelationAction(actor.userId(),actionId);
-        if(prior!=null)return replayRelation(prior,"REVOKE",fingerprint);
+        if(prior!=null)return replayRelation(prior,"REVOKE",fingerprint,fileObjectId);
         FileBusinessRelation relation=access.requireCanWriteRelation(fileObjectId,relationId,actor);
         if(repository.revokeRelation(relationId)!=1)conflict("File relation changed concurrently");
         insertRelationAction(new RelationAction(actor.userId(),actionId,"REVOKE",relationId,fingerprint,clock.instant()));
@@ -280,15 +280,27 @@ public class FileObjectService
 
     private void cleanupFailedUpload(UploadIntent intent,FileStoragePort.StagedObject staged,boolean published,FileActor actor)
     {
-        try{if(published)storage.delete(intent.objectKey());else if(staged!=null)storage.abort(staged);}catch(RuntimeException ignored){}
-        cleanupAudit.recordCleanup(intent.fileObjectId(),intent.idempotencyKey(),"UPLOAD_ABORTED",actor);
+        if(!published&&staged==null)return;
+        String targetType=published?"OBJECT":"STAGED";
+        String targetKey=published?intent.objectKey():staged.stagingKey();
+        Long cleanupTaskId=cleanupAudit.beginCleanup(intent.fileObjectId(),intent.idempotencyKey(),targetType,targetKey,actor);
+        try
+        {
+            if(published)storage.delete(intent.objectKey());else storage.abort(staged);
+            cleanupAudit.recordCleanupSuccess(cleanupTaskId,"UPLOAD_ABORTED",actor);
+        }
+        catch(RuntimeException error)
+        {
+            String code=error instanceof FileException file?file.getBusinessCode():error.getClass().getSimpleName();
+            cleanupAudit.recordCleanupFailure(cleanupTaskId,code,safeCleanupMessage(error.getMessage()),actor);
+        }
     }
 
-    private FileBusinessRelation replayRelation(RelationAction prior,String type,String fingerprint)
+    private FileBusinessRelation replayRelation(RelationAction prior,String type,String fingerprint,Long expectedFileObjectId)
     {
         if(!type.equals(prior.actionType())||!fingerprint.equals(prior.requestFingerprint()))actionConflict();
         FileBusinessRelation relation=repository.findRelationById(prior.relationId());
-        if(relation==null)conflict("Recorded relation is unavailable");
+        if(relation==null||!expectedFileObjectId.equals(relation.fileObjectId()))actionConflict();
         return relation;
     }
 
@@ -339,8 +351,8 @@ public class FileObjectService
         };
     }
 
-    static String relationActionFingerprint(String type,Long relationId)
-    {return sha256(type+"\u001f"+relationId);}
+    static String relationActionFingerprint(String type,Long fileObjectId,Long relationId)
+    {return sha256(type+"\u001f"+fileObjectId+"\u001f"+relationId);}
     private static String relationFingerprint(Long fileId,String type,Long businessId,String material,Scope scope)
     {return sha256(String.join("\u001f","RELATE",String.valueOf(fileId),type,String.valueOf(businessId),material,
         scope.visibility(),String.valueOf(scope.deptId()),String.valueOf(scope.userId())));}
@@ -369,6 +381,8 @@ public class FileObjectService
         c.materialType(),normalizeVisibility(c.visibility())));}
     private static String safeFailure(String value)
     {if(value==null||value.isBlank())return "STREAM_FAILED";return value.length()>120?value.substring(0,120):value;}
+    private static String safeCleanupMessage(String value)
+    {if(value==null||value.isBlank())return "Storage cleanup failed";return value.length()>500?value.substring(0,500):value;}
     private static String objectKey(){return "objects/"+UUID.randomUUID();}
     private static String randomToken(int bytes){byte[] value=new byte[bytes];new SecureRandom().nextBytes(value);return Base64.getUrlEncoder().withoutPadding().encodeToString(value);}
     private static String sha256(String value){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));}catch(Exception e){throw new IllegalStateException(e);}}

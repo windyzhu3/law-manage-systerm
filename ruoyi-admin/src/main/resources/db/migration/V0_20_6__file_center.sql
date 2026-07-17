@@ -161,6 +161,29 @@ create table file_lifecycle_audit (
   key idx_file_lifecycle_action (actor_id,action_id)
 ) engine=innodb comment='Append-only relation, version and storage cleanup lifecycle audit';
 
+create table file_storage_cleanup (
+  cleanup_task_id bigint not null auto_increment,
+  file_object_id bigint not null,
+  action_id varchar(128) null,
+  target_type varchar(16) not null,
+  target_key varchar(300) not null,
+  status varchar(16) not null,
+  retry_count int not null default 0,
+  last_error_code varchar(120) null,
+  last_error_message varchar(500) null,
+  next_retry_at datetime not null,
+  actor_id bigint not null,
+  actor_dept_id bigint null,
+  completed_at datetime null,
+  create_time datetime not null,
+  update_time datetime not null,
+  primary key (cleanup_task_id),
+  key idx_file_cleanup_retry (status,next_retry_at,cleanup_task_id),
+  key idx_file_cleanup_object (file_object_id,create_time),
+  constraint chk_file_cleanup_target check (target_type in ('STAGED','OBJECT')),
+  constraint chk_file_cleanup_status check (status in ('PENDING','FAILED','COMPLETED'))
+) engine=innodb comment='Retryable storage cleanup task and alerting source';
+
 set @todo_menu=(select menu_id from sys_menu where perms='todo:list' order by menu_id limit 1);
 insert into sys_menu(menu_name,parent_id,order_num,path,component,`query`,route_name,is_frame,is_cache,menu_type,visible,status,perms,icon,create_by,create_time)
 select x.name,@todo_menu,x.ord,'#','',null,null,1,0,'F','0','0',x.perm,'#','admin',sysdate() from (

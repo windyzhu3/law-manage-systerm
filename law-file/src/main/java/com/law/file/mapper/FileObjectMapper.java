@@ -35,4 +35,10 @@ public interface FileObjectMapper
     List<Map<String,Object>> selectAccessLogs(Long fileObjectId);
     int insertLifecycleAudit(Map<String,Object> row);
     List<Map<String,Object>> selectLifecycleAudits(Long fileObjectId);
+    int insertCleanupTask(Map<String,Object> row);
+    Map<String,Object> selectCleanupTaskById(Long cleanupTaskId);
+    List<Map<String,Object>> selectRetryableCleanupTasks(@Param("readyAt") Instant readyAt,@Param("limit") int limit);
+    int completeCleanupTask(@Param("cleanupTaskId") Long cleanupTaskId,@Param("completedAt") Instant completedAt);
+    int failCleanupTask(@Param("cleanupTaskId") Long cleanupTaskId,@Param("errorCode") String errorCode,
+        @Param("errorMessage") String errorMessage,@Param("nextRetryAt") Instant nextRetryAt);
 }

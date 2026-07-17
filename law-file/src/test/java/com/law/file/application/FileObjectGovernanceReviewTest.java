@@ -136,10 +136,25 @@ class FileObjectGovernanceReviewTest
         verify(repository).insertLifecycleAudit(argThat(value->value.eventType().equals("RELATION_REVOKED")));
 
         when(repository.findRelationAction(7L,"revoke-1")).thenReturn(new RelationAction(
-            7L,"revoke-1","REVOKE",4L,FileObjectService.relationActionFingerprint("REVOKE",4L),now));
+            7L,"revoke-1","REVOKE",4L,FileObjectService.relationActionFingerprint("REVOKE",10L,4L),now));
         when(repository.findRelationById(4L)).thenReturn(revoked);
         assertFalse(service.revokeRelation(10L,4L,"revoke-1",actor).active());
         verify(repository,times(1)).revokeRelation(4L);
+    }
+
+    @Test void revoke_action_replay_on_a_different_file_path_is_a_non_enumerating_conflict()
+    {
+        FileBusinessRelation original=relation(4L,"DEPARTMENT",3L,0L,false);
+        when(repository.findRelationAction(7L,"revoke-1")).thenReturn(new RelationAction(
+            7L,"revoke-1","REVOKE",4L,FileObjectService.relationActionFingerprint("REVOKE",99L,4L),now));
+        when(repository.findRelationById(4L)).thenReturn(original);
+
+        FileException error=assertThrows(FileException.class,
+            ()->service.revokeRelation(99L,4L,"revoke-1",actor));
+
+        assertEquals("FILE_ACTION_ID_CONFLICT",error.getBusinessCode());
+        assertFalse(error.getMessage().contains("10"));
+        verify(repository,never()).revokeRelation(anyLong());
     }
 
     @Test void token_is_bound_to_one_relation_and_redemption_rechecks_that_relation()
@@ -177,12 +192,13 @@ class FileObjectGovernanceReviewTest
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
         when(repository.insertVersion(any())).thenReturn(null);
+        when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(31L);
 
         assertThrows(FileException.class,
             ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
 
         verify(storage).abort(staged);
-        verify(cleanupAudit).recordCleanup(10L,"idem-1","UPLOAD_ABORTED",actor);
+        verify(cleanupAudit).recordCleanupSuccess(31L,"UPLOAD_ABORTED",actor);
         verify(storage,never()).publish(any(),anyString());
     }
 
@@ -193,6 +209,7 @@ class FileObjectGovernanceReviewTest
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
         when(repository.insertVersion(any())).thenReturn(null);
+        when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(32L);
         TransactionSynchronizationManager.initSynchronization();
         try
         {
@@ -204,12 +221,31 @@ class FileObjectGovernanceReviewTest
 
             verify(storage).abort(staged);
             verify(storage,never()).delete(anyString());
-            verify(cleanupAudit).recordCleanup(10L,"idem-1","UPLOAD_ABORTED",actor);
+            verify(cleanupAudit).recordCleanupSuccess(32L,"UPLOAD_ABORTED",actor);
         }
         finally
         {
             TransactionSynchronizationManager.clearSynchronization();
         }
+    }
+
+    @Test void cleanup_storage_failure_is_persisted_as_failed_instead_of_upload_aborted()
+    {
+        UploadIntent intent=intent("REGISTERED",now.plusSeconds(60),null);
+        FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject("staged/1",3L,HASH);
+        when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
+        when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(repository.insertVersion(any())).thenReturn(null);
+        when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(33L);
+        doThrow(new FileException("FILE_STORAGE_ABORT_FAILED","Unable to discard staged file"))
+            .when(storage).abort(staged);
+
+        assertThrows(FileException.class,
+            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
+
+        verify(cleanupAudit).recordCleanupFailure(33L,"FILE_STORAGE_ABORT_FAILED",
+            "Unable to discard staged file",actor);
+        verify(cleanupAudit,never()).recordCleanupSuccess(anyLong(),eq("UPLOAD_ABORTED"),any());
     }
 
     private UploadIntent intent(String status,Instant expiresAt,Long completedVersionId)

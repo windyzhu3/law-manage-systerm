@@ -15,4 +15,7 @@ public final class FilePersistenceModel
         Instant expiresAt) { }
     public record RelationAction(Long actorId,String actionId,String actionType,Long relationId,
         String requestFingerprint,Instant createdAt) { }
+    public record CleanupTask(Long cleanupTaskId,Long fileObjectId,String actionId,String targetType,
+        String targetKey,String status,int retryCount,String lastErrorCode,String lastErrorMessage,
+        Instant nextRetryAt,Long actorId,Long actorDeptId,Instant createdAt) { }
 }

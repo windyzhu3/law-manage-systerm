@@ -16,6 +16,7 @@ import com.law.file.domain.FileObject.FileMaterial;
 import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
+import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.mapper.FileObjectMapper;
@@ -87,6 +88,19 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     @Override public int insertLifecycleAudit(LifecycleAudit value){return mapper.insertLifecycleAudit(lifecycleRow(value));}
     @Override public List<LifecycleAudit> findLifecycleAudits(Long id)
     {List<Map<String,Object>> rows=mapper.selectLifecycleAudits(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::lifecycle).toList();}
+    @Override public CleanupTask insertCleanupTask(CleanupTask value)
+    {
+        Map<String,Object> row=cleanupRow(value);if(mapper.insertCleanupTask(row)!=1)return null;
+        return new CleanupTask(longValue(row,"cleanupTaskId"),value.fileObjectId(),value.actionId(),value.targetType(),
+            value.targetKey(),value.status(),value.retryCount(),value.lastErrorCode(),value.lastErrorMessage(),
+            value.nextRetryAt(),value.actorId(),value.actorDeptId(),value.createdAt());
+    }
+    @Override public CleanupTask findCleanupTaskById(Long id){return cleanup(mapper.selectCleanupTaskById(id));}
+    @Override public List<CleanupTask> findRetryableCleanupTasks(Instant at,int limit)
+    {List<Map<String,Object>> rows=mapper.selectRetryableCleanupTasks(at,limit);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::cleanup).toList();}
+    @Override public int completeCleanupTask(Long id,Instant at){return mapper.completeCleanupTask(id,at);}
+    @Override public int failCleanupTask(Long id,String code,String message,Instant next)
+    {return mapper.failCleanupTask(id,code,message,next);}
 
     private static FileObject object(Map<String,Object> r){return r==null?null:new FileObject(longValue(r,"fileObjectId"),text(r,"logicalName"),integer(r,"currentVersionNo"),integer(r,"nextVersionNo"),text(r,"status"),longValue(r,"createdBy"),integer(r,"version"));}
     private static FileVersion version(Map<String,Object> r){return r==null?null:new FileVersion(longValue(r,"fileVersionId"),longValue(r,"fileObjectId"),integer(r,"versionNo"),text(r,"originalFileName"),text(r,"contentType"),number(r,"sizeBytes"),text(r,"sha256"),text(r,"changeDescription"),longValue(r,"createdBy"),instant(r,"createdAt"));}
@@ -97,6 +111,7 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     private static AccessToken token(Map<String,Object> r){return r==null?null:new AccessToken(longValue(r,"accessTokenId"),longValue(r,"fileObjectId"),longValue(r,"fileVersionId"),longValue(r,"relationId"),text(r,"accessType"),text(r,"tokenHash"),longValue(r,"actorId"),longValue(r,"actorDeptId"),instant(r,"expiresAt"),instant(r,"consumedAt"));}
     private static AccessLog accessLog(Map<String,Object> r){return r==null?null:new AccessLog(longValue(r,"accessLogId"),text(r,"accessSessionId"),longValue(r,"fileObjectId"),longValue(r,"fileVersionId"),longValue(r,"relationId"),text(r,"businessType"),longValue(r,"businessId"),text(r,"accessType"),text(r,"eventType"),text(r,"outcome"),text(r,"failureCode"),longValue(r,"actorId"),longValue(r,"actorDeptId"),text(r,"clientIp"),instant(r,"accessedAt"));}
     private static LifecycleAudit lifecycle(Map<String,Object> r){return r==null?null:new LifecycleAudit(longValue(r,"lifecycleAuditId"),longValue(r,"fileObjectId"),longValue(r,"fileVersionId"),longValue(r,"relationId"),text(r,"actionId"),text(r,"eventType"),text(r,"details"),longValue(r,"actorId"),longValue(r,"actorDeptId"),instant(r,"occurredAt"));}
+    private static CleanupTask cleanup(Map<String,Object> r){return r==null?null:new CleanupTask(longValue(r,"cleanupTaskId"),longValue(r,"fileObjectId"),text(r,"actionId"),text(r,"targetType"),text(r,"targetKey"),text(r,"status"),integer(r,"retryCount"),text(r,"lastErrorCode"),text(r,"lastErrorMessage"),instant(r,"nextRetryAt"),longValue(r,"actorId"),longValue(r,"actorDeptId"),instant(r,"createdAt"));}
 
     private static Map<String,Object> versionRow(StoredVersion stored){FileVersion v=stored.metadata();Map<String,Object> r=new HashMap<>();r.put("fileObjectId",v.fileObjectId());r.put("versionNo",v.versionNo());r.put("objectKey",stored.objectKey());r.put("originalFileName",v.originalFileName());r.put("contentType",v.contentType());r.put("sizeBytes",v.sizeBytes());r.put("sha256",v.sha256());r.put("changeDescription",v.changeDescription());r.put("createdBy",v.createdBy());r.put("createdAt",v.createdAt());return r;}
     private static Map<String,Object> intentRow(UploadIntent v){Map<String,Object> r=new HashMap<>();r.put("uploadIntentId",v.uploadIntentId());r.put("idempotencyKey",v.idempotencyKey());r.put("fileObjectId",v.fileObjectId());r.put("targetVersionNo",v.targetVersionNo());r.put("objectKey",v.objectKey());r.put("originalFileName",v.originalFileName());r.put("contentType",v.contentType());r.put("expectedSize",v.expectedSize());r.put("expectedSha256",v.expectedSha256());r.put("changeDescription",v.changeDescription());r.put("requestFingerprint",v.requestFingerprint());r.put("actorId",v.actorId());r.put("status",v.status());r.put("expiresAt",v.expiresAt());return r;}
@@ -105,6 +120,7 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     private static Map<String,Object> tokenRow(AccessToken v){Map<String,Object> r=new HashMap<>();r.put("fileObjectId",v.fileObjectId());r.put("fileVersionId",v.fileVersionId());r.put("relationId",v.relationId());r.put("accessType",v.accessType());r.put("tokenHash",v.tokenHash());r.put("actorId",v.actorId());r.put("actorDeptId",v.actorDeptId());r.put("expiresAt",v.expiresAt());return r;}
     private static Map<String,Object> accessLogRow(AccessLog v){Map<String,Object> r=new HashMap<>();r.put("accessSessionId",v.accessSessionId());r.put("fileObjectId",v.fileObjectId());r.put("fileVersionId",v.fileVersionId());r.put("relationId",v.relationId());r.put("businessType",v.businessType());r.put("businessId",v.businessId());r.put("accessType",v.accessType());r.put("eventType",v.eventType());r.put("outcome",v.outcome());r.put("failureCode",v.failureCode());r.put("actorId",v.actorId());r.put("actorDeptId",v.actorDeptId());r.put("clientIp",v.clientIp());r.put("accessedAt",v.accessedAt());return r;}
     private static Map<String,Object> lifecycleRow(LifecycleAudit v){Map<String,Object> r=new HashMap<>();r.put("fileObjectId",v.fileObjectId());r.put("fileVersionId",v.fileVersionId());r.put("relationId",v.relationId());r.put("actionId",v.actionId());r.put("eventType",v.eventType());r.put("details",v.details());r.put("actorId",v.actorId());r.put("actorDeptId",v.actorDeptId());r.put("occurredAt",v.occurredAt());return r;}
+    private static Map<String,Object> cleanupRow(CleanupTask v){Map<String,Object> r=new HashMap<>();r.put("fileObjectId",v.fileObjectId());r.put("actionId",v.actionId());r.put("targetType",v.targetType());r.put("targetKey",v.targetKey());r.put("status",v.status());r.put("retryCount",v.retryCount());r.put("nextRetryAt",v.nextRetryAt());r.put("actorId",v.actorId());r.put("actorDeptId",v.actorDeptId());r.put("createdAt",v.createdAt());return r;}
     private static Object value(Map<String,Object> r,String key){if(r.containsKey(key))return r.get(key);String snake=key.replaceAll("([A-Z])","_$1").toLowerCase();return r.get(snake);}
     private static String text(Map<String,Object> r,String k){Object v=value(r,k);return v==null?null:String.valueOf(v);}
     private static Long longValue(Map<String,Object> r,String k){Object v=value(r,k);return v==null?null:Long.valueOf(String.valueOf(v));}

@@ -11,6 +11,7 @@ import com.law.file.domain.FileObject.FileMaterial;
 import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
+import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 
@@ -44,4 +45,9 @@ public interface FileObjectRepository
     List<AccessLog> findAccessLogs(Long fileObjectId);
     int insertLifecycleAudit(LifecycleAudit audit);
     List<LifecycleAudit> findLifecycleAudits(Long fileObjectId);
+    CleanupTask insertCleanupTask(CleanupTask task);
+    CleanupTask findCleanupTaskById(Long cleanupTaskId);
+    List<CleanupTask> findRetryableCleanupTasks(Instant readyAt,int limit);
+    int completeCleanupTask(Long cleanupTaskId,Instant completedAt);
+    int failCleanupTask(Long cleanupTaskId,String errorCode,String errorMessage,Instant nextRetryAt);
 }

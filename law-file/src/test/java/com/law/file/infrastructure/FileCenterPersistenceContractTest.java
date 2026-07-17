@@ -24,12 +24,18 @@ class FileCenterPersistenceContractTest
             ()->assertTrue(sql.contains("change_description varchar(500) not null")),
             ()->assertTrue(sql.contains("relation_id bigint not null, access_type")),
             ()->assertTrue(sql.contains("create table file_lifecycle_audit")),
+            ()->assertTrue(sql.contains("create table file_storage_cleanup")),
+            ()->assertTrue(sql.contains("status in ('pending','failed','completed')")),
+            ()->assertTrue(sql.contains("idx_file_cleanup_retry (status,next_retry_at,cleanup_task_id)")),
+            ()->assertTrue(sql.contains("last_error_code varchar(120)")),
             ()->assertTrue(sql.contains("access_session_id char(36) not null")),
             ()->assertTrue(sql.contains("outcome varchar(16) not null")),
             ()->assertFalse(sql.contains(" access_token varchar")),
             ()->assertTrue(mapper.contains("status='expired'")),
             ()->assertTrue(mapper.contains("relation_id relationid")),
-            ()->assertTrue(mapper.contains("event_type eventtype"))
+            ()->assertTrue(mapper.contains("event_type eventtype")),
+            ()->assertTrue(mapper.contains("status='failed' and next_retry_at&lt;=#{readyat}")),
+            ()->assertTrue(mapper.contains("for update skip locked"))
         );
     }
 }
