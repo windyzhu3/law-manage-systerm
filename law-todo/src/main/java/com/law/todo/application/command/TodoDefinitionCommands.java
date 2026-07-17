@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 
 public final class TodoDefinitionCommands
 {
@@ -40,6 +41,7 @@ public final class TodoDefinitionCommands
     }
     public record VirtualTaskCompletionSample(
             @NotBlank String nodeKey,
+            @NotNull @PositiveOrZero Integer occurrence,
             @NotNull Map<String,Object> payload,
             @NotNull LocalDateTime completedAt)
     {

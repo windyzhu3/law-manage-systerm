@@ -241,26 +241,30 @@ public class TodoDefinitionSimulationService
         RouteSimulationContext context=new RouteSimulationContext(command.payload(),command.effectiveAt(),
                 validatedSamples(command.taskCompletions(),nodes,command.effectiveAt(),issues));
         List<RouteTrace> traces=new ArrayList<>();walk(text(graph.get("start")),null,0,nodes,outgoing,context,traces,issues,new HashSet<>(),new HashMap<>(),0);
+        context.reportUnusedSamples(issues);
         return List.copyOf(traces);
     }
 
-    private Map<String,VirtualTaskCompletionSample> validatedSamples(List<VirtualTaskCompletionSample> samples,
+    private Map<TaskOccurrenceKey,VirtualTaskCompletionSample> validatedSamples(List<VirtualTaskCompletionSample> samples,
             Map<String,Map<String,Object>> nodes,LocalDateTime effectiveAt,List<SimulationIssue> issues)
     {
-        Map<String,Integer> counts=new HashMap<>();
-        for(VirtualTaskCompletionSample sample:samples)if(sample!=null&&sample.nodeKey()!=null)counts.merge(sample.nodeKey(),1,Integer::sum);
-        Map<String,VirtualTaskCompletionSample> result=new LinkedHashMap<>();Set<String> duplicateIssues=new HashSet<>();
+        Map<TaskOccurrenceKey,Integer> counts=new HashMap<>();
+        for(VirtualTaskCompletionSample sample:samples)
+            if(sample!=null&&sample.nodeKey()!=null&&sample.occurrence()!=null)
+                counts.merge(new TaskOccurrenceKey(sample.nodeKey(),sample.occurrence()),1,Integer::sum);
+        Map<TaskOccurrenceKey,VirtualTaskCompletionSample> result=new LinkedHashMap<>();Set<TaskOccurrenceKey> duplicateIssues=new HashSet<>();
         for(VirtualTaskCompletionSample sample:samples)
         {
-            if(sample==null||sample.nodeKey()==null||sample.nodeKey().isBlank())
+            if(sample==null||sample.nodeKey()==null||sample.nodeKey().isBlank()||sample.occurrence()==null||sample.occurrence()<0)
             {
-                issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_INVALID","taskCompletions","ERROR","TASK completion sample requires a node key, payload and completion time"));continue;
+                issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_INVALID","taskCompletions","ERROR","TASK completion sample requires a node key, non-negative route occurrence, payload and completion time"));continue;
             }
-            String key=sample.nodeKey(),path="taskCompletions."+key;
-            if(counts.getOrDefault(key,0)>1)
+            String key=sample.nodeKey();TaskOccurrenceKey sampleKey=new TaskOccurrenceKey(key,sample.occurrence());
+            String path=samplePath(sampleKey);
+            if(counts.getOrDefault(sampleKey,0)>1)
             {
-                if(duplicateIssues.add(key))
-                    issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_DUPLICATE",path,"ERROR","TASK completion samples must have unique node keys"));
+                if(duplicateIssues.add(sampleKey))
+                    issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_DUPLICATE",path,"ERROR","TASK completion samples must have unique node key and occurrence pairs"));
                 continue;
             }
             Map<String,Object> node=nodes.get(key);
@@ -268,7 +272,7 @@ public class TodoDefinitionSimulationService
             if(!"TASK".equals(text(node.get("type")))){issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_NODE_NOT_TASK",path,"ERROR","Completion samples can reference TASK nodes only"));continue;}
             if(sample.payload()==null||sample.completedAt()==null){issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_INVALID",path,"ERROR","TASK completion sample requires a payload and completion time"));continue;}
             if(sample.completedAt().isBefore(effectiveAt)){issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_TIME_INVALID",path+".completedAt","ERROR","TASK completion time cannot precede the sample event effective time"));continue;}
-            result.put(key,sample);
+            result.put(sampleKey,sample);
         }
         return Map.copyOf(result);
     }
@@ -298,16 +302,27 @@ public class TodoDefinitionSimulationService
         {
             if("TASK".equals(type))
             {
-                VirtualTaskCompletionSample sample=context.samples.get(key);
+                int taskOccurrence=occurrence;TaskOccurrenceKey sampleKey=new TaskOccurrenceKey(key,taskOccurrence);
+                VirtualTaskCompletionSample sample=context.sample(sampleKey);
                 if(sample==null)
                 {
-                    traces.add(new RouteTrace(traces.size()+1,key,type,"PENDING_COMPLETION",branch,occurrence,
+                    traces.add(new RouteTrace(traces.size()+1,key,type,"PENDING_COMPLETION",branch,taskOccurrence,
                             longValue(node.get("templateVersionId")),context.effectiveAt,
                             List.of("task:would-create","task:pending-completion")));
                     active.remove(fence);return;
                 }
+                context.markUsed(sampleKey);
+                if(sample.completedAt().isBefore(context.effectiveAt))
+                {
+                    issues.add(new SimulationIssue("TODO_SIMULATION_TASK_SAMPLE_CAUSAL_TIME_INVALID",samplePath(sampleKey)+".completedAt","ERROR",
+                            "TASK completion time cannot precede the current route effective time"));
+                    traces.add(new RouteTrace(traces.size()+1,key,type,"INVALID_COMPLETION_TIME",branch,taskOccurrence,
+                            longValue(node.get("templateVersionId")),context.effectiveAt,
+                            List.of("task:would-create","task:completion-time-invalid")));
+                    active.remove(fence);return;
+                }
                 context.merge(sample);
-                traces.add(new RouteTrace(traces.size()+1,key,type,"VIRTUAL_COMPLETED",branch,occurrence,
+                traces.add(new RouteTrace(traces.size()+1,key,type,"VIRTUAL_COMPLETED",branch,taskOccurrence,
                         longValue(node.get("templateVersionId")),context.effectiveAt,
                         List.of("task:would-create","task:virtual-completed","task:completed-at:"+sample.completedAt())));
             }
@@ -328,7 +343,8 @@ public class TodoDefinitionSimulationService
             List<Map<String,Object>> selected=edges.stream().filter(edge->edge.get("condition")==null
                     ||matches(edge.get("condition"),forkContext.payload,issues,"routing.edges."+text(edge.get("key")))).toList();
             selected=new ArrayList<>(selected);selected.sort(Comparator.comparing(
-                    (Map<String,Object> edge)->forkContext.nextTaskCompletionAt(text(edge.get("to"))),Comparator.nullsLast(LocalDateTime::compareTo))
+                    (Map<String,Object> edge)->predictJoinArrival(text(edge.get("to")),text(edge.get("branchKey")),occurrence,
+                            nodes,outgoing,forkContext.copy(),new HashSet<>(),0),Comparator.nullsLast(LocalDateTime::compareTo))
                     .thenComparing(edge->text(edge.get("key"))));
             for(Map<String,Object> edge:selected)follow(edge,text(edge.get("branchKey")),occurrence,nodes,outgoing,
                     forkContext.copy(),traces,issues,new HashSet<>(active),joins,depth);
@@ -347,20 +363,66 @@ public class TodoDefinitionSimulationService
             List<SimulationIssue> issues,Set<String> active,Map<String,JoinSimulationState> joins,int depth)
     {if(edge==null){issues.add(new SimulationIssue("TODO_SIMULATION_ROUTE_NO_MATCH","routing","WARNING","No deterministic outgoing route matched"));return;}walk(text(edge.get("to")),branch,occurrence,nodes,outgoing,context,traces,issues,active,joins,depth+1);}
 
+    private LocalDateTime predictJoinArrival(String key,String branch,int occurrence,Map<String,Map<String,Object>> nodes,
+            Map<String,List<Map<String,Object>>> outgoing,RouteSimulationContext context,Set<String> active,int depth)
+    {
+        if(key==null||depth>nodes.size()*4+8)return null;
+        String fence=key+"|"+branch+"|"+occurrence;if(!active.add(fence))return null;
+        Map<String,Object> node=nodes.get(key);if(node==null)return null;String type=text(node.get("type"));
+        if("JOIN".equals(type))return context.effectiveAt;
+        if("TASK".equals(type))
+        {
+            int taskOccurrence=occurrence;VirtualTaskCompletionSample sample=context.sample(new TaskOccurrenceKey(key,taskOccurrence));
+            if(sample==null||sample.completedAt().isBefore(context.effectiveAt))return null;context.merge(sample);
+        }
+        List<Map<String,Object>> edges=outgoing.getOrDefault(key,List.of());if("END".equals(type)||edges.isEmpty())return null;
+        List<SimulationIssue> ignored=new ArrayList<>();
+        if("DECISION".equals(type))
+        {
+            Map<String,Object> selected=null,fallback=null;for(Map<String,Object> edge:edges){if(Boolean.TRUE.equals(edge.get("default")))fallback=edge;else if(matches(edge.get("condition"),context.payload,ignored,"routing")){selected=edge;break;}}
+            Map<String,Object> edge=selected==null?fallback:selected;return edge==null?null:predictJoinArrival(text(edge.get("to")),branch,occurrence,nodes,outgoing,context,active,depth+1);
+        }
+        if("LOOP".equals(type))
+        {
+            boolean end=node.get("endCondition")!=null&&matches(node.get("endCondition"),context.payload,ignored,"routing");
+            Integer max=integer(node.get("maxOccurrences"),null);String wanted=end||(max!=null&&occurrence>=max)?"EXIT":"BODY";
+            Map<String,Object> edge=edges.stream().filter(value->wanted.equals(text(value.get("branchKey")))).findFirst().orElse(null);
+            return edge==null?null:predictJoinArrival(text(edge.get("to")),branch,"BODY".equals(wanted)?occurrence+1:occurrence,nodes,outgoing,context,active,depth+1);
+        }
+        if("FORK".equals(type))
+        {
+            return edges.stream().filter(edge->edge.get("condition")==null||matches(edge.get("condition"),context.payload,ignored,"routing"))
+                    .map(edge->predictJoinArrival(text(edge.get("to")),text(edge.get("branchKey")),occurrence,nodes,outgoing,context.copy(),new HashSet<>(active),depth+1))
+                    .filter(java.util.Objects::nonNull).min(LocalDateTime::compareTo).orElse(null);
+        }
+        return predictJoinArrival(text(edges.get(0).get("to")),branch,occurrence,nodes,outgoing,context,active,depth+1);
+    }
+
     private static final class RouteSimulationContext
     {
         private final Map<String,Object> payload;
-        private final Map<String,VirtualTaskCompletionSample> samples;
+        private final Map<TaskOccurrenceKey,VirtualTaskCompletionSample> samples;
+        private final Set<TaskOccurrenceKey> usedSamples;
         private LocalDateTime effectiveAt;
         private RouteSimulationContext(Map<String,Object> payload,LocalDateTime effectiveAt,
-                Map<String,VirtualTaskCompletionSample> samples)
-        {this.payload=new LinkedHashMap<>(payload);this.effectiveAt=effectiveAt;this.samples=samples;}
+                Map<TaskOccurrenceKey,VirtualTaskCompletionSample> samples)
+        {this(payload,effectiveAt,samples,new HashSet<>());}
+        private RouteSimulationContext(Map<String,Object> payload,LocalDateTime effectiveAt,
+                Map<TaskOccurrenceKey,VirtualTaskCompletionSample> samples,Set<TaskOccurrenceKey> usedSamples)
+        {this.payload=new LinkedHashMap<>(payload);this.effectiveAt=effectiveAt;this.samples=samples;this.usedSamples=usedSamples;}
+        private VirtualTaskCompletionSample sample(TaskOccurrenceKey key){return samples.get(key);}
+        private void markUsed(TaskOccurrenceKey key){usedSamples.add(key);}
         private void merge(VirtualTaskCompletionSample sample)
         {payload.putAll(sample.payload());if(sample.completedAt().isAfter(effectiveAt))effectiveAt=sample.completedAt();}
-        private RouteSimulationContext copy(){return new RouteSimulationContext(payload,effectiveAt,samples);}
-        private LocalDateTime nextTaskCompletionAt(String nodeKey)
-        {VirtualTaskCompletionSample sample=samples.get(nodeKey);return sample==null?null:sample.completedAt();}
+        private RouteSimulationContext copy(){return new RouteSimulationContext(payload,effectiveAt,samples,usedSamples);}
+        private void reportUnusedSamples(List<SimulationIssue> issues)
+        {samples.keySet().stream().filter(key->!usedSamples.contains(key)).sorted().forEach(key->issues.add(new SimulationIssue(
+                "TODO_SIMULATION_TASK_SAMPLE_UNUSED",samplePath(key),"WARNING","TASK completion sample was not reached by the simulated route")));}
     }
+
+    private record TaskOccurrenceKey(String nodeKey,int occurrence) implements Comparable<TaskOccurrenceKey>
+    {@Override public int compareTo(TaskOccurrenceKey other){int byNode=nodeKey.compareTo(other.nodeKey);return byNode!=0?byNode:Integer.compare(occurrence,other.occurrence);}}
+    private static String samplePath(TaskOccurrenceKey key){return "taskCompletions."+key.nodeKey()+"["+key.occurrence()+"]";}
 
     private static final class JoinSimulationState
     {

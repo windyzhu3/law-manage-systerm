@@ -56,7 +56,7 @@ class TodoTemplateControllerValidationTest
         MockMvcBuilders.standaloneSetup(controller()).setValidator(validator).build()
             .perform(post("/todo/template/version/9/simulate").contentType("application/json").content("""
                     {"payload":{"stage":"READY"},"businessType":"LEAD","businessId":3,"effectiveAt":"2026-07-17T09:00:00",
-                     "taskCompletions":[{"nodeKey":"start"}]}
+                     "taskCompletions":[{"nodeKey":"start","occurrence":-1}]}
                     """))
             .andExpect(status().isBadRequest());
     }

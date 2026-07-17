@@ -12,13 +12,15 @@ export function saveTriggerRule(data) { return request({ url: '/todo/template/tr
 export function listWorkCalendars() { return request({ url: '/todo/calendar', method: 'get' }) }
 export function saveWorkCalendar(data) { return request({ url: '/todo/calendar', method: data.calendarId ? 'put' : 'post', data }) }
 export function preflightDefinition(versionId) { return request({ url: `/todo/definitions/version/${versionId}/preflight`, method: 'post' }) }
-export function buildVirtualTaskCompletion(nodeKey, payload, completedAt) {
-  if (!nodeKey || payload == null || !completedAt) throw new Error('nodeKey, payload and completedAt are required')
-  return { nodeKey, payload: { ...payload }, completedAt }
+export function buildVirtualTaskCompletion(nodeKey, occurrence, payload, completedAt) {
+  if (!nodeKey || !Number.isInteger(occurrence) || occurrence < 0 || payload == null || !completedAt) {
+    throw new Error('nodeKey, non-negative route occurrence, payload and completedAt are required')
+  }
+  return { nodeKey, occurrence, payload: { ...payload }, completedAt }
 }
 export function simulateDefinition(versionId, data) {
   const taskCompletions = (data.taskCompletions || []).map(sample =>
-    buildVirtualTaskCompletion(sample.nodeKey, sample.payload, sample.completedAt))
+    buildVirtualTaskCompletion(sample.nodeKey, sample.occurrence, sample.payload, sample.completedAt))
   return request({ url: `/todo/definitions/version/${versionId}/simulate`, method: 'post', data: { ...data, taskCompletions } })
 }
 export function rollbackDefinitionDraft(versionId, data) { return request({ url: `/todo/definitions/version/${versionId}/rollback-draft`, method: 'post', data }) }
