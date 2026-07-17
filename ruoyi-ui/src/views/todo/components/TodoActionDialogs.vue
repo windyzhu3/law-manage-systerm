@@ -1,9 +1,86 @@
-<template><el-dialog :title="titles[action]||'处理待办'" :visible.sync="innerVisible" width="620px" append-to-body :close-on-click-modal="false"><el-alert v-if="todo" :title="`${todo.template_code||'GENERAL'} · ${todo.business_no||'-'}`" type="info" :closable="false"/><el-form ref="form" :model="form" label-width="110px"><el-form-item label="处理意见" :required="requiresOpinion"><el-input v-model="form.opinion" type="textarea" :rows="3" maxlength="1000" show-word-limit/></el-form-item><el-form-item v-if="action==='transfer'" label="新负责人" required><el-input-number v-model="form.targetOwnerId" :min="1"/></el-form-item><template v-if="action==='complete'"><el-form-item v-for="field in fields" :key="field.key" :label="field.label" :required="field.required"><el-select v-if="field.type==='select'" v-model="form.payload[field.key]" style="width:100%"><el-option v-for="option in field.options" :key="String(option.value)" :label="option.label" :value="option.value"/></el-select><el-date-picker v-else-if="field.type==='date'" v-model="form.payload[field.key]" type="date" value-format="yyyy-MM-dd" style="width:100%"/><el-input-number v-else-if="field.type==='number'" v-model="form.payload[field.key]" :min="0" style="width:100%"/><el-switch v-else-if="field.type==='boolean'" v-model="form.payload[field.key]"/><file-upload v-else-if="field.type==='file'" v-model="form.payload[field.key]" :limit="1"/><el-input v-else v-model="form.payload[field.key]" :placeholder="`请输入${field.label}`"/></el-form-item><template v-if="needsMaterials"><el-divider content-position="left">材料清单</el-divider><div v-for="(item,index) in form.materials" :key="index" class="material-row"><el-input v-model="item.materialName" placeholder="材料名称"/><el-select v-model="item.materialStatus"><el-option label="已准备" value="ready"/><el-option label="待补充" value="pending"/></el-select><file-upload v-model="item.fileUrl" :limit="1"/><el-button type="text" @click="form.materials.splice(index,1)">删除</el-button></div><el-button type="text" @click="form.materials.push({materialName:'',materialStatus:'ready',fileUrl:''})">+ 添加材料</el-button></template></template></el-form><div slot="footer"><el-button @click="innerVisible=false">取消</el-button><el-button type="primary" :loading="submitting" @click="submit">确认</el-button></div></el-dialog></template>
+<template>
+  <el-dialog :title="titles[action] || '处理待办'" :visible.sync="innerVisible" width="680px" append-to-body :close-on-click-modal="false">
+    <el-alert v-if="todo" :title="`${businessNo} · ${todo.title || '待办'}`" type="info" :closable="false" />
+    <div v-loading="loading">
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" show-icon />
+      <el-form :model="form" label-width="120px">
+        <el-form-item label="处理意见" :required="requiresOpinion">
+          <el-input v-model="form.opinion" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+        </el-form-item>
+        <el-form-item v-if="action === 'transfer'" label="新负责人" required>
+          <el-input-number v-model="state.fields.targetOwnerId" :min="1" :precision="0" style="width:100%" />
+        </el-form-item>
+      </el-form>
+      <todo-dynamic-form
+        v-if="formView"
+        ref="dynamicForm"
+        v-model="state"
+        :form-view="formView"
+        business-type="TODO"
+        :business-id="todoId"
+      />
+    </div>
+    <div slot="footer">
+      <el-button @click="innerVisible = false">取消</el-button>
+      <el-button type="primary" :loading="submitting" :disabled="loading || !formView" @click="submit">确认</el-button>
+    </div>
+  </el-dialog>
+</template>
+
 <script>
-const options={review:[{label:'通过',value:'pass'},{label:'退回',value:'back'},{label:'拒绝',value:'reject'}],yesNo:[{label:'是',value:true},{label:'否',value:false}],decision:[{label:'通过',value:'approved'},{label:'拒绝',value:'rejected'}],invoice:[{label:'完成开票',value:'invoice'},{label:'部分开票',value:'partial'}],transfer:[{label:'通过',value:'passed'},{label:'拒绝',value:'rejected'},{label:'补充材料',value:'supplement'}]}
-const schemas={CONTRACT_REVIEW:[f('action','审核动作','select',options.review),f('opinion','审核意见')],CONTRACT_SIGN:[f('signStatus','签署状态','select',[{label:'已签署',value:'1'},{label:'部分签署',value:'2'}]),f('signMethod','签署方式'),f('signDate','签署日期','date'),f('signFileUrl','签署文件','file')],PAYMENT_CONFIRM:[f('planId','收费计划ID','number'),f('receivedAmount','实收金额','number'),f('paymentMethod','付款方式'),f('voucherUrl','付款凭证','file'),f('remark','备注','text',null,false)],INVOICE_HANDLE:[f('planId','收费计划ID','number'),f('action','开票动作','select',options.invoice),f('invoiceNo','发票号码'),f('invoiceFileUrl','发票文件','file'),f('invoiceType','发票类型','text',null,false),f('remark','备注','text',null,false)],CASE_CREATE_CHECK:[f('materialsChecked','材料已核验','boolean')],CASE_ASSIGN:[f('lawyerId','主办律师ID','number')],CASE_REASSIGN:[f('lawyerId','主办律师ID','number')],CASE_ACCEPT:[f('confirmId','确认记录ID','number'),f('accepted','是否接案','select',options.yesNo),f('reason','说明')],CASE_TRANSFER_REVIEW:[f('transferId','转案记录ID','number'),f('action','审批动作','select',options.transfer),f('opinion','审批意见')],MATTER_NODE_HANDLE:[f('nodeId','节点ID','number'),f('actualDate','实际完成日期','date')],MATTER_EXPENSE_REVIEW:[f('expenseId','费用ID','number'),f('result','审核结果','select',options.decision),f('voucherUrl','费用凭证','file'),f('remark','备注','text',null,false)],MATTER_DOCUMENT_SUPPLY:[f('documentType','文档类型'),f('fileName','文件名称'),f('fileUrl','文档文件','file'),f('remark','备注','text',null,false)],CASE_CLOSE_CONFIRM:[f('action','确认动作','select',options.review),f('opinion','确认意见'),f('feeClearStatus','费用结清状态','select',[{label:'已结清',value:'cleared'},{label:'未结清',value:'uncleared'}])],CASE_ARCHIVE_CONFIRM:[f('action','确认动作','select',options.review),f('opinion','确认意见'),f('archiveNo','归档编号')]}
-schemas.LEAD_FIRST_CONTACT=[f('contactResult','首联结果'),f('fileUrl','联系凭证','file')]
-function f(key,label,type='text',values=null,required=true){return{key,label,type,options:values,required}}
-export default{name:'TodoActionDialogs',props:{visible:Boolean,action:String,submitting:Boolean,todo:{type:Object,default:()=>({})}},data(){return{form:fresh(),titles:{claim:'领取待办',start:'开始办理',submit:'提交待办',complete:'完成待办',return:'退回待办',transfer:'转派待办',cancel:'取消待办'}}},computed:{innerVisible:{get(){return this.visible},set(v){this.$emit('update:visible',v)}},fields(){return schemas[this.todo.template_code]||[f('contactResult','完成结果')]},needsMaterials(){return ['MATTER_NODE_HANDLE','CASE_ARCHIVE_CONFIRM'].includes(this.todo.template_code)},requiresOpinion(){return ['return','cancel'].includes(this.action)}},watch:{visible(v){if(v)this.form=fresh()}},methods:{submit(){if(this.requiresOpinion&&!this.form.opinion.trim())return this.$modal.msgError('请填写处理意见');for(const field of this.fields)if(field.required&&(this.form.payload[field.key]===undefined||this.form.payload[field.key]===null||this.form.payload[field.key]===''))return this.$modal.msgError(`请填写${field.label}`);const payload={...this.form.payload};if(this.needsMaterials)payload.materials=this.form.materials;this.$emit('submit',{opinion:this.form.opinion,payload})}}}
-function fresh(){const payload={};const form={opinion:'',payload,materials:[{materialName:'',materialStatus:'ready',fileUrl:''}]};Object.defineProperty(form,'targetOwnerId',{get(){return payload.targetOwnerId||null},set(v){payload.targetOwnerId=v},enumerable:true});return form}
-</script><style scoped>.material-row{display:grid;grid-template-columns:1fr 120px 1fr 50px;gap:8px;align-items:center;margin-bottom:10px}</style>
+import TodoDynamicForm from '@/components/TodoDynamicForm'
+import { createFormState, createActionPayload } from '@/components/TodoDynamicForm/schema-runtime'
+import { getTodoForm } from '@/api/todo'
+
+export default {
+  name: 'TodoActionDialogs',
+  components: { TodoDynamicForm },
+  props: {
+    visible: Boolean,
+    action: String,
+    submitting: Boolean,
+    todo: { type: Object, default: () => ({}) }
+  },
+  data() {
+    return {
+      loading: false,
+      loadError: '',
+      formView: null,
+      form: { opinion: '' },
+      state: { fields: {}, materials: [] },
+      titles: { claim: '领取待办', start: '开始办理', submit: '提交待办', complete: '完成待办', return: '退回待办', transfer: '转派待办', cancel: '取消待办' }
+    }
+  },
+  computed: {
+    innerVisible: { get() { return this.visible }, set(value) { this.$emit('update:visible', value) } },
+    todoId() { return this.todo.todoId || this.todo.todo_id },
+    businessNo() { return this.todo.businessNo || this.todo.business_no || '-' },
+    requiresOpinion() { return ['return', 'cancel'].includes(this.action) }
+  },
+  watch: {
+    visible(value) { if (value) this.openSession() }
+  },
+  methods: {
+    openSession() {
+      this.form = { opinion: '' }
+      this.state = { fields: {}, materials: [] }
+      this.formView = null
+      this.loadError = ''
+      this.loading = true
+      getTodoForm(this.todoId).then(response => {
+        this.formView = { ...(response.data || {}), action: String(this.action || '').toUpperCase() }
+        this.state = createFormState(this.formView)
+      }).catch(error => {
+        this.loadError = (error && (error.msg || error.message)) || '表单加载失败'
+      }).finally(() => { this.loading = false })
+    },
+    submit() {
+      if (this.requiresOpinion && !this.form.opinion.trim()) return this.$modal.msgError('请填写处理意见')
+      if (this.action === 'transfer' && !this.state.fields.targetOwnerId) return this.$modal.msgError('请选择新负责人')
+      if (!this.$refs.dynamicForm.validate()) return
+      const payload = createActionPayload(this.formView, this.state)
+      this.$emit('submit', { opinion: this.form.opinion, fields: payload.fields, fileObjectIds: payload.fileObjectIds })
+    }
+  }
+}
+</script>

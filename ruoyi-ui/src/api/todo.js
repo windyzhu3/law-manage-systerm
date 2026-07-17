@@ -2,6 +2,7 @@ import request from '@/utils/request'
 export function getTodoDashboard() { return request({ url: '/todo/dashboard', method: 'get' }) }
 export function listTodo(query) { return request({ url: '/todo/list', method: 'get', params: query }) }
 export function getTodo(id) { return request({ url: '/todo/' + id, method: 'get' }) }
+export function getTodoForm(id) { return request({ url: `/todo/${id}/form`, method: 'get' }) }
 function action(id, name, data) { return request({ url: `/todo/${id}/${name}`, method: 'post', data }) }
 export function claimTodo(id, data) { return action(id, 'claim', data) }
 export function startTodo(id, data) { return action(id, 'start', data) }
@@ -16,3 +17,15 @@ export function addTodoCandidate(id, data) { return action(id, 'candidate', data
 export function getBusinessTodoSummary(type, id) { return request({ url: `/todo/business/${type}/${id}/summary`, method: 'get' }) }
 export function listBusinessTodos(type, id, params) { return request({ url: `/todo/business/${type}/${id}/list`, method: 'get', params }) }
 export function getTodoChain(rootTodoId) { return request({ url: `/todo/chain/${rootTodoId}`, method: 'get' }) }
+export function requestTodoExtension(id, data) { return request({ url: `/todo/${id}/extension-requests`, method: 'post', data }) }
+export function registerBusinessFile(data) { return request({ url: '/files/register', method: 'post', data }) }
+export function completeBusinessFileUpload(uploadIntentId, file) {
+  const data = new FormData()
+  data.append('file', file)
+  return request({
+    url: `/files/${uploadIntentId}/complete`,
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
+  })
+}

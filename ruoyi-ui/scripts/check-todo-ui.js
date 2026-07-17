@@ -39,8 +39,8 @@ for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'de
   if (!detail.includes(marker)) throw new Error(`missing detail aggregate marker ${marker}`)
 }
 const actions = fs.readFileSync('src/views/todo/components/TodoActionDialogs.vue', 'utf8')
-if (!actions.includes('<file-upload')) throw new Error('todo completion must use FileUpload')
-for(const code of ['CONTRACT_REVIEW','CONTRACT_SIGN','PAYMENT_CONFIRM','INVOICE_HANDLE','CASE_CREATE_CHECK','CASE_ASSIGN','CASE_ACCEPT','CASE_TRANSFER_REVIEW','MATTER_NODE_HANDLE','MATTER_EXPENSE_REVIEW','MATTER_DOCUMENT_SUPPLY','CASE_CLOSE_CONFIRM','CASE_ARCHIVE_CONFIRM']) if(!actions.includes(code)) throw new Error(`missing structured completion form ${code}`)
+for (const marker of ['todo-dynamic-form', 'getTodoForm', 'fileObjectIds', 'createActionPayload']) if (!actions.includes(marker)) throw new Error(`missing schema runtime action marker ${marker}`)
+if (/template_?code|templateCode/i.test(actions)) throw new Error('todo actions must not branch by template code')
 console.log('todo ui contract ok')
 
 const definitionApi = fs.readFileSync('src/api/todo-definition.js', 'utf8')
