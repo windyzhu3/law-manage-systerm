@@ -43,15 +43,22 @@ public final class CompositeOwnerResolver
     }
 
     public OwnerResolutionResult resolve(OwnerRule rule, OwnerResolutionContext context)
+    { return resolve(rule,context,false); }
+
+    /** Resolves with read-only round-robin preview semantics. */
+    public OwnerResolutionResult resolveForSimulation(OwnerRule rule,OwnerResolutionContext context)
+    { return resolve(rule,context,true); }
+
+    private OwnerResolutionResult resolve(OwnerRule rule, OwnerResolutionContext context,boolean simulation)
     {
         Objects.requireNonNull(rule, "rule");
         Objects.requireNonNull(context, "context");
         Set<Object> active = Collections.newSetFromMap(new IdentityHashMap<>());
-        return resolve(rule, context, 1, active);
+        return resolve(rule, context, 1, active,simulation);
     }
 
     private OwnerResolutionResult resolve(OwnerRule rule, OwnerResolutionContext context,
-            int depth, Set<Object> active)
+            int depth, Set<Object> active,boolean simulation)
     {
         if (depth > MAX_DEPTH)
             throw error("TODO_OWNER_RULE_DEPTH_EXCEEDED", "Owner rule nesting exceeds " + MAX_DEPTH);
@@ -66,8 +73,8 @@ public final class CompositeOwnerResolver
             OwnerStrategy strategy = strategies.get(type);
             OwnerResolutionResult raw = strategy == null
                     ? unsupported(type)
-                    : raw(strategy, rule, context, depth, active);
-            return compose(raw, config, context, depth, active);
+                    : raw(strategy, rule, context, depth, active,simulation);
+            return compose(raw, config, context, depth, active,simulation);
         }
         finally
         {
@@ -77,7 +84,7 @@ public final class CompositeOwnerResolver
     }
 
     private OwnerResolutionResult raw(OwnerStrategy strategy, OwnerRule rule,
-            OwnerResolutionContext context, int depth, Set<Object> active)
+            OwnerResolutionContext context, int depth, Set<Object> active,boolean simulation)
     {
         if (!"ROUND_ROBIN".equals(strategy.type()))
             return safe(strategy.resolve(rule, context));
@@ -85,19 +92,21 @@ public final class CompositeOwnerResolver
         OwnerRule source = nestedRule(rule.config().get("source"), active);
         OwnerResolutionResult sourceResult = source == null
                 ? OwnerResolutionResult.empty()
-                : resolve(source, context, depth + 1, active);
+                : resolve(source, context, depth + 1, active,simulation);
         List<Long> pool = new ArrayList<>(sourceResult.candidateUserIds());
         if (sourceResult.ownerId() != null) pool.add(sourceResult.ownerId());
         pool = available(pool, true, context);
         Map<String, Object> enriched = new LinkedHashMap<>(rule.config());
         enriched.put(ROUND_ROBIN_SOURCE, pool);
-        OwnerResolutionResult selected = safe(strategy.resolve(new OwnerRule(enriched), context));
+        OwnerResolutionResult selected = safe(simulation
+                ?roundRobinPreview(new OwnerRule(enriched),context)
+                :strategy.resolve(new OwnerRule(enriched), context));
         return result(selected.ownerId(), selected.candidateUserIds(), selected.ccUserIds(),
                 selected.fallbackUsed(), concat(sourceResult.trace(), selected.trace()));
     }
 
     private OwnerResolutionResult compose(OwnerResolutionResult raw, Map<String, Object> config,
-            OwnerResolutionContext context, int depth, Set<Object> active)
+            OwnerResolutionContext context, int depth, Set<Object> active,boolean simulation)
     {
         boolean skipUnavailable = bool(config.get("skipUnavailable"), true);
         boolean useDelegation = bool(config.get("useDelegation"), true);
@@ -108,14 +117,14 @@ public final class CompositeOwnerResolver
 
         for (OwnerRule candidateRule : nestedRules(config.get("candidates"), active))
         {
-            OwnerResolutionResult nested = resolve(candidateRule, context, depth + 1, active);
+            OwnerResolutionResult nested = resolve(candidateRule, context, depth + 1, active,simulation);
             if (nested.ownerId() != null) candidates.add(nested.ownerId());
             candidates.addAll(nested.candidateUserIds());
             trace.addAll(nested.trace());
         }
         for (OwnerRule ccRule : nestedRules(config.get("cc"), active))
         {
-            OwnerResolutionResult nested = resolve(ccRule, context, depth + 1, active);
+            OwnerResolutionResult nested = resolve(ccRule, context, depth + 1, active,simulation);
             if (nested.ownerId() != null) cc.add(nested.ownerId());
             cc.addAll(nested.candidateUserIds());
             cc.addAll(nested.ccUserIds());
@@ -129,7 +138,7 @@ public final class CompositeOwnerResolver
             OwnerRule fallback = nestedRule(config.get("fallback"), active);
             if (fallback != null)
             {
-                OwnerResolutionResult nested = resolve(fallback, context, depth + 1, active);
+                OwnerResolutionResult nested = resolve(fallback, context, depth + 1, active,simulation);
                 trace.add("fallback:applied");
                 trace.addAll(nested.trace());
                 cc.addAll(nested.ccUserIds());
@@ -256,6 +265,16 @@ public final class CompositeOwnerResolver
                 trace.add("round-robin:" + strategyKey + ":" + selectedId + ":rejected");
         }
         return result(owner, pool, List.of(), false, trace);
+    }
+
+    @SuppressWarnings("unchecked")
+    private OwnerResolutionResult roundRobinPreview(OwnerRule rule,OwnerResolutionContext context)
+    {
+        String strategyKey=text(rule.config().get("strategyKey"));
+        List<Long> pool=sorted((Collection<Long>)rule.config().get(ROUND_ROBIN_SOURCE));
+        Optional<Long> selected=strategyKey==null||pool.isEmpty()?Optional.empty():organization.previewRoundRobin(strategyKey,pool);
+        Long owner=selected.filter(pool::contains).orElse(null);
+        return result(owner,pool,List.of(),false,owner==null?List.of("round-robin:"+strategyKey+":preview-empty"):List.of("round-robin:"+strategyKey+":"+owner+":preview"));
     }
 
     private OwnerResolutionResult assignmentLevel(OwnerRule rule, OwnerResolutionContext context)

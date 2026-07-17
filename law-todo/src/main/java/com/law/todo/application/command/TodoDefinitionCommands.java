@@ -1,5 +1,9 @@
 package com.law.todo.application.command;
 
+import java.time.LocalDateTime;
+import java.util.Map;
+
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,4 +17,16 @@ public final class TodoDefinitionCommands
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
     public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,@NotBlank String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson) { }
     public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId) { }
+    public record SimulateDefinitionCommand(
+            @NotEmpty Map<String,Object> payload,
+            @NotBlank String businessType,
+            @NotNull @Positive Long businessId,
+            @NotNull LocalDateTime effectiveAt)
+    {
+        public SimulateDefinitionCommand
+        {
+            payload=payload==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+        }
+    }
+    public record RollbackDraftCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
 }

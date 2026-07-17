@@ -14,6 +14,7 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.definition.catalog.TodoDecisionService;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
@@ -113,6 +114,25 @@ public class TodoDefinitionService
         Long id = longValue(target.get("versionId"));
         mapper.updateDefinitionActionEntity(command.actionId(), id);
         return id;
+    }
+
+    /** Creates a new editable draft from immutable published history; history is never modified. */
+    @Transactional
+    public Long rollbackDraft(Long sourceVersionId,RollbackDraftCommand command,Actor actor)
+    {
+        Long repeated=repeatedEntity(command.actionId());if(repeated!=null)return repeated;
+        Map<String,Object> source=requireVersion(sourceVersionId);String status=text(value(source,"status","status"));
+        if(!PUBLISHED.equals(status)&&!"RETIRED".equals(status))
+            throw new TodoException("TODO_ROLLBACK_SOURCE_IMMUTABLE_REQUIRED","Rollback source must be published or retired");
+        Long templateId=longValue(value(source,"template_id","templateId"));
+        claim(command.actionId(),"ROLLBACK_DRAFT","VERSION",sourceVersionId,actor,Map.of("newVersionNo",command.newVersionNo()));
+        TodoDefinitionDocument copied=definition(source);Map<String,Object> target=new HashMap<>();
+        target.put("templateId",templateId);target.put("versionNo",command.newVersionNo());target.put("status",DRAFT);
+        target.put("sourceVersionId",sourceVersionId);target.put("definitionSchemaVersion",copied.schemaVersion());
+        target.put("definitionJson",codec.canonicalJson(copied));target.put("compiledJson",null);target.put("definitionHash",null);target.put("validationReportJson",null);
+        projectLegacyRules(copied,target);
+        if(mapper.insertTemplateVersion(target)<=0)throw new TodoException("TODO_ROLLBACK_DRAFT_FAILED","Rollback draft creation failed");
+        Long targetId=longValue(target.get("versionId"));mapper.updateDefinitionActionEntity(command.actionId(),targetId);return targetId;
     }
 
     @Transactional

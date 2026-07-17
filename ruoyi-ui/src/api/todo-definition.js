@@ -11,3 +11,11 @@ export function listTriggerRules() { return request({ url: '/todo/template/trigg
 export function saveTriggerRule(data) { return request({ url: '/todo/template/trigger', method: 'post', data }) }
 export function listWorkCalendars() { return request({ url: '/todo/calendar', method: 'get' }) }
 export function saveWorkCalendar(data) { return request({ url: '/todo/calendar', method: data.calendarId ? 'put' : 'post', data }) }
+export function preflightDefinition(versionId) { return request({ url: `/todo/definitions/version/${versionId}/preflight`, method: 'post' }) }
+export function simulateDefinition(versionId, data) { return request({ url: `/todo/definitions/version/${versionId}/simulate`, method: 'post', data }) }
+export function rollbackDefinitionDraft(versionId, data) { return request({ url: `/todo/definitions/version/${versionId}/rollback-draft`, method: 'post', data }) }
+export function diffDefinitionVersions(leftVersionId, rightVersionId) { return request({ url: `/todo/definitions/versions/${leftVersionId}/diff/${rightVersionId}`, method: 'get' }) }
+export function listTodoEventCatalog() { return request({ url: '/todo/event-catalog', method: 'get' }) }
+export function listTodoHandlerCatalog() { return request({ url: '/todo/handler-catalog', method: 'get' }) }
+export function listTodoValidatorCatalog() { return request({ url: '/todo/validator-catalog', method: 'get' }) }
+export function listTodoDecisions() { return request({ url: '/todo/decisions', method: 'get' }) }

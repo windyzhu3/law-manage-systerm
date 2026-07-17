@@ -23,7 +23,9 @@ public interface TodoMapper
     int updateDefinitionDocument(Map<String,Object> version);
     int updateDefinitionCompilation(Map<String,Object> version);
     Map<String,Object> selectEventCatalog(@Param("eventType") String eventType,@Param("payloadVersion") int payloadVersion);
+    List<Map<String,Object>> selectEventCatalogs();
     Map<String,Object> selectDecisionByCode(String decisionCode);
+    List<Map<String,Object>> selectDecisions();
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
     List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);

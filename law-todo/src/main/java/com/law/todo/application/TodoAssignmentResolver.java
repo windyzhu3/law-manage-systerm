@@ -38,6 +38,11 @@ public class TodoAssignmentResolver
         return composite.resolve(rule, context);
     }
 
+    public OwnerResolutionResult resolveForSimulation(OwnerRule rule,OwnerResolutionContext context)
+    {
+        return composite.resolveForSimulation(rule,context);
+    }
+
     public Assignment resolve(String rule, Map<String, Object> payload)
     {
         String value = rule == null ? "" : rule.trim();

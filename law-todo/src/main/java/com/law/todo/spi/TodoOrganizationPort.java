@@ -28,6 +28,13 @@ public interface TodoOrganizationPort
     /** Atomically advances a persistent cursor and returns a member of the supplied pool. */
     Optional<Long> roundRobin(String strategyKey, List<Long> sortedAvailableCandidates);
 
+    /** Read-only deterministic selection used by the definition simulator; never advances a cursor. */
+    default Optional<Long> previewRoundRobin(String strategyKey,List<Long> sortedAvailableCandidates)
+    {
+        return sortedAvailableCandidates==null||sortedAvailableCandidates.isEmpty()
+                ?Optional.empty():Optional.of(sortedAvailableCandidates.get(0));
+    }
+
     /** Covers enabled account, active employment, and absence at the effective time. */
     boolean isAvailable(long userId, LocalDateTime effectiveAt);
 

@@ -25,6 +25,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateComma
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
 import com.law.todo.domain.TodoException;
 import com.law.todo.definition.catalog.TodoDecisionService;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
@@ -177,6 +178,23 @@ class TodoDefinitionServiceTest
 
         assertTrue(transaction.noRollbackFor().length>0);
         assertTrue(TodoException.class.isAssignableFrom(transaction.noRollbackFor()[0]));
+    }
+
+    @Test void rollbackCreatesANewDraftWithoutMutatingPublishedHistory()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
+                new com.law.todo.definition.codec.LegacyDefinitionAdapter().fromLegacy(source)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
+        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",12L);return 1;});
+
+        assertEquals(12L,service().rollbackDraft(9L,new RollbackDraftCommand("rollback-1",3),actor));
+
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> inserted=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertTemplateVersion(inserted.capture());
+        assertEquals("DRAFT",inserted.getValue().get("status"));assertEquals(9L,inserted.getValue().get("sourceVersionId"));
+        assertEquals(null,inserted.getValue().get("compiledJson"));
+        verify(mapper,never()).updateDefinitionDocument(anyMap());
     }
 
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}
