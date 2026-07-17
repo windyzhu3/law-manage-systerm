@@ -1,0 +1,32 @@
+package com.law.file.mapper;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.apache.ibatis.annotations.Param;
+
+public interface FileObjectMapper
+{
+    Map<String,Object> selectObject(Long fileObjectId);
+    int insertObject(Map<String,Object> row);
+    int reserveNextVersion(@Param("fileObjectId") Long fileObjectId,@Param("expectedNextVersion") int expectedNextVersion,@Param("expectedVersion") int expectedVersion);
+    int activateVersion(@Param("fileObjectId") Long fileObjectId,@Param("versionNo") int versionNo,@Param("minimumCurrentVersion") int minimumCurrentVersion);
+    Map<String,Object> selectCurrentVersion(Long fileObjectId);
+    Map<String,Object> selectVersionById(Long fileVersionId);
+    List<Map<String,Object>> selectVersions(Long fileObjectId);
+    int insertVersion(Map<String,Object> row);
+    Map<String,Object> selectIntentByIdempotency(@Param("actorId") Long actorId,@Param("idempotencyKey") String idempotencyKey);
+    Map<String,Object> selectIntentForUpdate(String uploadIntentId);
+    int insertUploadIntent(Map<String,Object> row);
+    int markUploadCompleted(@Param("uploadIntentId") String uploadIntentId,@Param("versionId") Long versionId);
+    List<Map<String,Object>> selectActiveRelations(Long fileObjectId);
+    Map<String,Object> selectRelation(Map<String,Object> query);
+    Map<String,Object> selectRelationByAction(@Param("actorId") Long actorId,@Param("actionId") String actionId);
+    int insertRelation(Map<String,Object> row);
+    List<Map<String,Object>> selectMaterials(@Param("businessType") String businessType,@Param("businessId") Long businessId,@Param("fileObjectIds") List<Long> fileObjectIds);
+    int insertAccessToken(Map<String,Object> row);
+    Map<String,Object> selectAccessTokenForUpdate(String tokenHash);
+    int consumeAccessToken(@Param("accessTokenId") Long accessTokenId,@Param("consumedAt") Instant consumedAt);
+    int insertAccessLog(Map<String,Object> row);
+    List<Map<String,Object>> selectAccessLogs(Long fileObjectId);
+}

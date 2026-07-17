@@ -9,4 +9,8 @@ import com.law.todo.definition.validation.TodoFormValidator.Material;
 public interface TodoMaterialLookup
 {
     List<Material> resolve(List<Long> fileObjectIds);
+    default List<Material> resolve(String businessType,Long businessId,List<Long> fileObjectIds)
+    {
+        return resolve(fileObjectIds);
+    }
 }

@@ -18,6 +18,10 @@
     <dependencies>
         <dependency>
             <groupId>com.ruoyi</groupId>
+            <artifactId>law-file</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.ruoyi</groupId>
             <artifactId>law-todo</artifactId>
             <version>${ruoyi.version}</version>
         </dependency>

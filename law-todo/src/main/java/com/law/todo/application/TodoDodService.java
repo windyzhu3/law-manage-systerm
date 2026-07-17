@@ -25,7 +25,8 @@ public class TodoDodService
     }
     public void validate(TodoInstance todo,TodoDefinitionDocument definition,String action,Map<String,Object> fields,List<Long> fileObjectIds)
     {
-        formValidator.validateSubmission(definition,action,fields,fileObjectIds,materialLookup::resolve);
+        formValidator.validateSubmission(definition,action,fields,fileObjectIds,
+            ids->materialLookup.resolve(todo.getBusinessType(),todo.getBusinessId(),ids));
         if("COMPLETE".equalsIgnoreCase(action))validateBusiness(todo,fields);
     }
     public void validate(TodoInstance todo,List<String> fields,List<String> attachmentTypes,Map<String,Object> payload,List<String> attachments)

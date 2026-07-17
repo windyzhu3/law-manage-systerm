@@ -8,18 +8,9 @@
         <artifactId>ruoyi</artifactId>
         <version>3.9.2</version>
     </parent>
-    <artifactId>law-todo</artifactId>
-    <description>Todo Engine domain and application module</description>
+    <artifactId>law-file</artifactId>
+    <description>Governed file object, version, relation and access module</description>
     <dependencies>
-        <dependency>
-            <groupId>com.ruoyi</groupId>
-            <artifactId>law-file</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.ruoyi</groupId>
-            <artifactId>law-business</artifactId>
-            <version>${ruoyi.version}</version>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
@@ -27,14 +18,6 @@
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.alibaba.fastjson2</groupId>
-            <artifactId>fastjson2</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

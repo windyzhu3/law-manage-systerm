@@ -142,6 +142,13 @@ referer:
   # 允许的域名列表
   allowed-domains: localhost,127.0.0.1,ruoyi.vip,www.ruoyi.vip
 
+# Governed file-center storage. Storage object keys are internal and never returned by APIs.
+law:
+  file:
+    storage:
+      local:
+        root: ${LAW_FILE_STORAGE_ROOT:${ruoyi.profile}/file-center}
+
 # 防止XSS攻击
 xss:
   # 过滤开关

@@ -1,0 +1,121 @@
+package com.ruoyi.web.controller.file;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+
+import com.law.file.application.FileObjectService;
+import com.law.file.application.FileObjectService.RegisterUploadCommand;
+import com.law.file.application.FileObjectService.RegisterVersionCommand;
+import com.law.file.domain.FileObject.AccessContent;
+import com.law.file.domain.FileObject.AccessLog;
+import com.law.file.domain.FileObject.FileActor;
+import com.law.file.domain.FileObject.FileBusinessRelation;
+import com.law.file.domain.FileObject.FileVersion;
+import com.ruoyi.common.core.controller.BaseController;
+import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.utils.SecurityUtils;
+import com.ruoyi.common.utils.ip.IpUtils;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
+@RestController
+@RequestMapping("/files")
+public class FileObjectController extends BaseController
+{
+    private final FileObjectService service;
+    public FileObjectController(FileObjectService service){this.service=service;}
+
+    @PreAuthorize("@ss.hasPermi('file:object:upload')")
+    @PostMapping("/register")
+    public AjaxResult register(@Valid @RequestBody RegisterUploadRequest request)
+    {return success(service.registerUpload(request.command(),actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:upload')")
+    @PostMapping("/{uploadIntentId}/complete")
+    public AjaxResult complete(@PathVariable String uploadIntentId,@RequestParam("file") MultipartFile file) throws Exception
+    {try(InputStream input=file.getInputStream()){return success(version(service.completeUpload(uploadIntentId,input,actor())));}}
+
+    @PreAuthorize("@ss.hasPermi('file:object:upload')")
+    @PostMapping("/{fileObjectId}/versions")
+    public AjaxResult addVersion(@PathVariable Long fileObjectId,@Valid @RequestBody RegisterVersionRequest request)
+    {return success(service.addVersion(fileObjectId,request.command(),actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:relate')")
+    @PostMapping("/{fileObjectId}/relations")
+    public AjaxResult relate(@PathVariable Long fileObjectId,@Valid @RequestBody RelationRequest request)
+    {return success(relation(service.relate(fileObjectId,request.actionId(),request.businessType(),request.businessId(),request.materialType(),request.visibility(),actor())));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @PostMapping("/{fileObjectId}/access-token")
+    public AjaxResult token(@PathVariable Long fileObjectId,@Valid @RequestBody AccessTokenRequest request)
+    {return success(service.issueAccessToken(fileObjectId,request.accessType(),actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @GetMapping("/{fileObjectId}/preview-token")
+    public AjaxResult previewToken(@PathVariable Long fileObjectId)
+    {return success(service.issueAccessToken(fileObjectId,"PREVIEW",actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @GetMapping("/{fileObjectId}/download-token")
+    public AjaxResult downloadToken(@PathVariable Long fileObjectId)
+    {return success(service.issueAccessToken(fileObjectId,"DOWNLOAD",actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @GetMapping("/{fileObjectId}/versions")
+    public AjaxResult versions(@PathVariable Long fileObjectId)
+    {return success(service.versions(fileObjectId,actor()).stream().map(FileObjectController::version).toList());}
+
+    @PreAuthorize("@ss.hasPermi('file:object:audit')")
+    @GetMapping("/{fileObjectId}/access-logs")
+    public AjaxResult accessLogs(@PathVariable Long fileObjectId)
+    {return success(service.accessLogs(fileObjectId,actor()).stream().map(FileObjectController::audit).toList());}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @GetMapping("/access/{token}")
+    public ResponseEntity<StreamingResponseBody> open(@PathVariable String token)
+    {
+        AccessContent content=service.open(token,actor(),IpUtils.getIpAddr());
+        StreamingResponseBody body=output->{try(InputStream input=content.input()){input.transferTo(output);}};
+        MediaType media;try{media=MediaType.parseMediaType(content.contentType());}catch(Exception ignored){media=MediaType.APPLICATION_OCTET_STREAM;}
+        return ResponseEntity.ok().contentType(media).contentLength(content.sizeBytes())
+            .header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename(content.fileName(),StandardCharsets.UTF_8).build().toString())
+            .header(HttpHeaders.CACHE_CONTROL,"no-store").body(body);
+    }
+
+    private FileActor actor(){return new FileActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getDeptId());}
+    private static VersionView version(FileVersion value){return new VersionView(value.fileObjectId(),value.fileVersionId(),value.versionNo(),value.originalFileName(),value.contentType(),value.sizeBytes(),value.sha256(),value.createdAt());}
+    private static RelationView relation(FileBusinessRelation value){return new RelationView(value.relationId(),value.fileObjectId(),value.businessType(),value.businessId(),value.materialType(),value.visibility());}
+    private static AuditView audit(AccessLog value){return new AuditView(value.accessLogId(),value.fileObjectId(),value.fileVersionId(),value.businessType(),value.businessId(),value.accessType(),value.actorId(),value.actorDeptId(),value.clientIp(),value.accessedAt());}
+
+    public record RegisterUploadRequest(@NotBlank String actionId,@NotBlank String originalFileName,@NotBlank String contentType,
+        @PositiveOrZero long expectedSize,@Pattern(regexp="(?i)[0-9a-f]{64}") String expectedSha256,@NotBlank String businessType,
+        @NotNull @Positive Long businessId,@NotBlank String materialType,String visibility)
+    {RegisterUploadCommand command(){return new RegisterUploadCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256,businessType,businessId,materialType,visibility);}}
+    public record RegisterVersionRequest(@NotBlank String actionId,@NotBlank String originalFileName,@NotBlank String contentType,
+        @PositiveOrZero long expectedSize,@Pattern(regexp="(?i)[0-9a-f]{64}") String expectedSha256)
+    {RegisterVersionCommand command(){return new RegisterVersionCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256);}}
+    public record RelationRequest(@NotBlank String actionId,@NotBlank String businessType,@NotNull @Positive Long businessId,@NotBlank String materialType,String visibility) { }
+    public record AccessTokenRequest(@Pattern(regexp="(?i)PREVIEW|DOWNLOAD") String accessType) { }
+    public record VersionView(Long fileObjectId,Long fileVersionId,int versionNo,String originalFileName,String contentType,long sizeBytes,String sha256,java.time.Instant createdAt) { }
+    public record RelationView(Long relationId,Long fileObjectId,String businessType,Long businessId,String materialType,String visibility) { }
+    public record AuditView(Long accessLogId,Long fileObjectId,Long fileVersionId,String businessType,Long businessId,String accessType,Long actorId,Long actorDeptId,String clientIp,java.time.Instant accessedAt) { }
+}

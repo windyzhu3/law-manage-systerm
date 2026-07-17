@@ -170,6 +170,12 @@
                 <version>${ruoyi.version}</version>
             </dependency>
 
+            <dependency>
+                <groupId>com.ruoyi</groupId>
+                <artifactId>law-file</artifactId>
+                <version>${ruoyi.version}</version>
+            </dependency>
+
             <!-- 通用工具-->
             <dependency>
                 <groupId>com.ruoyi</groupId>
@@ -185,6 +191,7 @@
         <module>ruoyi-framework</module>
         <module>ruoyi-system</module>
         <module>law-business</module>
+        <module>law-file</module>
         <module>law-todo</module>
         <module>ruoyi-quartz</module>
         <module>ruoyi-generator</module>
