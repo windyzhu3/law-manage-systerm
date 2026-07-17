@@ -4,7 +4,11 @@ import java.io.InputStream;
 
 public interface FileStoragePort
 {
-    StoredObject store(InputStream input,String objectKey,long size,String sha256);
+    StagedObject stage(InputStream input,long size,String sha256);
+    StoredObject publish(StagedObject staged,String objectKey);
+    void abort(StagedObject staged);
+    void delete(String objectKey);
     InputStream read(String objectKey);
+    record StagedObject(String stagingKey,long size,String sha256) { }
     record StoredObject(String objectKey,long size,String sha256) { }
 }

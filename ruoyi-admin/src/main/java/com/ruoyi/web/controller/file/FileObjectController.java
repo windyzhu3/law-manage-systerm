@@ -15,6 +15,7 @@ import com.law.file.application.FileObjectService.RegisterUploadCommand;
 import com.law.file.application.FileObjectService.RegisterVersionCommand;
 import com.law.file.domain.FileObject.AccessContent;
 import com.law.file.domain.FileObject.AccessLog;
+import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.domain.FileObject.FileActor;
 import com.law.file.domain.FileObject.FileBusinessRelation;
 import com.law.file.domain.FileObject.FileVersion;
@@ -64,20 +65,25 @@ public class FileObjectController extends BaseController
     public AjaxResult relate(@PathVariable Long fileObjectId,@Valid @RequestBody RelationRequest request)
     {return success(relation(service.relate(fileObjectId,request.actionId(),request.businessType(),request.businessId(),request.materialType(),request.visibility(),actor())));}
 
+    @PreAuthorize("@ss.hasPermi('file:object:relate')")
+    @PostMapping("/{fileObjectId}/relations/{relationId}/revoke")
+    public AjaxResult revoke(@PathVariable Long fileObjectId,@PathVariable Long relationId,@Valid @RequestBody RevokeRelationRequest request)
+    {return success(relation(service.revokeRelation(fileObjectId,relationId,request.actionId(),actor())));}
+
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @PostMapping("/{fileObjectId}/access-token")
     public AjaxResult token(@PathVariable Long fileObjectId,@Valid @RequestBody AccessTokenRequest request)
-    {return success(service.issueAccessToken(fileObjectId,request.accessType(),actor()));}
+    {return success(service.issueAccessToken(fileObjectId,request.relationId(),request.accessType(),actor()));}
 
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @GetMapping("/{fileObjectId}/preview-token")
-    public AjaxResult previewToken(@PathVariable Long fileObjectId)
-    {return success(service.issueAccessToken(fileObjectId,"PREVIEW",actor()));}
+    public AjaxResult previewToken(@PathVariable Long fileObjectId,@RequestParam Long relationId)
+    {return success(service.issueAccessToken(fileObjectId,relationId,"PREVIEW",actor()));}
 
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @GetMapping("/{fileObjectId}/download-token")
-    public AjaxResult downloadToken(@PathVariable Long fileObjectId)
-    {return success(service.issueAccessToken(fileObjectId,"DOWNLOAD",actor()));}
+    public AjaxResult downloadToken(@PathVariable Long fileObjectId,@RequestParam Long relationId)
+    {return success(service.issueAccessToken(fileObjectId,relationId,"DOWNLOAD",actor()));}
 
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @GetMapping("/{fileObjectId}/versions")
@@ -89,33 +95,52 @@ public class FileObjectController extends BaseController
     public AjaxResult accessLogs(@PathVariable Long fileObjectId)
     {return success(service.accessLogs(fileObjectId,actor()).stream().map(FileObjectController::audit).toList());}
 
+    @PreAuthorize("@ss.hasPermi('file:object:audit')")
+    @GetMapping("/{fileObjectId}/lifecycle-audits")
+    public AjaxResult lifecycleAudits(@PathVariable Long fileObjectId)
+    {return success(service.lifecycleAudits(fileObjectId,actor()).stream().map(FileObjectController::lifecycle).toList());}
+
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @GetMapping("/access/{token}")
     public ResponseEntity<StreamingResponseBody> open(@PathVariable String token)
     {
         AccessContent content=service.open(token,actor(),IpUtils.getIpAddr());
-        StreamingResponseBody body=output->{try(InputStream input=content.input()){input.transferTo(output);}};
+        StreamingResponseBody body=output->{
+            try(InputStream input=content.input()) {
+                input.transferTo(output);
+            } catch(Exception error) {
+                try{service.completeAccess(content.receipt(),false,error.getClass().getSimpleName());}catch(RuntimeException ignored){}
+                throw error;
+            }
+            service.completeAccess(content.receipt(),true,null);
+        };
         MediaType media;try{media=MediaType.parseMediaType(content.contentType());}catch(Exception ignored){media=MediaType.APPLICATION_OCTET_STREAM;}
+        ContentDisposition disposition="PREVIEW".equals(content.accessType())
+            ?ContentDisposition.inline().filename(content.fileName(),StandardCharsets.UTF_8).build()
+            :ContentDisposition.attachment().filename(content.fileName(),StandardCharsets.UTF_8).build();
         return ResponseEntity.ok().contentType(media).contentLength(content.sizeBytes())
-            .header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename(content.fileName(),StandardCharsets.UTF_8).build().toString())
+            .header(HttpHeaders.CONTENT_DISPOSITION,disposition.toString())
             .header(HttpHeaders.CACHE_CONTROL,"no-store").body(body);
     }
 
     private FileActor actor(){return new FileActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getDeptId());}
-    private static VersionView version(FileVersion value){return new VersionView(value.fileObjectId(),value.fileVersionId(),value.versionNo(),value.originalFileName(),value.contentType(),value.sizeBytes(),value.sha256(),value.createdAt());}
+    private static VersionView version(FileVersion value){return new VersionView(value.fileObjectId(),value.fileVersionId(),value.versionNo(),value.originalFileName(),value.contentType(),value.sizeBytes(),value.sha256(),value.changeDescription(),value.createdAt());}
     private static RelationView relation(FileBusinessRelation value){return new RelationView(value.relationId(),value.fileObjectId(),value.businessType(),value.businessId(),value.materialType(),value.visibility());}
-    private static AuditView audit(AccessLog value){return new AuditView(value.accessLogId(),value.fileObjectId(),value.fileVersionId(),value.businessType(),value.businessId(),value.accessType(),value.actorId(),value.actorDeptId(),value.clientIp(),value.accessedAt());}
+    private static AuditView audit(AccessLog value){return new AuditView(value.accessLogId(),value.accessSessionId(),value.fileObjectId(),value.fileVersionId(),value.relationId(),value.businessType(),value.businessId(),value.accessType(),value.eventType(),value.outcome(),value.failureCode(),value.actorId(),value.actorDeptId(),value.clientIp(),value.accessedAt());}
+    private static LifecycleView lifecycle(LifecycleAudit value){return new LifecycleView(value.lifecycleAuditId(),value.fileObjectId(),value.fileVersionId(),value.relationId(),value.actionId(),value.eventType(),value.details(),value.actorId(),value.actorDeptId(),value.occurredAt());}
 
     public record RegisterUploadRequest(@NotBlank String actionId,@NotBlank String originalFileName,@NotBlank String contentType,
         @PositiveOrZero long expectedSize,@Pattern(regexp="(?i)[0-9a-f]{64}") String expectedSha256,@NotBlank String businessType,
         @NotNull @Positive Long businessId,@NotBlank String materialType,String visibility)
     {RegisterUploadCommand command(){return new RegisterUploadCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256,businessType,businessId,materialType,visibility);}}
     public record RegisterVersionRequest(@NotBlank String actionId,@NotBlank String originalFileName,@NotBlank String contentType,
-        @PositiveOrZero long expectedSize,@Pattern(regexp="(?i)[0-9a-f]{64}") String expectedSha256)
-    {RegisterVersionCommand command(){return new RegisterVersionCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256);}}
+        @PositiveOrZero long expectedSize,@Pattern(regexp="(?i)[0-9a-f]{64}") String expectedSha256,@NotBlank String changeDescription)
+    {RegisterVersionCommand command(){return new RegisterVersionCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256,changeDescription);}}
     public record RelationRequest(@NotBlank String actionId,@NotBlank String businessType,@NotNull @Positive Long businessId,@NotBlank String materialType,String visibility) { }
-    public record AccessTokenRequest(@Pattern(regexp="(?i)PREVIEW|DOWNLOAD") String accessType) { }
-    public record VersionView(Long fileObjectId,Long fileVersionId,int versionNo,String originalFileName,String contentType,long sizeBytes,String sha256,java.time.Instant createdAt) { }
+    public record RevokeRelationRequest(@NotBlank String actionId) { }
+    public record AccessTokenRequest(@NotNull @Positive Long relationId,@Pattern(regexp="(?i)PREVIEW|DOWNLOAD") String accessType) { }
+    public record VersionView(Long fileObjectId,Long fileVersionId,int versionNo,String originalFileName,String contentType,long sizeBytes,String sha256,String changeDescription,java.time.Instant createdAt) { }
     public record RelationView(Long relationId,Long fileObjectId,String businessType,Long businessId,String materialType,String visibility) { }
-    public record AuditView(Long accessLogId,Long fileObjectId,Long fileVersionId,String businessType,Long businessId,String accessType,Long actorId,Long actorDeptId,String clientIp,java.time.Instant accessedAt) { }
+    public record AuditView(Long accessLogId,String accessSessionId,Long fileObjectId,Long fileVersionId,Long relationId,String businessType,Long businessId,String accessType,String eventType,String outcome,String failureCode,Long actorId,Long actorDeptId,String clientIp,java.time.Instant accessedAt) { }
+    public record LifecycleView(Long lifecycleAuditId,Long fileObjectId,Long fileVersionId,Long relationId,String actionId,String eventType,String details,Long actorId,Long actorDeptId,java.time.Instant occurredAt) { }
 }

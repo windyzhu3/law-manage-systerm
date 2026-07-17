@@ -48,18 +48,18 @@ public class TodoCommandService
     @Transactional public TodoInstance claim(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=require(id);
-        if(!access.canClaim(todo,actor.userId(),actor.deptId()))deny();validateAction(todo,command,"CLAIM");
+        if(!access.canClaim(todo,actor.userId(),actor.deptId()))deny();validateAction(todo,command,"CLAIM",actor);
         return transition(todo,TodoStatus.CLAIMED,actor.userId(),"CLAIM",command,actor);
     }
     @Transactional public TodoInstance start(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=requireOwner(id,actor);
-        validateAction(todo,command,"START");return transition(todo,TodoStatus.IN_PROGRESS,null,"START",command,actor);
+        validateAction(todo,command,"START",actor);return transition(todo,TodoStatus.IN_PROGRESS,null,"START",command,actor);
     }
     @Transactional public TodoInstance submit(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=requireOwner(id,actor);
-        validateAction(todo,command,"SUBMIT");return transition(todo,TodoStatus.SUBMITTED,null,"SUBMIT",command,actor);
+        validateAction(todo,command,"SUBMIT",actor);return transition(todo,TodoStatus.SUBMITTED,null,"SUBMIT",command,actor);
     }
     @Transactional public TodoInstance complete(Long id,ActionCommand command,Actor actor)
     {
@@ -69,20 +69,20 @@ public class TodoCommandService
     @Transactional public TodoInstance returnTodo(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=require(id);
-        if(!access.canReview(todo,actor.userId()))deny();validateAction(todo,command,"RETURN");
+        if(!access.canReview(todo,actor.userId()))deny();validateAction(todo,command,"RETURN",actor);
         return transition(todo,TodoStatus.RETURNED,null,"RETURN",command,actor);
     }
     @Transactional public TodoInstance transfer(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=requireOwner(id,actor);
         TodoStatus current=TodoStatus.fromCode(todo.getStatus());if(current.isTerminal())terminal("transferred");
-        validateAction(todo,command,"TRANSFER");Long target=positiveOwner(command.payload().get("targetOwnerId"));
+        validateAction(todo,command,"TRANSFER",actor);Long target=positiveOwner(command.payload().get("targetOwnerId"));
         return transition(todo,current,target,"TRANSFER",command,actor);
     }
     @Transactional public TodoInstance cancel(Long id,ActionCommand command,Actor actor)
     {
         requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);TodoInstance todo=requireOwner(id,actor);
-        validateAction(todo,command,"CANCEL");return transition(todo,TodoStatus.CANCELLED,null,"CANCEL",command,actor);
+        validateAction(todo,command,"CANCEL",actor);return transition(todo,TodoStatus.CANCELLED,null,"CANCEL",command,actor);
     }
 
     @Transactional public TodoInstance autoComplete(Long id,ActionCommand command,Actor actor)
@@ -93,25 +93,25 @@ public class TodoCommandService
     @Transactional public TodoInstance autoReturn(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"RETURN_DEFAULT");if(repeatedAuto(id,command,"RETURN_DEFAULT"))return mapper.selectById(id);TodoInstance todo=require(id);
-        validateAction(todo,command,"RETURN");return transition(todo,TodoStatus.RETURNED,null,"RETURN_DEFAULT",command,actor);
+        validateAction(todo,command,"RETURN",actor);return transition(todo,TodoStatus.RETURNED,null,"RETURN_DEFAULT",command,actor);
     }
     @Transactional public TodoInstance autoEscalate(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"ESCALATE");if(repeatedAuto(id,command,"ESCALATE"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("escalated");
-        validateAction(todo,command,"ESCALATE");return transition(todo,status,null,"ESCALATE",command,actor);
+        validateAction(todo,command,"ESCALATE",actor);return transition(todo,status,null,"ESCALATE",command,actor);
     }
     @Transactional public TodoInstance autoTransfer(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"TRANSFER");if(repeatedAuto(id,command,"TRANSFER"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("transferred");
-        validateAction(todo,command,"TRANSFER");return transition(todo,status,positiveOwner(command.payload().get("targetOwnerId")),"TRANSFER",command,actor);
+        validateAction(todo,command,"TRANSFER",actor);return transition(todo,status,positiveOwner(command.payload().get("targetOwnerId")),"TRANSFER",command,actor);
     }
     @Transactional public TodoInstance autoReturnPool(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"RETURN_POOL");if(repeatedAuto(id,command,"RETURN_POOL"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("returned to pool");
-        validateAction(todo,command,"RETURN_POOL");
+        validateAction(todo,command,"RETURN_POOL",actor);
         if(mapper.returnToPoolConditionally(id,status.code(),actor.userName())<=0)concurrent();
         writeAction(todo,command,actor,"RETURN_POOL",status.code(),TodoStatus.CREATED.code());
         todo.setStatus(TodoStatus.CREATED.code());todo.setOwnerId(null);todo.setOwnerDeptId(null);return todo;
@@ -119,7 +119,7 @@ public class TodoCommandService
 
     private TodoInstance complete(TodoInstance todo,ActionCommand command,Actor actor,String actionType)
     {
-        validateAction(todo,command,"COMPLETE");TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
+        validateAction(todo,command,"COMPLETE",actor);TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
         for(TodoCompletionHandler handler:completionHandlers)if(handler.supports(completed))handler.complete(completed,command.payload(),actor.userId(),actor.userName());
         if(routing!=null)routing.advance(completed,command.payload());return completed;
     }
@@ -178,7 +178,7 @@ public class TodoCommandService
     private void requireHumanActionId(ActionCommand command){if(command!=null&&command.actionId()!=null&&command.actionId().regionMatches(true,0,"AUTO:",0,5))throw new TodoException("TODO_ACTION_ID_RESERVED","AUTO: action ids are reserved for controlled service actions");}
     private void requireAutoActionId(ActionCommand command){if(command==null||command.actionId()==null||!command.actionId().startsWith("AUTO:"))throw new TodoException("TODO_AUTO_ACTION_ID_REQUIRED","Controlled auto actions require a reserved AUTO: action id");}
 
-    private void validateAction(TodoInstance todo,ActionCommand command,String action)
+    private void validateAction(TodoInstance todo,ActionCommand command,String action,Actor actor)
     {
         Map<String,Object> version=mapper.selectTemplateVersionById(todo.getTemplateVersionId());
         String compiled=version==null?null:text(value(version,"compiled_json","compiledJson"));
@@ -193,7 +193,7 @@ public class TodoCommandService
         }
         if(todo.getDodSnapshotJson()!=null&&!todo.getDodSnapshotJson().isBlank())
             definition=new TodoDefinitionDocument(definition.schemaVersion(),definition.templateCode(),definition.event(),definition.owner(),new DodRule(JSON.parseObject(todo.getDodSnapshotJson())),definition.sla(),definition.ui(),definition.routing(),definition.autoActions(),definition.decisionRefs(),definition.acceptanceRefs());
-        dod.validate(todo,definition,action,command.fields(),command.fileObjectIds());
+        dod.validate(todo,definition,action,command.fields(),command.fileObjectIds(),actor);
         if("COMPLETE".equals(action))
         {
             List<String> legacyTypes=JSON.parseObject(JSON.toJSONString(definition.dod().config())).getList("requiredAttachments",String.class);

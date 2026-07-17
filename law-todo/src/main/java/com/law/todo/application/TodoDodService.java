@@ -10,6 +10,7 @@ import com.law.todo.spi.TodoMaterialLookup;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.definition.validation.TodoFormValidator;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.law.todo.application.command.TodoActionCommands.Actor;
 
 @Service
 public class TodoDodService
@@ -23,10 +24,10 @@ public class TodoDodService
         this.validators=validators==null?List.of():validators;this.formValidator=new TodoFormValidator();
         this.materialLookup=materialLookups==null||materialLookups.isEmpty()?ids->{throw new TodoException("TODO_MATERIAL_LOOKUP_UNAVAILABLE","Material metadata lookup is unavailable");}:materialLookups.get(0);
     }
-    public void validate(TodoInstance todo,TodoDefinitionDocument definition,String action,Map<String,Object> fields,List<Long> fileObjectIds)
+    public void validate(TodoInstance todo,TodoDefinitionDocument definition,String action,Map<String,Object> fields,List<Long> fileObjectIds,Actor actor)
     {
         formValidator.validateSubmission(definition,action,fields,fileObjectIds,
-            ids->materialLookup.resolve(todo.getBusinessType(),todo.getBusinessId(),ids));
+            ids->materialLookup.resolve(todo.getBusinessType(),todo.getBusinessId(),ids,actor));
         if("COMPLETE".equalsIgnoreCase(action))validateBusiness(todo,fields);
     }
     public void validate(TodoInstance todo,List<String> fields,List<String> attachmentTypes,Map<String,Object> payload,List<String> attachments)

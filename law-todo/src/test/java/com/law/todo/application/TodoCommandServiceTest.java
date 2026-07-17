@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +32,7 @@ class TodoCommandServiceTest
     @Mock TodoAccessPolicy access;
     @Mock TodoCompletionHandler completionHandler;
     @Mock TodoRoutingService routing;
+    @Mock TodoDodService dod;
     TodoCommandService service;
 
     @BeforeEach void setUp(){service=new TodoCommandService(mapper,access);}
@@ -187,6 +189,22 @@ class TodoCommandServiceTest
         InOrder order=org.mockito.Mockito.inOrder(completionHandler,routing);
         order.verify(completionHandler).complete(todo,Map.of("approved",true),7L,"alice");
         order.verify(routing).advance(todo,Map.of("approved",true));
+    }
+
+    @Test void completion_passes_the_authenticated_actor_to_dod_material_validation()
+    {
+        TodoInstance todo=todo(18L,"SUBMITTED",7L);todo.setTemplateVersionId(18L);todo.setBusinessType("CASE");todo.setBusinessId(9L);
+        when(mapper.selectById(18L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(18L)).thenReturn(Map.of("compiled_json",
+            "{\"schemaVersion\":1,\"templateCode\":\"T\",\"dod\":{\"config\":{}},\"ui\":{\"config\":{}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
+        when(mapper.updateStatusConditionally(18L,"SUBMITTED","COMPLETED",null,"alice")).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        Actor actor=new Actor(7L,"alice",3L);
+        TodoCommandService guarded=new TodoCommandService(mapper,access,dod,List.of(),null);
+
+        guarded.complete(18L,new ActionCommand("done-18",null,Map.of(),List.of(11L)),actor);
+
+        verify(dod).validate(eq(todo),any(),eq("COMPLETE"),eq(Map.of()),eq(List.of(11L)),eq(actor));
     }
 
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}

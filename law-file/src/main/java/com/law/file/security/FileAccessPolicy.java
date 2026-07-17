@@ -23,6 +23,16 @@ public class FileAccessPolicy
     }
     public List<FileBusinessRelation> requireCanRead(Long fileObjectId,FileActor actor)
     {return require(fileObjectId,actor,false);}
+    public FileBusinessRelation requireCanReadRelation(Long fileObjectId,Long relationId,FileActor actor)
+    {
+        return require(fileObjectId,actor,false).stream().filter(value->value.relationId().equals(relationId))
+            .findFirst().orElseThrow(()->new FileAccessDeniedException("File relation is outside the actor's business scope"));
+    }
+    public FileBusinessRelation requireCanWriteRelation(Long fileObjectId,Long relationId,FileActor actor)
+    {
+        return require(fileObjectId,actor,true).stream().filter(value->value.relationId().equals(relationId))
+            .findFirst().orElseThrow(()->new FileAccessDeniedException("File relation is outside the actor's business scope"));
+    }
     public List<FileBusinessRelation> requireCanWrite(Long fileObjectId,FileActor actor)
     {return require(fileObjectId,actor,true);}
     private List<FileBusinessRelation> require(Long id,FileActor actor,boolean write)
@@ -43,8 +53,8 @@ public class FileAccessPolicy
     {
         return switch(relation.visibility()) {
             case "BUSINESS" -> true;
-            case "DEPARTMENT" -> actor.deptId()!=null&&actor.deptId().equals(relation.createdDeptId());
-            case "PRIVATE" -> actor.userId().equals(relation.createdBy());
+            case "DEPARTMENT" -> actor.deptId()!=null&&actor.deptId().equals(relation.scopeDeptId());
+            case "PRIVATE" -> actor.userId().equals(relation.scopeUserId());
             default -> false;
         };
     }

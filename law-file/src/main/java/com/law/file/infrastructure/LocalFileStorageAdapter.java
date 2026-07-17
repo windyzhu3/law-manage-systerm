@@ -21,12 +21,12 @@ public class LocalFileStorageAdapter implements FileStoragePort
     public LocalFileStorageAdapter(@Value("${law.file.storage.local.root:${ruoyi.profile}/file-center}") String root){this(Path.of(root));}
     public LocalFileStorageAdapter(Path root){this.root=root.toAbsolutePath().normalize();}
 
-    @Override public StoredObject store(InputStream input,String objectKey,long expectedSize,String expectedSha256)
+    @Override public StagedObject stage(InputStream input,long expectedSize,String expectedSha256)
     {
         validateExpected(expectedSize,expectedSha256);
-        Path target=resolve(objectKey);Path temporary=root.resolve(".tmp").resolve(UUID.randomUUID().toString()).normalize();
+        String stagingKey=".staged/"+UUID.randomUUID();Path temporary=resolve(stagingKey);
         try {
-            Files.createDirectories(temporary.getParent());Files.createDirectories(target.getParent());
+            Files.createDirectories(temporary.getParent());
             MessageDigest digest=MessageDigest.getInstance("SHA-256");long size;
             try(DigestInputStream source=new DigestInputStream(input,digest)) { size=Files.copy(source,temporary,StandardCopyOption.REPLACE_EXISTING); }
             String actual=HexFormat.of().formatHex(digest.digest());
@@ -34,11 +34,34 @@ public class LocalFileStorageAdapter implements FileStoragePort
                 Files.deleteIfExists(temporary);
                 throw new FileException("FILE_CONTENT_MISMATCH","Uploaded content does not match declared size and SHA-256");
             }
-            try { Files.move(temporary,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING); }
-            catch(java.nio.file.AtomicMoveNotSupportedException unsupported){Files.move(temporary,target,StandardCopyOption.REPLACE_EXISTING);}
-            return new StoredObject(objectKey,size,actual);
+            return new StagedObject(stagingKey,size,actual);
         } catch(FileException error){throw error;}
           catch(Exception error){try{Files.deleteIfExists(temporary);}catch(Exception ignored){}throw new FileException("FILE_STORAGE_WRITE_FAILED","Unable to store file",error);}
+    }
+    @Override public StoredObject publish(StagedObject staged,String objectKey)
+    {
+        if(staged==null||staged.stagingKey()==null||!staged.stagingKey().startsWith(".staged/"))
+            throw new FileException("FILE_STAGE_INVALID","Invalid staged object");
+        Path temporary=resolve(staged.stagingKey());Path target=resolve(objectKey);
+        try {
+            if(!Files.isRegularFile(temporary))throw new FileException("FILE_STAGE_NOT_FOUND","Staged content does not exist");
+            Files.createDirectories(target.getParent());
+            try { Files.move(temporary,target,StandardCopyOption.ATOMIC_MOVE); }
+            catch(java.nio.file.AtomicMoveNotSupportedException unsupported){Files.move(temporary,target);}
+            return new StoredObject(objectKey,staged.size(),staged.sha256());
+        } catch(FileException error){throw error;}
+          catch(Exception error){throw new FileException("FILE_STORAGE_PUBLISH_FAILED","Unable to publish file",error);}
+    }
+    @Override public void abort(StagedObject staged)
+    {
+        if(staged==null)return;
+        try{Files.deleteIfExists(resolve(staged.stagingKey()));}
+        catch(Exception error){throw new FileException("FILE_STORAGE_ABORT_FAILED","Unable to discard staged file",error);}
+    }
+    @Override public void delete(String objectKey)
+    {
+        try{Files.deleteIfExists(resolve(objectKey));}
+        catch(Exception error){throw new FileException("FILE_STORAGE_DELETE_FAILED","Unable to delete stored file",error);}
     }
     @Override public InputStream read(String objectKey)
     {

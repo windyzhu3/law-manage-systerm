@@ -39,6 +39,23 @@ class FileAccessPolicyTest
         assertEquals(List.of(expected),new FileAccessPolicy(repository,List.of(checker)).requireCanRead(10L,actor));
     }
 
+    @Test void relation_specific_read_never_falls_back_to_another_visible_relation()
+    {
+        FileBusinessRelation privateRelation=relation(1L,"PRIVATE",8L,3L);
+        FileBusinessRelation publicRelation=relation(2L,"BUSINESS",8L,4L);
+        when(repository.findActiveRelations(10L)).thenReturn(List.of(privateRelation,publicRelation));
+        when(checker.supports("CASE")).thenReturn(true);when(checker.canRead("CASE",9L,7L,3L)).thenReturn(true);
+
+        assertThrows(FileAccessDeniedException.class,
+            ()->new FileAccessPolicy(repository,List.of(checker)).requireCanReadRelation(10L,1L,actor));
+    }
+
     private FileBusinessRelation relation(String visibility,Long creator,Long dept)
-    {return new FileBusinessRelation(1L,"rel-1",10L,"CASE",9L,"PROOF",visibility,creator,dept,true);}
+    {return relation(1L,visibility,creator,dept);}
+    private FileBusinessRelation relation(Long id,String visibility,Long creator,Long dept)
+    {
+        Long scopeDept="DEPARTMENT".equals(visibility)?dept:0L;
+        Long scopeUser="PRIVATE".equals(visibility)?creator:0L;
+        return new FileBusinessRelation(id,10L,"CASE",9L,"PROOF",visibility,scopeDept,scopeUser,creator,dept,true);
+    }
 }
