@@ -6,6 +6,12 @@ function parse(value, fallback) {
   try { return JSON.parse(value) } catch (e) { return fallback }
 }
 
+function canonicalError() {
+  const error = new Error('Canonical definition JSON is malformed or not an object')
+  error.code = 'TODO_DEFINITION_CANONICAL_INVALID'
+  return error
+}
+
 function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? clone(value) : {}
 }
@@ -44,8 +50,15 @@ function canonical(input) {
 }
 
 function hydrateDefinition(row) {
-  const stored = parse(value(row, 'definition_json', 'definitionJson'), null)
-  if (stored && typeof stored === 'object') return canonical(stored)
+  const raw = value(row, 'definition_json', 'definitionJson')
+  if (raw !== undefined && raw !== null && raw !== '') {
+    let stored = raw
+    if (typeof raw === 'string') {
+      try { stored = JSON.parse(raw) } catch (e) { throw canonicalError() }
+    }
+    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) throw canonicalError()
+    return canonical(stored)
+  }
   return canonical({
     schemaVersion: value(row, 'definition_schema_version', 'definitionSchemaVersion') || 1,
     templateCode: value(row, 'template_code', 'templateCode') || '',
@@ -63,6 +76,17 @@ function hydrateDefinition(row) {
     decisionRefs: array(parse(value(row, 'decision_refs_json', 'decisionRefsJson'), [])),
     acceptanceRefs: array(parse(value(row, 'acceptance_refs_json', 'acceptanceRefsJson'), []))
   })
+}
+
+function definitionSourceToken(row) {
+  const raw = value(row, 'definition_json', 'definitionJson')
+  return raw === undefined || raw === null || raw === '' ? null : raw
+}
+
+function replaceDraftWithServerVersion(rows, versionId) {
+  const fresh = (rows || []).find(row => String(value(row, 'version_id', 'versionId')) === String(versionId))
+  if (!fresh) throw new Error('Saved draft was not returned by the server')
+  return clone(fresh)
 }
 
 function serializeDefinition(form) {
@@ -83,4 +107,4 @@ function toDraftPayload(form, expectedDefinitionJson = null) {
   }
 }
 
-module.exports = { hydrateDefinition, serializeDefinition, toDraftPayload }
+module.exports = { hydrateDefinition, serializeDefinition, toDraftPayload, definitionSourceToken, replaceDraftWithServerVersion }

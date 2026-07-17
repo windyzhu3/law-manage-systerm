@@ -29,7 +29,7 @@ function normalize(value) {
 }
 
 function run() {
-  const { hydrateDefinition, serializeDefinition, toDraftPayload } = require('../src/views/todo/config/definition-codec')
+  const { hydrateDefinition, serializeDefinition, toDraftPayload, definitionSourceToken, replaceDraftWithServerVersion } = require('../src/views/todo/config/definition-codec')
   const hydrated = hydrateDefinition({ definition_json: JSON.stringify(fixture) })
   const serialized = serializeDefinition(hydrated)
   assert.deepStrictEqual(normalize(serialized), normalize(fixture), 'canonical document must survive hydrate/serialize without data loss')
@@ -39,6 +39,13 @@ function run() {
   assert.strictEqual(payload.expectedDefinitionJson, null, 'codec leaves source token ownership to the loaded form row')
   const tokenPayload = toDraftPayload(hydrated, JSON.stringify(fixture))
   assert.strictEqual(tokenPayload.expectedDefinitionJson, JSON.stringify(fixture), 'draft payload must preserve the loaded source token for optimistic concurrency')
+  assert.throws(() => hydrateDefinition({ definition_json: '{not-json', owner_rule_json: '{"type":"PAYLOAD"}' }),
+    error => error && error.code === 'TODO_DEFINITION_CANONICAL_INVALID', 'malformed canonical JSON must fail closed instead of hydrating legacy columns')
+  assert.throws(() => hydrateDefinition({ definitionJson: '[]', ownerRuleJson: '{"type":"PAYLOAD"}' }),
+    error => error && error.code === 'TODO_DEFINITION_CANONICAL_INVALID', 'non-object canonical JSON must fail closed')
+  const refreshed = replaceDraftWithServerVersion([{ version_id: 9, definition_json: JSON.stringify({ ...fixture, templateCode: 'LEAD_SECOND_CONTACT' }) }], 9)
+  const secondPayload = toDraftPayload(hydrateDefinition(refreshed), definitionSourceToken(refreshed))
+  assert.strictEqual(secondPayload.expectedDefinitionJson, refreshed.definition_json, 'the refreshed server row must supply the next save token')
 
   const legacy = hydrateDefinition({
     template_code: 'CASE_ASSIGN', event_type: 'CASE_CREATED', payload_version: 1,
@@ -69,6 +76,10 @@ function run() {
   assert.ok(eventBuilder.includes('请在触发规则页编辑') && eventBuilder.includes('Task14'), 'event builder must direct edits to the Task14 trigger-rules resource')
   assert.ok(!eventBuilder.includes("$emit('input'"), 'Task13 event builder must never mutate trigger rules')
   assert.ok((eventBuilder.match(/disabled/g) || []).length >= 3, 'Task13 event inputs must be display-only')
+  assert.ok(form.includes('definitionError') && form.includes('invalid-definition'), 'DefinitionForm must surface canonical codec errors and block validation')
+  const drawer = fs.readFileSync('src/views/todo/config/components/VersionDrawer.vue', 'utf8')
+  assert.ok(drawer.includes('listDefinitionVersions') && drawer.includes('replaceDraftWithServerVersion'), 'VersionDrawer must refetch and replace the server draft after saving')
+  assert.ok(drawer.includes('definitionError') && drawer.includes('versions-refreshed'), 'VersionDrawer must disable saving corrupted drafts and publish refreshed rows')
   console.log('todo definition round-trip contract ok')
 }
 
