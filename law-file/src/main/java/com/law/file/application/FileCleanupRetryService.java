@@ -43,7 +43,8 @@ public class FileCleanupRetryService
             catch(RuntimeException error)
             {
                 String code=code(error);String message=message(error);
-                repository.failCleanupTask(task.cleanupTaskId(),code,message,now.plusSeconds(300));
+                if(repository.failCleanupTask(task.cleanupTaskId(),code,message,now.plusSeconds(300))!=1)
+                    throw new FileException("FILE_CLEANUP_STATE_CONFLICT","Unable to keep cleanup task retryable",error);
                 audit(task,"CLEANUP_RETRY_FAILED",code+": "+message,now);
             }
         }
@@ -60,8 +61,9 @@ public class FileCleanupRetryService
 
     private void audit(CleanupTask task,String event,String details,Instant now)
     {
-        repository.insertLifecycleAudit(new LifecycleAudit(null,task.fileObjectId(),null,null,task.actionId(),event,
-            details,task.actorId(),task.actorDeptId(),now));
+        if(repository.insertLifecycleAudit(new LifecycleAudit(null,task.fileObjectId(),null,null,task.actionId(),event,
+            details,task.actorId(),task.actorDeptId(),now))!=1)
+            throw new FileException("FILE_CLEANUP_AUDIT_FAILED","Unable to write cleanup retry audit");
     }
 
     private static String code(RuntimeException error)

@@ -36,6 +36,23 @@ class FileCleanupRetryServiceTest
         verify(repository).insertLifecycleAudit(argThat(value->value.eventType().equals("CLEANUP_RETRY_SUCCEEDED")));
     }
 
+    @Test void retry_hook_recovers_an_expired_pending_cleanup_after_a_crash()
+    {
+        FileObjectRepository repository=mock(FileObjectRepository.class);
+        FileStoragePort storage=mock(FileStoragePort.class);
+        CleanupTask pending=new CleanupTask(43L,10L,"idem-1","OBJECT","objects/43","PENDING",0,null,null,
+            NOW,7L,3L,NOW.minusSeconds(60));
+        when(repository.findRetryableCleanupTasks(NOW,10)).thenReturn(List.of(pending));
+        when(repository.completeCleanupTask(43L,NOW)).thenReturn(1);
+        when(repository.insertLifecycleAudit(any())).thenReturn(1);
+
+        int completed=new FileCleanupRetryService(repository,storage,Clock.fixed(NOW,ZoneOffset.UTC)).retryFailed(10);
+
+        assertEquals(1,completed);
+        verify(storage).delete("objects/43");
+        verify(repository).completeCleanupTask(43L,NOW);
+    }
+
     @Test void retry_hook_keeps_failure_retryable_with_error_details()
     {
         FileObjectRepository repository=mock(FileObjectRepository.class);

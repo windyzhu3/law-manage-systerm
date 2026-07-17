@@ -22,7 +22,6 @@ public record FileObject(Long fileObjectId,String logicalName,int currentVersion
         Long actorId,Long actorDeptId,String clientIp,Instant accessedAt) { }
     public record LifecycleAudit(Long lifecycleAuditId,Long fileObjectId,Long fileVersionId,Long relationId,String actionId,
         String eventType,String details,Long actorId,Long actorDeptId,Instant occurredAt) { }
-    public record FileMaterial(Long fileObjectId,String materialType) { }
     public record AccessReceipt(String sessionId,Long fileObjectId,Long fileVersionId,Long relationId,String accessType,
         Long actorId,Long actorDeptId,String clientIp) { }
     public record AccessContent(InputStream input,String fileName,String contentType,long sizeBytes,String accessType,

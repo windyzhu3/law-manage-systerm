@@ -7,7 +7,6 @@ import com.law.file.domain.FileObject;
 import com.law.file.domain.FileObject.AccessLog;
 import com.law.file.domain.FileObject.AccessToken;
 import com.law.file.domain.FileObject.FileBusinessRelation;
-import com.law.file.domain.FileObject.FileMaterial;
 import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
@@ -37,7 +36,6 @@ public interface FileObjectRepository
     int revokeRelation(Long relationId);
     RelationAction findRelationAction(Long actorId,String actionId);
     int insertRelationAction(RelationAction action);
-    List<FileMaterial> findMaterials(String businessType,Long businessId,List<Long> fileObjectIds);
     AccessToken insertAccessToken(AccessToken token);
     AccessToken findAccessTokenForUpdate(String tokenHash);
     int consumeAccessToken(Long accessTokenId,Instant consumedAt);

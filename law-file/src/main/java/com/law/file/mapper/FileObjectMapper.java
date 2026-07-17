@@ -27,7 +27,6 @@ public interface FileObjectMapper
     int revokeRelation(Long relationId);
     Map<String,Object> selectRelationAction(@Param("actorId") Long actorId,@Param("actionId") String actionId);
     int insertRelationAction(Map<String,Object> row);
-    List<Map<String,Object>> selectMaterials(@Param("businessType") String businessType,@Param("businessId") Long businessId,@Param("fileObjectIds") List<Long> fileObjectIds);
     int insertAccessToken(Map<String,Object> row);
     Map<String,Object> selectAccessTokenForUpdate(String tokenHash);
     int consumeAccessToken(@Param("accessTokenId") Long accessTokenId,@Param("consumedAt") Instant consumedAt);

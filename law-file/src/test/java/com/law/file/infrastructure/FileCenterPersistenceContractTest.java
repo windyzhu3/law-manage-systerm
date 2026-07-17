@@ -34,7 +34,7 @@ class FileCenterPersistenceContractTest
             ()->assertTrue(mapper.contains("status='expired'")),
             ()->assertTrue(mapper.contains("relation_id relationid")),
             ()->assertTrue(mapper.contains("event_type eventtype")),
-            ()->assertTrue(mapper.contains("status='failed' and next_retry_at&lt;=#{readyat}")),
+            ()->assertTrue(mapper.contains("status in ('pending','failed') and next_retry_at&lt;=#{readyat}")),
             ()->assertTrue(mapper.contains("for update skip locked"))
         );
     }

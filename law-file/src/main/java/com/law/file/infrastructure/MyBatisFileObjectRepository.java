@@ -12,7 +12,6 @@ import com.law.file.domain.FileObject;
 import com.law.file.domain.FileObject.AccessLog;
 import com.law.file.domain.FileObject.AccessToken;
 import com.law.file.domain.FileObject.FileBusinessRelation;
-import com.law.file.domain.FileObject.FileMaterial;
 import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
@@ -72,8 +71,6 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     @Override public int revokeRelation(Long id){return mapper.revokeRelation(id);}
     @Override public RelationAction findRelationAction(Long actor,String action){return relationAction(mapper.selectRelationAction(actor,action));}
     @Override public int insertRelationAction(RelationAction value){return mapper.insertRelationAction(relationActionRow(value));}
-    @Override public List<FileMaterial> findMaterials(String type,Long businessId,List<Long> ids)
-    {if(ids==null||ids.isEmpty())return List.of();return mapper.selectMaterials(type,businessId,ids).stream().map(r->new FileMaterial(longValue(r,"fileObjectId"),text(r,"materialType"))).toList();}
     @Override public AccessToken insertAccessToken(AccessToken value)
     {
         Map<String,Object> row=tokenRow(value);if(mapper.insertAccessToken(row)!=1)return null;
