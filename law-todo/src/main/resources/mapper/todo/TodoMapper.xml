@@ -203,6 +203,7 @@
     values(#{executionKey},#{todoId},#{ruleKey},#{actionType},'CLAIMED',1,#{now},#{now},#{now})
   </insert>
   <select id="selectAutoActionExecution" resultType="java.util.Map">select * from todo_auto_action_execution where execution_key=#{executionKey}</select>
+  <select id="selectAutoActionExecutionForUpdate" resultType="java.util.Map">select * from todo_auto_action_execution where execution_key=#{executionKey} for update</select>
   <update id="claimAutoActionRetry">update todo_auto_action_execution set status='CLAIMED',attempt_count=attempt_count+1,claimed_at=#{now},update_time=#{now} where execution_key=#{executionKey} and status='RETRY' and attempt_count=#{expectedAttempt} and next_retry_at&lt;=#{now}</update>
   <update id="claimStaleAutoActionExecution">update todo_auto_action_execution set attempt_count=attempt_count+1,claimed_at=#{now},update_time=#{now} where execution_key=#{executionKey} and status='CLAIMED' and attempt_count=#{expectedAttempt} and claimed_at&lt;=#{staleBefore}</update>
   <update id="finalizeStaleAutoActionDead">update todo_auto_action_execution set status='DEAD',attempt_count=#{finalAttempt},completed_at=#{now},next_retry_at=null,last_error_code=#{errorCode},last_error_message=#{errorMessage},update_time=#{now} where execution_key=#{executionKey} and status='CLAIMED' and attempt_count=#{expectedAttempt} and claimed_at&lt;=#{staleBefore} and not exists(select 1 from todo_action_log committed where committed.action_id=#{executionKey})</update>

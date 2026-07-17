@@ -107,6 +107,7 @@ public interface TodoMapper
     List<Map<String,Object>> selectAutoActionScanItems(@Param("now") LocalDateTime now);
     int insertAutoActionExecutionIfAbsent(Map<String,Object> execution);
     Map<String,Object> selectAutoActionExecution(String executionKey);
+    Map<String,Object> selectAutoActionExecutionForUpdate(String executionKey);
     int claimAutoActionRetry(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("now") LocalDateTime now);
     int claimStaleAutoActionExecution(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("staleBefore") LocalDateTime staleBefore,@Param("now") LocalDateTime now);
     int finalizeStaleAutoActionDead(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("finalAttempt") int finalAttempt,@Param("staleBefore") LocalDateTime staleBefore,@Param("now") LocalDateTime now,@Param("errorCode") String errorCode,@Param("errorMessage") String errorMessage);

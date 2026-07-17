@@ -87,6 +87,7 @@ class TodoCommandServiceTest
 
     @Test void autoReplayRejectsActionTypeOrSourceCollision()
     {
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:1:rule")).thenReturn(execution("AUTO:1:rule",1L,"COMPLETE_DEFAULT","CLAIMED"));
         when(mapper.selectActionById("AUTO:1:rule")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE","action_source","HUMAN","operator_id",7L,"operator_name","alice"));
         TodoException error=assertThrows(TodoException.class,()->service.autoComplete(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));
         assertEquals("TODO_AUTO_ACTION_REPLAY_CONFLICT",error.getBusinessCode());verify(mapper,never()).selectById(1L);
@@ -94,8 +95,16 @@ class TodoCommandServiceTest
 
     @Test void autoReplayAcceptsOnlyMatchingSystemAction()
     {
-        TodoInstance done=todo(1L,"COMPLETED",7L);when(mapper.selectActionById("AUTO:1:rule")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.selectById(1L)).thenReturn(done);
+        TodoInstance done=todo(1L,"COMPLETED",7L);when(mapper.selectAutoActionExecutionForUpdate("AUTO:1:rule")).thenReturn(execution("AUTO:1:rule",1L,"COMPLETE_DEFAULT","CLAIMED"));when(mapper.selectActionById("AUTO:1:rule")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.selectById(1L)).thenReturn(done);
         assertEquals(done,service.autoComplete(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));verify(mapper,never()).updateStatusConditionally(any(),any(),any(),any(),any());
+        InOrder order=org.mockito.Mockito.inOrder(mapper);order.verify(mapper).selectAutoActionExecutionForUpdate("AUTO:1:rule");order.verify(mapper).selectActionById("AUTO:1:rule");
+    }
+
+    @Test void deadExecutionFenceRejectsAutoCommandBeforeTodoMutationOrReplay()
+    {
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:1:rule")).thenReturn(execution("AUTO:1:rule",1L,"COMPLETE_DEFAULT","DEAD"));
+        TodoException error=assertThrows(TodoException.class,()->service.autoComplete(1L,new ActionCommand("AUTO:1:rule",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));
+        assertEquals("TODO_AUTO_ACTION_FENCE_REJECTED",error.getBusinessCode());verify(mapper,never()).selectActionById(any());verify(mapper,never()).selectById(any());verify(mapper,never()).updateStatusConditionally(any(),any(),any(),any(),any());
     }
 
     @Test void strongActionCommandPreservesPresentNullAndLegacyPayloadAlias()
@@ -124,6 +133,7 @@ class TodoCommandServiceTest
     @Test void controlledCompletionStillRunsNonWaivableDodValidation()
     {
         TodoInstance todo=todo(16L,"SUBMITTED",7L);todo.setTemplateVersionId(10L);todo.setBusinessType("LEAD");
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:16:r")).thenReturn(execution("AUTO:16:r",16L,"COMPLETE_DEFAULT","CLAIMED"));
         when(mapper.selectById(16L)).thenReturn(todo);
         when(mapper.selectTemplateVersionById(10L)).thenReturn(Map.of("compiled_json","{\"schemaVersion\":1,\"templateCode\":\"T\",\"dod\":{\"config\":{\"requiredFields\":[\"proof\"]}},\"ui\":{\"config\":{\"fields\":[\"proof\"]}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
         TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(),null);
@@ -180,4 +190,5 @@ class TodoCommandServiceTest
     }
 
     private TodoInstance todo(Long id,String status,Long owner){TodoInstance t=new TodoInstance();t.setTodoId(id);t.setStatus(status);t.setOwnerId(owner);return t;}
+    private Map<String,Object> execution(String key,Long todoId,String type,String status){return Map.of("execution_key",key,"todo_id",todoId,"action_type",type,"status",status);}
 }

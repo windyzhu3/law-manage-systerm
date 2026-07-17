@@ -138,6 +138,7 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("status='RETRY' and attempt_count=#{expectedAttempt}"));
             assertTrue(xml.contains("status='CLAIMED' and attempt_count=#{attemptNo}"));
             assertTrue(xml.contains("finalizeStaleAutoActionDead"));
+            assertTrue(xml.contains("selectAutoActionExecutionForUpdate"));assertTrue(xml.contains("from todo_auto_action_execution where execution_key=#{executionKey} for update"));
             assertTrue(xml.contains("status='CLAIMED' and attempt_count=#{expectedAttempt} and claimed_at&lt;=#{staleBefore}"));
             assertTrue(xml.contains("not exists(select 1 from todo_action_log committed where committed.action_id=#{executionKey})"));
             assertTrue(xml.contains("selectGovernedSupervisors"));assertTrue(xml.contains("coalesce((select owner.dept_id"));

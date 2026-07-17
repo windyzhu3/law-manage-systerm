@@ -87,29 +87,29 @@ public class TodoCommandService
 
     @Transactional public TodoInstance autoComplete(Long id,ActionCommand command,Actor actor)
     {
-        requireServiceActor(actor);if(repeatedAuto(id,command,"COMPLETE_DEFAULT"))return mapper.selectById(id);
+        requireServiceActor(actor);fenceAutoExecution(id,command,"COMPLETE_DEFAULT");if(repeatedAuto(id,command,"COMPLETE_DEFAULT"))return mapper.selectById(id);
         return complete(require(id),command,actor,"COMPLETE_DEFAULT");
     }
     @Transactional public TodoInstance autoReturn(Long id,ActionCommand command,Actor actor)
     {
-        requireServiceActor(actor);if(repeatedAuto(id,command,"RETURN_DEFAULT"))return mapper.selectById(id);TodoInstance todo=require(id);
+        requireServiceActor(actor);fenceAutoExecution(id,command,"RETURN_DEFAULT");if(repeatedAuto(id,command,"RETURN_DEFAULT"))return mapper.selectById(id);TodoInstance todo=require(id);
         validateAction(todo,command,"RETURN");return transition(todo,TodoStatus.RETURNED,null,"RETURN_DEFAULT",command,actor);
     }
     @Transactional public TodoInstance autoEscalate(Long id,ActionCommand command,Actor actor)
     {
-        requireServiceActor(actor);if(repeatedAuto(id,command,"ESCALATE"))return mapper.selectById(id);TodoInstance todo=require(id);
+        requireServiceActor(actor);fenceAutoExecution(id,command,"ESCALATE");if(repeatedAuto(id,command,"ESCALATE"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("escalated");
         validateAction(todo,command,"ESCALATE");return transition(todo,status,null,"ESCALATE",command,actor);
     }
     @Transactional public TodoInstance autoTransfer(Long id,ActionCommand command,Actor actor)
     {
-        requireServiceActor(actor);if(repeatedAuto(id,command,"TRANSFER"))return mapper.selectById(id);TodoInstance todo=require(id);
+        requireServiceActor(actor);fenceAutoExecution(id,command,"TRANSFER");if(repeatedAuto(id,command,"TRANSFER"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("transferred");
         validateAction(todo,command,"TRANSFER");return transition(todo,status,positiveOwner(command.payload().get("targetOwnerId")),"TRANSFER",command,actor);
     }
     @Transactional public TodoInstance autoReturnPool(Long id,ActionCommand command,Actor actor)
     {
-        requireServiceActor(actor);if(repeatedAuto(id,command,"RETURN_POOL"))return mapper.selectById(id);TodoInstance todo=require(id);
+        requireServiceActor(actor);fenceAutoExecution(id,command,"RETURN_POOL");if(repeatedAuto(id,command,"RETURN_POOL"))return mapper.selectById(id);TodoInstance todo=require(id);
         TodoStatus status=TodoStatus.fromCode(todo.getStatus());if(status.isTerminal())terminal("returned to pool");
         validateAction(todo,command,"RETURN_POOL");
         if(mapper.returnToPoolConditionally(id,status.code(),actor.userName())<=0)concurrent();
@@ -158,6 +158,14 @@ public class TodoCommandService
                 ||!String.valueOf(TodoAutoActionService.SERVICE_ACTOR.userId()).equals(operator)||!TodoAutoActionService.SERVICE_ACTOR.userName().equals(name))
             throw new TodoException("TODO_AUTO_ACTION_REPLAY_CONFLICT","Reserved auto action id belongs to another action or source");
         return true;
+    }
+
+    private void fenceAutoExecution(Long todoId,ActionCommand command,String expectedType)
+    {
+        requireAutoActionId(command);Map<String,Object> execution=mapper.selectAutoActionExecutionForUpdate(command.actionId());
+        String key=execution==null?null:text(value(execution,"execution_key","executionKey"));Object recorded=execution==null?null:value(execution,"todo_id","todoId");String type=execution==null?null:text(value(execution,"action_type","actionType"));String status=execution==null?null:text(value(execution,"status","status"));
+        if(execution==null||!command.actionId().equals(key)||recorded==null||!todoId.equals(Long.valueOf(String.valueOf(recorded)))||!expectedType.equals(type)||!"CLAIMED".equals(status))
+            throw new TodoException("TODO_AUTO_ACTION_FENCE_REJECTED","Controlled auto action requires its matching CLAIMED execution lock");
     }
 
     private TodoInstance require(Long id){TodoInstance todo=mapper.selectById(id);if(todo==null)throw new TodoException("TODO_NOT_FOUND","Todo does not exist");return todo;}

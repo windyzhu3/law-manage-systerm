@@ -1,4 +1,5 @@
 alter table todo_action_log add column action_source varchar(16) not null default 'HUMAN' after action_type;
+alter table todo_action_log modify column action_id varchar(300) not null;
 
 create table todo_auto_action_execution (
   execution_key varchar(300) not null,

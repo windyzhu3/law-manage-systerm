@@ -26,7 +26,9 @@ import com.law.todo.definition.model.TodoDefinitionDocument.AutoActionRule;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.notification.TodoNotificationPort;
 import com.law.todo.spi.TodoAutoActionCapability;
+import com.law.todo.spi.TodoSupervisorPort;
 
 @ExtendWith(MockitoExtension.class)
 class TodoAutoActionServiceTest
@@ -112,28 +114,45 @@ class TodoAutoActionServiceTest
         verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"DEAD".equals(row.get("status"))&&Integer.valueOf(3).equals(row.get("attemptNo"))));
     }
 
-    @Test void staleAtMaxReconcilesCommittedSystemCommandAsSuccessWithoutReexecution()
+    @Test void staleAtMaxReplaysCommittedSystemCommandCapabilityBeforeSuccess()
     {
         when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));
-        when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
+        when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(complete.execute(any(),any(),any())).thenReturn(AutoActionResult.success());when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
 
         AutoActionResult result=service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW);
 
-        assertEquals(AutoActionStatus.SUCCESS,result.status());verify(complete,never()).execute(any(),any(),any());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))&&Integer.valueOf(2).equals(row.get("attemptNo"))));verify(mapper,never()).finalizeStaleAutoActionDead(any(),any(Integer.class),any(Integer.class),any(),any(),any(),any());
+        assertEquals(AutoActionStatus.SUCCESS,result.status());verify(complete).execute(any(),any(),org.mockito.ArgumentMatchers.eq(TodoAutoActionService.SERVICE_ACTOR));verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))&&Integer.valueOf(2).equals(row.get("attemptNo"))));verify(mapper,never()).finalizeStaleAutoActionDead(any(),any(Integer.class),any(Integer.class),any(),any(),any(),any());
     }
 
     @Test void losingCommittedCommandReconciliationRaceReplaysSuccessWithoutDuplicateAudit()
     {
-        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);Map<String,Object> claimed=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1));Map<String,Object> success=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","SUCCESS","attempt_count",2);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(claimed,success);when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(0);
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);Map<String,Object> claimed=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1));Map<String,Object> success=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","SUCCESS","attempt_count",2);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(claimed,success);when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(complete.execute(any(),any(),any())).thenReturn(AutoActionResult.success());when(mapper.completeAutoActionExecution(anyMap())).thenReturn(0);
 
-        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete,never()).execute(any(),any(),any());verify(mapper,never()).insertAutoActionAudit(anyMap());
+        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete).execute(any(),any(),any());verify(mapper,never()).insertAutoActionAudit(anyMap());
     }
 
     @Test void commandAppearingDuringAtomicDeadRaceIsReconciledAsSuccess()
     {
-        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(null,Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.finalizeStaleAutoActionDead("AUTO:1:due-complete",2,3,NOW.minusMinutes(15),NOW,"TODO_AUTO_ACTION_STALE_MAX_ATTEMPTS","Stale execution reached maximum attempts")).thenReturn(0);when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(null,Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.finalizeStaleAutoActionDead("AUTO:1:due-complete",2,3,NOW.minusMinutes(15),NOW,"TODO_AUTO_ACTION_STALE_MAX_ATTEMPTS","Stale execution reached maximum attempts")).thenReturn(0);when(complete.execute(any(),any(),any())).thenReturn(AutoActionResult.success());when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
 
-        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete,never()).execute(any(),any(),any());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))));
+        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete).execute(any(),any(),any());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))));
+    }
+
+    @Test void failedCommittedCommandRepairCannotBeRecordedAsSuccess()
+    {
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(complete.execute(any(),any(),any())).thenThrow(new TodoException("TODO_AUTO_ACTION_REPAIR_FAILED","notification unavailable"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
+
+        AutoActionResult result=service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW);
+
+        assertEquals(AutoActionStatus.DEAD,result.status());assertEquals("TODO_AUTO_ACTION_REPAIR_FAILED",result.errorCode());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"DEAD".equals(row.get("status"))));
+    }
+
+    @Test void staleCommittedEscalationRepairsMissingSupervisorNotificationBeforeSuccess()
+    {
+        TodoCommandService commands=org.mockito.Mockito.mock(TodoCommandService.class);TodoNotificationPort notifications=org.mockito.Mockito.mock(TodoNotificationPort.class);TodoSupervisorPort supervisors=org.mockito.Mockito.mock(TodoSupervisorPort.class);when(supervisors.supervisors(7L,3L)).thenReturn(List.of(8L));TodoAutoActionCapability escalation=new TodoAutoActionConfiguration().escalationCapability(commands,notifications,supervisors);TodoAutoActionService repairing=new TodoAutoActionService(mapper,List.of(escalation));TodoInstance todo=todo();todo.setOwnerId(7L);todo.setOwnerDeptId(3L);todo.setTitle("Review");
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-escalate")).thenReturn(Map.of("execution_key","AUTO:1:due-escalate","todo_id",1L,"rule_key","due-escalate","action_type","ESCALATE","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));when(mapper.selectActionById("AUTO:1:due-escalate")).thenReturn(Map.of("todo_id",1L,"action_type","ESCALATE","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);AutoActionRule rule=new AutoActionRule(Map.of("ruleKey","due-escalate","actionType","ESCALATE","capability","ESCALATE","triggerAt","SLA_100","maxAttempts",3));
+
+        assertEquals(AutoActionStatus.SUCCESS,repairing.execute(rule,todo,NOW).status());verify(commands).autoEscalate(org.mockito.ArgumentMatchers.eq(1L),any(),org.mockito.ArgumentMatchers.eq(TodoAutoActionService.SERVICE_ACTOR));verify(notifications).send(org.mockito.ArgumentMatchers.argThat(command->command.recipientUserId().equals(8L)&&command.type().equals("AUTO_ESCALATE_SLA_100")&&command.idempotencyKey().length()<=128));
     }
 
     @Test void losingStaleFinalizationRaceReplaysWinnerWithoutDuplicateAudit()
