@@ -24,47 +24,37 @@ import com.ruoyi.system.service.event.CaseTransferReviewTodoHandler;
 
 class CaseManagementTodoFlowTest
 {
-    @Test
-    void assignmentAndAcceptanceHandlersMapStablePayloads()
+    @Test void assignmentAndAcceptanceHandlersMapStablePayloads()
     {
-        CaseAssignmentService assignments = mock(CaseAssignmentService.class);
-        new CaseAssignmentTodoHandler(assignments).complete(todo("CASE_ASSIGN"), Map.of("lawyerId", 12L), 1L, "admin");
-        verify(assignments).assign(argThat(command -> Long.valueOf(12L).equals(command.getMainLawyerId())
-                && "Y".equals(command.getNotifyFlag())), any());
+        CaseAssignmentService assignments=mock(CaseAssignmentService.class);
+        new CaseAssignmentTodoHandler(assignments).complete(todo("CASE_ASSIGN"),Map.of("lawyerId",12L),1L,"admin");
+        verify(assignments).assign(argThat(command->Long.valueOf(12L).equals(command.getMainLawyerId())&&"Y".equals(command.getNotifyFlag())),any());
 
-        CaseConfirmationService confirmations = mock(CaseConfirmationService.class);
-        TodoMapper todos = mock(TodoMapper.class);
-        TodoInstance accept = todo("CASE_ACCEPT"); accept.setTodoId(9L);
-        new CaseAcceptanceTodoHandler(confirmations, todos).complete(accept,
-                Map.of("confirmId", 33L, "accepted", true, "reason", "同意"), 12L, "lawyer");
-        verify(confirmations).handle(argThat(command -> "accepted".equals(command.getConfirmResult())
-                && Long.valueOf(33L).equals(command.getConfirmId())), any());
-        verify(todos).cancelActiveByBusiness("CASE", 8L, 9L, "lawyer");
+        CaseConfirmationService confirmations=mock(CaseConfirmationService.class);TodoMapper todos=mock(TodoMapper.class);
+        TodoInstance accept=todo("CASE_ACCEPT");accept.setTodoId(9L);
+        new CaseAcceptanceTodoHandler(confirmations,todos).complete(accept,Map.of("confirmId",33L,"accepted",true,"reason","同意"),12L,"lawyer");
+        verify(confirmations).handle(argThat(command->"accepted".equals(command.getConfirmResult())&&Long.valueOf(33L).equals(command.getConfirmId())),any());
+        verify(todos).cancelActiveByBusiness("CASE",8L,9L,"lawyer");
     }
 
-    @Test
-    void validatorRejectsStaleAssignment()
+    @Test void validatorRejectsStaleAssignment()
     {
-        BizCaseMapper mapper = mock(BizCaseMapper.class);
-        when(mapper.selectCaseById(8L)).thenReturn(Map.of("case_status", "processing"));
-        TodoException error = assertThrows(TodoException.class,
-                () -> new CaseTodoValidator(mapper).validate(todo("CASE_ASSIGN"), Map.of("lawyerId", 12L)));
-        assertEquals("CASE_STATE_STALE", error.getBusinessCode());
+        BizCaseMapper mapper=mock(BizCaseMapper.class);when(mapper.selectCaseById(8L)).thenReturn(Map.of("case_status","processing"));
+        TodoException error=assertThrows(TodoException.class,()->new CaseTodoValidator(mapper).validate(todo("CASE_ASSIGN"),Map.of("lawyerId",12L)));
+        assertEquals("CASE_STATE_STALE",error.getBusinessCode());
     }
 
-    @Test
-    void transferReviewUsesTypedCommandAndActor()
+    @Test void transferReviewUsesStableKeyWithHistoricalFallback()
     {
-        CaseTransferService service = mock(CaseTransferService.class);
-        new CaseTransferReviewTodoHandler(service).complete(todo("CASE_TRANSFER_REVIEW"),
-                Map.of("transferId", 4L, "action", "passed", "opinion", "同意"), 1L, "admin");
-        verify(service).approve(argThat(command -> Long.valueOf(4L).equals(command.getTransferId())
-                && "passed".equals(command.getAction())), any());
+        CaseTransferService service=mock(CaseTransferService.class);CaseTransferReviewTodoHandler handler=new CaseTransferReviewTodoHandler(service);
+        handler.complete(todo("CASE_TRANSFER_REVIEW"),Map.of("transferId",4L,"reviewAction","passed","opinion","同意"),1L,"admin");
+        verify(service).approve(argThat(command->Long.valueOf(4L).equals(command.getTransferId())&&"passed".equals(command.getAction())),any());
+        handler.complete(todo("CASE_TRANSFER_REVIEW"),Map.of("transferId",5L,"action","rejected","opinion","退回"),1L,"admin");
+        verify(service).approve(argThat(command->Long.valueOf(5L).equals(command.getTransferId())&&"rejected".equals(command.getAction())),any());
     }
 
     private TodoInstance todo(String code)
     {
-        TodoInstance value = new TodoInstance(); value.setTemplateCode(code); value.setBusinessType("CASE");
-        value.setBusinessId(8L); value.setOwnerDeptId(3L); return value;
+        TodoInstance value=new TodoInstance();value.setTemplateCode(code);value.setBusinessType("CASE");value.setBusinessId(8L);value.setOwnerDeptId(3L);return value;
     }
 }

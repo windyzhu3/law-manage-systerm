@@ -11,12 +11,40 @@ import com.ruoyi.system.mapper.BizLeadMapper;
 @Component
 public class LeadFirstContactHandler implements TodoCompletionHandler
 {
-    private final BizLeadMapper mapper;public LeadFirstContactHandler(BizLeadMapper mapper){this.mapper=mapper;}
-    public boolean supports(TodoInstance todo){return "LEAD".equals(todo.getBusinessType())&&"线索首联".equals(todo.getTitle());}
+    private final BizLeadMapper mapper;
+
+    public LeadFirstContactHandler(BizLeadMapper mapper)
+    {
+        this.mapper = mapper;
+    }
+
+    @Override
+    public boolean supports(TodoInstance todo)
+    {
+        return "LEAD_FIRST_CONTACT".equals(todo.getTemplateCode())
+                || (todo.getTemplateCode() == null && "LEAD".equals(todo.getBusinessType())
+                    && "线索首联".equals(todo.getTitle()));
+    }
+
+    @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
     {
-        BizLeadFollowup followup=new BizLeadFollowup();followup.setLeadId(todo.getBusinessId());followup.setFollowType(text(payload.getOrDefault("followType","phone")));followup.setFollowResult(text(payload.get("contactResult")));followup.setContent(text(payload.getOrDefault("content","完成首次联系")));followup.setFollowUserId(operatorId);followup.setFollowUserName(operatorName);followup.setTaskStatus("completed");followup.setCreateBy(operatorName);
-        if(mapper.insertFollowup(followup)<=0)throw new TodoException("LEAD_FOLLOWUP_CREATE_FAILED","首联跟进记录创建失败");mapper.touchLeadFollowTime(todo.getBusinessId(),null,operatorName);
+        BizLeadFollowup followup = new BizLeadFollowup();
+        followup.setLeadId(todo.getBusinessId());
+        followup.setFollowType(text(payload.getOrDefault("followType","phone")));
+        followup.setFollowResult(text(payload.get("contactResult")));
+        followup.setContent(text(payload.getOrDefault("content","完成首次联系")));
+        followup.setFollowUserId(operatorId);
+        followup.setFollowUserName(operatorName);
+        followup.setTaskStatus("completed");
+        followup.setCreateBy(operatorName);
+        if(mapper.insertFollowup(followup)<=0)
+            throw new TodoException("LEAD_FOLLOWUP_CREATE_FAILED","首联跟进记录创建失败");
+        mapper.touchLeadFollowTime(todo.getBusinessId(),null,operatorName);
     }
-    private String text(Object value){return value==null?null:String.valueOf(value);}
+
+    private String text(Object value)
+    {
+        return value == null ? null : String.valueOf(value);
+    }
 }

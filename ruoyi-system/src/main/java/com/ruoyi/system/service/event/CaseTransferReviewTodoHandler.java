@@ -25,14 +25,19 @@ public class CaseTransferReviewTodoHandler implements TodoCompletionHandler
     }
 
     @Override
-    public void complete(TodoInstance todo, Map<String,Object> payload, Long userId, String userName)
+    public void complete(TodoInstance todo,Map<String,Object> payload,Long userId,String userName)
     {
         CaseTransferApprovalCommand command = new CaseTransferApprovalCommand();
         command.setTransferId(longValue(payload.get("transferId")));
-        command.setAction(text(payload.get("action")));
+        command.setAction(reviewAction(payload));
         command.setOpinion(text(payload.get("opinion")));
-        service.approve(command, new BusinessActor(userId, userName, userName,
-                todo.getOwnerDeptId(), Long.valueOf(1L).equals(userId)));
+        service.approve(command,new BusinessActor(userId,userName,userName,todo.getOwnerDeptId(),Long.valueOf(1L).equals(userId)));
+    }
+
+    private String reviewAction(Map<String,Object> payload)
+    {
+        Object stable = payload.get("reviewAction");
+        return text(stable == null ? payload.get("action") : stable);
     }
 
     private Long longValue(Object value)
