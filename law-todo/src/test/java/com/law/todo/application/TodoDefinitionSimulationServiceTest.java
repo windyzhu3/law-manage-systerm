@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.application.command.TodoDefinitionCommands.SimulateDefinitionCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.mapper.TodoMapper;
@@ -128,6 +129,8 @@ class TodoDefinitionSimulationServiceTest
                 new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)));
 
         assertEquals(List.of("start"),result.routes().stream().map(route->route.nodeKey()).toList());
+        assertEquals("PENDING_COMPLETION",result.routes().get(0).status());
+        assertTrue(result.routes().get(0).trace().contains("task:would-create"));
     }
 
     @Test void fork_tasks_stop_tokens_before_join_and_downstream_without_completion_samples()
@@ -158,6 +161,126 @@ class TodoDefinitionSimulationServiceTest
 
         assertEquals(List.of("root"),result.routes().stream().map(route->route.nodeKey()).toList());
         assertFalse(result.routes().stream().anyMatch(route->route.nodeKey().equals("join")||route.nodeKey().equals("after")));
+    }
+
+    @Test void virtual_task_completion_merges_payload_and_time_before_decision_routing()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        Map<String,Object> ready=Map.of("$expression",Map.of("version",1,"root",Map.of("field","route","operator","EQ","value","NEXT")));
+        var graph=new TodoDefinitionDocument.RoutingGraph(Map.of(
+                "start","start","nodes",List.of(
+                        Map.of("key","start","type","TASK","templateVersionId",9L),Map.of("key","decision","type","DECISION"),
+                        Map.of("key","next","type","TASK","templateVersionId",10L),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","s-d","from","start","to","decision"),
+                        Map.of("key","d-n","from","decision","to","next","condition",ready,"priority",10),
+                        Map.of("key","d-e","from","decision","to","end","default",true),Map.of("key","n-e","from","next","to","end"))));
+        TodoDefinitionDocument value=withRouting(base,graph);String compiled=new TodoDefinitionCodec().canonicalJson(value);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));when(mapper.selectTemplateVersionById(10L)).thenReturn(publishedVersion(10L));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        LocalDateTime completed=LocalDateTime.of(2026,7,17,10,30);
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0),
+                        List.of(new VirtualTaskCompletionSample("start",Map.of("route","NEXT"),completed))));
+
+        assertEquals(List.of("start","decision","next"),result.routes().stream().map(route->route.nodeKey()).toList());
+        assertEquals("VIRTUAL_COMPLETED",result.routes().get(0).status());
+        assertTrue(result.routes().get(0).trace().contains("task:completed-at:"+completed));
+        assertEquals("PENDING_COMPLETION",result.routes().get(2).status());
+    }
+
+    @Test void virtual_task_completions_advance_fork_all_join_without_inventing_uncompleted_work()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        var graph=new TodoDefinitionDocument.RoutingGraph(Map.of(
+                "start","root","nodes",List.of(
+                        Map.of("key","root","type","TASK","templateVersionId",9L),Map.of("key","fork","type","FORK"),
+                        Map.of("key","a","type","TASK","templateVersionId",10L),Map.of("key","b","type","TASK","templateVersionId",11L),
+                        Map.of("key","join","type","JOIN","joinMode","ALL","branches",List.of("A","B")),
+                        Map.of("key","after","type","TASK","templateVersionId",12L),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","r-f","from","root","to","fork"),
+                        Map.of("key","f-a","from","fork","to","a","branchKey","A"),Map.of("key","f-b","from","fork","to","b","branchKey","B"),
+                        Map.of("key","a-j","from","a","to","join"),Map.of("key","b-j","from","b","to","join"),
+                        Map.of("key","j-a","from","join","to","after"),Map.of("key","a-e","from","after","to","end"))));
+        TodoDefinitionDocument value=withRouting(base,graph);String compiled=new TodoDefinitionCodec().canonicalJson(value);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));when(mapper.selectTemplateVersionById(10L)).thenReturn(publishedVersion(10L));
+        when(mapper.selectTemplateVersionById(11L)).thenReturn(publishedVersion(11L));when(mapper.selectTemplateVersionById(12L)).thenReturn(publishedVersion(12L));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());LocalDateTime at=LocalDateTime.of(2026,7,17,10,0);
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0),List.of(
+                        sample("root",at),sample("a",at.plusMinutes(10)),sample("b",at.plusMinutes(20)))));
+
+        assertEquals(3,result.routes().stream().filter(route->"VIRTUAL_COMPLETED".equals(route.status())).count());
+        assertTrue(result.routes().stream().anyMatch(route->route.nodeKey().equals("join")&&route.status().equals("ADVANCED")));
+        assertEquals("PENDING_COMPLETION",result.routes().stream().filter(route->route.nodeKey().equals("after")).findFirst().orElseThrow().status());
+    }
+
+    @Test void fork_branches_evaluate_from_the_same_prefork_payload_and_merge_only_at_join()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        Map<String,Object> initial=Map.of("$expression",Map.of("version",1,"root",Map.of("field","flag","operator","EQ","value","INITIAL")));
+        var graph=new TodoDefinitionDocument.RoutingGraph(Map.of(
+                "start","root","nodes",List.of(Map.of("key","root","type","TASK","templateVersionId",9L),Map.of("key","fork","type","FORK"),
+                        Map.of("key","a","type","TASK","templateVersionId",10L),Map.of("key","b-decision","type","DECISION"),
+                        Map.of("key","b","type","TASK","templateVersionId",11L),Map.of("key","b-other","type","TASK","templateVersionId",13L),
+                        Map.of("key","join","type","JOIN","joinMode","ALL","branches",List.of("A","B")),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","r-f","from","root","to","fork"),Map.of("key","f-a","from","fork","to","a","branchKey","A"),
+                        Map.of("key","f-bd","from","fork","to","b-decision","branchKey","B"),Map.of("key","bd-b","from","b-decision","to","b","condition",initial),
+                        Map.of("key","bd-o","from","b-decision","to","b-other","default",true),Map.of("key","a-j","from","a","to","join"),
+                        Map.of("key","b-j","from","b","to","join"),Map.of("key","o-j","from","b-other","to","join"),Map.of("key","j-e","from","join","to","end"))));
+        TodoDefinitionDocument value=withRouting(base,graph);String compiled=new TodoDefinitionCodec().canonicalJson(value);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));when(mapper.selectTemplateVersionById(10L)).thenReturn(publishedVersion(10L));
+        when(mapper.selectTemplateVersionById(11L)).thenReturn(publishedVersion(11L));when(mapper.selectTemplateVersionById(13L)).thenReturn(publishedVersion(13L));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        LocalDateTime at=LocalDateTime.of(2026,7,17,10,0);
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY","flag","INITIAL"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0),List.of(
+                        sample("root",at),new VirtualTaskCompletionSample("a",Map.of("flag","MUTATED_BY_A"),at.plusMinutes(10)),sample("b",at.plusMinutes(20)))));
+
+        assertTrue(result.routes().stream().anyMatch(route->route.nodeKey().equals("b")&&route.status().equals("VIRTUAL_COMPLETED")),
+                ()->"routes="+result.routes()+", issues="+result.issues());
+        assertTrue(result.routes().stream().anyMatch(route->route.nodeKey().equals("join")&&route.status().equals("ADVANCED")
+                && at.plusMinutes(20).equals(route.effectiveAt())));
+    }
+
+    @Test void virtual_task_sample_can_drive_a_bounded_loop_to_exit()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        var graph=new TodoDefinitionDocument.RoutingGraph(Map.of(
+                "start","root","nodes",List.of(Map.of("key","root","type","TASK","templateVersionId",9L),
+                        Map.of("key","loop","type","LOOP","maxOccurrences",2),Map.of("key","body","type","TASK","templateVersionId",10L),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","r-l","from","root","to","loop"),Map.of("key","l-b","from","loop","to","body","branchKey","BODY"),
+                        Map.of("key","b-l","from","body","to","loop"),Map.of("key","l-e","from","loop","to","end","branchKey","EXIT"))));
+        TodoDefinitionDocument value=withRouting(base,graph);String compiled=new TodoDefinitionCodec().canonicalJson(value);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));when(mapper.selectTemplateVersionById(10L)).thenReturn(publishedVersion(10L));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());LocalDateTime at=LocalDateTime.of(2026,7,17,10,0);
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0),List.of(sample("root",at),sample("body",at.plusMinutes(10)))));
+
+        assertEquals(List.of(1,2),result.routes().stream().filter(route->route.nodeKey().equals("body")).map(route->route.occurrence()).toList());
+        assertTrue(result.routes().stream().anyMatch(route->route.nodeKey().equals("end")&&route.status().equals("ENDED")));
+    }
+
+    @Test void duplicate_unknown_and_non_task_completion_samples_are_stable_issues_and_are_not_applied()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        var graph=new TodoDefinitionDocument.RoutingGraph(Map.of("start","task","nodes",List.of(
+                Map.of("key","task","type","TASK","templateVersionId",9L),Map.of("key","decision","type","DECISION"),Map.of("key","end","type","END")),
+                "edges",List.of(Map.of("key","t-d","from","task","to","decision"),Map.of("key","d-e","from","decision","to","end","default",true))));
+        TodoDefinitionDocument value=withRouting(base,graph);String compiled=new TodoDefinitionCodec().canonicalJson(value);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        LocalDateTime at=LocalDateTime.of(2026,7,17,10,0);
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0),List.of(
+                        sample("task",at),sample("task",at.plusMinutes(1)),sample("decision",at),sample("missing",at))));
+
+        assertEquals("PENDING_COMPLETION",result.routes().get(0).status());
+        assertEquals(List.of("TODO_SIMULATION_TASK_SAMPLE_DUPLICATE","TODO_SIMULATION_TASK_SAMPLE_NODE_NOT_TASK","TODO_SIMULATION_TASK_SAMPLE_NODE_UNKNOWN"),
+                result.issues().stream().map(issue->issue.code()).filter(code->code.startsWith("TODO_SIMULATION_TASK_SAMPLE_")).toList());
     }
 
     @Test void invalid_compiled_graph_becomes_sorted_issues_instead_of_throwing()
@@ -199,6 +322,25 @@ class TodoDefinitionSimulationServiceTest
 
         assertTrue(result.issues().stream().anyMatch(issue->issue.code().equals("TODO_SIMULATION_VERSION_STATUS_INELIGIBLE")));
         assertTrue(result.routes().isEmpty());
+    }
+
+    @Test void blocked_definition_retains_unresolved_decision_issue_but_simulates_its_compiled_snapshot()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        TodoDefinitionDocument blocked=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),base.event(),
+                base.owner(),base.dod(),base.sla(),base.ui(),base.routing(),base.autoActions(),List.of("Q-001"),base.acceptanceRefs());
+        String compiled=new TodoDefinitionCodec().canonicalJson(blocked);Map<String,Object> row=version(compiled);row.put("status","BLOCKED");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(row);
+        when(mapper.selectDecisionByCode("Q-001")).thenReturn(Map.of("decision_code","Q-001","status","OPEN","blocking","Y"));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}"));
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)));
+
+        assertTrue(result.issues().stream().anyMatch(issue->issue.code().equals("TODO_DECISION_UNRESOLVED")));
+        assertEquals(List.of("task"),result.routes().stream().map(route->route.nodeKey()).toList());
+        assertFalse(result.issues().stream().anyMatch(issue->issue.code().equals("TODO_SIMULATION_VERSION_STATUS_INELIGIBLE")));
     }
 
     @Test void unmatched_trigger_cannot_claim_that_runtime_work_would_be_created()
@@ -267,6 +409,10 @@ class TodoDefinitionSimulationServiceTest
     }
 
     private Map<String,Object> publishedVersion(long id){return Map.of("version_id",id,"status","PUBLISHED");}
+    private Map<String,Object> calendar(){return Map.of("work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}");}
+    private VirtualTaskCompletionSample sample(String nodeKey,LocalDateTime completedAt){return new VirtualTaskCompletionSample(nodeKey,Map.of(),completedAt);}
+    private TodoDefinitionDocument withRouting(TodoDefinitionDocument base,TodoDefinitionDocument.RoutingGraph graph)
+    {return new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),base.event(),base.owner(),base.dod(),base.sla(),base.ui(),graph,base.autoActions(),base.decisionRefs(),base.acceptanceRefs());}
 
     private TodoDefinitionDocument definition(Map<String,Object> owner)
     {

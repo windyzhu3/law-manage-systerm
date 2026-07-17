@@ -31,7 +31,7 @@ public record TodoSimulationView(
     public record FormTrace(Map<String,Object> ui,Map<String,Object> dod)
     { public FormTrace { ui=immutable(ui);dod=immutable(dod); } }
     public record RouteTrace(int order,String nodeKey,String nodeType,String status,String branchKey,
-            Integer occurrence,Long templateVersionId,List<String> trace)
+            Integer occurrence,Long templateVersionId,LocalDateTime effectiveAt,List<String> trace)
     { public RouteTrace { trace=copy(trace); } }
     public record AutoActionTrace(String ruleKey,String actionType,String triggerAt,LocalDateTime scheduledAt,String status,String reason) { }
     public record HandlerTrace(String code,String status,boolean simulatable,String reason) { }

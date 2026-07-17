@@ -7,6 +7,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
@@ -132,7 +133,15 @@ public class TodoDefinitionService
         target.put("sourceVersionId",sourceVersionId);target.put("definitionSchemaVersion",copied.schemaVersion());
         target.put("definitionJson",codec.canonicalJson(copied));target.put("compiledJson",null);target.put("definitionHash",null);target.put("validationReportJson",null);
         projectLegacyRules(copied,target);
-        if(mapper.insertTemplateVersion(target)<=0)throw new TodoException("TODO_ROLLBACK_DRAFT_FAILED","Rollback draft creation failed");
+        try
+        {
+            if(mapper.insertTemplateVersion(target)<=0)
+                throw new TodoException("TODO_ROLLBACK_DRAFT_FAILED","Rollback draft creation failed");
+        }
+        catch(DuplicateKeyException collision)
+        {
+            throw new TodoException("TODO_DEFINITION_VERSION_CONFLICT","The rollback target version already exists");
+        }
         Long targetId=longValue(target.get("versionId"));
         if(mapper.completeDefinitionAction(command.actionId(),fingerprint,targetId)<=0)
             throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Rollback action claim could not be completed");

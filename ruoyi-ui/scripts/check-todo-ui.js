@@ -44,7 +44,8 @@ for(const code of ['CONTRACT_REVIEW','CONTRACT_SIGN','PAYMENT_CONFIRM','INVOICE_
 console.log('todo ui contract ok')
 
 const definitionApi = fs.readFileSync('src/api/todo-definition.js', 'utf8')
-for (const name of ['listDefinitions','copyDefinition','copyDefinitionVersion','updateDefinitionDraft','publishDefinition','listTriggerRules','listWorkCalendars']) if (!definitionApi.includes(`export function ${name}`)) throw new Error(`missing definition api ${name}`)
+for (const name of ['listDefinitions','copyDefinition','copyDefinitionVersion','updateDefinitionDraft','publishDefinition','listTriggerRules','listWorkCalendars','buildVirtualTaskCompletion']) if (!definitionApi.includes(`export function ${name}`)) throw new Error(`missing definition api ${name}`)
+for (const marker of ['taskCompletions','nodeKey','payload','completedAt']) if (!definitionApi.includes(marker)) throw new Error(`missing simulation completion sample marker ${marker}`)
 const definitionForm = fs.readFileSync('src/views/todo/config/components/DefinitionForm.vue','utf8')
 for (const marker of ['ownerMode','requiredFields','requiredAttachments','slaMinutes','calendarCode','nextTemplateVersionId','规则预览']) if (!definitionForm.includes(marker)) throw new Error(`missing structured definition marker ${marker}`)
 const configPage=fs.readFileSync('src/views/todo/config/index.vue','utf8')

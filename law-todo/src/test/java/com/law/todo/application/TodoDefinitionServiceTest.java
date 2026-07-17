@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
@@ -180,6 +181,18 @@ class TodoDefinitionServiceTest
         assertTrue(TodoException.class.isAssignableFrom(transaction.noRollbackFor()[0]));
     }
 
+    @Test void blocked_definition_cannot_be_published()
+    {
+        Map<String,Object> blocked=draft(null,null);blocked.put("status","BLOCKED");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(blocked);
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->service().publish(new PublishDraftCommand("pub-blocked-state",9L),actor));
+
+        assertEquals("TODO_TEMPLATE_VERSION_IMMUTABLE",error.getBusinessCode());
+        verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
+    }
+
     @Test void rollbackCreatesANewDraftWithoutMutatingPublishedHistory()
     {
         Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
@@ -254,6 +267,24 @@ class TodoDefinitionServiceTest
         order.verify(mapper).selectDefinitionActionForUpdate("rollback-atomic");
         order.verify(mapper).insertTemplateVersion(anyMap());
         order.verify(mapper).completeDefinitionAction("rollback-atomic",rollbackFingerprint(9L,1L,3,actor),12L);
+    }
+
+    @Test void rollback_target_version_collision_from_a_different_action_has_a_stable_business_error()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenReturn(1);
+        when(mapper.selectDefinitionActionForUpdate("rollback-racer-2")).thenReturn(new HashMap<>(Map.of(
+                "action_id","rollback-racer-2","action_type","ROLLBACK_DRAFT","source_entity_id",9L,
+                "operator_id",7L,"operator_name","alice","action_status","CLAIMED",
+                "request_fingerprint",rollbackFingerprint(9L,1L,3,actor))));
+        when(mapper.insertTemplateVersion(anyMap())).thenThrow(new DuplicateKeyException("uk_todo_template_version"));
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->service().rollbackDraft(9L,new RollbackDraftCommand("rollback-racer-2",3),actor));
+
+        assertEquals("TODO_DEFINITION_VERSION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).completeDefinitionAction(anyString(),anyString(),org.mockito.ArgumentMatchers.anyLong());
     }
 
     private String rollbackFingerprint(long source,long template,int version,Actor actor)

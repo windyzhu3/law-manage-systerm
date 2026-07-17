@@ -49,5 +49,16 @@ class TodoTemplateControllerValidationTest
             .perform(post("/todo/template/version/9/rollback-draft").contentType("application/json").content("{}"))
             .andExpect(status().isBadRequest());
     }
+
+    @Test void rejectsSimulationTaskCompletionWithoutStrongPayloadAndCompletionTime() throws Exception
+    {
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();validator.afterPropertiesSet();
+        MockMvcBuilders.standaloneSetup(controller()).setValidator(validator).build()
+            .perform(post("/todo/template/version/9/simulate").contentType("application/json").content("""
+                    {"payload":{"stage":"READY"},"businessType":"LEAD","businessId":3,"effectiveAt":"2026-07-17T09:00:00",
+                     "taskCompletions":[{"nodeKey":"start"}]}
+                    """))
+            .andExpect(status().isBadRequest());
+    }
     private TodoTemplateController controller(){return new TodoTemplateController(org.mockito.Mockito.mock(TodoTemplateService.class),org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(com.law.todo.application.TodoDefinitionSimulationService.class),org.mockito.Mockito.mock(com.law.todo.application.TodoDefinitionDiffService.class),org.mockito.Mockito.mock(com.law.todo.application.TodoDefinitionCatalogService.class));}
 }

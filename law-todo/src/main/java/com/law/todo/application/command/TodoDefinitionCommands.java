@@ -1,8 +1,10 @@
 package com.law.todo.application.command;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -21,11 +23,29 @@ public final class TodoDefinitionCommands
             @NotEmpty Map<String,Object> payload,
             @NotBlank String businessType,
             @NotNull @Positive Long businessId,
-            @NotNull LocalDateTime effectiveAt)
+            @NotNull LocalDateTime effectiveAt,
+            List<@Valid VirtualTaskCompletionSample> taskCompletions)
     {
+        public SimulateDefinitionCommand(Map<String,Object> payload,String businessType,Long businessId,
+                LocalDateTime effectiveAt)
+        {
+            this(payload,businessType,businessId,effectiveAt,List.of());
+        }
+
         public SimulateDefinitionCommand
         {
             payload=payload==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+            taskCompletions=taskCompletions==null?List.of():List.copyOf(taskCompletions);
+        }
+    }
+    public record VirtualTaskCompletionSample(
+            @NotBlank String nodeKey,
+            @NotNull Map<String,Object> payload,
+            @NotNull LocalDateTime completedAt)
+    {
+        public VirtualTaskCompletionSample
+        {
+            payload=payload==null?null:java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
         }
     }
     public record RollbackDraftCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
