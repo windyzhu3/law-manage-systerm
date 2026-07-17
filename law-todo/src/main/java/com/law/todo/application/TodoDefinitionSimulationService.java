@@ -34,6 +34,12 @@ import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.assignment.OwnerResolutionContext;
 import com.law.todo.assignment.OwnerResolutionResult;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
+import com.law.todo.definition.catalog.TodoDecisionService;
+import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.definition.compiler.DefinitionValidationReport;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.CompilationContext;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.service.WorkingTimeCalculator;
@@ -50,31 +56,68 @@ public class TodoDefinitionSimulationService
     private final TodoMapper mapper;
     private final TodoAssignmentResolver owners;
     private final List<TodoCompletionHandler> handlers;
+    private final TodoDefinitionCompiler compiler;
     private final TodoDefinitionCodec codec=new TodoDefinitionCodec();
     private final ConditionValidator conditions=new ConditionValidator();
     private final ConditionEvaluator evaluator=new ConditionEvaluator();
 
     public TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners)
-    {this(mapper,owners,List.of());}
+    {this(mapper,owners,List.of(),compiler(mapper));}
 
     @Autowired
     public TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,List<TodoCompletionHandler> handlers)
-    {this.mapper=mapper;this.owners=owners;this.handlers=handlers==null?List.of():List.copyOf(handlers);}
+    {this(mapper,owners,handlers,compiler(mapper));}
+
+    TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,
+            List<TodoCompletionHandler> handlers,TodoDefinitionCompiler compiler)
+    {this.mapper=mapper;this.owners=owners;this.handlers=handlers==null?List.of():List.copyOf(handlers);this.compiler=compiler;}
 
     @Transactional(readOnly=true)
     public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command)
     {
         Map<String,Object> row=requireVersion(versionId);
+        List<SimulationIssue> issues=new ArrayList<>();
+        String status=text(value(row,"status","status"));
+        if(!Set.of("DRAFT","PUBLISHED","RETIRED").contains(status))
+        {
+            issues.add(new SimulationIssue("TODO_SIMULATION_VERSION_STATUS_INELIGIBLE","version.status","ERROR",
+                    "Only DRAFT, PUBLISHED or RETIRED definition versions can be simulated"));
+            return halted(versionId,null,null,command,issues);
+        }
         String compiled=text(value(row,"compiled_json","compiledJson"));
         String expectedHash=text(value(row,"definition_hash","definitionHash"));
         if(compiled==null||compiled.isBlank()||expectedHash==null||expectedHash.isBlank())
-            throw new TodoException("TODO_DEFINITION_NOT_COMPILED","Run preflight before simulation");
+        {
+            issues.add(new SimulationIssue("TODO_DEFINITION_NOT_COMPILED","version.compiledJson","ERROR","Run preflight before simulation"));
+            return halted(versionId,expectedHash,null,command,issues);
+        }
         TodoDefinitionDocument definition;
-        try{definition=codec.read(compiled);}catch(IllegalArgumentException invalid){throw new TodoException("TODO_COMPILED_DEFINITION_INVALID",invalid.getMessage());}
+        try{definition=codec.read(compiled);}catch(RuntimeException invalid)
+        {
+            issues.add(new SimulationIssue("TODO_COMPILED_DEFINITION_INVALID","version.compiledJson","ERROR",safeMessage(invalid)));
+            return halted(versionId,expectedHash,null,command,issues);
+        }
         String canonical=codec.canonicalJson(definition),actualHash=sha256(canonical);
-        if(!expectedHash.equals(actualHash))throw new TodoException("TODO_DEFINITION_HASH_MISMATCH","Compiled definition hash does not match its immutable snapshot");
+        if(!expectedHash.equals(actualHash))
+        {
+            issues.add(new SimulationIssue("TODO_DEFINITION_HASH_MISMATCH","version.definitionHash","ERROR","Compiled definition hash does not match its immutable snapshot"));
+            return halted(versionId,actualHash,definition,command,issues);
+        }
 
-        List<SimulationIssue> issues=new ArrayList<>();
+        try
+        {
+            DefinitionValidationReport report=compiler.compile(definition,new CompilationContext(versionId,
+                    "DRAFT".equals(status),id->templateVersion(id,versionId,status)));
+            report.errors().forEach(issue->issues.add(new SimulationIssue(issue.code(),issue.path(),"ERROR",issue.message())));
+            report.warnings().forEach(issue->issues.add(new SimulationIssue(issue.code(),issue.path(),"WARNING",issue.message())));
+        }
+        catch(RuntimeException invalid)
+        {
+            issues.add(new SimulationIssue("TODO_SIMULATION_DEFINITION_VALIDATION_FAILED","definition","ERROR",safeMessage(invalid)));
+        }
+        if(issues.stream().anyMatch(issue->"ERROR".equals(issue.severity())))
+            return halted(versionId,actualHash,definition,command,issues);
+
         TriggerTrace trigger=trigger(definition,command,issues);
         boolean matched="MATCHED".equals(trigger.status());
         OwnerTrace owner=matched?owner(definition,command,issues):new OwnerTrace("SKIPPED",null,List.of(),List.of(),false,List.of("trigger:"+trigger.status().toLowerCase()));
@@ -86,6 +129,29 @@ public class TodoDefinitionSimulationService
         issues.sort(Comparator.comparing(SimulationIssue::code).thenComparing(SimulationIssue::path).thenComparing(SimulationIssue::message));
         return new TodoSimulationView(versionId,actualHash,trigger,owner,sla,
                 new FormTrace(definition.ui().config(),definition.dod().config()),routes,actions,handlerTraces,issues);
+    }
+
+    private TemplateVersion templateVersion(long id,long currentId,String currentStatus)
+    {
+        Map<String,Object> target=mapper.selectTemplateVersionById(id);
+        if(target==null||target.isEmpty())return null;
+        String status=text(value(target,"status","status"));
+        if(id==currentId&&"RETIRED".equals(currentStatus))status="PUBLISHED";
+        return new TemplateVersion(id,status);
+    }
+
+    private TodoSimulationView halted(long versionId,String hash,TodoDefinitionDocument definition,
+            SimulateDefinitionCommand command,List<SimulationIssue> issues)
+    {
+        sort(issues);
+        String eventType=definition==null||definition.event()==null?null:definition.event().eventType();
+        int payloadVersion=definition==null||definition.event()==null?0:definition.event().payloadVersion();
+        FormTrace form=definition==null?new FormTrace(Map.of(),Map.of()):new FormTrace(
+                definition.ui()==null?Map.of():definition.ui().config(),definition.dod()==null?Map.of():definition.dod().config());
+        return new TodoSimulationView(versionId,hash,new TriggerTrace("SKIPPED",eventType,payloadVersion,List.of("definition:ineligible")),
+                new OwnerTrace("SKIPPED",null,List.of(),List.of(),false,List.of("definition:ineligible")),
+                new SlaTrace("SKIPPED",null,command.effectiveAt(),null,null,null,null,List.of("definition:ineligible")),
+                form,List.of(),List.of(),List.of(),issues);
     }
 
     private TriggerTrace trigger(TodoDefinitionDocument definition,SimulateDefinitionCommand command,List<SimulationIssue> issues)
@@ -190,6 +256,7 @@ public class TodoDefinitionSimulationService
         {
             String status="TASK".equals(type)?"WOULD_CREATE":"END".equals(type)?"ENDED":"VISITED";
             traces.add(new RouteTrace(traces.size()+1,key,type,status,branch,occurrence,longValue(node.get("templateVersionId")),List.of("node:"+type.toLowerCase())));
+            if("TASK".equals(type)){active.remove(fence);return;}
         }
         List<Map<String,Object>> edges=outgoing.getOrDefault(key,List.of());
         if("END".equals(type)||edges.isEmpty()){active.remove(fence);return;}
@@ -235,7 +302,13 @@ public class TodoDefinitionSimulationService
                 }
                 catch(RuntimeException unknown){status="UNKNOWN";reason=safeMessage(unknown);issues.add(new SimulationIssue("TODO_SIMULATION_AUTO_ACTION_CONTEXT_UNKNOWN","autoActions."+text(c.get("ruleKey"))+".precondition","WARNING",reason));}
             }
-            result.add(new AutoActionTrace(text(c.get("ruleKey")),text(c.containsKey("actionType")?c.get("actionType"):c.get("action")),trigger,scheduledAt(trigger,sla),status,reason));
+            LocalDateTime scheduledAt=scheduledAt(trigger,sla);
+            if("WOULD_SCHEDULE".equals(status)&&scheduledAt==null)
+            {
+                status="UNSCHEDULABLE";reason="The governed SLA timestamp cannot be calculated";
+                issues.add(new SimulationIssue("TODO_SIMULATION_AUTO_ACTION_UNSCHEDULABLE","autoActions."+text(c.get("ruleKey"))+".triggerAt","ERROR",reason));
+            }
+            result.add(new AutoActionTrace(text(c.get("ruleKey")),text(c.containsKey("actionType")?c.get("actionType"):c.get("action")),trigger,scheduledAt,status,reason));
         }
         result.sort(Comparator.comparing(AutoActionTrace::ruleKey,Comparator.nullsFirst(String::compareTo)));return List.copyOf(result);
     }
@@ -244,6 +317,8 @@ public class TodoDefinitionSimulationService
     {List<HandlerTrace> result=handlers.stream().map(handler->new HandlerTrace(handler.catalogCode(),handler.supportsSimulation()?"SIMULATABLE":"NOT_EXECUTED",handler.supportsSimulation(),handler.simulationDescription())).sorted(Comparator.comparing(HandlerTrace::code)).toList();for(HandlerTrace handler:result)if(!handler.simulatable())issues.add(new SimulationIssue("TODO_SIMULATION_HANDLER_NOT_EXECUTED","handlers."+handler.code(),"INFO",handler.reason()));return result;}
 
     private Map<String,Object> requireVersion(long id){Map<String,Object> row=mapper.selectTemplateVersionById(id);if(row==null||row.isEmpty())throw new TodoException("TODO_TEMPLATE_VERSION_NOT_FOUND","Template version not found");return row;}
+    private static TodoDefinitionCompiler compiler(TodoMapper mapper){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
+    private void sort(List<SimulationIssue> issues){issues.sort(Comparator.comparing(SimulationIssue::code).thenComparing(SimulationIssue::path).thenComparing(SimulationIssue::message));}
     private WorkCalendar calendar(Map<String,Object> row){Set<DayOfWeek> days=EnumSet.noneOf(DayOfWeek.class);for(String day:text(value(row,"work_days","workDays")).split(","))days.add(DayOfWeek.of(Integer.parseInt(day.trim())));Map<LocalDate,Boolean> exceptions=new HashMap<>();String json=text(value(row,"exception_json","exceptionJson"));if(json!=null&&!json.isBlank())JSON.parseObject(json).forEach((k,v)->exceptions.put(LocalDate.parse(k),Boolean.valueOf(String.valueOf(v))));return new WorkCalendar(days,time(value(row,"work_start","workStart")),time(value(row,"work_end","workEnd")),exceptions);}
     private LocalTime time(Object value){String text=String.valueOf(value);return LocalTime.parse(text.length()>8?text.substring(0,8):text);}
     private long ceiling(long minutes,int percent){return (minutes*percent+99)/100;}

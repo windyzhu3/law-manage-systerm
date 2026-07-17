@@ -185,8 +185,13 @@ class TodoDefinitionServiceTest
         Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
                 new com.law.todo.definition.codec.LegacyDefinitionAdapter().fromLegacy(source)));
         when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
-        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenReturn(1);
+        when(mapper.selectDefinitionActionForUpdate("rollback-1")).thenReturn(new HashMap<>(Map.of(
+                "action_id","rollback-1","action_type","ROLLBACK_DRAFT","source_entity_id",9L,
+                "operator_id",7L,"operator_name","alice","action_status","CLAIMED",
+                "request_fingerprint",rollbackFingerprint(9L,1L,3,actor))));
         when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",12L);return 1;});
+        when(mapper.completeDefinitionAction("rollback-1",rollbackFingerprint(9L,1L,3,actor),12L)).thenReturn(1);
 
         assertEquals(12L,service().rollbackDraft(9L,new RollbackDraftCommand("rollback-1",3),actor));
 
@@ -195,6 +200,68 @@ class TodoDefinitionServiceTest
         assertEquals("DRAFT",inserted.getValue().get("status"));assertEquals(9L,inserted.getValue().get("sourceVersionId"));
         assertEquals(null,inserted.getValue().get("compiledJson"));
         verify(mapper,never()).updateDefinitionDocument(anyMap());
+    }
+
+    @Test void rollbackReplayWithTheSameFingerprintReturnsTheRecordedDraft()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenReturn(0);
+        when(mapper.selectDefinitionActionForUpdate("rollback-same")).thenReturn(Map.of(
+                "action_id","rollback-same","action_type","ROLLBACK_DRAFT","source_entity_id",9L,
+                "entity_id",12L,"operator_id",7L,"operator_name","alice","action_status","APPLIED",
+                "request_fingerprint",rollbackFingerprint(9L,1L,3,actor)));
+
+        assertEquals(12L,service().rollbackDraft(9L,new RollbackDraftCommand("rollback-same",3),actor));
+
+        verify(mapper,never()).insertTemplateVersion(anyMap());
+    }
+
+    @Test void rollbackRejectsAnActionIdPreviouslyClaimedByCopyOrAnotherRequest()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenReturn(0);
+        when(mapper.selectDefinitionActionForUpdate("shared-action")).thenReturn(Map.of(
+                "action_id","shared-action","action_type","COPY_VERSION","source_entity_id",9L,
+                "entity_id",12L,"operator_id",7L,"operator_name","alice","action_status","APPLIED",
+                "request_fingerprint","different"));
+
+        TodoException error=assertThrows(TodoException.class,()->service().rollbackDraft(9L,
+                new RollbackDraftCommand("shared-action",3),actor));
+
+        assertEquals("TODO_DEFINITION_ACTION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).insertTemplateVersion(anyMap());
+    }
+
+    @Test void rollbackCompletesItsClaimOnlyAfterTheDraftHasBeenInserted()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
+                new com.law.todo.definition.codec.LegacyDefinitionAdapter().fromLegacy(source)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenReturn(1);
+        when(mapper.selectDefinitionActionForUpdate("rollback-atomic")).thenReturn(new HashMap<>(Map.of(
+                "action_id","rollback-atomic","action_type","ROLLBACK_DRAFT","source_entity_id",9L,
+                "operator_id",7L,"operator_name","alice","action_status","CLAIMED",
+                "request_fingerprint",rollbackFingerprint(9L,1L,3,actor))));
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",12L);return 1;});
+        when(mapper.completeDefinitionAction("rollback-atomic",rollbackFingerprint(9L,1L,3,actor),12L)).thenReturn(1);
+
+        assertEquals(12L,service().rollbackDraft(9L,new RollbackDraftCommand("rollback-atomic",3),actor));
+
+        org.mockito.InOrder order=org.mockito.Mockito.inOrder(mapper);
+        order.verify(mapper).insertDefinitionActionClaim(anyMap());
+        order.verify(mapper).selectDefinitionActionForUpdate("rollback-atomic");
+        order.verify(mapper).insertTemplateVersion(anyMap());
+        order.verify(mapper).completeDefinitionAction("rollback-atomic",rollbackFingerprint(9L,1L,3,actor),12L);
+    }
+
+    private String rollbackFingerprint(long source,long template,int version,Actor actor)
+    {
+        java.util.Map<String,Object> value=new java.util.TreeMap<>();
+        value.put("actionType","ROLLBACK_DRAFT");value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());
+        value.put("actorName",actor.userName());value.put("sourceVersionId",source);value.put("targetTemplateId",template);value.put("targetVersionNo",version);
+        return TodoDefinitionSimulationService.sha256(com.alibaba.fastjson2.JSON.toJSONString(value));
     }
 
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}

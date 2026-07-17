@@ -120,19 +120,58 @@ public class TodoDefinitionService
     @Transactional
     public Long rollbackDraft(Long sourceVersionId,RollbackDraftCommand command,Actor actor)
     {
-        Long repeated=repeatedEntity(command.actionId());if(repeated!=null)return repeated;
         Map<String,Object> source=requireVersion(sourceVersionId);String status=text(value(source,"status","status"));
         if(!PUBLISHED.equals(status)&&!"RETIRED".equals(status))
             throw new TodoException("TODO_ROLLBACK_SOURCE_IMMUTABLE_REQUIRED","Rollback source must be published or retired");
         Long templateId=longValue(value(source,"template_id","templateId"));
-        claim(command.actionId(),"ROLLBACK_DRAFT","VERSION",sourceVersionId,actor,Map.of("newVersionNo",command.newVersionNo()));
+        String fingerprint=rollbackFingerprint(sourceVersionId,templateId,command.newVersionNo(),actor);
+        Long repeated=claimRollback(command.actionId(),sourceVersionId,templateId,command.newVersionNo(),actor,fingerprint);
+        if(repeated!=null)return repeated;
         TodoDefinitionDocument copied=definition(source);Map<String,Object> target=new HashMap<>();
         target.put("templateId",templateId);target.put("versionNo",command.newVersionNo());target.put("status",DRAFT);
         target.put("sourceVersionId",sourceVersionId);target.put("definitionSchemaVersion",copied.schemaVersion());
         target.put("definitionJson",codec.canonicalJson(copied));target.put("compiledJson",null);target.put("definitionHash",null);target.put("validationReportJson",null);
         projectLegacyRules(copied,target);
         if(mapper.insertTemplateVersion(target)<=0)throw new TodoException("TODO_ROLLBACK_DRAFT_FAILED","Rollback draft creation failed");
-        Long targetId=longValue(target.get("versionId"));mapper.updateDefinitionActionEntity(command.actionId(),targetId);return targetId;
+        Long targetId=longValue(target.get("versionId"));
+        if(mapper.completeDefinitionAction(command.actionId(),fingerprint,targetId)<=0)
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Rollback action claim could not be completed");
+        return targetId;
+    }
+
+    private Long claimRollback(String actionId,Long sourceVersionId,Long templateId,Integer targetVersionNo,
+            Actor actor,String fingerprint)
+    {
+        Map<String,Object> action=new HashMap<>();action.put("actionId",actionId);action.put("actionType","ROLLBACK_DRAFT");
+        action.put("entityType","VERSION");action.put("sourceEntityId",sourceVersionId);action.put("operatorId",actor.userId());
+        action.put("operatorName",actor.userName());action.put("operatorDeptId",actor.deptId());action.put("requestFingerprint",fingerprint);
+        action.put("payloadJson",JSON.toJSONString(Map.of("targetTemplateId",templateId,"newVersionNo",targetVersionNo)));
+        mapper.insertDefinitionActionClaim(action);
+        Map<String,Object> claimed=mapper.selectDefinitionActionForUpdate(actionId);
+        if(claimed==null||claimed.isEmpty()||!"ROLLBACK_DRAFT".equals(text(value(claimed,"action_type","actionType")))
+                ||!fingerprint.equals(text(value(claimed,"request_fingerprint","requestFingerprint")))
+                ||!sourceVersionId.equals(longValue(value(claimed,"source_entity_id","sourceEntityId")))
+                ||!actor.userId().equals(longValue(value(claimed,"operator_id","operatorId")))
+                ||!actor.userName().equals(text(value(claimed,"operator_name","operatorName"))))
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Definition action idempotency key belongs to a different request");
+        Long result=longValue(value(claimed,"entity_id","entityId"));
+        if(result!=null)
+        {
+            if(!"APPLIED".equals(text(value(claimed,"action_status","actionStatus"))))
+                throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Recorded rollback result is incomplete");
+            return result;
+        }
+        if(!"CLAIMED".equals(text(value(claimed,"action_status","actionStatus"))))
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Rollback action is not claimable");
+        return null;
+    }
+
+    private String rollbackFingerprint(Long sourceVersionId,Long templateId,Integer targetVersionNo,Actor actor)
+    {
+        Map<String,Object> value=new java.util.TreeMap<>();value.put("actionType","ROLLBACK_DRAFT");
+        value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());value.put("actorName",actor.userName());
+        value.put("sourceVersionId",sourceVersionId);value.put("targetTemplateId",templateId);value.put("targetVersionNo",targetVersionNo);
+        return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));
     }
 
     @Transactional

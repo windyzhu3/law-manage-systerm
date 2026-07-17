@@ -25,7 +25,10 @@ public interface TodoMapper
     Map<String,Object> selectEventCatalog(@Param("eventType") String eventType,@Param("payloadVersion") int payloadVersion);
     List<Map<String,Object>> selectEventCatalogs();
     Map<String,Object> selectDecisionByCode(String decisionCode);
+    Map<String,Object> selectDecisionById(Long decisionId);
     List<Map<String,Object>> selectDecisions();
+    int insertDecision(Map<String,Object> decision);
+    int updateDecisionConditionally(Map<String,Object> decision);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);
     List<Map<String,Object>> selectTriggerRules(@Param("eventType") String eventType,@Param("businessType") String businessType);
     List<Map<String,Object>> selectSlaScanItems(@Param("now") LocalDateTime now);
@@ -83,6 +86,9 @@ public interface TodoMapper
     int insertDefinitionActionIfAbsent(Map<String,Object> action);
     Map<String,Object> selectDefinitionActionById(String actionId);
     int updateDefinitionActionEntity(@Param("actionId") String actionId,@Param("entityId") Long entityId);
+    int insertDefinitionActionClaim(Map<String,Object> action);
+    Map<String,Object> selectDefinitionActionForUpdate(String actionId);
+    int completeDefinitionAction(@Param("actionId") String actionId,@Param("requestFingerprint") String requestFingerprint,@Param("entityId") Long entityId);
     Map<String,Object> selectBusinessTodoSummary(Map<String,Object> query);
     List<Long> selectBusinessTodoOwners(Map<String,Object> query);
     Map<String,Object> selectBusinessRecentAction(Map<String,Object> query);

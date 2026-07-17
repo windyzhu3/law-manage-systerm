@@ -147,4 +147,18 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("returnToPoolConditionally"));
         }
     }
+
+    @Test void definitionRollbackUsesLockedFingerprintClaimAndConditionalResult() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            assertTrue(xml.contains("insertDefinitionActionClaim"));
+            assertTrue(xml.contains("action_status,request_fingerprint"));
+            assertTrue(xml.contains("selectDefinitionActionForUpdate"));
+            assertTrue(xml.contains("from todo_definition_action where action_id=#{actionId} for update"));
+            assertTrue(xml.contains("completeDefinitionAction"));
+            assertTrue(xml.contains("request_fingerprint=#{requestFingerprint} and action_status='CLAIMED' and entity_id is null"));
+        }
+    }
 }
