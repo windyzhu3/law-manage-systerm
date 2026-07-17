@@ -112,6 +112,30 @@ class TodoAutoActionServiceTest
         verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"DEAD".equals(row.get("status"))&&Integer.valueOf(3).equals(row.get("attemptNo"))));
     }
 
+    @Test void staleAtMaxReconcilesCommittedSystemCommandAsSuccessWithoutReexecution()
+    {
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));
+        when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
+
+        AutoActionResult result=service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW);
+
+        assertEquals(AutoActionStatus.SUCCESS,result.status());verify(complete,never()).execute(any(),any(),any());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))&&Integer.valueOf(2).equals(row.get("attemptNo"))));verify(mapper,never()).finalizeStaleAutoActionDead(any(),any(Integer.class),any(Integer.class),any(),any(),any(),any());
+    }
+
+    @Test void losingCommittedCommandReconciliationRaceReplaysSuccessWithoutDuplicateAudit()
+    {
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);Map<String,Object> claimed=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1));Map<String,Object> success=Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","SUCCESS","attempt_count",2);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(claimed,success);when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.completeAutoActionExecution(anyMap())).thenReturn(0);
+
+        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete,never()).execute(any(),any(),any());verify(mapper,never()).insertAutoActionAudit(anyMap());
+    }
+
+    @Test void commandAppearingDuringAtomicDeadRaceIsReconciledAsSuccess()
+    {
+        when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);when(mapper.selectAutoActionExecution("AUTO:1:due-complete")).thenReturn(Map.of("execution_key","AUTO:1:due-complete","todo_id",1L,"rule_key","due-complete","action_type","COMPLETE_DEFAULT","status","CLAIMED","attempt_count",2,"claimed_at",NOW.minusHours(1)));when(mapper.selectActionById("AUTO:1:due-complete")).thenReturn(null,Map.of("todo_id",1L,"action_type","COMPLETE_DEFAULT","action_source","SYSTEM","operator_id",-1L,"operator_name","TODO_AUTO_ACTION"));when(mapper.finalizeStaleAutoActionDead("AUTO:1:due-complete",2,3,NOW.minusMinutes(15),NOW,"TODO_AUTO_ACTION_STALE_MAX_ATTEMPTS","Stale execution reached maximum attempts")).thenReturn(0);when(mapper.completeAutoActionExecution(anyMap())).thenReturn(1);when(mapper.insertAutoActionAudit(anyMap())).thenReturn(1);
+
+        assertEquals(AutoActionStatus.SUCCESS,service.execute(rule("COMPLETE_DEFAULT",Map.of("maxAttempts",3)),todo(),NOW).status());verify(complete,never()).execute(any(),any(),any());verify(mapper).insertAutoActionAudit(org.mockito.ArgumentMatchers.argThat(row->"SUCCESS".equals(row.get("status"))));
+    }
+
     @Test void losingStaleFinalizationRaceReplaysWinnerWithoutDuplicateAudit()
     {
         when(mapper.insertAutoActionExecutionIfAbsent(anyMap())).thenReturn(0);

@@ -46,6 +46,7 @@ public interface TodoMapper
     int countCandidateAccess(@Param("todoId") Long todoId,@Param("userId") Long userId,@Param("deptId") Long deptId);
     int countCcAccess(@Param("todoId") Long todoId,@Param("userId") Long userId);
     int countSupervisorAccess(@Param("todoId") Long todoId,@Param("userId") Long userId);
+    List<Long> selectGovernedSupervisors(@Param("ownerId") Long ownerId,@Param("ownerDeptId") Long ownerDeptId);
     Long selectUserDeptId(Long userId);
     List<Map<String,Object>> selectTemplates();
     int insertTemplate(Map<String,Object> value);

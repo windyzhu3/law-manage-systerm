@@ -20,6 +20,14 @@ public class TodoAutoActionResultRecorder
     }
 
     @Transactional
+    public boolean tryRecord(Map<String,Object> outcome,Map<String,Object> audit)
+    {
+        if(mapper.completeAutoActionExecution(outcome)<=0)return false;
+        if(mapper.insertAutoActionAudit(audit)<=0)throw new TodoException("TODO_AUTO_ACTION_AUDIT_FAILED","Immutable auto action audit could not be recorded");
+        return true;
+    }
+
+    @Transactional
     public boolean finalizeStaleDead(String executionKey,int expectedAttempt,int finalAttempt,java.time.LocalDateTime staleBefore,
             java.time.LocalDateTime now,String errorCode,String errorMessage,Map<String,Object> audit)
     {

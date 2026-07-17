@@ -105,13 +105,14 @@ public class TodoAutoActionService
             int currentAttempt=number(value(execution,"attempt_count","attemptCount"));
             if(currentAttempt+1>=maxAttempts)
             {
+                AutoActionResult reconciled=reconcileCommittedAction(executionKey,todo,ruleKey,actionType,currentAttempt,now);
+                if(reconciled!=null)return reconciled;
                 int finalAttempt=Math.max(currentAttempt,maxAttempts);String code="TODO_AUTO_ACTION_STALE_MAX_ATTEMPTS",message="Stale execution reached maximum attempts";
                 Map<String,Object> audit=audit(executionKey,todo,ruleKey,actionType,finalAttempt,AutoActionResult.dead(code,message),now);
                 if(recorder.finalizeStaleDead(executionKey,currentAttempt,finalAttempt,now.minusMinutes(claimTimeoutMinutes),now,code,message,audit))
                     return AutoActionResult.dead(code,message);
-                Map<String,Object> winner=mapper.selectAutoActionExecution(executionKey);String winnerStatus=text(value(winner,"status","status"));
-                if("DEAD".equals(winnerStatus))return AutoActionResult.dead(text(value(winner,"last_error_code","lastErrorCode")),text(value(winner,"last_error_message","lastErrorMessage")));
-                return AutoActionResult.retry("TODO_AUTO_ACTION_ALREADY_CLAIMED","Execution is already claimed");
+                reconciled=reconcileCommittedAction(executionKey,todo,ruleKey,actionType,currentAttempt,now);
+                return reconciled==null?replayWinner(mapper.selectAutoActionExecution(executionKey)):reconciled;
             }
             if(mapper.claimStaleAutoActionExecution(executionKey,currentAttempt,now.minusMinutes(claimTimeoutMinutes),now)<=0)
                 return AutoActionResult.retry("TODO_AUTO_ACTION_ALREADY_CLAIMED","Execution is already claimed");
@@ -190,6 +191,29 @@ public class TodoAutoActionService
     private Map<String,Object> audit(String key,TodoInstance todo,String ruleKey,String actionType,int attempt,AutoActionResult result,LocalDateTime now)
     {
         Map<String,Object> audit=new HashMap<>();audit.put("executionKey",key);audit.put("attemptNo",attempt);audit.put("todoId",todo.getTodoId());audit.put("ruleKey",ruleKey);audit.put("actionType",actionType);audit.put("status",result.status().name());audit.put("errorCode",result.errorCode());audit.put("errorMessage",result.errorMessage());audit.put("serviceActorId",SERVICE_ACTOR.userId());audit.put("serviceActorName",SERVICE_ACTOR.userName());audit.put("now",now);return audit;
+    }
+
+    private AutoActionResult reconcileCommittedAction(String executionKey,TodoInstance todo,String ruleKey,String actionType,int attempt,LocalDateTime now)
+    {
+        Map<String,Object> action=mapper.selectActionById(executionKey);if(action==null||action.isEmpty())return null;
+        AutoActionResult result=committedActionMatches(action,todo.getTodoId(),actionType)
+                ?AutoActionResult.success():AutoActionResult.dead("TODO_AUTO_ACTION_RECONCILIATION_CONFLICT","Reserved action does not match the controlled execution identity");
+        Map<String,Object> outcome=new HashMap<>();outcome.put("executionKey",executionKey);outcome.put("attemptNo",attempt);outcome.put("status",result.status().name());outcome.put("errorCode",result.errorCode());outcome.put("errorMessage",result.errorMessage());outcome.put("nextRetryAt",null);outcome.put("now",now);
+        if(recorder.tryRecord(outcome,audit(executionKey,todo,ruleKey,actionType,attempt,result,now)))return result;
+        return replayWinner(mapper.selectAutoActionExecution(executionKey));
+    }
+
+    private boolean committedActionMatches(Map<String,Object> action,Long todoId,String actionType)
+    {
+        Object recorded=value(action,"todo_id","todoId");String source=text(value(action,"action_source","actionSource"));String operator=text(value(action,"operator_id","operatorId"));String name=text(value(action,"operator_name","operatorName"));
+        return recorded!=null&&todoId.equals(Long.valueOf(String.valueOf(recorded)))&&actionType.equals(text(value(action,"action_type","actionType")))&&"SYSTEM".equals(source)&&String.valueOf(SERVICE_ACTOR.userId()).equals(operator)&&SERVICE_ACTOR.userName().equals(name);
+    }
+
+    private AutoActionResult replayWinner(Map<String,Object> winner)
+    {
+        if(winner!=null&&"SUCCESS".equals(text(value(winner,"status","status"))))return AutoActionResult.success();
+        if(winner!=null&&"DEAD".equals(text(value(winner,"status","status"))))return AutoActionResult.dead(text(value(winner,"last_error_code","lastErrorCode")),text(value(winner,"last_error_message","lastErrorMessage")));
+        return AutoActionResult.retry("TODO_AUTO_ACTION_ALREADY_CLAIMED","Execution is already claimed");
     }
 
     private void recordInvalidRule(TodoInstance todo,AutoActionRule rule,int index,RuntimeException invalid,LocalDateTime now)
