@@ -11,6 +11,11 @@ const required = [
   ,'src/views/todo/config/components/TemplateList.vue'
   ,'src/views/todo/config/components/VersionDrawer.vue'
   ,'src/views/todo/config/components/DefinitionForm.vue'
+  ,'src/views/todo/config/components/EventConditionBuilder.vue'
+  ,'src/views/todo/config/components/OwnerRuleBuilder.vue'
+  ,'src/views/todo/config/components/DodFormBuilder.vue'
+  ,'src/views/todo/config/components/SlaRuleBuilder.vue'
+  ,'src/views/todo/config/definition-codec.js'
   ,'src/views/todo/config/components/TriggerRuleTable.vue'
   ,'src/views/todo/config/components/WorkCalendarTable.vue'
   ,'src/api/todo-operations.js'
@@ -47,7 +52,9 @@ const definitionApi = fs.readFileSync('src/api/todo-definition.js', 'utf8')
 for (const name of ['listDefinitions','copyDefinition','copyDefinitionVersion','updateDefinitionDraft','publishDefinition','listTriggerRules','listWorkCalendars','buildVirtualTaskCompletion']) if (!definitionApi.includes(`export function ${name}`)) throw new Error(`missing definition api ${name}`)
 for (const marker of ['taskCompletions','nodeKey','occurrence','payload','completedAt']) if (!definitionApi.includes(marker)) throw new Error(`missing simulation completion sample marker ${marker}`)
 const definitionForm = fs.readFileSync('src/views/todo/config/components/DefinitionForm.vue','utf8')
-for (const marker of ['ownerMode','requiredFields','requiredAttachments','slaMinutes','calendarCode','nextTemplateVersionId','规则预览']) if (!definitionForm.includes(marker)) throw new Error(`missing structured definition marker ${marker}`)
+for (const marker of ['event-condition-builder','owner-rule-builder','dod-form-builder','sla-rule-builder','hydrateDefinition','serializeDefinition','规则预览']) if (!definitionForm.includes(marker)) throw new Error(`missing visual definition marker ${marker}`)
+const definitionCodec = fs.readFileSync('src/views/todo/config/definition-codec.js','utf8')
+for (const marker of ['hydrateDefinition','serializeDefinition','toDraftPayload','autoActions','acceptanceRefs']) if (!definitionCodec.includes(marker)) throw new Error(`missing definition codec marker ${marker}`)
 const configPage=fs.readFileSync('src/views/todo/config/index.vue','utf8')
 for(const marker of ["v-hasPermi",'copyDefinition','publishDefinition','发布后该版本不可修改']) if(!configPage.includes(marker)&&!fs.readFileSync('src/views/todo/config/components/TemplateList.vue','utf8').includes(marker)&&!fs.readFileSync('src/views/todo/config/components/VersionDrawer.vue','utf8').includes(marker)) throw new Error(`missing config marker ${marker}`)
 

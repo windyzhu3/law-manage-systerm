@@ -1,3 +1,43 @@
-<template><el-form ref="form" :model="form" :rules="rules" label-width="110px"><el-form-item label="负责人规则" prop="ownerMode"><el-select v-model="form.ownerMode"><el-option label="业务负责人" value="PAYLOAD:ownerId"/><el-option label="主办律师" value="PAYLOAD:mainLawyerId"/><el-option label="角色候选" value="ROLE"/></el-select><el-input v-if="form.ownerMode==='ROLE'" v-model="form.roleId" placeholder="角色ID"/></el-form-item><el-form-item label="必填字段"><el-select v-model="form.requiredFields" multiple allow-create filterable/></el-form-item><el-form-item label="必需材料"><el-select v-model="form.requiredAttachments" multiple allow-create filterable/></el-form-item><el-form-item label="SLA分钟" prop="slaMinutes"><el-input-number v-model="form.slaMinutes" :min="1"/></el-form-item><el-form-item label="工作日历"><el-input v-model="form.calendarCode"/></el-form-item><el-form-item label="下一版本"><el-input-number v-model="form.nextTemplateVersionId" :min="1"/></el-form-item><el-alert title="发布后版本不可修改；后续调整请复制为新草稿" type="info" :closable="false"/><el-form-item label="规则预览"><pre>{{ preview }}</pre></el-form-item></el-form></template>
-<script>export default{name:'DefinitionForm',props:{value:{type:Object,default:()=>({})}},data(){return{form:{ownerMode:'PAYLOAD:ownerId',roleId:'',requiredFields:[],requiredAttachments:[],slaMinutes:480,calendarCode:'DEFAULT',nextTemplateVersionId:null,...this.value},rules:{ownerMode:[{required:true,message:'请选择负责人规则'}],slaMinutes:[{required:true,type:'number',min:1,message:'SLA必须大于0'}]}}},computed:{preview(){return JSON.stringify(this.payload(),null,2)}},methods:{validate(){return new Promise((resolve,reject)=>this.$refs.form.validate(ok=>ok?resolve(this.payload()):reject(new Error('invalid'))))},payload(){const owner=this.form.ownerMode==='ROLE'?`ROLE:${this.form.roleId}`:this.form.ownerMode;return{ownerRuleJson:JSON.stringify(owner),dodRuleJson:JSON.stringify({requiredFields:this.form.requiredFields,requiredAttachments:this.form.requiredAttachments}),slaRuleJson:JSON.stringify({calendarCode:this.form.calendarCode,minutes:this.form.slaMinutes}),nextRuleJson:this.form.nextTemplateVersionId?JSON.stringify({templateVersionId:this.form.nextTemplateVersionId}):null,uiSchemaJson:JSON.stringify({formCode:'STRUCTURED'})}}}}</script>
+<template>
+  <el-form ref="form" :model="form" :rules="rules" label-width="110px">
+    <event-condition-builder v-model="form.event" :readonly="readonly" />
+    <owner-rule-builder v-model="form.owner.config" :readonly="readonly" />
+    <dod-form-builder v-model="form.dod.config" :readonly="readonly" />
+    <sla-rule-builder v-model="form.sla.config" :readonly="readonly" />
+    <el-form-item label="下一版本">
+      <el-input-number v-model="form.routing.config.templateVersionId" :disabled="readonly" :min="1" />
+    </el-form-item>
+    <el-alert title="已发布版本为只读快照；请复制为新草稿后再调整。" type="info" :closable="false" />
+    <el-form-item label="规则预览"><pre>{{ preview }}</pre></el-form-item>
+  </el-form>
+</template>
+<script>
+import EventConditionBuilder from './EventConditionBuilder'
+import OwnerRuleBuilder from './OwnerRuleBuilder'
+import DodFormBuilder from './DodFormBuilder'
+import SlaRuleBuilder from './SlaRuleBuilder'
+import { hydrateDefinition, serializeDefinition, toDraftPayload } from '../definition-codec'
+
+export default {
+  name: 'DefinitionForm',
+  components: { EventConditionBuilder, OwnerRuleBuilder, DodFormBuilder, SlaRuleBuilder },
+  props: { value: { type: Object, default: () => ({}) }, readonly: Boolean },
+  data() {
+    return {
+      form: hydrateDefinition(this.value),
+      rules: {
+        'event.eventType': [{ required: true, message: '请选择触发事件' }],
+        'sla.config.minutes': [{ required: true, type: 'number', min: 1, message: 'SLA 必须大于 0' }]
+      }
+    }
+  },
+  computed: { preview() { return JSON.stringify(serializeDefinition(this.form), null, 2) } },
+  methods: {
+    validate() {
+      if (this.readonly) return Promise.reject(new Error('published definition is read-only'))
+      return new Promise((resolve, reject) => this.$refs.form.validate(ok => ok ? resolve(toDraftPayload(this.form)) : reject(new Error('invalid'))))
+    }
+  }
+}
+</script>
 <style scoped>pre{max-height:180px;overflow:auto;padding:10px;background:#f8fafc;border-radius:6px}</style>
