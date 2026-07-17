@@ -18,7 +18,16 @@ public final class TodoDefinitionCommands
 
     public record CopyTemplateCommand(@NotBlank String actionId,@NotBlank String newTemplateCode,@NotBlank String newTemplateName) { }
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
-    public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,@NotBlank String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson) { }
+    public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
+            String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson,
+            String definitionJson)
+    {
+        public UpdateDraftCommand(String actionId,Long versionId,String definitionJson)
+        { this(actionId,versionId,null,null,null,null,null,definitionJson); }
+        /** Compatibility constructor for callers that still send the legacy projections. */
+        public UpdateDraftCommand(String actionId,Long versionId,String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson)
+        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,null); }
+    }
     public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId) { }
     public record SimulateDefinitionCommand(
             @NotEmpty Map<String,Object> payload,

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import com.ruoyi.common.core.domain.BaseEntity;
@@ -30,6 +31,9 @@ public class SysDept extends BaseEntity
 
     /** 部门名称 */
     private String deptName;
+
+    /** Immutable business-facing department code used by cross-environment rules. */
+    private String deptCode;
 
     /** 显示顺序 */
     private Integer orderNum;
@@ -96,6 +100,11 @@ public class SysDept extends BaseEntity
     {
         this.deptName = deptName;
     }
+
+    @NotBlank(message = "Department code is required")
+    @Pattern(regexp = "[A-Z][A-Z0-9_]{1,63}", message = "Department code must be an uppercase stable code")
+    public String getDeptCode() { return deptCode; }
+    public void setDeptCode(String deptCode) { this.deptCode = deptCode; }
 
     @NotNull(message = "显示顺序不能为空")
     public Integer getOrderNum()
@@ -188,6 +197,7 @@ public class SysDept extends BaseEntity
             .append("parentId", getParentId())
             .append("ancestors", getAncestors())
             .append("deptName", getDeptName())
+            .append("deptCode", getDeptCode())
             .append("orderNum", getOrderNum())
             .append("leader", getLeader())
             .append("phone", getPhone())

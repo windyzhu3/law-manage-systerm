@@ -191,19 +191,45 @@ public class TodoDefinitionService
             return repeated;
         Map<String, Object> current = requireVersion(command.versionId());
         requireDraft(current);
-        validate(command.ownerRuleJson(), command.dodRuleJson(), command.slaRuleJson(),
-                command.nextRuleJson(), command.uiSchemaJson());
+        TodoDefinitionDocument definition;
+        if (command.definitionJson() != null && !command.definitionJson().isBlank())
+        {
+            try { definition=codec.read(command.definitionJson()); }
+            catch (RuntimeException invalid) { throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid template JSON: definitionJson"); }
+            String code=text(value(current,"template_code","templateCode"));
+            if (code != null && !code.equals(definition.templateCode()))
+                throw new TodoException("TODO_TEMPLATE_CODE_MISMATCH","Definition templateCode does not match the draft");
+        }
+        else
+        {
+            validate(command.ownerRuleJson(), command.dodRuleJson(), command.slaRuleJson(),command.nextRuleJson(), command.uiSchemaJson());
+            Map<String,Object> legacy=new HashMap<>(current);
+            legacy.put("owner_rule_json",command.ownerRuleJson());legacy.put("dod_rule_json",command.dodRuleJson());legacy.put("sla_rule_json",command.slaRuleJson());legacy.put("next_rule_json",command.nextRuleJson());legacy.put("ui_schema_json",command.uiSchemaJson());
+            definition=legacyAdapter.fromLegacy(legacy);
+        }
+        validateDefinition(definition);
         claim(command.actionId(), "UPDATE_DRAFT", "VERSION", command.versionId(), actor, Map.of());
         Map<String, Object> update = new HashMap<>();
         update.put("versionId", command.versionId());
-        update.put("ownerRuleJson", command.ownerRuleJson());
-        update.put("dodRuleJson", command.dodRuleJson());
-        update.put("slaRuleJson", command.slaRuleJson());
-        update.put("nextRuleJson", command.nextRuleJson());
-        update.put("uiSchemaJson", command.uiSchemaJson());
+        update.put("definitionSchemaVersion",definition.schemaVersion());
+        update.put("definitionJson",codec.canonicalJson(definition));
+        update.put("compiledJson",null);update.put("definitionHash",null);update.put("validationReportJson",null);
+        projectLegacyRules(definition,update);
         if (mapper.updateTemplateVersionDraft(update) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Draft version changed");
         return command.versionId();
+    }
+
+    private void validateDefinition(TodoDefinitionDocument definition)
+    {
+        if (definition == null || definition.event() == null || definition.owner() == null || definition.dod() == null
+                || definition.sla() == null || definition.ui() == null || definition.routing() == null)
+            throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Canonical definition contains required missing sections");
+        Object departmentCode=definition.owner().config().get("departmentCode");
+        if (departmentCode != null && String.valueOf(departmentCode).matches("DEPT_[0-9]+"))
+            throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_LEGACY","Definition owner must use a managed stable departmentCode");
+        validate(JSON.toJSONString(definition.owner().config()),JSON.toJSONString(definition.dod().config()),
+                JSON.toJSONString(definition.sla().config()),JSON.toJSONString(definition.routing().config()),JSON.toJSONString(definition.ui().config()));
     }
 
     @Transactional(noRollbackFor = PreflightFailedException.class)

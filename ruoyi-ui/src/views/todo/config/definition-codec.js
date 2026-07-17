@@ -73,6 +73,7 @@ function serializeDefinition(form) {
 function toDraftPayload(form) {
   const document = serializeDefinition(form)
   return {
+    definitionJson: JSON.stringify(document),
     ownerRuleJson: JSON.stringify(document.owner.config),
     dodRuleJson: JSON.stringify(document.dod.config),
     slaRuleJson: JSON.stringify(document.sla.config),

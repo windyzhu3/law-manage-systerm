@@ -67,6 +67,7 @@
       :tree-props="{children: 'children', hasChildren: 'hasChildren'}"
     >
       <el-table-column prop="deptName" label="部门名称" width="260"></el-table-column>
+      <el-table-column prop="deptCode" label="稳定编码" width="160"></el-table-column>
       <el-table-column prop="orderNum" label="排序" width="200">
         <template slot-scope="scope">
           <el-input-number v-model="scope.row.orderNum" controls-position="right" :min="0" size="mini" style="width: 88px" />
@@ -126,6 +127,7 @@
               <el-input v-model="form.deptName" placeholder="请输入部门名称" />
             </el-form-item>
           </el-col>
+          <el-col :span="12"><el-form-item label="稳定编码" prop="deptCode"><el-input v-model="form.deptCode" placeholder="例如 LEGAL_REVIEW" :disabled="form.deptId && !/^DEPT_\d+$/.test(form.deptCode)" /></el-form-item></el-col>
           <el-col :span="12">
             <el-form-item label="显示排序" prop="orderNum">
               <el-input-number v-model="form.orderNum" controls-position="right" :min="0" />
@@ -215,6 +217,7 @@ export default {
         deptName: [
           { required: true, message: "部门名称不能为空", trigger: "blur" }
         ],
+        deptCode: [{ required: true, pattern: /^[A-Z][A-Z0-9_]{1,63}$/, message: "请输入不可变的大写稳定编码", trigger: "blur" }],
         orderNum: [
           { required: true, message: "显示排序不能为空", trigger: "blur" }
         ],
@@ -271,6 +274,7 @@ export default {
         deptId: undefined,
         parentId: undefined,
         deptName: undefined,
+        deptCode: undefined,
         orderNum: undefined,
         leader: undefined,
         phone: undefined,

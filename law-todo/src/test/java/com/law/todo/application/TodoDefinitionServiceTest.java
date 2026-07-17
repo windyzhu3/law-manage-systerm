@@ -59,6 +59,36 @@ class TodoDefinitionServiceTest
         assertEquals(12L,id);verify(mapper).insertTemplate(anyMap());verify(mapper).insertDefinitionActionIfAbsent(anyMap());
     }
 
+    @Test void updateDraftAtomicallyPersistsCanonicalDocumentAndLegacyProjections()
+    {
+        Map<String,Object> current=draft(null,null);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        when(mapper.updateTemplateVersionDraft(anyMap())).thenReturn(1);
+        String document="""
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{"priority":"HIGH"}},
+                 "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},
+                 "dod":{"config":{"requiredFields":["summary"]}},"sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},
+                 "ui":{"config":{"formCode":"TD-001"}},"routing":{"config":{}},
+                 "autoActions":[{"config":{"ruleKey":"remind","actionType":"NOTIFY"}}],
+                 "decisionRefs":["D-1"],"acceptanceRefs":["A-1"]}
+                """;
+
+        assertEquals(9L,service().updateDraft(new UpdateDraftCommand("edit-document",9L,document),actor));
+
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> updated=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).updateTemplateVersionDraft(updated.capture());
+        Map<String,Object> value=updated.getValue();
+        TodoDefinitionDocument saved=new TodoDefinitionCodec().read(String.valueOf(value.get("definitionJson")));
+        assertEquals("HIGH",saved.event().condition().get("priority"));
+        assertEquals("NOTIFY",saved.autoActions().get(0).config().get("actionType"));
+        assertEquals(List.of("D-1"),saved.decisionRefs());
+        assertEquals(List.of("A-1"),saved.acceptanceRefs());
+        assertTrue(String.valueOf(value.get("ownerRuleJson")).contains("ownerId"));
+        assertTrue(String.valueOf(value.get("uiSchemaJson")).contains("TD-001"));
+    }
+
     @Test void copyCanonicalVersionPreservesTheWholeDocumentAndSynchronizesProjections()
     {
         String canonical="""

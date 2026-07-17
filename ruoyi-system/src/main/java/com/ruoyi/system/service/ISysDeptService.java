@@ -90,6 +90,7 @@ public interface ISysDeptService
      * @return 结果
      */
     public boolean checkDeptNameUnique(SysDept dept);
+    public boolean checkDeptCodeUnique(SysDept dept);
 
     /**
      * 校验部门是否有数据权限

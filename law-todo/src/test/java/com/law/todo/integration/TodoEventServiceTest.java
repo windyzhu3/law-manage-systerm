@@ -13,9 +13,12 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doAnswer;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.domain.model.TodoInstance;
@@ -25,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.expression.ConditionEvaluator;
+import com.law.todo.spi.TodoOrganizationPort;
 
 @ExtendWith(MockitoExtension.class)
 class TodoEventServiceTest
@@ -103,6 +107,32 @@ class TodoEventServiceTest
 
         assertEquals(1,result.size());
         verify(mapper,times(1)).insertInstance(any());
+    }
+
+    @Test void canonicalTypedOwnerRuleResolvesCandidatesInsteadOfUsingStaleScalarProjection()
+    {
+        Map<String,Object> typed=new java.util.HashMap<>(rule());
+        typed.put("owner_rule_json","ROLE:999");
+        typed.put("definition_json","""
+                {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"ROLE","roleKey":"legal_reviewer"}},"dod":{"config":{}},"sla":{"config":{}},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(typed));
+        when(mapper.selectRoleIdByKey("legal_reviewer")).thenReturn(5L);
+        TodoOrganizationPort organization=new TodoOrganizationPort(){
+            public List<Long> usersForRole(long roleId){return roleId==5?List.of(41L,42L):List.of();}
+            public List<Long> usersForDepartment(long id){return List.of();} public List<Long> usersForPost(long id){return List.of();}
+            public Optional<Long> businessOwner(String type,Long id){return Optional.empty();} public Optional<Long> supervisor(long id,int levels){return Optional.empty();}
+            public Optional<Long> roundRobin(String key,List<Long> candidates){return Optional.empty();} public boolean isAvailable(long id,LocalDateTime at){return true;}
+            public Optional<Long> delegateFor(long id,LocalDateTime at){return Optional.empty();} public List<Long> assignmentLevel(int level,String type,Long id){return List.of();}
+        };
+
+        new TodoEventService(mapper,new TodoAssignmentResolver(organization)).handle(event());
+
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> candidate=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertCandidate(candidate.capture());
+        assertEquals("USER",candidate.getValue().get("candidateType"));
+        assertEquals(41L,candidate.getValue().get("candidateValue"));
     }
 
     @Test void createsTodoWhenNestedConditionTreeMatches()

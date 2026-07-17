@@ -11,6 +11,7 @@ import java.util.UUID;
 import java.util.Set;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,8 @@ import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.assignment.OwnerResolutionContext;
+import com.law.todo.assignment.OwnerResolutionResult;
 import com.law.todo.routing.RouteToken;
 import com.law.todo.routing.RouteTokenStatus;
 
@@ -52,7 +55,7 @@ public class TodoEventService
             String key=event.eventId()+":"+version+":"+event.aggregateId();
             TodoInstance existing=mapper.selectByTriggerKey(key);
             if(existing!=null){result.add(existing);continue;}
-            Assignment assignment=resolver.resolve(text(value(rule,"owner_rule_json","ownerRuleJson")),event.payload());
+            Assignment assignment=resolveAssignment(rule,event);
             TodoInstance todo=new TodoInstance();
             todo.setTodoNo("TD"+UUID.randomUUID().toString().replace("-","").substring(0,20).toUpperCase());
             todo.setTemplateId(longValue(value(rule,"template_id","templateId")));
@@ -97,6 +100,44 @@ public class TodoEventService
         todo.setSlaSnapshot(text(value(version,"sla_rule_json","slaRuleJson")));
         todo.setRouteNodeKey(text(definition.routing().config().get("start")));
         todo.setPayloadSchemaVersion(definition.event()==null?Integer.valueOf(String.valueOf(value(version,"payload_version","payloadVersion"))):definition.event().payloadVersion());
+    }
+    /** Prefer the immutable compiled/canonical owner rule; scalar JSON is historical compatibility only. */
+    private Assignment resolveAssignment(Map<String,Object> rule,TodoEvent event)
+    {
+        String document=text(value(rule,"compiled_json","compiledJson"));
+        if(document==null||document.isBlank())document=text(value(rule,"definition_json","definitionJson"));
+        if(document!=null&&!document.isBlank())
+        {
+            try
+            {
+                TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
+                if(definition.owner()!=null)
+                {
+                    OwnerResolutionResult resolved=resolver.resolve(resolveStableOwnerReferences(definition.owner()),new OwnerResolutionContext(
+                            event.payload(),event.aggregateType(),event.aggregateId(),LocalDateTime.now()));
+                    if(resolved.ownerId()!=null)return new Assignment(resolved.ownerId(),null,null);
+                    if(!resolved.candidateUserIds().isEmpty())return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
+                }
+            }
+            catch(RuntimeException ignored)
+            {
+                // A historical corrupt snapshot still follows the legacy scalar resolver path below.
+            }
+        }
+        return resolver.resolve(text(value(rule,"owner_rule_json","ownerRuleJson")),event.payload());
+    }
+    private TodoDefinitionDocument.OwnerRule resolveStableOwnerReferences(TodoDefinitionDocument.OwnerRule owner)
+    {
+        Map<String,Object> config=new LinkedHashMap<>(owner.config());String type=text(config.get("type"));
+        if("ROLE".equals(type)&&config.get("roleKey")!=null)
+        {
+            Long id=mapper.selectRoleIdByKey(String.valueOf(config.get("roleKey")));if(id!=null)config.put("operand",id);
+        }
+        if("DEPT".equals(type)&&config.get("departmentCode")!=null)
+        {
+            Long id=mapper.selectDepartmentIdByCode(String.valueOf(config.get("departmentCode")));if(id!=null)config.put("operand",id);
+        }
+        return new TodoDefinitionDocument.OwnerRule(config);
     }
     private void initializeRootRoute(TodoInstance todo)
     {

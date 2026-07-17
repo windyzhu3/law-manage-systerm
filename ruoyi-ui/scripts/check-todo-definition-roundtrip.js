@@ -29,11 +29,13 @@ function normalize(value) {
 }
 
 function run() {
-  const { hydrateDefinition, serializeDefinition } = require('../src/views/todo/config/definition-codec')
+  const { hydrateDefinition, serializeDefinition, toDraftPayload } = require('../src/views/todo/config/definition-codec')
   const hydrated = hydrateDefinition({ definition_json: JSON.stringify(fixture) })
   const serialized = serializeDefinition(hydrated)
   assert.deepStrictEqual(normalize(serialized), normalize(fixture), 'canonical document must survive hydrate/serialize without data loss')
   assert.deepStrictEqual(Object.keys(serialized).sort(), ['acceptanceRefs', 'autoActions', 'decisionRefs', 'dod', 'event', 'owner', 'routing', 'schemaVersion', 'sla', 'templateCode', 'ui'], 'serializer must emit only canonical definition sections')
+  const payload = toDraftPayload(hydrated)
+  assert.deepStrictEqual(normalize(JSON.parse(payload.definitionJson)), normalize(fixture), 'draft payload must persist the complete canonical definition document')
 
   const legacy = hydrateDefinition({
     template_code: 'CASE_ASSIGN', event_type: 'CASE_CREATED', payload_version: 1,

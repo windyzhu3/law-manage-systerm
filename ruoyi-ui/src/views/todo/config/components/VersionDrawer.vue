@@ -14,7 +14,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <definition-form v-if="editing" ref="definition" :value="editing" :readonly="editing.status !== 'DRAFT'" />
+      <definition-form v-if="editing" :key="editing.version_id || editing.versionId" ref="definition" :value="editing" :readonly="editing.status !== 'DRAFT'" />
       <el-button v-if="editing && editing.status === 'DRAFT'" type="primary" @click="save">保存草稿</el-button>
     </div>
   </el-drawer>

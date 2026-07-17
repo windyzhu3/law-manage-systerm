@@ -182,6 +182,14 @@ public class SysDeptServiceImpl implements ISysDeptService
         return UserConstants.UNIQUE;
     }
 
+    @Override
+    public boolean checkDeptCodeUnique(SysDept dept)
+    {
+        Long deptId=StringUtils.isNull(dept.getDeptId())?-1L:dept.getDeptId();
+        SysDept info=deptMapper.checkDeptCodeUnique(dept.getDeptCode());
+        return StringUtils.isNull(info)||info.getDeptId().longValue()==deptId.longValue();
+    }
+
     /**
      * 校验部门是否有数据权限
      * 
@@ -232,6 +240,8 @@ public class SysDeptServiceImpl implements ISysDeptService
     {
         SysDept newParentDept = deptMapper.selectDeptById(dept.getParentId());
         SysDept oldDept = deptMapper.selectDeptById(dept.getDeptId());
+        if (oldDept != null && oldDept.getDeptCode() != null && !oldDept.getDeptCode().matches("DEPT_[0-9]+") && !oldDept.getDeptCode().equals(dept.getDeptCode()))
+            throw new ServiceException("Stable department code cannot be changed after it is assigned");
         if (StringUtils.isNotNull(newParentDept) && StringUtils.isNotNull(oldDept))
         {
             String newAncestors = newParentDept.getAncestors() + "," + newParentDept.getDeptId();

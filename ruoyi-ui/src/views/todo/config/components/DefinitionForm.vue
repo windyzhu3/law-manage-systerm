@@ -32,6 +32,7 @@ export default {
     }
   },
   computed: { preview() { return JSON.stringify(serializeDefinition(this.form), null, 2) } },
+  watch: { value: { deep: true, handler(next) { this.form = hydrateDefinition(next) } } },
   methods: {
     validate() {
       if (this.readonly) return Promise.reject(new Error('published definition is read-only'))
