@@ -8,6 +8,17 @@ function config(value) {
   return value.config && typeof value.config === 'object' ? value.config : value
 }
 
+export function getBusinessContext(formView) {
+  const businessType = formView && formView.businessType
+  const businessId = Number(formView && formView.businessId)
+  if (!businessType || !Number.isFinite(businessId) || businessId <= 0) throw new Error('Todo form is missing its governed business context')
+  return { businessType, businessId }
+}
+
+export function getFileFieldContext(formView, field) {
+  return { ...getBusinessContext(formView), materialType: field.materialType || field.key }
+}
+
 function effectiveRules(formView) {
   const dod = config(formView && formView.dod)
   const action = String((formView && formView.action) || '').toUpperCase()

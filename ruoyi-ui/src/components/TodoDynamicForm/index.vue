@@ -16,7 +16,7 @@
 import BusinessFilePicker from '@/components/BusinessFile/BusinessFilePicker'
 import TodoMaterialChecklist from '@/components/BusinessFile/TodoMaterialChecklist'
 import { fieldRegistry, resolveFieldComponent } from './field-registry'
-import { normalizeFields, validateFormState, getMaterialRequirements } from './schema-runtime'
+import { normalizeFields, validateFormState, getMaterialRequirements, getFileFieldContext } from './schema-runtime'
 
 const TodoDictField = {
   name: 'TodoDictField',
@@ -62,7 +62,7 @@ export default {
   props: {
     value: { type: Object, required: true },
     formView: { type: Object, required: true },
-    businessType: { type: String, default: 'TODO' },
+    businessType: { type: String, required: true },
     businessId: { type: [Number, String], required: true },
     disabled: Boolean
   },
@@ -82,7 +82,7 @@ export default {
       if (field.type === 'datetime') return { ...common, type: 'datetime', valueFormat: 'yyyy-MM-ddTHH:mm:ss', style: 'width:100%' }
       if (field.type === 'number') return { ...common, min: field.min, max: field.max, precision: field.precision, style: 'width:100%' }
       if (field.type === 'dict') return { ...common, options: field.options || [] }
-      if (field.type === 'file') return { ...common, businessType: field.businessType || this.businessType, businessId: this.businessId, materialType: field.materialType || field.key, limit: field.limit || 1 }
+      if (field.type === 'file') return { ...common, ...getFileFieldContext(this.formView, field), limit: field.limit || 1 }
       if (field.type === 'materialChecklist') return { ...common, businessType: this.businessType, businessId: this.businessId, requirements: field.requirements || this.requirements }
       return common
     },

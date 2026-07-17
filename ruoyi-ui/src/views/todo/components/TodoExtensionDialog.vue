@@ -14,7 +14,7 @@
         <el-input v-model="form.reason" type="textarea" :rows="4" maxlength="1000" show-word-limit />
       </el-form-item>
       <el-form-item label="证明材料" :required="proofRequired">
-        <business-file-picker v-model="form.proofFiles" business-type="TODO" :business-id="todoId" material-type="EXTENSION_PROOF" :limit="5" />
+        <business-file-picker v-model="form.proofFiles" :business-type="businessContext.businessType" :business-id="businessContext.businessId" material-type="EXTENSION_PROOF" :limit="5" />
       </el-form-item>
     </el-form>
     <div slot="footer">
@@ -34,7 +34,8 @@ export default {
   props: {
     visible: Boolean,
     todo: { type: Object, default: () => ({}) },
-    policy: { type: Object, default: () => ({}) }
+    policy: { type: Object, required: true },
+    businessContext: { type: Object, required: true }
   },
   data() {
     return {
@@ -49,23 +50,11 @@ export default {
   computed: {
     innerVisible: { get() { return this.visible }, set(value) { this.$emit('update:visible', value) } },
     todoId() { return this.todo.todoId || this.todo.todo_id },
-    maxCount() { return Number(this.policy.maxExtensionCount || this.policy.max_extension_count || 0) },
-    usedCount() { return Number(this.policy.approvedExtensionCount || this.policy.approved_extension_count || 0) },
-    remainingCount() {
-      const explicit = this.policy.remainingRequestCount ?? this.policy.remaining_request_count
-      if (explicit != null) return Number(explicit)
-      const hasMaximum = this.policy.maxExtensionCount != null || this.policy.max_extension_count != null
-      return hasMaximum ? Math.max(0, this.maxCount - this.usedCount) : '—'
-    },
+    remainingCount() { return Number(this.policy.remainingRequestCount) },
     proofRequired() { return this.policy.proofRequired === true || this.policy.proof_required === true },
-    proofRule() {
-      const known = this.policy.proofRequired != null || this.policy.proof_required != null
-      return known ? (this.proofRequired ? '必需' : '选填') : '按当前 SLA 政策'
-    },
+    proofRule() { return this.proofRequired ? '必需' : '选填' },
     maximumDuration() {
-      const value = this.policy.maxExtensionValue || this.policy.max_extension_value
-      const unit = this.policy.maxExtensionUnit || this.policy.max_extension_unit
-      return value && unit ? `${value} ${unit}` : '按当前 SLA 政策'
+      return `${this.policy.maxExtensionValue} ${this.policy.maxExtensionUnit}`
     }
   },
   watch: {

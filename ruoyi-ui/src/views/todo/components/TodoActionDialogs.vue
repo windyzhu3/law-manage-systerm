@@ -16,8 +16,8 @@
         ref="dynamicForm"
         v-model="state"
         :form-view="formView"
-        business-type="TODO"
-        :business-id="todoId"
+        :business-type="businessContext.businessType"
+        :business-id="businessContext.businessId"
       />
     </div>
     <div slot="footer">
@@ -29,7 +29,7 @@
 
 <script>
 import TodoDynamicForm from '@/components/TodoDynamicForm'
-import { createFormState, createActionPayload } from '@/components/TodoDynamicForm/schema-runtime'
+import { createFormState, createActionPayload, getBusinessContext } from '@/components/TodoDynamicForm/schema-runtime'
 import { getTodoForm } from '@/api/todo'
 
 export default {
@@ -55,6 +55,7 @@ export default {
     innerVisible: { get() { return this.visible }, set(value) { this.$emit('update:visible', value) } },
     todoId() { return this.todo.todoId || this.todo.todo_id },
     businessNo() { return this.todo.businessNo || this.todo.business_no || '-' },
+    businessContext() { return this.formView ? getBusinessContext(this.formView) : { businessType: '', businessId: 0 } },
     requiresOpinion() { return ['return', 'cancel'].includes(this.action) }
   },
   watch: {

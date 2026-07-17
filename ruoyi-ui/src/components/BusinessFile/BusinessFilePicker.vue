@@ -27,7 +27,7 @@ export default {
   name: 'BusinessFilePicker',
   props: {
     value: { type: [Number, String, Object, Array], default: null },
-    businessType: { type: String, default: 'TODO' },
+    businessType: { type: String, required: true },
     businessId: { type: [Number, String], required: true },
     materialType: { type: String, default: 'TODO_MATERIAL' },
     visibility: { type: String, default: 'BUSINESS' },

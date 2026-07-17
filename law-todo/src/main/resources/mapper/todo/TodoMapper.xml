@@ -80,7 +80,7 @@
   <update id="advanceRouteJoinConditionally">update todo_route_join set status='ADVANCED',advanced_at=sysdate(),version=version+1 where root_todo_id=#{rootTodoId} and node_key=#{nodeKey} and occurrence=#{occurrence} and status='WAITING'</update>
   <update id="updateInitialRouteSnapshot">update todo_instance set root_todo_id=#{rootTodoId},route_token=#{routeToken},occurrence_key=#{occurrenceKey} where todo_id=#{todoId} and root_todo_id is null and route_node_key is not null</update>
   <select id="selectExtensionContext" resultType="java.util.Map">
-    select t.todo_id,t.status todo_status,t.owner_id,s.start_at,s.due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
+    select t.todo_id,t.status todo_status,t.owner_id,t.business_type,t.business_id,s.start_at,s.due_at,s.remind80_at,s.overdue100_at,s.escalate150_at,
       c.calendar_id,c.work_days,c.work_start,c.work_end,c.exception_json,
       p.policy_version_id,p.max_extension_count,p.max_extension_value,p.max_extension_unit,p.proof_required,p.pending_sla_mode
     from todo_instance t join todo_sla_record s on s.todo_id=t.todo_id

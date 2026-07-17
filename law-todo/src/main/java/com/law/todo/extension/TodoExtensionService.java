@@ -32,6 +32,8 @@ import com.law.todo.mapper.TodoMapper;
 import com.law.todo.notification.StationNotificationAdapter;
 import com.law.todo.notification.TodoNotificationPort;
 import com.law.todo.notification.TodoNotificationPort.NotificationCommand;
+import com.law.todo.spi.TodoMaterialLookup;
+import com.law.todo.definition.validation.TodoFormValidator.Material;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
@@ -43,16 +45,22 @@ public class TodoExtensionService
 {
     private final TodoMapper mapper;
     private final TodoNotificationPort notifications;
+    private final TodoMaterialLookup materials;
 
-    public TodoExtensionService(TodoMapper mapper){this(mapper,new StationNotificationAdapter(mapper));}
-    @Autowired public TodoExtensionService(TodoMapper mapper,TodoNotificationPort notifications)
-    {this.mapper=mapper;this.notifications=notifications;}
+    public TodoExtensionService(TodoMapper mapper){this(mapper,new StationNotificationAdapter(mapper),unavailableMaterials());}
+    public TodoExtensionService(TodoMapper mapper,TodoMaterialLookup materials){this(mapper,new StationNotificationAdapter(mapper),materials);}
+    public TodoExtensionService(TodoMapper mapper,TodoNotificationPort notifications){this(mapper,notifications,unavailableMaterials());}
+    @Autowired public TodoExtensionService(TodoMapper mapper,TodoNotificationPort notifications,List<TodoMaterialLookup> lookups)
+    {this(mapper,notifications,lookups==null||lookups.isEmpty()?unavailableMaterials():lookups.get(0));}
+    private TodoExtensionService(TodoMapper mapper,TodoNotificationPort notifications,TodoMaterialLookup materials)
+    {this.mapper=mapper;this.notifications=notifications;this.materials=materials;}
 
     @Transactional public ExtensionView request(Long todoId,RequestCommand command,Actor actor)
     {
         requireAction(command==null?null:command.actionId());requireActor(actor);requireProofIds(command.proofFileObjectIds());
         Map<String,Object> claimed=claim(command.actionId(),"REQUEST",todoId,null,actor);if(present(claimed))return replayRequest(todoId,claimed);
         Map<String,Object> context=mapper.selectExtensionContext(todoId);requireContext(todoId,context,actor);
+        requireProofRelations(context,command.proofFileObjectIds(),actor);
         Policy policy=policy(context);LocalDateTime current=date(value(context,"due_at","dueAt"));
         requireLater(current,command.requestedDueAt());
         if(policy.proofRequired()&&command.proofFileObjectIds().isEmpty())fail("TODO_EXTENSION_PROOF_REQUIRED","Proof material is required");
@@ -207,6 +215,15 @@ public class TodoExtensionService
     private void completeAction(String actionId,Long extensionId,String resultStatus){Map<String,Object> row=new HashMap<>();row.put("actionId",actionId);row.put("extensionId",extensionId);row.put("resultStatus",resultStatus);if(mapper.completeExtensionAction(row)<=0)fail("TODO_EXTENSION_ACTION_CONFLICT","Extension action result could not be recorded");}
     private void pendingConflict(Long todoId){Map<String,Object> pending=mapper.selectPendingExtensionByTodoId(todoId);if(present(pending))fail("TODO_EXTENSION_PENDING_EXISTS","A pending extension request already exists");fail("TODO_EXTENSION_ACTION_CONFLICT","Extension request collided with another action");}
     private void requireProofIds(List<Long> ids){if(ids!=null&&ids.stream().anyMatch(id->id==null||id<=0))fail("TODO_EXTENSION_PROOF_INVALID","Proof fileObjectIds must be positive");}
+    private void requireProofRelations(Map<String,Object> context,List<Long> ids,Actor actor)
+    {
+        if(ids==null||ids.isEmpty())return;
+        String businessType=string(value(context,"business_type","businessType"));
+        Long businessId=number(value(context,"business_id","businessId"));
+        List<Material> resolved=materials.resolve(businessType,businessId,ids,actor);
+        for(Long id:ids)if(resolved.stream().noneMatch(value->id.equals(value.fileObjectId())&&"EXTENSION_PROOF".equals(value.materialType())))
+            fail("TODO_EXTENSION_PROOF_RELATION_INVALID","Proof files must use an EXTENSION_PROOF relation on the Todo business");
+    }
     private void requireLater(LocalDateTime current,LocalDateTime requested){if(current==null||requested==null||!requested.isAfter(current))fail("TODO_EXTENSION_DUE_INVALID","Requested due time must be later than the current effective due time");}
     private void requireAction(String value){if(value==null||value.isBlank()||value.length()>64)fail("TODO_ACTION_ID_INVALID","actionId is required and limited to 64 characters");}
     private void requireActor(Actor actor){if(actor==null||actor.userId()==null||actor.userName()==null||actor.userName().isBlank())fail("TODO_ACTOR_INVALID","Actor is required");}
@@ -221,5 +238,6 @@ public class TodoExtensionService
     private LocalDateTime date(Object value){return value instanceof LocalDateTime time?time:value==null?null:LocalDateTime.parse(String.valueOf(value).replace(' ','T'));}
     private LocalTime time(Object value){String text=String.valueOf(value);return LocalTime.parse(text.length()>=8?text.substring(0,8):text);}
     private void fail(String code,String message){throw new TodoException(code,message);}
+    private static TodoMaterialLookup unavailableMaterials(){return ids->{throw new TodoException("TODO_MATERIAL_LOOKUP_UNAVAILABLE","Material metadata lookup is unavailable");};}
     private record Policy(long versionId,int maxCount,long maxValue,DurationUnit maxUnit,boolean proofRequired,PendingSlaMode pendingMode) { }
 }

@@ -34,13 +34,15 @@ for (const [fieldType, componentName] of Object.entries(expected)) {
 includes(registry, 'export const fieldRegistry', 'field registry must provide the fieldRegistry export')
 
 const runtime = read('src/components/TodoDynamicForm/schema-runtime.js')
-for (const exported of ['createFormState', 'createActionPayload', 'validateFormState']) {
+for (const exported of ['createFormState', 'createActionPayload', 'validateFormState', 'getBusinessContext', 'getFileFieldContext']) {
   includes(runtime, `export function ${exported}`, `schema runtime must export ${exported}`)
 }
 const executableRuntime = runtime.replace(/export function /g, 'function ')
-const runtimeExports = new Function(`${executableRuntime}; return { createFormState, createActionPayload, validateFormState }`)()
+const runtimeExports = new Function(`${executableRuntime}; return { createFormState, createActionPayload, validateFormState, getBusinessContext, getFileFieldContext }`)()
 const fixture = {
   action: 'COMPLETE',
+  businessType: 'CONTRACT',
+  businessId: 77,
   ui: { config: { fields: [{ key: 'proof', type: 'file', materialType: 'PROOF' }] } },
   dod: { config: { requiredFields: ['proof'], materials: [{ type: 'PROOF', minCount: 1 }] } },
   defaults: {}, materials: []
@@ -50,6 +52,10 @@ state.fields.proof = { fileObjectId: 41, materialType: 'PROOF', fileName: 'proof
 state.materials = [{ fileObjectId: 41, materialType: 'PROOF', fileName: 'proof.pdf' }]
 assert.deepStrictEqual(runtimeExports.createActionPayload(fixture, state).fileObjectIds, [41])
 assert.deepStrictEqual(runtimeExports.validateFormState(fixture, state), [])
+assert.deepStrictEqual(runtimeExports.getBusinessContext(fixture), { businessType: 'CONTRACT', businessId: 77 })
+assert.deepStrictEqual(runtimeExports.getFileFieldContext(fixture, fixture.ui.config.fields[0]), {
+  businessType: 'CONTRACT', businessId: 77, materialType: 'PROOF'
+})
 
 const dynamicForm = read('src/components/TodoDynamicForm/index.vue')
 includes(dynamicForm, "import { fieldRegistry", 'dynamic form must consume the shared field registry')
@@ -60,6 +66,9 @@ includes(actionDialog, "import TodoDynamicForm", 'action dialog must render Todo
 includes(actionDialog, 'getTodoForm', 'action dialog must load the backend form view')
 if (/template_?code|templateCode/i.test(actionDialog + todoPage + runtime)) {
   throw new Error('runtime actions must not branch directly or indirectly on template code')
+}
+if (/business-type=["']TODO["']/.test(actionDialog + dynamicForm + read('src/views/todo/components/TodoExtensionDialog.vue'))) {
+  throw new Error('runtime uploads must never use TODO/todoId as a material relation context')
 }
 
 const filePicker = read('src/components/BusinessFile/BusinessFilePicker.vue')

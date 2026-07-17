@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -17,6 +18,9 @@ import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
+import com.law.file.application.FileMaterialQueryService;
+import com.law.file.application.FileMaterialQueryService.FileMaterialView;
+import com.law.file.domain.FileObject.FileActor;
 
 @ExtendWith(MockitoExtension.class)
 class TodoQueryServiceTest
@@ -37,6 +41,30 @@ class TodoQueryServiceTest
 
         assertEquals("COMPLETE",form.action());assertEquals("abc",form.definitionHash());
         assertEquals("OK",form.defaults().get("result"));
+    }
+
+    @Test void form_exposes_authoritative_business_material_and_extension_policy_context()
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(2L);todo.setStatus("SUBMITTED");todo.setTemplateVersionId(9L);
+        todo.setBusinessType("CONTRACT");todo.setBusinessId(77L);
+        when(mapper.selectById(2L)).thenReturn(todo);when(access.canView(todo,7L,3L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of("dod_rule_json","{}","ui_schema_json","{}"));
+        FileMaterialQueryService files=org.mockito.Mockito.mock(FileMaterialQueryService.class);
+        when(files.list("CONTRACT",77L,new FileActor(7L,"alice",3L))).thenReturn(List.of(
+            new FileMaterialView(12L,41L,"SIGNED_CONTRACT","signed.pdf","BUSINESS")));
+        when(mapper.selectExtensionContext(2L)).thenReturn(new java.util.HashMap<>(Map.ofEntries(
+            Map.entry("policy_version_id",101L),Map.entry("max_extension_count",3),
+            Map.entry("max_extension_value",2L),Map.entry("max_extension_unit","WORKING_DAYS"),
+            Map.entry("proof_required",true),Map.entry("pending_sla_mode","CONTINUE"),
+            Map.entry("due_at",java.time.LocalDateTime.of(2026,7,20,18,0)))));
+        when(mapper.countApprovedExtensions(2L,101L)).thenReturn(1);
+
+        var form=new TodoQueryService(mapper,access,files).form(2L,new Actor(7L,"alice",3L));
+
+        assertEquals("CONTRACT",form.businessType());assertEquals(77L,form.businessId());
+        assertEquals(41L,form.materials().get(0).fileObjectId());
+        assertEquals(2,form.extensionPolicy().remainingRequestCount());
+        assertEquals(true,form.extensionPolicy().proofRequired());
     }
 
     @ParameterizedTest

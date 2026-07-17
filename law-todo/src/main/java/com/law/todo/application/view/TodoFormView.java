@@ -5,9 +5,11 @@ import java.util.Map;
 
 import com.law.todo.definition.model.TodoDefinitionDocument.DodRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
+import java.time.LocalDateTime;
 
-public record TodoFormView(Long todoId, String action, UiSchema ui, DodRule dod,
-        Map<String,Object> defaults, List<MaterialState> materials, String definitionHash)
+public record TodoFormView(Long todoId, String action, String businessType, Long businessId,
+        UiSchema ui, DodRule dod, Map<String,Object> defaults, List<MaterialState> materials,
+        ExtensionPolicyView extensionPolicy, String definitionHash)
 {
     public TodoFormView
     {
@@ -17,4 +19,7 @@ public record TodoFormView(Long todoId, String action, UiSchema ui, DodRule dod,
     }
 
     public record MaterialState(Long fileObjectId, String materialType, String fileName) { }
+    public record ExtensionPolicyView(Long policyVersionId,int maxExtensionCount,int approvedExtensionCount,
+        int remainingRequestCount,long maxExtensionValue,String maxExtensionUnit,boolean proofRequired,
+        String pendingSlaMode,LocalDateTime currentDueAt) { }
 }

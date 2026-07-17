@@ -25,6 +25,8 @@ import com.law.todo.extension.TodoExtensionCommands.DecisionCommand;
 import com.law.todo.extension.TodoExtensionCommands.ExtensionView;
 import com.law.todo.extension.TodoExtensionCommands.RequestCommand;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.spi.TodoMaterialLookup;
+import com.law.todo.definition.validation.TodoFormValidator.Material;
 
 class TodoExtensionServiceTest
 {
@@ -34,11 +36,17 @@ class TodoExtensionServiceTest
     private final TodoMapper mapper=mock(TodoMapper.class);
     private final Actor requester=new Actor(7L,"requester",3L);
     private final Actor approver=new Actor(8L,"approver",4L);
+    private final TodoMaterialLookup materials=mock(TodoMaterialLookup.class);
 
     @BeforeEach void actionPersistence()
     {
         org.mockito.Mockito.lenient().when(mapper.insertExtensionActionIfAbsent(anyMap())).thenReturn(1);
         org.mockito.Mockito.lenient().when(mapper.completeExtensionAction(anyMap())).thenReturn(1);
+        org.mockito.Mockito.lenient().when(materials.resolve(org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyList(),
+            org.mockito.ArgumentMatchers.any())).thenAnswer(invocation->{
+                List<Long> ids=invocation.getArgument(2);return ids.stream().map(id->new Material(id,"EXTENSION_PROOF")).toList();
+            });
     }
 
     @Test void pendingRequestExplicitlyKeepsSlaRunning()
@@ -114,6 +122,18 @@ class TodoExtensionServiceTest
             ()->service().request(9L,new RequestCommand("too-long",REQUESTED.plusDays(30),"reason",List.of(1L)),requester)).getBusinessCode());
     }
 
+    @Test void request_authorizes_proofs_against_the_todo_business_and_exact_material_type()
+    {
+        when(mapper.selectExtensionContext(9L)).thenReturn(context());
+        when(materials.resolve("CONTRACT",77L,List.of(41L),requester)).thenReturn(List.of(new Material(41L,"OTHER")));
+
+        TodoException error=assertThrows(TodoException.class,()->service().request(9L,
+            new RequestCommand("wrong-proof",REQUESTED,"reason",List.of(41L)),requester));
+
+        assertEquals("TODO_EXTENSION_PROOF_RELATION_INVALID",error.getBusinessCode());
+        verify(mapper,never()).insertExtensionRequest(anyMap());
+    }
+
     @Test void approvalRechecksRequestedDueAgainstCurrentEffectiveDue()
     {
         Map<String,Object> pending=extension(PENDING,null,null);
@@ -175,12 +195,13 @@ class TodoExtensionServiceTest
         assertEquals("TODO_EXTENSION_PENDING_EXISTS",error.getBusinessCode());
     }
 
-    private TodoExtensionService service(){return new TodoExtensionService(mapper);}
+    private TodoExtensionService service(){return new TodoExtensionService(mapper,materials);}
 
     private Map<String,Object> context()
     {
         return Map.ofEntries(
             Map.entry("todo_id",9L),Map.entry("todo_status","IN_PROGRESS"),Map.entry("owner_id",7L),
+            Map.entry("business_type","CONTRACT"),Map.entry("business_id",77L),
             Map.entry("start_at",START),Map.entry("due_at",ORIGINAL),Map.entry("calendar_id",2L),
             Map.entry("work_days","1,2,3,4,5"),Map.entry("work_start","09:00:00"),Map.entry("work_end","18:00:00"),
             Map.entry("exception_json","{}"),Map.entry("policy_version_id",101L),

@@ -41,14 +41,14 @@
           v-if="materials.length || requirements.length"
           :value="materials"
           :requirements="requirements"
-          business-type="TODO"
-          :business-id="todoId"
+          :business-type="businessContext.businessType"
+          :business-id="businessContext.businessId"
           readonly
         />
         <el-empty v-else description="暂无材料" :image-size="64" />
       </section>
     </div>
-    <todo-extension-dialog :visible.sync="extensionOpen" :todo="todo" :policy="extensionPolicy" @success="extensionSuccess" />
+    <todo-extension-dialog v-if="extensionPolicy" :visible.sync="extensionOpen" :todo="todo" :policy="extensionPolicy" :business-context="businessContext" @success="extensionSuccess" />
   </el-drawer>
 </template>
 
@@ -57,7 +57,7 @@ import TodoRelationPanel from './TodoRelationPanel'
 import TodoExtensionDialog from './TodoExtensionDialog'
 import TodoMaterialChecklist from '@/components/BusinessFile/TodoMaterialChecklist'
 import { getTodoForm } from '@/api/todo'
-import { getMaterialRequirements } from '@/components/TodoDynamicForm/schema-runtime'
+import { getMaterialRequirements, getBusinessContext } from '@/components/TodoDynamicForm/schema-runtime'
 
 export default {
   name: 'TodoDetailDrawer',
@@ -71,19 +71,14 @@ export default {
     actions() { return this.detail.actions || [] },
     attachments() { return this.detail.attachments || [] },
     materials() {
+      if (this.detail.materials) return this.detail.materials
       if (this.formView && this.formView.materials) return this.formView.materials
-      return this.attachments.map(file => ({
-        fileObjectId: Number(file.file_object_id || file.fileObjectId),
-        materialType: file.attachment_type || file.attachmentType,
-        fileName: file.file_name || file.fileName
-      })).filter(file => file.fileObjectId > 0)
+      return []
     },
     requirements() { return this.formView ? getMaterialRequirements({ ...this.formView, action: 'COMPLETE' }) : [] },
-    canRequestExtension() { return !['COMPLETED', 'CANCELLED'].includes(this.todo.status) },
-    extensionPolicy() {
-      const snapshot = parseJson(this.todo.slaSnapshot || this.todo.sla_snapshot)
-      return { ...(snapshot.config || snapshot), ...this.todo }
-    }
+    businessContext() { return this.formView ? getBusinessContext(this.formView) : { businessType: this.todo.businessType || this.todo.business_type || '', businessId: Number(this.todo.businessId || this.todo.business_id || 0) } },
+    extensionPolicy() { return (this.formView && this.formView.extensionPolicy) || null },
+    canRequestExtension() { return !!this.extensionPolicy && this.extensionPolicy.remainingRequestCount > 0 && !['COMPLETED', 'CANCELLED'].includes(this.todo.status) }
   },
   watch: {
     visible(value) { if (value) this.loadFormView() }
@@ -104,10 +99,6 @@ export default {
   }
 }
 
-function parseJson(value) {
-  if (!value || typeof value === 'object') return value || {}
-  try { return JSON.parse(value) } catch (error) { return {} }
-}
 </script>
 
 <style scoped>

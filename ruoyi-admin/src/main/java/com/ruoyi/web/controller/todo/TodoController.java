@@ -25,7 +25,7 @@ public class TodoController extends BaseController
     public TodoController(TodoQueryService query,TodoCommandService command,TodoCollaborationService collaboration){this.query=query;this.command=command;this.collaboration=collaboration;}
     @PreAuthorize("@ss.hasPermi('todo:list')") @GetMapping("/dashboard") public AjaxResult dashboard(){return success(query.dashboard(SecurityUtils.getUserId(),SecurityUtils.getDeptId()));}
     @PreAuthorize("@ss.hasPermi('todo:list')") @GetMapping("/list") public TableDataInfo list(@RequestParam Map<String,Object> q){startPage();List<Map<String,Object>> rows=query.list(q,SecurityUtils.getUserId(),SecurityUtils.getDeptId());return getDataTable(rows);}
-    @PreAuthorize("@ss.hasPermi('todo:query')") @GetMapping("/{id}") public AjaxResult detail(@PathVariable Long id){return success(query.detailView(id,SecurityUtils.getUserId(),SecurityUtils.getDeptId()));}
+    @PreAuthorize("@ss.hasPermi('todo:query')") @GetMapping("/{id}") public AjaxResult detail(@PathVariable Long id){return success(query.detailView(id,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:query')") @GetMapping("/{id}/form") public AjaxResult form(@PathVariable Long id){return success(query.form(id,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:claim')") @PostMapping("/{id}/claim") public AjaxResult claim(@PathVariable Long id,@Valid @RequestBody ActionRequest c){return success(command.claim(id,c.toCommand(),actor()));}
     @PreAuthorize("@ss.hasPermi('todo:start')") @PostMapping("/{id}/start") public AjaxResult start(@PathVariable Long id,@Valid @RequestBody ActionRequest c){return success(command.start(id,c.toCommand(),actor()));}

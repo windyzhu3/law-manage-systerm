@@ -54,6 +54,8 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     @Override public int markUploadCompleted(String id,Long versionId){return mapper.markUploadCompleted(id,versionId);}
     @Override public List<FileBusinessRelation> findActiveRelations(Long id)
     {List<Map<String,Object>> rows=mapper.selectActiveRelations(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::relation).toList();}
+    @Override public List<FileBusinessRelation> findActiveRelations(String type,Long businessId)
+    {List<Map<String,Object>> rows=mapper.selectActiveBusinessRelations(type,businessId);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::relation).toList();}
     @Override public FileBusinessRelation findRelation(Long id,String type,Long businessId,String material,String visibility,Long dept,Long user)
     {
         Map<String,Object> q=new HashMap<>();q.put("fileObjectId",id);q.put("businessType",type);q.put("businessId",businessId);

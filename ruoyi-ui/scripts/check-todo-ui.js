@@ -35,7 +35,7 @@ for (const marker of ['todo-detail-drawer', 'todo-action-dialogs', "v-hasPermi",
   if (!page.includes(marker)) throw new Error(`missing page marker ${marker}`)
 }
 const detail = fs.readFileSync('src/views/todo/components/TodoDetailDrawer.vue', 'utf8')
-for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'detail.relations']) {
+for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'detail.materials', 'detail.relations']) {
   if (!detail.includes(marker)) throw new Error(`missing detail aggregate marker ${marker}`)
 }
 const actions = fs.readFileSync('src/views/todo/components/TodoActionDialogs.vue', 'utf8')

@@ -30,6 +30,7 @@ public interface FileObjectRepository
     int expireUploadIntent(String uploadIntentId,Instant expiredAt);
     int markUploadCompleted(String uploadIntentId,Long versionId);
     List<FileBusinessRelation> findActiveRelations(Long fileObjectId);
+    List<FileBusinessRelation> findActiveRelations(String businessType,Long businessId);
     FileBusinessRelation findRelation(Long fileObjectId,String businessType,Long businessId,String materialType,String visibility,Long scopeDeptId,Long scopeUserId);
     FileBusinessRelation findRelationById(Long relationId);
     FileBusinessRelation insertRelation(FileBusinessRelation relation);

@@ -32,7 +32,7 @@ export default {
   props: {
     value: { type: Array, default: () => [] },
     requirements: { type: Array, default: () => [] },
-    businessType: { type: String, default: 'TODO' },
+    businessType: { type: String, required: true },
     businessId: { type: [Number, String], required: true },
     readonly: Boolean
   },

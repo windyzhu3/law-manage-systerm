@@ -21,6 +21,7 @@ public interface FileObjectMapper
     int expireUploadIntent(@Param("uploadIntentId") String uploadIntentId,@Param("expiredAt") Instant expiredAt);
     int markUploadCompleted(@Param("uploadIntentId") String uploadIntentId,@Param("versionId") Long versionId);
     List<Map<String,Object>> selectActiveRelations(Long fileObjectId);
+    List<Map<String,Object>> selectActiveBusinessRelations(@Param("businessType") String businessType,@Param("businessId") Long businessId);
     Map<String,Object> selectRelation(Map<String,Object> query);
     Map<String,Object> selectRelationById(Long relationId);
     int insertRelation(Map<String,Object> row);
