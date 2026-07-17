@@ -20,6 +20,7 @@ import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.validation.TodoFormValidator;
 import com.law.todo.routing.RoutingGraphValidator;
+import com.law.todo.spi.TodoAutoActionCapability;
 
 @Component
 public class TodoDefinitionCompiler
@@ -71,6 +72,7 @@ public class TodoDefinitionCompiler
         }
 
         validateStructure(definition, errors);
+        validateAutoActions(definition, errors);
         for (TodoFormValidator.ValidationIssue formIssue : new TodoFormValidator().validateDefinition(definition))
             errors.add(issue(formIssue.code(), formIssue.path(), formIssue.message()));
         if (definition.routing() != null && !definition.routing().config().isEmpty())
@@ -85,6 +87,29 @@ public class TodoDefinitionCompiler
         String compiledJson = codec.canonicalJson(definition);
         return new DefinitionValidationReport(errors, List.of(), compiledJson, sha256(compiledJson));
     }
+
+    private void validateAutoActions(TodoDefinitionDocument definition,List<ValidationIssue> errors)
+    {
+        java.util.Set<String> keys=new java.util.HashSet<>();
+        for(int index=0;index<definition.autoActions().size();index++)
+        {
+            Map<String,Object> config=definition.autoActions().get(index).config();String path="autoActions["+index+"]";
+            String type=text(config.containsKey("actionType")?config.get("actionType"):config.get("action"));
+            if(!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(type))errors.add(issue("TODO_AUTO_ACTION_NOT_ALLOWED",path+".actionType","Auto action is not allow-listed"));
+            String key=text(config.get("ruleKey"));if(blank(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_REQUIRED",path+".ruleKey","ruleKey is required"));else if(!keys.add(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_DUPLICATE",path+".ruleKey","ruleKey must be unique"));
+            String trigger=text(config.get("triggerAt"));if(!java.util.Set.of("DUE","SLA_80","SLA_100","SLA_150").contains(trigger))errors.add(issue("TODO_AUTO_ACTION_TRIGGER_INVALID",path+".triggerAt","triggerAt must use a governed SLA time"));
+            String capability=text(config.get("capability"));if(capability==null||!capability.equals(type))errors.add(issue("TODO_AUTO_ACTION_CAPABILITY_MISMATCH",path+".capability","Capability is required and must match actionType"));
+            if("TRANSFER".equals(type)&&config.get("targetOwnerId")==null)errors.add(issue("TODO_AUTO_ACTION_TRANSFER_OWNER_REQUIRED",path+".targetOwnerId","TRANSFER requires targetOwnerId"));
+            positive(config.get("maxAttempts"),path+".maxAttempts",errors);positive(config.get("retryDelayMinutes"),path+".retryDelayMinutes",errors);positive(config.get("claimTimeoutMinutes"),path+".claimTimeoutMinutes",errors);
+            if(config.get("precondition")!=null)
+            {
+                try{if(!(config.get("precondition") instanceof Map<?,?> condition))throw new IllegalArgumentException("precondition must be an object");Map<String,Object> canonical=new HashMap<>();for(Map.Entry<?,?> entry:condition.entrySet()){if(!(entry.getKey() instanceof String conditionKey))throw new IllegalArgumentException("precondition keys must be strings");canonical.put(conditionKey,entry.getValue());}conditionValidator.decodeCanonical(canonical);}
+                catch(IllegalArgumentException invalid){errors.add(issue("TODO_AUTO_ACTION_PRECONDITION_INVALID",path+".precondition",invalid.getMessage()));}
+            }
+        }
+    }
+    private void positive(Object value,String path,List<ValidationIssue> errors){if(value==null)return;try{if(Integer.parseInt(String.valueOf(value))<=0)throw new NumberFormatException();}catch(NumberFormatException invalid){errors.add(issue("TODO_AUTO_ACTION_NUMBER_INVALID",path,"Value must be a positive integer"));}}
+    private String text(Object value){return value==null?null:String.valueOf(value);}
 
     private void validateTaskReferences(TodoDefinitionDocument definition, CompilationContext context,
             List<ValidationIssue> errors)

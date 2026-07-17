@@ -31,12 +31,20 @@ import com.law.todo.definition.model.TodoDefinitionDocument.OwnerRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.RoutingGraph;
 import com.law.todo.definition.model.TodoDefinitionDocument.SlaRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
+import com.law.todo.definition.model.TodoDefinitionDocument.AutoActionRule;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.expression.ConditionValidator;
 
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionCompilerTest
 {
+    @Test void compilerRejectsUnknownOrUndeclaredAutoActionCapability()
+    {
+        TodoDefinitionDocument source=valid();
+        TodoDefinitionDocument invalid=new TodoDefinitionDocument(source.schemaVersion(),source.templateCode(),source.event(),source.owner(),source.dod(),source.sla(),source.ui(),source.routing(),List.of(new AutoActionRule(Map.of("ruleKey","unsafe","actionType","SCRIPT","triggerAt","DUE"))),source.decisionRefs(),source.acceptanceRefs());
+        var codes=compiler.compile(invalid).errors().stream().map(issue->issue.code()).toList();
+        assertTrue(codes.contains("TODO_AUTO_ACTION_NOT_ALLOWED"));assertTrue(codes.contains("TODO_AUTO_ACTION_CAPABILITY_MISMATCH"));
+    }
     @Test void compilerRejectsDodFieldThatRuntimeFormCannotRender()
     {
         TodoDefinitionDocument source=valid();

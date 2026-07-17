@@ -3,6 +3,7 @@ package com.law.todo.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -99,6 +100,26 @@ class TodoCommandServiceTest
                 new ActionCommand("done-2",null,Map.of(),List.of()),new Actor(7L,"alice",3L)));
 
         assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+    }
+
+    @Test void controlledCompletionStillRunsNonWaivableDodValidation()
+    {
+        TodoInstance todo=todo(16L,"SUBMITTED",7L);todo.setTemplateVersionId(10L);todo.setBusinessType("LEAD");
+        when(mapper.selectById(16L)).thenReturn(todo);
+        when(mapper.selectTemplateVersionById(10L)).thenReturn(Map.of("compiled_json","{\"schemaVersion\":1,\"templateCode\":\"T\",\"dod\":{\"config\":{\"requiredFields\":[\"proof\"]}},\"ui\":{\"config\":{\"fields\":[\"proof\"]}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(),null);
+
+        TodoException error=assertThrows(TodoException.class,()->guarded.autoComplete(16L,new ActionCommand("AUTO:16:r",null,Map.of()),TodoAutoActionService.SERVICE_ACTOR));
+
+        assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+        verify(mapper,never()).updateStatusConditionally(org.mockito.ArgumentMatchers.eq(16L),any(),any(),any(),any());
+    }
+
+    @Test void controlledEntryPointRejectsSpoofedHumanActor()
+    {
+        TodoException error=assertThrows(TodoException.class,()->service.autoComplete(1L,new ActionCommand("AUTO:1:r",null,Map.of()),new Actor(7L,"alice",3L)));
+        assertEquals("TODO_AUTO_ACTION_ACTOR_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).selectById(1L);
     }
 
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}

@@ -103,4 +103,12 @@ public interface TodoMapper
     List<String> selectRouteTokenArrivalsForUpdate(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
     int advanceRouteJoinConditionally(@Param("rootTodoId") Long rootTodoId,@Param("nodeKey") String nodeKey,@Param("occurrence") int occurrence);
     int updateInitialRouteSnapshot(@Param("todoId") Long todoId,@Param("rootTodoId") Long rootTodoId,@Param("routeToken") String routeToken,@Param("occurrenceKey") String occurrenceKey);
+    List<Map<String,Object>> selectAutoActionScanItems(@Param("now") LocalDateTime now);
+    int insertAutoActionExecutionIfAbsent(Map<String,Object> execution);
+    Map<String,Object> selectAutoActionExecution(String executionKey);
+    int claimAutoActionRetry(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("now") LocalDateTime now);
+    int claimStaleAutoActionExecution(@Param("executionKey") String executionKey,@Param("expectedAttempt") int expectedAttempt,@Param("staleBefore") LocalDateTime staleBefore,@Param("now") LocalDateTime now);
+    int completeAutoActionExecution(Map<String,Object> outcome);
+    int insertAutoActionAudit(Map<String,Object> audit);
+    int returnToPoolConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("operator") String operator);
 }

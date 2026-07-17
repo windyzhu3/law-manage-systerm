@@ -127,4 +127,18 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("status='WAITING'"));
         }
     }
+
+    @Test void autoActionsUseClaimsCommandBoundaryAndAppendOnlyResultAudit() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            assertTrue(xml.contains("insert ignore into todo_auto_action_execution"));
+            assertTrue(xml.contains("status='RETRY' and attempt_count=#{expectedAttempt}"));
+            assertTrue(xml.contains("status='CLAIMED' and attempt_count=#{attemptNo}"));
+            assertTrue(xml.contains("insert into todo_auto_action_audit"));
+            assertTrue(xml.contains("not exists(select 1 from todo_sla_record paused"));
+            assertTrue(xml.contains("returnToPoolConditionally"));
+        }
+    }
 }
