@@ -29,15 +29,9 @@ public class CaseTransferReviewTodoHandler implements TodoCompletionHandler
     {
         CaseTransferApprovalCommand command = new CaseTransferApprovalCommand();
         command.setTransferId(longValue(payload.get("transferId")));
-        command.setAction(reviewAction(payload));
+        command.setAction(ReviewActionCompatibility.resolve(todo,payload));
         command.setOpinion(text(payload.get("opinion")));
         service.approve(command,new BusinessActor(userId,userName,userName,todo.getOwnerDeptId(),Long.valueOf(1L).equals(userId)));
-    }
-
-    private String reviewAction(Map<String,Object> payload)
-    {
-        Object stable = payload.get("reviewAction");
-        return text(stable == null ? payload.get("action") : stable);
     }
 
     private Long longValue(Object value)

@@ -33,7 +33,7 @@ public class ContractTodoValidator implements TodoBusinessValidator
         String code = todo.getTemplateCode();
         if("CONTRACT_REVIEW".equals(code))
         {
-            String action = reviewAction(payload);
+            String action = ReviewActionCompatibility.resolve(todo,payload);
             if(!Set.of("pass","back","reject").contains(action))fail("CONTRACT_ACTION_INVALID","审核动作不合法");
             if(!"1".equals(contract.getAuditStatus()))fail("CONTRACT_AUDIT_STATE_STALE","合同已不处于审核中");
             required(payload,"opinion");
@@ -62,12 +62,6 @@ public class ContractTodoValidator implements TodoBusinessValidator
             if(!"1".equals(contract.getSignStatus()))fail("CASE_CREATE_PRECONDITION_FAILED","合同尚未完成签署");
             if(mapper.countConfirmedFeePlans(contract.getContractId())<=0)fail("CASE_CREATE_PRECONDITION_FAILED","合同尚无已确认缴费记录");
         }
-    }
-
-    private String reviewAction(Map<String,Object> payload)
-    {
-        Object stable = payload.get("reviewAction");
-        return text(stable == null ? payload.get("action") : stable);
     }
 
     private void required(Map<String,Object> value,String key)

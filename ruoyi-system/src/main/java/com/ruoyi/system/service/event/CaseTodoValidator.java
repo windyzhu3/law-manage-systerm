@@ -42,14 +42,8 @@ public class CaseTodoValidator implements TodoBusinessValidator
         }
         if("CASE_TRANSFER_REVIEW".equals(code))
         {
-            required(payload,"transferId");requiredReviewAction(payload);required(payload,"opinion");
+            required(payload,"transferId");ReviewActionCompatibility.resolve(todo,payload);required(payload,"opinion");
         }
-    }
-
-    private void requiredReviewAction(Map<String,Object> payload)
-    {
-        if(blank(payload.get("reviewAction"))&&blank(payload.get("action")))
-            fail("TODO_DOD_FIELD_MISSING","缺少完成字段：reviewAction");
     }
 
     private void required(Map<String,Object> payload,String key)

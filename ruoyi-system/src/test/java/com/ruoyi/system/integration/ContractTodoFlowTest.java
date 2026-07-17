@@ -17,15 +17,36 @@ import com.ruoyi.system.service.event.ContractTodoValidator;
 
 class ContractTodoFlowTest
 {
-    @Test void reviewHandlerUsesStableKeyAndKeepsHistoricalFallback()
+    @Test void reviewHandlerUsesStableKeyAndKeepsOnlySnapshotProvenHistoricalFallback()
     {
         ContractLifecycleService service=mock(ContractLifecycleService.class);
-        ContractReviewTodoHandler handler=new ContractReviewTodoHandler(service);TodoInstance todo=todo("CONTRACT_REVIEW");
-        handler.complete(todo,Map.of("reviewAction","pass","opinion","同意"),7L,"alice");
-        verify(service).approve(eq(8L),eq("pass"),eq("同意"),any());
-        handler.complete(todo,Map.of("action","back","opinion","补充"),7L,"alice");
-        verify(service).approve(eq(8L),eq("back"),eq("补充"),any());
-        todo.setTemplateCode("CONTRACT_SIGN");assertFalse(handler.supports(todo));
+        ContractReviewTodoHandler handler=new ContractReviewTodoHandler(service);TodoInstance current=todo("CONTRACT_REVIEW");
+        current.setDodSnapshotJson("{\"requiredFields\":[\"reviewAction\",\"opinion\"]}");
+        handler.complete(current,Map.of("reviewAction","pass","opinion","approved"),7L,"alice");
+        verify(service).approve(eq(8L),eq("pass"),eq("approved"),any());
+        TodoException rejected=assertThrows(TodoException.class,
+                ()->handler.complete(current,Map.of("action","back","opinion","supplement"),7L,"alice"));
+        assertEquals("TODO_DOD_FIELD_MISSING",rejected.getBusinessCode());
+
+        TodoInstance historical=todo("CONTRACT_REVIEW");
+        historical.setDodSnapshotJson("{\"requiredFields\":[\"action\",\"opinion\"]}");
+        handler.complete(historical,Map.of("action","back","opinion","supplement"),7L,"alice");
+        verify(service).approve(eq(8L),eq("back"),eq("supplement"),any());
+        current.setTemplateCode("CONTRACT_SIGN");assertFalse(handler.supports(current));
+    }
+
+    @Test void reviewValidatorRejectsLegacyKeyForCurrentSnapshotButAcceptsHistoricalSnapshot()
+    {
+        BizContractMapper mapper=mock(BizContractMapper.class);BizContract contract=new BizContract();
+        contract.setContractId(8L);contract.setAuditStatus("1");when(mapper.selectContractById(8L)).thenReturn(contract);
+        ContractTodoValidator validator=new ContractTodoValidator(mapper);
+        TodoInstance current=todo("CONTRACT_REVIEW");
+        current.setDodSnapshotJson("{\"requiredFields\":[\"reviewAction\",\"opinion\"]}");
+        assertEquals("TODO_DOD_FIELD_MISSING",assertThrows(TodoException.class,
+                ()->validator.validate(current,Map.of("action","pass","opinion","ok"))).getBusinessCode());
+        TodoInstance historical=todo("CONTRACT_REVIEW");
+        historical.setDodSnapshotJson("{\"requiredFields\":[\"action\",\"opinion\"]}");
+        assertDoesNotThrow(()->validator.validate(historical,Map.of("action","pass","opinion","ok")));
     }
 
     @Test void validatorRejectsStaleReviewAndAcceptsFileCenterBackedSignature()

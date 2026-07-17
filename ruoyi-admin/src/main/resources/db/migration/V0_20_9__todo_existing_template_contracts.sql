@@ -5,6 +5,14 @@ set @case_manager_role_id=(select role_id from sys_role where role_key='case_man
 set @finance_role_id=(select role_id from sys_role where role_key='finance_manager' and del_flag='0' limit 1);
 set @partner_role_id=(select role_id from sys_role where role_key='law_partner_manager' and del_flag='0' limit 1);
 
+create temporary table tmp_todo_task11_role_guard (
+  role_count int not null,
+  constraint ck_task11_required_roles_present check (role_count=3)
+) engine=innodb;
+insert into tmp_todo_task11_role_guard(role_count)
+values ((@case_manager_role_id is not null)+(@finance_role_id is not null)+(@partner_role_id is not null));
+drop temporary table tmp_todo_task11_role_guard;
+
 create temporary table tmp_todo_template_contract (
   template_code varchar(64) not null,
   event_type varchar(100) not null,
@@ -40,8 +48,18 @@ insert into tmp_todo_template_contract(template_code,event_type,business_type,ow
 
 update tmp_todo_template_contract x
 join todo_template t on t.template_code=x.template_code
-set x.source_version_id=(select v.version_id from todo_template_version v where v.template_id=t.template_id order by v.version_no desc limit 1),
-    x.new_version_no=(select coalesce(max(v.version_no),0)+1 from todo_template_version v where v.template_id=t.template_id);
+set x.source_version_id=(select v.version_id from todo_template_version v where v.template_id=t.template_id order by v.version_no desc limit 1);
+
+create temporary table tmp_todo_task11_source_guard (
+  template_count int not null,
+  source_version_count int not null,
+  constraint ck_task11_all_15_templates_present check (template_count=15),
+  constraint ck_task11_all_15_source_versions_present check (source_version_count=15)
+) engine=innodb;
+insert into tmp_todo_task11_source_guard(template_count,source_version_count)
+select count(t.template_id),count(x.source_version_id)
+from tmp_todo_template_contract x left join todo_template t on t.template_code=x.template_code;
+drop temporary table tmp_todo_task11_source_guard;
 
 update tmp_todo_template_contract
 set definition_text=concat(
@@ -49,6 +67,21 @@ set definition_text=concat(
   '},"event":{"condition":{},"eventType":"',event_type,'","payloadVersion":1},"owner":{"config":',owner_config,
   '},"routing":{"config":{}},"schemaVersion":1,"sla":{"config":{"calendarCode":"DEFAULT","minutes":',sla_minutes,
   '}},"templateCode":"',template_code,'","ui":{"config":',ui_config,'}}');
+
+update tmp_todo_template_contract x
+join todo_template t on t.template_code=x.template_code
+join todo_template_version v on v.template_id=t.template_id
+  and v.status='PUBLISHED'
+  and v.definition_hash=lower(sha2(x.definition_text,256))
+  and v.version_no=(select max(v2.version_no) from todo_template_version v2
+    where v2.template_id=t.template_id and v2.status='PUBLISHED'
+      and v2.definition_hash=lower(sha2(x.definition_text,256)))
+set x.new_version_id=v.version_id,x.new_version_no=v.version_no;
+
+update tmp_todo_template_contract x
+join todo_template t on t.template_code=x.template_code
+set x.new_version_no=(select coalesce(max(v.version_no),0)+1 from todo_template_version v where v.template_id=t.template_id)
+where x.new_version_id is null;
 
 insert into todo_event_catalog(event_type,payload_version,business_object_type,payload_schema_json,
   owner_field_paths_json,condition_field_paths_json,default_value_field_paths_json,producer,sample_payload_json,status,create_by)
@@ -71,7 +104,8 @@ select t.template_id,x.new_version_no,'PUBLISHED',x.source_version_id,json_quote
   json_object('calendarCode','DEFAULT','minutes',x.sla_minutes),null,cast(x.ui_config as json),1,
   cast(x.definition_text as json),cast(x.definition_text as json),lower(sha2(x.definition_text,256)),
   cast('{"errors":[],"warnings":[]}' as json),'admin',sysdate()
-from tmp_todo_template_contract x join todo_template t on t.template_code=x.template_code;
+from tmp_todo_template_contract x join todo_template t on t.template_code=x.template_code
+where x.new_version_id is null;
 
 update tmp_todo_template_contract x
 join todo_template t on t.template_code=x.template_code

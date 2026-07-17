@@ -26,14 +26,8 @@ public class ContractReviewTodoHandler implements TodoCompletionHandler
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
     {
-        service.approve(todo.getBusinessId(),reviewAction(payload),text(payload.get("opinion")),
+        service.approve(todo.getBusinessId(),ReviewActionCompatibility.resolve(todo,payload),text(payload.get("opinion")),
                 new BusinessActor(operatorId,operatorName,operatorName,todo.getOwnerDeptId(),operatorId==1));
-    }
-
-    private String reviewAction(Map<String,Object> payload)
-    {
-        Object stable = payload.get("reviewAction");
-        return text(stable == null ? payload.get("action") : stable);
     }
 
     private String text(Object value)
