@@ -70,7 +70,7 @@ function serializeDefinition(form) {
   return SECTIONS.reduce((result, key) => { result[key] = document[key]; return result }, {})
 }
 
-function toDraftPayload(form) {
+function toDraftPayload(form, expectedDefinitionJson = null) {
   const document = serializeDefinition(form)
   return {
     definitionJson: JSON.stringify(document),
@@ -78,7 +78,8 @@ function toDraftPayload(form) {
     dodRuleJson: JSON.stringify(document.dod.config),
     slaRuleJson: JSON.stringify(document.sla.config),
     nextRuleJson: JSON.stringify(document.routing.config),
-    uiSchemaJson: JSON.stringify(document.ui.config)
+    uiSchemaJson: JSON.stringify(document.ui.config),
+    expectedDefinitionJson
   }
 }
 

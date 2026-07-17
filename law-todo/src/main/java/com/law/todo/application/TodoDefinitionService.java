@@ -186,11 +186,9 @@ public class TodoDefinitionService
     @Transactional
     public Long updateDraft(UpdateDraftCommand command, Actor actor)
     {
-        Long repeated = repeatedEntity(command.actionId());
-        if (repeated != null)
-            return repeated;
         Map<String, Object> current = requireVersion(command.versionId());
         requireDraft(current);
+        String storedDefinitionJson=text(value(current,"definition_json","definitionJson"));
         TodoDefinitionDocument definition;
         if (command.definitionJson() != null && !command.definitionJson().isBlank())
         {
@@ -208,28 +206,101 @@ public class TodoDefinitionService
             definition=legacyAdapter.fromLegacy(legacy);
         }
         validateDefinition(definition);
-        claim(command.actionId(), "UPDATE_DRAFT", "VERSION", command.versionId(), actor, Map.of());
+        String canonical=codec.canonicalJson(definition);
+        String fingerprint=updateFingerprint(command,actor,canonical,command.expectedDefinitionJson());
+        Long repeated=claimUpdateDraft(command,actor,fingerprint);
+        if(repeated!=null)return repeated;
+        if (storedDefinitionJson != null && !storedDefinitionJson.isBlank()
+                && (command.expectedDefinitionJson()==null || command.expectedDefinitionJson().isBlank()))
+            throw new TodoException("TODO_TEMPLATE_SOURCE_TOKEN_REQUIRED","Reload the draft before saving a canonical definition");
+        if (command.expectedDefinitionJson()!=null && !command.expectedDefinitionJson().equals(storedDefinitionJson))
+            throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Draft version changed; reload before saving");
         Map<String, Object> update = new HashMap<>();
         update.put("versionId", command.versionId());
         update.put("definitionSchemaVersion",definition.schemaVersion());
-        update.put("definitionJson",codec.canonicalJson(definition));
+        update.put("definitionJson",canonical);update.put("expectedDefinitionJson",storedDefinitionJson);
         update.put("compiledJson",null);update.put("definitionHash",null);update.put("validationReportJson",null);
         projectLegacyRules(definition,update);
         if (mapper.updateTemplateVersionDraft(update) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Draft version changed");
+        if(mapper.completeDefinitionAction(command.actionId(),fingerprint,command.versionId())<=0)
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Draft action claim could not be completed");
         return command.versionId();
     }
 
     private void validateDefinition(TodoDefinitionDocument definition)
     {
+        validateDefinitionStructure(definition);
+        validateStableOwnerReferences(definition.owner().config());
+        validate(JSON.toJSONString(definition.owner().config()),JSON.toJSONString(definition.dod().config()),
+                JSON.toJSONString(definition.sla().config()),JSON.toJSONString(definition.routing().config()),JSON.toJSONString(definition.ui().config()));
+    }
+
+    private void validateDefinitionStructure(TodoDefinitionDocument definition)
+    {
         if (definition == null || definition.event() == null || definition.owner() == null || definition.dod() == null
                 || definition.sla() == null || definition.ui() == null || definition.routing() == null)
             throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Canonical definition contains required missing sections");
-        Object departmentCode=definition.owner().config().get("departmentCode");
-        if (departmentCode != null && String.valueOf(departmentCode).matches("DEPT_[0-9]+"))
-            throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_LEGACY","Definition owner must use a managed stable departmentCode");
-        validate(JSON.toJSONString(definition.owner().config()),JSON.toJSONString(definition.dod().config()),
-                JSON.toJSONString(definition.sla().config()),JSON.toJSONString(definition.routing().config()),JSON.toJSONString(definition.ui().config()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void validateStableOwnerReferences(Object value)
+    {
+        if(value instanceof java.util.Collection<?> entries)
+        {
+            for(Object entry:entries)validateStableOwnerReferences(entry);
+            return;
+        }
+        if(!(value instanceof Map<?,?> raw))return;
+        Map<String,Object> config=new HashMap<>();raw.forEach((key,entry)->config.put(String.valueOf(key),entry));
+        Object roleKey=config.get("roleKey");
+        if(roleKey!=null && !String.valueOf(roleKey).isBlank()
+                && mapper.selectRoleIdByKey(String.valueOf(roleKey))==null)
+            throw new TodoException("TODO_OWNER_ROLE_KEY_NOT_FOUND","Definition owner references an unknown or disabled roleKey");
+        Object departmentCode=config.get("departmentCode");
+        if(departmentCode!=null && !String.valueOf(departmentCode).isBlank())
+        {
+            String code=String.valueOf(departmentCode);
+            if(code.matches("DEPT_[0-9]+"))
+                throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_LEGACY","Definition owner must use a managed stable departmentCode");
+            if(mapper.selectDepartmentIdByCode(code)==null)
+                throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_NOT_FOUND","Definition owner references an unknown or disabled departmentCode");
+        }
+        for(Object child:config.values())validateStableOwnerReferences(child);
+    }
+
+    private String updateFingerprint(UpdateDraftCommand command,Actor actor,String canonical,String expectedDefinitionJson)
+    {
+        Map<String,Object> value=new java.util.TreeMap<>();value.put("actionType","UPDATE_DRAFT");
+        value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());value.put("actorName",actor.userName());
+        value.put("versionId",command.versionId());value.put("definitionJson",canonical);value.put("expectedDefinitionJson",expectedDefinitionJson);
+        return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));
+    }
+
+    private Long claimUpdateDraft(UpdateDraftCommand command,Actor actor,String fingerprint)
+    {
+        Map<String,Object> action=new HashMap<>();action.put("actionId",command.actionId());action.put("actionType","UPDATE_DRAFT");
+        action.put("entityType","VERSION");action.put("sourceEntityId",command.versionId());action.put("operatorId",actor.userId());
+        action.put("operatorName",actor.userName());action.put("operatorDeptId",actor.deptId());action.put("requestFingerprint",fingerprint);
+        action.put("payloadJson",JSON.toJSONString(Map.of("versionId",command.versionId())));
+        mapper.insertDefinitionActionClaim(action);
+        Map<String,Object> claimed=mapper.selectDefinitionActionForUpdate(command.actionId());
+        if(claimed==null||claimed.isEmpty()||!"UPDATE_DRAFT".equals(text(value(claimed,"action_type","actionType")))
+                ||!fingerprint.equals(text(value(claimed,"request_fingerprint","requestFingerprint")))
+                ||!command.versionId().equals(longValue(value(claimed,"source_entity_id","sourceEntityId")))
+                ||!actor.userId().equals(longValue(value(claimed,"operator_id","operatorId")))
+                ||!actor.userName().equals(text(value(claimed,"operator_name","operatorName"))))
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Definition action idempotency key belongs to a different request");
+        Long result=longValue(value(claimed,"entity_id","entityId"));
+        if(result!=null)
+        {
+            if(!"APPLIED".equals(text(value(claimed,"action_status","actionStatus"))))
+                throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Recorded draft result is incomplete");
+            return result;
+        }
+        if(!"CLAIMED".equals(text(value(claimed,"action_status","actionStatus"))))
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Draft action is not claimable");
+        return null;
     }
 
     @Transactional(noRollbackFor = PreflightFailedException.class)
@@ -267,6 +338,8 @@ public class TodoDefinitionService
     {
         Map<String, Object> current = requireVersion(versionId);
         TodoDefinitionDocument definition = definition(current);
+        validateDefinitionStructure(definition);
+        validateStableOwnerReferences(definition.owner().config());
         CompilationContext context = new CompilationContext(versionId, guardedPublishPreflight, id -> {
             Map<String, Object> target = mapper.selectTemplateVersionById(id);
             return target == null || target.isEmpty() ? null
@@ -351,8 +424,10 @@ public class TodoDefinitionService
     private TodoDefinitionDocument definition(Map<String, Object> current)
     {
         String canonical = text(value(current, "definition_json", "definitionJson"));
-        return canonical == null || canonical.isBlank()
-                ? legacyAdapter.fromLegacy(current) : codec.read(canonical);
+        if(canonical==null||canonical.isBlank())return legacyAdapter.fromLegacy(current);
+        try{return codec.read(canonical);}
+        catch(RuntimeException invalid)
+        {throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid canonical template JSON");}
     }
 
     private Map<String, Object> requireTemplate(Long id)

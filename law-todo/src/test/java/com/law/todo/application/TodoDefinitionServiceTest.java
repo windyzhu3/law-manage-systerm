@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -63,8 +64,11 @@ class TodoDefinitionServiceTest
     {
         Map<String,Object> current=draft(null,null);
         when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
-        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        AtomicReference<Map<String,Object>> action=new AtomicReference<>();
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenAnswer(invocation->{Map<String,Object> recorded=new HashMap<>(invocation.getArgument(0));recorded.put("actionStatus","CLAIMED");action.set(recorded);return 1;});
+        when(mapper.selectDefinitionActionForUpdate("edit-document")).thenAnswer(invocation->action.get());
         when(mapper.updateTemplateVersionDraft(anyMap())).thenReturn(1);
+        when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq("edit-document"),anyString(),org.mockito.ArgumentMatchers.eq(9L))).thenReturn(1);
         String document="""
                 {"schemaVersion":1,"templateCode":"TD-001",
                  "event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{"priority":"HIGH"}},
@@ -87,6 +91,58 @@ class TodoDefinitionServiceTest
         assertEquals(List.of("A-1"),saved.acceptanceRefs());
         assertTrue(String.valueOf(value.get("ownerRuleJson")).contains("ownerId"));
         assertTrue(String.valueOf(value.get("uiSchemaJson")).contains("TD-001"));
+    }
+
+    @Test void updateDraftUsesSourceTokenAndReturnsTheRecordedResultForAnIdenticalReplay()
+    {
+        String currentDocument="""
+                {"schemaVersion":1,"templateCode":"TD-001","event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
+                "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},"dod":{"config":{}},"sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+        Map<String,Object> current=draft(null,null);current.put("definition_json",currentDocument);
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L));
+        AtomicReference<Map<String,Object>> persisted=new AtomicReference<>(current);
+        when(mapper.selectTemplateVersionById(9L)).thenAnswer(invocation->persisted.get());
+        Map<String,Map<String,Object>> actions=new HashMap<>();
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> incoming=invocation.getArgument(0);
+            actions.computeIfAbsent(String.valueOf(incoming.get("actionId")),ignored->{Map<String,Object> recorded=new HashMap<>(incoming);recorded.put("actionStatus","CLAIMED");return recorded;});return 1;
+        });
+        when(mapper.selectDefinitionActionForUpdate(anyString())).thenAnswer(invocation->actions.get(invocation.getArgument(0)));
+        when(mapper.updateTemplateVersionDraft(anyMap())).thenAnswer(invocation->{Map<String,Object> saved=new HashMap<>(persisted.get());saved.put("definition_json",invocation.<Map<String,Object>>getArgument(0).get("definitionJson"));persisted.set(saved);return 1;});
+        when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq("edit-token"),anyString(),org.mockito.ArgumentMatchers.eq(9L)))
+                .thenAnswer(invocation->{ Map<String,Object> action=actions.get("edit-token");action.put("action_status","APPLIED");action.put("entity_id",9L);return 1; });
+        String replacement=currentDocument.replace("ownerId","assigneeId");
+        UpdateDraftCommand command=new UpdateDraftCommand("edit-token",9L,null,null,null,null,null,replacement,currentDocument);
+
+        assertEquals(9L,service().updateDraft(command,actor));
+        assertEquals(9L,service().updateDraft(command,actor));
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> update=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).updateTemplateVersionDraft(update.capture());
+        assertEquals(currentDocument,update.getValue().get("expectedDefinitionJson"));
+        verify(mapper).completeDefinitionAction(org.mockito.ArgumentMatchers.eq("edit-token"),anyString(),org.mockito.ArgumentMatchers.eq(9L));
+        TodoException conflict=assertThrows(TodoException.class,()->service().updateDraft(
+                new UpdateDraftCommand("edit-token",9L,null,null,null,null,null,replacement.replace("assigneeId","reviewerId"),currentDocument),actor));
+        assertEquals("TODO_DEFINITION_ACTION_CONFLICT",conflict.getBusinessCode());
+        TodoException stale=assertThrows(TodoException.class,()->service().updateDraft(
+                new UpdateDraftCommand("stale-token",9L,null,null,null,null,null,replacement,currentDocument),actor));
+        assertEquals("TODO_TEMPLATE_VERSION_CONFLICT",stale.getBusinessCode());
+    }
+
+    @Test void updateDraftRejectsAnUnknownNestedStableDepartmentReferenceBeforeSaving()
+    {
+        Map<String,Object> current=draft(null,null);when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        String document="""
+                {"schemaVersion":1,"templateCode":"TD-001","event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
+                "owner":{"config":{"type":"PAYLOAD","operand":"ownerId","cc":[{"type":"DEPT","departmentCode":"RETIRED_DEPT"}]}},
+                "dod":{"config":{}},"sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+        when(mapper.selectDepartmentIdByCode("RETIRED_DEPT")).thenReturn(null);
+
+        TodoException error=assertThrows(TodoException.class,()->service().updateDraft(new UpdateDraftCommand("bad-owner",9L,document),actor));
+
+        assertEquals("TODO_OWNER_DEPARTMENT_CODE_NOT_FOUND",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
     @Test void copyCanonicalVersionPreservesTheWholeDocumentAndSynchronizesProjections()

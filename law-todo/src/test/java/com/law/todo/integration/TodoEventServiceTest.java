@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.TodoAssignmentResolver;
+import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import org.springframework.dao.DuplicateKeyException;
@@ -135,6 +136,57 @@ class TodoEventServiceTest
         assertEquals(41L,candidate.getValue().get("candidateValue"));
     }
 
+    @Test void malformedCanonicalOwnerDefinitionNeverFallsBackToStaleLegacyProjection()
+    {
+        Map<String,Object> corrupted=new java.util.HashMap<>(rule());
+        corrupted.put("definition_json","{not-json");
+        corrupted.put("owner_rule_json","PAYLOAD:ownerId");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(corrupted));
+
+        TodoException error=org.junit.jupiter.api.Assertions.assertThrows(TodoException.class,
+                ()->new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()));
+
+        assertEquals("TODO_OWNER_RULE_RESOLUTION_FAILED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void malformedCompiledOwnerDefinitionNeverFallsBackToCanonicalOrLegacy()
+    {
+        Map<String,Object> corrupted=new java.util.HashMap<>(rule());
+        corrupted.put("compiled_json","{not-json");
+        corrupted.put("definition_json","""
+                {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},"dod":{"config":{}},"sla":{"config":{}},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        corrupted.put("owner_rule_json","PAYLOAD:ownerId");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(corrupted));
+
+        TodoException error=org.junit.jupiter.api.Assertions.assertThrows(TodoException.class,
+                ()->new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()));
+
+        assertEquals("TODO_OWNER_RULE_RESOLUTION_FAILED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void nestedStableOwnerReferencesFailClosedWhenRoleIsMissing()
+    {
+        Map<String,Object> typed=new java.util.HashMap<>(rule());
+        typed.put("definition_json","""
+                {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"PAYLOAD","operand":"ownerId","candidates":[{"type":"ROLE","roleKey":"retired_reviewer"}]}},
+                 "dod":{"config":{}},"sla":{"config":{}},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        typed.put("owner_rule_json","PAYLOAD:ownerId");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(typed));
+        when(mapper.selectRoleIdByKey("retired_reviewer")).thenReturn(null);
+
+        TodoException error=org.junit.jupiter.api.Assertions.assertThrows(TodoException.class,
+                ()->new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()));
+
+        assertEquals("TODO_OWNER_ROLE_KEY_NOT_FOUND",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
     @Test void createsTodoWhenNestedConditionTreeMatches()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
@@ -219,6 +271,7 @@ class TodoEventServiceTest
         Map<String,Object> version=new java.util.HashMap<>(rule());
         version.put("compiled_json","""
                 {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},
                  "routing":{"config":{"start":"review","nodes":[{"key":"review","type":"TASK","templateVersionId":22},{"key":"end","type":"END"}],
                  "edges":[{"key":"done","from":"review","to":"end"}]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """);

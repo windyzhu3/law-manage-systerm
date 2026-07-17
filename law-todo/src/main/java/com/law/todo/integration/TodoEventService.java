@@ -22,6 +22,7 @@ import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.application.TodoSlaService;
 import com.law.todo.application.TodoAssignmentResolver.Assignment;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.service.WorkingTimeCalculator;
 import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
@@ -104,40 +105,74 @@ public class TodoEventService
     /** Prefer the immutable compiled/canonical owner rule; scalar JSON is historical compatibility only. */
     private Assignment resolveAssignment(Map<String,Object> rule,TodoEvent event)
     {
-        String document=text(value(rule,"compiled_json","compiledJson"));
-        if(document==null||document.isBlank())document=text(value(rule,"definition_json","definitionJson"));
-        if(document!=null&&!document.isBlank())
-        {
-            try
-            {
-                TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
-                if(definition.owner()!=null)
-                {
-                    OwnerResolutionResult resolved=resolver.resolve(resolveStableOwnerReferences(definition.owner()),new OwnerResolutionContext(
-                            event.payload(),event.aggregateType(),event.aggregateId(),LocalDateTime.now()));
-                    if(resolved.ownerId()!=null)return new Assignment(resolved.ownerId(),null,null);
-                    if(!resolved.candidateUserIds().isEmpty())return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
-                }
-            }
-            catch(RuntimeException ignored)
-            {
-                // A historical corrupt snapshot still follows the legacy scalar resolver path below.
-            }
-        }
+        String compiled=text(value(rule,"compiled_json","compiledJson"));
+        String canonical=text(value(rule,"definition_json","definitionJson"));
+        if(compiled!=null&&!compiled.isBlank())
+            return resolveCanonicalAssignment(compiled,event);
+        if(canonical!=null&&!canonical.isBlank())
+            return resolveCanonicalAssignment(canonical,event);
         return resolver.resolve(text(value(rule,"owner_rule_json","ownerRuleJson")),event.payload());
     }
+
+    private Assignment resolveCanonicalAssignment(String document,TodoEvent event)
+    {
+        try
+        {
+            TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
+            if(definition.owner()==null)
+                throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical definition is missing its owner rule");
+            OwnerResolutionResult resolved=resolver.resolve(resolveStableOwnerReferences(definition.owner()),new OwnerResolutionContext(
+                    event.payload(),event.aggregateType(),event.aggregateId(),LocalDateTime.now()));
+            if(resolved.ownerId()!=null)return new Assignment(resolved.ownerId(),null,null);
+            if(!resolved.candidateUserIds().isEmpty())return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
+            return new Assignment(null,null,null);
+        }
+        catch(TodoException explicit)
+        {
+            throw explicit;
+        }
+        catch(RuntimeException failure)
+        {
+            throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical owner definition cannot be resolved");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
     private TodoDefinitionDocument.OwnerRule resolveStableOwnerReferences(TodoDefinitionDocument.OwnerRule owner)
     {
-        Map<String,Object> config=new LinkedHashMap<>(owner.config());String type=text(config.get("type"));
-        if("ROLE".equals(type)&&config.get("roleKey")!=null)
-        {
-            Long id=mapper.selectRoleIdByKey(String.valueOf(config.get("roleKey")));if(id!=null)config.put("operand",id);
-        }
-        if("DEPT".equals(type)&&config.get("departmentCode")!=null)
-        {
-            Long id=mapper.selectDepartmentIdByCode(String.valueOf(config.get("departmentCode")));if(id!=null)config.put("operand",id);
-        }
+        Object normalized=normalizeStableOwnerReferences(owner.config());
+        if(!(normalized instanceof Map<?,?> raw))
+            throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical owner rule must be an object");
+        Map<String,Object> config=new LinkedHashMap<>();raw.forEach((key,entry)->config.put(String.valueOf(key),entry));
         return new TodoDefinitionDocument.OwnerRule(config);
+    }
+
+    private Object normalizeStableOwnerReferences(Object value)
+    {
+        if(value instanceof java.util.Collection<?> entries)
+        {
+            List<Object> normalized=new ArrayList<>();for(Object entry:entries)normalized.add(normalizeStableOwnerReferences(entry));return normalized;
+        }
+        if(!(value instanceof Map<?,?> raw))return value;
+        Map<String,Object> config=new LinkedHashMap<>();raw.forEach((key,entry)->config.put(String.valueOf(key),entry));
+        Object roleKey=config.get("roleKey");
+        if(roleKey!=null&&!String.valueOf(roleKey).isBlank())
+        {
+            Long id=mapper.selectRoleIdByKey(String.valueOf(roleKey));
+            if(id==null)throw new TodoException("TODO_OWNER_ROLE_KEY_NOT_FOUND","Owner roleKey is unknown or disabled");
+            config.put("operand",id);
+        }
+        Object departmentCode=config.get("departmentCode");
+        if(departmentCode!=null&&!String.valueOf(departmentCode).isBlank())
+        {
+            Long id=mapper.selectDepartmentIdByCode(String.valueOf(departmentCode));
+            if(id==null)throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_NOT_FOUND","Owner departmentCode is unknown or disabled");
+            config.put("operand",id);
+        }
+        for(Map.Entry<String,Object> entry:new ArrayList<>(config.entrySet()))
+            if(entry.getValue() instanceof Map<?,?>||entry.getValue() instanceof java.util.Collection<?>)
+                config.put(entry.getKey(),normalizeStableOwnerReferences(entry.getValue()));
+        return config;
     }
     private void initializeRootRoute(TodoInstance todo)
     {

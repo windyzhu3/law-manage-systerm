@@ -25,6 +25,7 @@ export default {
   data() {
     return {
       form: hydrateDefinition(this.value),
+      expectedDefinitionJson: this.value.definition_json || this.value.definitionJson || null,
       rules: {
         'event.eventType': [{ required: true, message: '请选择触发事件' }],
         'sla.config.minutes': [{ required: true, type: 'number', min: 1, message: 'SLA 必须大于 0' }]
@@ -32,11 +33,11 @@ export default {
     }
   },
   computed: { preview() { return JSON.stringify(serializeDefinition(this.form), null, 2) } },
-  watch: { value: { deep: true, handler(next) { this.form = hydrateDefinition(next) } } },
+  watch: { value: { deep: true, handler(next) { this.form = hydrateDefinition(next); this.expectedDefinitionJson = next.definition_json || next.definitionJson || null } } },
   methods: {
     validate() {
       if (this.readonly) return Promise.reject(new Error('published definition is read-only'))
-      return new Promise((resolve, reject) => this.$refs.form.validate(ok => ok ? resolve(toDraftPayload(this.form)) : reject(new Error('invalid'))))
+      return new Promise((resolve, reject) => this.$refs.form.validate(ok => ok ? resolve(toDraftPayload(this.form, this.expectedDefinitionJson)) : reject(new Error('invalid'))))
     }
   }
 }

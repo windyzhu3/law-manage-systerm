@@ -20,13 +20,13 @@ public final class TodoDefinitionCommands
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
     public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
             String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson,
-            String definitionJson)
+            String definitionJson,String expectedDefinitionJson)
     {
         public UpdateDraftCommand(String actionId,Long versionId,String definitionJson)
-        { this(actionId,versionId,null,null,null,null,null,definitionJson); }
+        { this(actionId,versionId,null,null,null,null,null,definitionJson,null); }
         /** Compatibility constructor for callers that still send the legacy projections. */
         public UpdateDraftCommand(String actionId,Long versionId,String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson)
-        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,null); }
+        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,null,null); }
     }
     public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId) { }
     public record SimulateDefinitionCommand(

@@ -36,6 +36,9 @@ function run() {
   assert.deepStrictEqual(Object.keys(serialized).sort(), ['acceptanceRefs', 'autoActions', 'decisionRefs', 'dod', 'event', 'owner', 'routing', 'schemaVersion', 'sla', 'templateCode', 'ui'], 'serializer must emit only canonical definition sections')
   const payload = toDraftPayload(hydrated)
   assert.deepStrictEqual(normalize(JSON.parse(payload.definitionJson)), normalize(fixture), 'draft payload must persist the complete canonical definition document')
+  assert.strictEqual(payload.expectedDefinitionJson, null, 'codec leaves source token ownership to the loaded form row')
+  const tokenPayload = toDraftPayload(hydrated, JSON.stringify(fixture))
+  assert.strictEqual(tokenPayload.expectedDefinitionJson, JSON.stringify(fixture), 'draft payload must preserve the loaded source token for optimistic concurrency')
 
   const legacy = hydrateDefinition({
     template_code: 'CASE_ASSIGN', event_type: 'CASE_CREATED', payload_version: 1,
@@ -63,7 +66,9 @@ function run() {
   assert.ok(ownerBuilder.includes('listRole') && ownerBuilder.includes('listDept'), 'owner controls must be fed by repository role and department catalogs')
   assert.ok(!/placeholder="[^"\n]*(ID|id)/.test(ownerBuilder), 'owner controls must not ask administrators to type raw IDs')
   const eventBuilder = fs.readFileSync('src/views/todo/config/components/EventConditionBuilder.vue', 'utf8')
-  assert.ok(eventBuilder.includes('event_type') && eventBuilder.includes('payload_version'), 'event selector values must use stable catalog codes and versions')
+  assert.ok(eventBuilder.includes('请在触发规则页编辑') && eventBuilder.includes('Task14'), 'event builder must direct edits to the Task14 trigger-rules resource')
+  assert.ok(!eventBuilder.includes("$emit('input'"), 'Task13 event builder must never mutate trigger rules')
+  assert.ok((eventBuilder.match(/disabled/g) || []).length >= 3, 'Task13 event inputs must be display-only')
   console.log('todo definition round-trip contract ok')
 }
 
