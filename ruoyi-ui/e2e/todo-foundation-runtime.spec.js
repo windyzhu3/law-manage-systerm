@@ -45,6 +45,15 @@ test('business summary clears stale data and does not request an invalid id', as
   await expect(page.getByRole('button', { name: '查看全部' })).toBeDisabled()
 })
 
+test('a delayed A response cannot overwrite a newer B business summary', async ({ page }) => {
+  const state = await setupBusinessTodoRuntime(page)
+  await page.goto('/todo/race/a'); await expect.poll(() => state.summaryRequests).toContain('CASE/201'); await page.goto('/todo/race/b')
+  await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
+  await page.waitForTimeout(400)
+  await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
+  expect(state.summaryRequests).toEqual(expect.arrayContaining(['CASE/201', 'CASE/202']))
+})
+
 test('business drawer sends canonical return and transfer actions', async ({ page }) => {
   const state = await setupBusinessTodoRuntime(page)
   await page.goto('/todo/runtime/lead'); await page.getByRole('button', { name: '查看全部' }).click()
@@ -86,7 +95,8 @@ async function setupBusinessTodoRuntime(page, includeInvalid = false, failComple
     if (path === '/getRouters') return json(route, routes(includeInvalid))
     if (path.startsWith('/todo/business/') && path.endsWith('/summary')) {
       state.summaryRequests.push(path.replace('/todo/business/', '').replace('/summary', ''))
-      return json(route, { activeCount: 1, overdueCount: 0, ownerIds: [1], nearestDueAt: '2026-08-01' })
+      if (path.includes('/CASE/201/')) await new Promise(resolve => setTimeout(resolve, 300))
+      return json(route, { activeCount: path.includes('/CASE/202/') ? 2 : 1, overdueCount: 0, ownerIds: [1], nearestDueAt: '2026-08-01' })
     }
     if (path.startsWith('/todo/business/') && path.endsWith('/list')) {
       state.listRequests.push(path.replace('/todo/business/', '').replace('/list', ''))
@@ -106,14 +116,24 @@ async function setupBusinessTodoRuntime(page, includeInvalid = false, failComple
 }
 
 function routes(includeInvalid) {
+  const drawer = {
+    CASE: ['case/components/CaseDetailDrawer', { visible: true, caseData: { caseId: 101, caseNo: 'CS-101' } }],
+    CONTRACT: ['contract/components/ContractDetailDrawer', { visible: true, contract: { contractId: 102, contractNo: 'CT-102' } }],
+    MATTER: ['matter/components/MatterDetailDrawer', { visible: true, matter: { caseId: 103, caseNo: 'MT-103' } }],
+    LEAD: ['lead/components/LeadDetailDrawer', { value: true, lead: { leadId: 104, leadNo: 'LD-104' } }],
+    CUSTOMER: ['customer/components/CustomerDetailDrawer', { visible: true, customer: { customerId: 105, customerNo: 'CU-105' } }],
+    FINANCE: ['finance/components/CaseFinanceDrawer', { visible: true, caseId: 106 }]
+  }
   const children = domains.map(domain => ({
     path: `todo/runtime/${domain.type.toLowerCase()}`,
-    component: 'todo/components/BusinessTodoSummary',
+    component: drawer[domain.type][0],
     name: `TodoRuntime${domain.type}`,
-    props: { businessType: domain.type, businessId: domain.id, businessNo: domain.no },
+    props: drawer[domain.type][1],
     meta: { title: `Todo ${domain.type}` }
   }))
   if (includeInvalid) children.push({ path: 'todo/runtime/invalid', component: 'todo/components/BusinessTodoSummary', name: 'TodoRuntimeInvalid', props: { businessType: 'LEAD', businessId: 0, businessNo: 'LD-0' }, meta: { title: 'Todo Invalid' } })
+  children.push({ path: 'todo/race/a', component: 'todo/components/BusinessTodoSummary', name: 'TodoRaceA', props: { businessType: 'CASE', businessId: 201, businessNo: 'CS-A' }, meta: { title: 'Todo Race A' } })
+  children.push({ path: 'todo/race/b', component: 'todo/components/BusinessTodoSummary', name: 'TodoRaceB', props: { businessType: 'CASE', businessId: 202, businessNo: 'CS-B' }, meta: { title: 'Todo Race B' } })
   return [{ path: '/', component: 'Layout', children }]
 }
 
