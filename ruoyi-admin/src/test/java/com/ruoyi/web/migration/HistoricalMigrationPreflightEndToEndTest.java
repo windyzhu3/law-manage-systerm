@@ -339,6 +339,11 @@ class HistoricalMigrationPreflightEndToEndTest
         assertFalse(csv.contains("G04-E2E-DELETED-001"));
 
         JSONObject manifest=JSON.parseObject(entries.get("manifest.json"));
+        assertEquals(List.of("schemaVersion","gateCode","fileName","rowCount","csvSha256","generatedAt",
+                "classificationState","allowedBusinessLines"),new ArrayList<>(manifest.keySet()));
+        assertEquals(1,manifest.getIntValue("schemaVersion"));
+        assertEquals("G-04",manifest.getString("gateCode"));
+        assertEquals("historical-case-exceptions.csv",manifest.getString("fileName"));
         assertEquals(GENERATED_AT.toString(),manifest.getString("generatedAt"));
         assertEquals(candidates.size(),manifest.getLongValue("rowCount"));
         assertEquals(reportedSha,manifest.getString("csvSha256"));

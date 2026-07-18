@@ -130,9 +130,12 @@ public class HistoricalMigrationExportArchiveWriter
     private static byte[] manifest(long rows,String csvSha256,Instant generatedAt)
     {
         Map<String,Object> manifest=new LinkedHashMap<>();
-        manifest.put("generatedAt",generatedAt.toString());
+        manifest.put("schemaVersion",1);
+        manifest.put("gateCode","G-04");
+        manifest.put("fileName","historical-case-exceptions.csv");
         manifest.put("rowCount",rows);
         manifest.put("csvSha256",csvSha256);
+        manifest.put("generatedAt",generatedAt.toString());
         manifest.put("classificationState","UNREVIEWED");
         manifest.put("allowedBusinessLines",ALLOWED_LINES);
         return JSON.toJSONBytes(manifest);

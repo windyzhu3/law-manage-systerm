@@ -57,7 +57,14 @@ class HistoricalMigrationExportArchiveWriterTest
         assertTrue(csv.contains("\r\n"));
         assertFalse(csv.contains("NON_LITIGATION"));
         assertEquals(sha256(csvBytes),artifact.csvSha256());
+        assertEquals(List.of("schemaVersion","gateCode","fileName","rowCount","csvSha256","generatedAt",
+                "classificationState","allowedBusinessLines"),new ArrayList<>(manifest.keySet()));
+        assertEquals(1,manifest.getIntValue("schemaVersion"));
+        assertEquals("G-04",manifest.getString("gateCode"));
+        assertEquals("historical-case-exceptions.csv",manifest.getString("fileName"));
+        assertEquals(2,manifest.getLongValue("rowCount"));
         assertEquals(artifact.csvSha256(),manifest.getString("csvSha256"));
+        assertEquals(GENERATED_AT.toString(),manifest.getString("generatedAt"));
         assertEquals("UNREVIEWED",manifest.getString("classificationState"));
         assertEquals(List.of("NON_LITIGATION","COMPREHENSIVE","EXECUTION"),manifest.getList("allowedBusinessLines",String.class));
 
