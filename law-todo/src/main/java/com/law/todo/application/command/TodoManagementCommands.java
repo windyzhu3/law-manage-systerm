@@ -24,7 +24,11 @@ public final class TodoManagementCommands
         @NotNull @Positive Long templateVersionId,
         @NotBlank String businessType,
         @Pattern(regexp = "Y|N") String enabled,
-        String conditionJson) { }
+        String conditionJson,
+        @Min(1) Integer payloadVersion) {
+        public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson)
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,1);}
+    }
 
     public record PublishCommand(
         @NotNull @Min(1) Integer versionNo,

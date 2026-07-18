@@ -90,6 +90,33 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test
+    void decisionImpactReadModelRetainsUnreferencedAndDraftReferences() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            int start=xml.indexOf("<select id=\"selectDecisions\"");int end=xml.indexOf("</select>",start);
+            String select=xml.substring(start,end);
+            assertTrue(select.contains("left join todo_template_version"));
+            assertTrue(select.contains("v.status in ('DRAFT','BLOCKED','PUBLISHED')"));
+            assertTrue(select.contains("JSON_SEARCH") && select.contains("group_concat(distinct t.template_code"));
+            assertTrue(!select.contains("where v.status"));
+        }
+    }
+
+    @Test
+    void triggerRulesPersistAndReadPayloadVersion() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(xml.contains("payload_version,template_id"));
+            assertTrue(xml.contains("payload_version=coalesce(#{payloadVersion},1)"));
+            assertTrue(xml.contains("select r.*,t.template_code"));
+        }
+    }
+
     @Test void notificationAndThresholdWritesCarryRaceSafeIdentity() throws Exception
     {
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))

@@ -8,7 +8,7 @@ export function copyDefinitionVersion(id, version, data) { return request({ url:
 export function updateDefinitionDraft(versionId, data) { return request({ url: `/todo/template/version/${versionId}`, method: 'put', data }) }
 export function publishDefinition(versionId, data) { return request({ url: `/todo/template/version/${versionId}/publish`, method: 'post', data }) }
 export function listTriggerRules() { return request({ url: '/todo/template/trigger', method: 'get' }) }
-export function saveTriggerRule(data) { return request({ url: '/todo/template/trigger', method: 'post', data }) }
+export function saveTriggerRule(data) { return request({ url: '/todo/template/trigger', method: data.triggerRuleId ? 'put' : 'post', data }) }
 export function listWorkCalendars() { return request({ url: '/todo/calendar', method: 'get' }) }
 export function saveWorkCalendar(data) { return request({ url: '/todo/calendar', method: data.calendarId ? 'put' : 'post', data }) }
 export function preflightDefinition(versionId) { return request({ url: `/todo/definitions/version/${versionId}/preflight`, method: 'post' }) }

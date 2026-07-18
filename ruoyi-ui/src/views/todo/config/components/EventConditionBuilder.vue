@@ -1,23 +1,5 @@
-<template>
-  <div class="definition-builder">
-    <el-alert title="触发事件和条件由触发规则页维护；请在触发规则页编辑（Task14 resource）。" type="info" :closable="false" />
-    <el-form-item label="触发事件">
-      <el-input :value="model.eventType" disabled />
-      <el-input :value="String(model.payloadVersion)" disabled />
-    </el-form-item>
-    <el-form-item label="事件条件">
-      <el-input :value="conditionText" type="textarea" :rows="3" disabled />
-    </el-form-item>
-  </div>
-</template>
+<template><div class="definition-builder"><el-alert v-if="!triggerEditor" title="触发事件和条件由触发规则页维护" type="info" :closable="false" /><el-form-item label="触发事件"><el-input :value="model.eventType" :disabled="!triggerEditor" @input="update('eventType', $event)" /><el-input :value="String(model.payloadVersion)" :disabled="!triggerEditor" @input="update('payloadVersion', Number($event))" /></el-form-item><el-form-item label="事件条件"><el-input :value="conditionText" type="textarea" :rows="3" :disabled="!triggerEditor" @input="updateCondition" /></el-form-item></div></template>
 <script>
-export default {
-  name: 'EventConditionBuilder',
-  props: { value: { type: Object, default: () => ({}) } },
-  computed: {
-    model() { return { eventType: '', payloadVersion: 1, condition: {}, ...this.value } },
-    conditionText() { return JSON.stringify(this.model.condition || {}) }
-  }
-}
+export default { name: 'EventConditionBuilder', props: { value: { type: Object, default: () => ({}) }, triggerEditor: { type: Boolean, default: false } }, computed: { model() { return { eventType: '', payloadVersion: 1, condition: {}, ...this.value } }, conditionText() { return JSON.stringify(this.model.condition || {}) } }, methods: { update(key, value) { if (this.triggerEditor) this.$emit('input', { ...this.model, [key]: value }) }, updateCondition(value) { if (!this.triggerEditor) return; try { this.$emit('input', { ...this.model, condition: JSON.parse(value || '{}') }) } catch (_) {} } } }
 </script>
 <style scoped>.definition-builder .el-input{margin-right:8px;margin-bottom:8px;max-width:360px}</style>

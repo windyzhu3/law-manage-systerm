@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,6 +78,16 @@ class TodoDecisionManagementServiceTest
 
         assertEquals("TODO_DECISION_VERSION_CONFLICT",error.getBusinessCode());
         verify(mapper,never()).completeDefinitionAction(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test void listExposesServerComputedImpactsIncludingNoReference()
+    {
+        Map<String,Object> none=new HashMap<>(decision(1L,"D-001","OPEN",0));
+        Map<String,Object> draftAndPublished=new HashMap<>(decision(2L,"D-002","OPEN",0));draftAndPublished.put("impacted_template_codes","CASE_ASSIGN,LEAD_CONTACT");
+        when(mapper.selectDecisions()).thenReturn(List.of(draftAndPublished,none));
+        var values=service().list();
+        assertEquals(List.of(),values.get(0).impactedTemplateCodes());
+        assertEquals(List.of("CASE_ASSIGN","LEAD_CONTACT"),values.get(1).impactedTemplateCodes());
     }
 
     private TodoDecisionManagementService service(){return new TodoDecisionManagementService(mapper);}
