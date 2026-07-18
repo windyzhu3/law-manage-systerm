@@ -129,6 +129,11 @@ async function setupConfig(page, options = {}) {
       if (options.preflightFailure) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 500, msg: 'preflight failed', data: null }) })
       return json(route, state.historicalMigrationPreflight)
     }
+    if (path === '/todo/foundation-migration/exception-export' && options.exportFailure) return route.fulfill({
+      status: 200,
+      contentType: 'application/json;charset=UTF-8',
+      body: JSON.stringify({ code: 500, businessCode: 'TODO_MIGRATION_EXPORT_FAILED', msg: 'Historical migration export could not be generated' })
+    })
     if (path === '/todo/foundation-migration/exception-export') return route.fulfill({
       status: 200,
       contentType: 'application/zip',
@@ -430,6 +435,24 @@ test('historical migration preflight failure preserves the existing readiness re
   await expect(pane.getByText('CASE_BUSINESS_LINE_SCHEMA', { exact: true })).toBeVisible()
   await expect(pane.getByText('HISTORICAL_CASE_DEFAULT', { exact: true })).toBeVisible()
   await expect(pane.getByText('G-04 历史迁移门禁未就绪，不能批准准入证据', { exact: true })).toBeVisible()
+})
+
+test('historical migration JSON blob export failure stays local and produces no evidence download', async ({ page }) => {
+  await setupConfig(page, { exportFailure: true })
+  let downloads = 0
+  page.on('download', () => { downloads++ })
+  await page.getByRole('tab', { name: '历史迁移' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+
+  await pane.getByRole('button', { name: '导出异常候选清单' }).click()
+
+  await expect(pane.getByText('异常候选清单导出失败（TODO_MIGRATION_EXPORT_FAILED）：Historical migration export could not be generated', { exact: true })).toBeVisible()
+  await expect(pane.getByText('异常候选案件')).toBeVisible()
+  await expect(pane.locator('.preflight-groups').getByText('LITIGATION', { exact: true })).toBeVisible()
+  await expect(pane.getByText('CASE_BUSINESS_LINE_SCHEMA', { exact: true })).toBeVisible()
+  await expect(pane.getByText('G-04 历史迁移门禁未就绪，不能批准准入证据', { exact: true })).toBeVisible()
+  await expect(pane.getByText('UNREVIEWED', { exact: true })).toHaveCount(0)
+  expect(downloads).toBe(0)
 })
 
 test('historical migration inventory hides evidence export without permission', async ({ page }) => {

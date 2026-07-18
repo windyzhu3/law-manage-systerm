@@ -9,6 +9,7 @@
         </div>
         <el-button v-hasPermi="['todo:admission:export']" type="primary" size="small" :loading="exporting" @click="exportExceptions">导出异常候选清单</el-button>
       </div>
+      <el-alert v-if="exportError" :title="exportError" type="error" :closable="false" show-icon />
       <el-alert v-if="preflightError" :title="preflightError" type="error" :closable="false" show-icon />
       <template v-else>
         <div class="preflight-summary-grid">
@@ -63,7 +64,7 @@ export default {
   name: 'HistoricalMigrationReadiness',
   props: { report: { type: Object, default: () => ({ requirements: [] }) } },
   data() {
-    return { preflight: { groups: [] }, preflightLoading: false, preflightError: '', exporting: false, lastExport: null }
+    return { preflight: { groups: [] }, preflightLoading: false, preflightError: '', exporting: false, exportError: '', lastExport: null }
   },
   mounted() { this.loadPreflight() },
   methods: {
@@ -78,9 +79,14 @@ export default {
     },
     exportExceptions() {
       this.exporting = true
+      this.exportError = ''
       return exportHistoricalMigrationExceptions().then(result => {
         saveAs(result.blob, 'g04-historical-case-preflight.zip')
         this.lastExport = { rowCount: result.rowCount, csvSha256: result.csvSha256, classificationState: 'UNREVIEWED' }
+      }).catch(error => {
+        const code = error && error.businessCode ? `（${error.businessCode}）` : ''
+        const message = error && error.message ? error.message : 'Historical migration export could not be generated'
+        this.exportError = `异常候选清单导出失败${code}：${message}`
       }).finally(() => { this.exporting = false })
     },
     sourceLabel(status) { return ({ CONFIRMED: '仓库已确认', NEEDS_DECISION: '待业务决策', NEEDS_EVIDENCE: '待迁移证据' })[status] || status },

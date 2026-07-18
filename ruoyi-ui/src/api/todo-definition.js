@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import { unwrapHistoricalMigrationExportResponse } from './historical-migration-export-response'
 export function listDefinitions() { return request({ url: '/todo/template', method: 'get' }) }
 export function createDefinition(data) { return request({ url: '/todo/template', method: 'post', data }) }
 export function updateDefinition(data) { return request({ url: '/todo/template', method: 'put', data }) }
@@ -46,7 +47,7 @@ export function exportHistoricalMigrationExceptions(gateCode = 'G-04') {
   return request({
     url: '/todo/foundation-migration/exception-export', method: 'get', params: { gateCode },
     responseType: 'blob', returnFullResponse: true
-  }).then(response => ({
+  }).then(unwrapHistoricalMigrationExportResponse).then(response => ({
     blob: response.data,
     rowCount: Number(response.headers['x-exception-row-count'] || 0),
     csvSha256: response.headers['x-exception-csv-sha256'] || ''
