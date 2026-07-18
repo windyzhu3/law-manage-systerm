@@ -1,0 +1,132 @@
+{
+  "templateCode": "TD-008",
+  "templateName": "合同生成待办",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-008",
+    "event": {
+      "eventType": "QUOTE_ACCEPTED_CONFLICT_CLEARED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "templateId",
+          "contractFields",
+          "supplementaryTerms"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-008",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "templateId",
+            "type": "dict",
+            "label": "合同模板"
+          },
+          {
+            "key": "contractFields",
+            "type": "textarea",
+            "label": "合同字段"
+          },
+          {
+            "key": "supplementaryTerms",
+            "type": "textarea",
+            "label": "补充约定"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-008-OWNER",
+      "AT-TD-008-SLA",
+      "AT-TD-008-DOD",
+      "AT-TD-008-ROUTE",
+      "AT-TD-008-HANDLER",
+      "AT-TD-008-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-008",
+    "transitions": [
+      {
+        "on": "GENERATED",
+        "to": [
+          "TD-009"
+        ],
+        "businessAction": "CREATE_CONTRACT_DRAFT"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-008_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "QUOTE_ACCEPTED_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少报价接受且冲突通过事件"
+    },
+    {
+      "code": "CONTRACT_GENERATION_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "现有合同模块无按模板自动合成处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "QUOTE_ACCEPTED_EVENT",
+      "reason": "缺少报价接受且冲突通过事件"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CONTRACT_GENERATION_HANDLER",
+      "reason": "现有合同模块无按模板自动合成处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-008-OWNER",
+    "AT-TD-008-SLA",
+    "AT-TD-008-DOD",
+    "AT-TD-008-ROUTE",
+    "AT-TD-008-HANDLER",
+    "AT-TD-008-UI"
+  ]
+}

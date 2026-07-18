@@ -1,0 +1,242 @@
+{
+  "templateCode": "TD-001",
+  "templateName": "首联待办",
+  "stage": "阶段1-2",
+  "businessType": "LEAD",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-001",
+    "event": {
+      "eventType": "LEAD_ASSIGNED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "contactResult",
+          "contactedAt"
+        ],
+        "materials": [
+          {
+            "type": "CONTACT_PROOF",
+            "minCount": 1,
+            "label": "通话记录、录音或人工补录凭证"
+          }
+        ],
+        "conditionalRequired": [
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "VALID"
+            },
+            "field": "name"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "VALID"
+            },
+            "field": "city"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "VALID"
+            },
+            "field": "demand"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "VALID"
+            },
+            "field": "visited"
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "minutes": 30,
+        "thresholds": [
+          80,
+          100,
+          150
+        ]
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-001",
+        "businessType": "LEAD",
+        "fields": [
+          {
+            "key": "contactResult",
+            "type": "dict",
+            "label": "首联结果"
+          },
+          {
+            "key": "contactedAt",
+            "type": "datetime",
+            "label": "联系时间"
+          },
+          {
+            "key": "name",
+            "type": "text",
+            "label": "姓名"
+          },
+          {
+            "key": "city",
+            "type": "text",
+            "label": "城市"
+          },
+          {
+            "key": "demand",
+            "type": "textarea",
+            "label": "诉求"
+          },
+          {
+            "key": "visited",
+            "type": "dict",
+            "label": "是否到所"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [
+      {
+        "config": {
+          "ruleKey": "td001-sla-80",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_80",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      },
+      {
+        "config": {
+          "ruleKey": "td001-sla-100",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_100",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      },
+      {
+        "config": {
+          "ruleKey": "td001-sla-150",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_150",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      }
+    ],
+    "decisionRefs": [
+      "Q-006"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-001-OWNER",
+      "AT-TD-001-SLA",
+      "AT-TD-001-DOD",
+      "AT-TD-001-ROUTE",
+      "AT-TD-001-HANDLER",
+      "AT-TD-001-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-001",
+    "transitions": [
+      {
+        "on": "VALID",
+        "to": [
+          "TD-004"
+        ],
+        "businessAction": "WRITE_LEAD_VALID"
+      },
+      {
+        "on": "SUSPECT_INVALID",
+        "to": [
+          "TD-002"
+        ],
+        "businessAction": "MARK_SUSPECT_INVALID"
+      },
+      {
+        "on": "UNREACHABLE",
+        "to": [
+          "TD-003"
+        ],
+        "businessAction": "START_RETRY"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-001_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "LEAD_FIRST_CONTACT",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "TD001_HANDLER_ALIAS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有LEAD_FIRST_CONTACT处理器未绑定TD-001"
+    },
+    {
+      "code": "OUTBOUND_CALL_ADAPTER",
+      "repositoryStatus": "MISSING",
+      "reason": "外呼/APP证据接入方案未确认"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-006",
+      "reason": "外呼软件是否确定接入？APP直连ERP是否为P0还是P1？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "TD001_HANDLER_ALIAS",
+      "reason": "现有LEAD_FIRST_CONTACT处理器未绑定TD-001"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "OUTBOUND_CALL_ADAPTER",
+      "reason": "外呼/APP证据接入方案未确认"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-001-OWNER",
+    "AT-TD-001-SLA",
+    "AT-TD-001-DOD",
+    "AT-TD-001-ROUTE",
+    "AT-TD-001-HANDLER",
+    "AT-TD-001-UI"
+  ]
+}

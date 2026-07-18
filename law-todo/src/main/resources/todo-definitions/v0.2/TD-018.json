@@ -1,0 +1,147 @@
+{
+  "templateCode": "TD-018",
+  "templateName": "非诉成果交付待办",
+  "stage": "非诉流程",
+  "businessType": "NON_LITIGATION",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-018",
+    "event": {
+      "eventType": "NON_LITIGATION_WORK_COMPLETED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "assigneeId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "lawyer"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "deliveryResult",
+          "signedAt"
+        ],
+        "materials": [
+          {
+            "type": "NON_LITIGATION_DELIVERABLE",
+            "minCount": 1
+          },
+          {
+            "type": "CLIENT_RECEIPT",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "NON_LITIGATION_DELIVERY"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-018",
+        "businessType": "NON_LITIGATION",
+        "fields": [
+          {
+            "key": "deliveryResult",
+            "type": "dict",
+            "label": "交付结果"
+          },
+          {
+            "key": "signedAt",
+            "type": "datetime",
+            "label": "签收时间"
+          },
+          {
+            "key": "deliveryRemark",
+            "type": "textarea",
+            "label": "交付说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-002"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-018-OWNER",
+      "AT-TD-018-SLA",
+      "AT-TD-018-DOD",
+      "AT-TD-018-ROUTE",
+      "AT-TD-018-HANDLER",
+      "AT-TD-018-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-018",
+    "transitions": [
+      {
+        "on": "SIGNED",
+        "to": [
+          "END"
+        ],
+        "businessAction": "CLOSE_AND_CALCULATE_PERFORMANCE"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-018_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "NON_LITIGATION_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无非诉成果、签收和直接结案表"
+    },
+    {
+      "code": "NON_LITIGATION_DELIVERY_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少成果交付、留存、结案和绩效处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-002",
+      "reason": "非诉业务是否完全不进入档案管理员归档？是否仍需电子材料留存？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "NON_LITIGATION_DOMAIN",
+      "reason": "仓库无非诉成果、签收和直接结案表"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "NON_LITIGATION_DELIVERY_HANDLER",
+      "reason": "缺少成果交付、留存、结案和绩效处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-018-OWNER",
+    "AT-TD-018-SLA",
+    "AT-TD-018-DOD",
+    "AT-TD-018-ROUTE",
+    "AT-TD-018-HANDLER",
+    "AT-TD-018-UI"
+  ]
+}

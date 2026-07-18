@@ -1,0 +1,146 @@
+{
+  "templateCode": "TD-005",
+  "templateName": "无进展/失联回公海处置",
+  "stage": "阶段3",
+  "businessType": "CUSTOMER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-005",
+    "event": {
+      "eventType": "CUSTOMER_PROGRESS_STALE",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "SUPERVISOR",
+        "sourceField": "ownerId",
+        "levels": 1,
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "invalidLevel",
+          "reason"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "policyCode": "CUSTOMER_STALE_RETURN_POOL"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-005",
+        "businessType": "CUSTOMER",
+        "fields": [
+          {
+            "key": "invalidLevel",
+            "type": "dict",
+            "label": "无效客户分级"
+          },
+          {
+            "key": "reason",
+            "type": "textarea",
+            "label": "处置原因"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [
+      {
+        "config": {
+          "ruleKey": "td005-return-pool",
+          "actionType": "RETURN_POOL",
+          "capability": "RETURN_POOL",
+          "triggerAt": "DUE",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      }
+    ],
+    "decisionRefs": [
+      "Q-008"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-005-OWNER",
+      "AT-TD-005-SLA",
+      "AT-TD-005-DOD",
+      "AT-TD-005-ROUTE",
+      "AT-TD-005-HANDLER",
+      "AT-TD-005-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-005",
+    "transitions": [
+      {
+        "on": "COMPLETE",
+        "to": [
+          "END"
+        ],
+        "businessAction": "TAG_AND_RETURN_POOL"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-005_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "CUSTOMER_STALE_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少30天无进展/失联事件生产者"
+    },
+    {
+      "code": "CUSTOMER_RETURN_POOL_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少客户分级并回公海处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-008",
+      "reason": "无效线索/客户分级标签的等级和枚举值如何定义？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CUSTOMER_STALE_EVENT",
+      "reason": "缺少30天无进展/失联事件生产者"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CUSTOMER_RETURN_POOL_HANDLER",
+      "reason": "缺少客户分级并回公海处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-005-OWNER",
+    "AT-TD-005-SLA",
+    "AT-TD-005-DOD",
+    "AT-TD-005-ROUTE",
+    "AT-TD-005-HANDLER",
+    "AT-TD-005-UI"
+  ]
+}

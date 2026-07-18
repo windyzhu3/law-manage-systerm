@@ -22,6 +22,7 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.LegacyDefinitionAdapter;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
+import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler.CompilationContext;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
@@ -318,12 +319,20 @@ public class TodoDefinitionService
             return repeated;
         Map<String, Object> current = requireVersion(command.versionId());
         requireDraft(current);
+        PreflightResult preflight = null;
+        if (isPrdBlocked(current))
+        {
+            preflight = preflight(command.versionId(), true);
+            if (!preflight.publishable())
+                throw new PreflightFailedException();
+        }
         validate(text(value(current, "owner_rule_json", "ownerRuleJson")),
                 text(value(current, "dod_rule_json", "dodRuleJson")),
                 text(value(current, "sla_rule_json", "slaRuleJson")),
                 text(value(current, "next_rule_json", "nextRuleJson")),
                 text(value(current, "ui_schema_json", "uiSchemaJson")));
-        PreflightResult preflight = preflight(command.versionId(), true);
+        if (preflight == null)
+            preflight = preflight(command.versionId(), true);
         if (!preflight.publishable())
             throw new PreflightFailedException();
         claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,
@@ -346,13 +355,16 @@ public class TodoDefinitionService
         Map<String, Object> current = requireVersion(versionId);
         TodoDefinitionDocument definition = definition(current);
         validateDefinitionStructure(definition);
-        validateStableOwnerReferences(definition.owner().config());
+        boolean prdBlocked = isPrdBlocked(current);
+        if (!prdBlocked)
+            validateStableOwnerReferences(definition.owner().config());
         CompilationContext context = new CompilationContext(versionId, guardedPublishPreflight, id -> {
             Map<String, Object> target = mapper.selectTemplateVersionById(id);
             return target == null || target.isEmpty() ? null
                     : new TemplateVersion(id, text(value(target, "status", "status")));
         });
-        DefinitionValidationReport report = compiler.compile(definition, context);
+        DefinitionValidationReport report = applyPrdCatalogueGate(compiler.compile(definition, context), current,
+                prdBlocked);
         Map<String, Object> persisted = new HashMap<>();
         persisted.put("versionId", versionId);
         persisted.put("definitionSchemaVersion", definition.schemaVersion());
@@ -369,6 +381,29 @@ public class TodoDefinitionService
         if (mapper.updateDefinitionCompilation(persisted) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Definition changed during preflight");
         return new PreflightResult(versionId, report);
+    }
+
+    private DefinitionValidationReport applyPrdCatalogueGate(DefinitionValidationReport report,
+            Map<String, Object> current, boolean blocked)
+    {
+        if (!blocked)
+            return report;
+        List<ValidationIssue> errors = new java.util.ArrayList<>(report.errors());
+        String blockers = text(value(current, "prd_blockers_json", "prdBlockersJson"));
+        String message = "PRD template is BLOCKED by its definition catalogue";
+        if (blockers != null && !blockers.isBlank())
+            message += ": " + blockers;
+        errors.add(new ValidationIssue("TODO_PRD_TEMPLATE_BLOCKED", "productionState", message));
+        return new DefinitionValidationReport(errors, report.warnings(), report.compiledJson(),
+                report.definitionHash());
+    }
+
+    private boolean isPrdBlocked(Map<String, Object> version)
+    {
+        return "BLOCKED".equalsIgnoreCase(
+                text(value(version, "prd_foundation_state", "prdFoundationState")))
+                || "BLOCKED".equalsIgnoreCase(
+                        text(value(version, "prd_production_state", "prdProductionState")));
     }
 
     public record PreflightResult(long versionId, DefinitionValidationReport report)

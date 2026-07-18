@@ -1,0 +1,170 @@
+{
+  "templateCode": "TD-003",
+  "templateName": "无法联系重试",
+  "stage": "阶段1-2",
+  "businessType": "LEAD",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-003",
+    "event": {
+      "eventType": "LEAD_FIRST_CONTACT_UNREACHABLE",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "attemptStage",
+          "attemptCount",
+          "contactResult"
+        ],
+        "materials": [
+          {
+            "type": "CONTACT_PROOF",
+            "minCount": 1,
+            "label": "每次拨号记录"
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "schedule": [
+          "T0",
+          "T+1_AM_NOON_PM",
+          "T+2_AM_NOON_PM"
+        ],
+        "configuredBy": "Q-007"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-003",
+        "businessType": "LEAD",
+        "fields": [
+          {
+            "key": "attemptStage",
+            "type": "dict",
+            "label": "重试阶段"
+          },
+          {
+            "key": "attemptCount",
+            "type": "number",
+            "label": "拨号次数"
+          },
+          {
+            "key": "contactResult",
+            "type": "dict",
+            "label": "联系结果"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-007",
+      "Q-008"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-003-OWNER",
+      "AT-TD-003-SLA",
+      "AT-TD-003-DOD",
+      "AT-TD-003-ROUTE",
+      "AT-TD-003-HANDLER",
+      "AT-TD-003-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-003",
+    "transitions": [
+      {
+        "on": "CONNECTED",
+        "to": [
+          "TD-004"
+        ],
+        "businessAction": "WRITE_LEAD_VALID"
+      },
+      {
+        "on": "NEXT_WINDOW",
+        "to": [
+          "TD-003"
+        ],
+        "businessAction": "SCHEDULE_NEXT_RETRY"
+      },
+      {
+        "on": "EXHAUSTED",
+        "to": [
+          "END"
+        ],
+        "businessAction": "TAG_AND_RETURN_POOL"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-003_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "LEAD_RETRY_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少无法联系事件生产者"
+    },
+    {
+      "code": "LEAD_RETRY_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少T0/T+1/T+2状态及回公海处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-007",
+      "reason": "T0拨号次数自定义的默认策略是什么？是否按渠道/业务类型/销售组配置？"
+    },
+    {
+      "type": "DECISION",
+      "ref": "Q-008",
+      "reason": "无效线索/客户分级标签的等级和枚举值如何定义？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "LEAD_RETRY_EVENT",
+      "reason": "缺少无法联系事件生产者"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "LEAD_RETRY_HANDLER",
+      "reason": "缺少T0/T+1/T+2状态及回公海处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-003-OWNER",
+    "AT-TD-003-SLA",
+    "AT-TD-003-DOD",
+    "AT-TD-003-ROUTE",
+    "AT-TD-003-HANDLER",
+    "AT-TD-003-UI"
+  ]
+}

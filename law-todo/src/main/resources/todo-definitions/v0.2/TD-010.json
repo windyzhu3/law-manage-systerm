@@ -1,0 +1,166 @@
+{
+  "templateCode": "TD-010",
+  "templateName": "签章办理待办",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-010",
+    "event": {
+      "eventType": "CONTRACT_APPROVED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "signMode",
+          "signDate"
+        ],
+        "materials": [
+          {
+            "type": "SIGNED_CONTRACT",
+            "minCount": 1,
+            "label": "签署合同电子档或扫描件"
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "CONTRACT_SIGN"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-010",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "signMode",
+            "type": "dict",
+            "label": "签章方式"
+          },
+          {
+            "key": "signDate",
+            "type": "date",
+            "label": "签署日期"
+          },
+          {
+            "key": "caseManagerId",
+            "type": "user",
+            "label": "案管协作人"
+          },
+          {
+            "key": "adminId",
+            "type": "user",
+            "label": "行政协作人"
+          },
+          {
+            "key": "paperArchiveRemark",
+            "type": "textarea",
+            "label": "纸质附卷说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-010-OWNER",
+      "AT-TD-010-SLA",
+      "AT-TD-010-DOD",
+      "AT-TD-010-ROUTE",
+      "AT-TD-010-HANDLER",
+      "AT-TD-010-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-010",
+    "transitions": [
+      {
+        "on": "OFFLINE_SIGNED",
+        "to": [
+          "TD-011"
+        ],
+        "businessAction": "ARCHIVE_SIGNED_CONTRACT"
+      },
+      {
+        "on": "ONLINE_SIGNED",
+        "to": [
+          "TD-011"
+        ],
+        "businessAction": "ARCHIVE_SIGNED_CONTRACT"
+      }
+    ],
+    "notes": [
+      "销售负责发起；线下签章需案管/行政协作；线上签章依赖电子签适配器"
+    ]
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-010_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "CONTRACT_SIGN",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "TD010_HANDLER_ALIAS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有CONTRACT_SIGN处理器未绑定TD-010"
+    },
+    {
+      "code": "SIGN_COLLABORATION_ASSIGNMENT",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库未实现销售、案管、行政的签章协作分工与候选人分配"
+    },
+    {
+      "code": "ONLINE_SIGNATURE_ADAPTER",
+      "repositoryStatus": "MISSING",
+      "reason": "线上签章流程及案管/行政协作未实现"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "TD010_HANDLER_ALIAS",
+      "reason": "现有CONTRACT_SIGN处理器未绑定TD-010"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "SIGN_COLLABORATION_ASSIGNMENT",
+      "reason": "仓库未实现销售、案管、行政的签章协作分工与候选人分配"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ONLINE_SIGNATURE_ADAPTER",
+      "reason": "线上签章流程及案管/行政协作未实现"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-010-OWNER",
+    "AT-TD-010-SLA",
+    "AT-TD-010-DOD",
+    "AT-TD-010-ROUTE",
+    "AT-TD-010-HANDLER",
+    "AT-TD-010-UI"
+  ]
+}

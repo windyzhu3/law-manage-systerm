@@ -1,0 +1,132 @@
+{
+  "templateCode": "TD-012",
+  "templateName": "财务开票待办",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-012",
+    "event": {
+      "eventType": "PAYMENT_FULLY_RECEIVED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "financeOwnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "finance_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "invoiceAction",
+          "invoiceNo",
+          "invoiceDate"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "INVOICE_HANDLE"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-012",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "invoiceAction",
+            "type": "dict",
+            "label": "开票动作"
+          },
+          {
+            "key": "invoiceNo",
+            "type": "text",
+            "label": "发票号码"
+          },
+          {
+            "key": "invoiceDate",
+            "type": "date",
+            "label": "开票日期"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-012-OWNER",
+      "AT-TD-012-SLA",
+      "AT-TD-012-DOD",
+      "AT-TD-012-ROUTE",
+      "AT-TD-012-HANDLER",
+      "AT-TD-012-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-012",
+    "transitions": [
+      {
+        "on": "INVOICED",
+        "to": [
+          "TD-013"
+        ],
+        "businessAction": "WRITE_INVOICE"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-012_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "INVOICE_HANDLE",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "FULL_PAYMENT_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "现有PAYMENT_CONFIRMED不保证合同+基础/一次性费用全额到账"
+    },
+    {
+      "code": "TD012_HANDLER_ALIAS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有INVOICE_HANDLE处理器未绑定TD-012"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "FULL_PAYMENT_EVENT",
+      "reason": "现有PAYMENT_CONFIRMED不保证合同+基础/一次性费用全额到账"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "TD012_HANDLER_ALIAS",
+      "reason": "现有INVOICE_HANDLE处理器未绑定TD-012"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-012-OWNER",
+    "AT-TD-012-SLA",
+    "AT-TD-012-DOD",
+    "AT-TD-012-ROUTE",
+    "AT-TD-012-HANDLER",
+    "AT-TD-012-UI"
+  ]
+}

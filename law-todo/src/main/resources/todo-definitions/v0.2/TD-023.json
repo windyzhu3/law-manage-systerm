@@ -1,0 +1,157 @@
+{
+  "templateCode": "TD-023",
+  "templateName": "裁判文书30日跟进",
+  "stage": "阶段7",
+  "businessType": "MATTER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-023",
+    "event": {
+      "eventType": "MATTER_HEARING_COMPLETED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "internLawyerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "intern_lawyer"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "followupResult",
+          "followupAt"
+        ],
+        "materials": [
+          {
+            "type": "JUDGMENT_FOLLOWUP_PROOF",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "minutes": 43200,
+        "repeat": true
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-023",
+        "businessType": "MATTER",
+        "fields": [
+          {
+            "key": "followupResult",
+            "type": "dict",
+            "label": "跟进结果"
+          },
+          {
+            "key": "followupAt",
+            "type": "datetime",
+            "label": "跟进时间"
+          },
+          {
+            "key": "followupRemark",
+            "type": "textarea",
+            "label": "跟进说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-010",
+      "Q-011"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-023-OWNER",
+      "AT-TD-023-SLA",
+      "AT-TD-023-DOD",
+      "AT-TD-023-ROUTE",
+      "AT-TD-023-HANDLER",
+      "AT-TD-023-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-023",
+    "transitions": [
+      {
+        "on": "RECEIVED",
+        "to": [
+          "MATTER_CLOSE_REVIEW"
+        ],
+        "businessAction": "REGISTER_JUDGMENT"
+      },
+      {
+        "on": "NOT_RECEIVED",
+        "to": [
+          "TD-023"
+        ],
+        "businessAction": "SCHEDULE_NEXT_30_DAY_CYCLE"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-023_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "HEARING_COMPLETED_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少开庭完成且未收文书事件契约"
+    },
+    {
+      "code": "JUDGMENT_FOLLOWUP_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少30日循环、文书登记和结案路由处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-010",
+      "reason": "T10庭审笔录是否必须上传才允许进入裁判文书跟进？"
+    },
+    {
+      "type": "DECISION",
+      "ref": "Q-011",
+      "reason": "裁判文书跟进周期从15日改为30日后，是否所有综法案件统一30日？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "HEARING_COMPLETED_EVENT",
+      "reason": "缺少开庭完成且未收文书事件契约"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "JUDGMENT_FOLLOWUP_HANDLER",
+      "reason": "缺少30日循环、文书登记和结案路由处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-023-OWNER",
+    "AT-TD-023-SLA",
+    "AT-TD-023-DOD",
+    "AT-TD-023-ROUTE",
+    "AT-TD-023-HANDLER",
+    "AT-TD-023-UI"
+  ]
+}

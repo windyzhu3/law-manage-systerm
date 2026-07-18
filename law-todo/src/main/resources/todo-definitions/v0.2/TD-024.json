@@ -1,0 +1,151 @@
+{
+  "templateCode": "TD-024",
+  "templateName": "风险代理费催收待办",
+  "stage": "阶段7",
+  "businessType": "MATTER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-024",
+    "event": {
+      "eventType": "RISK_FEE_CONFIRMED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "salesOwnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "riskFeeAmount",
+          "collectionResult"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "policyRef": "Q-009"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-024",
+        "businessType": "MATTER",
+        "fields": [
+          {
+            "key": "riskFeeAmount",
+            "type": "number",
+            "label": "风险代理费"
+          },
+          {
+            "key": "collectionResult",
+            "type": "dict",
+            "label": "催收结果"
+          },
+          {
+            "key": "nextCollectionAt",
+            "type": "datetime",
+            "label": "下次催收时间"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-009",
+      "Q-012"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-024-OWNER",
+      "AT-TD-024-SLA",
+      "AT-TD-024-DOD",
+      "AT-TD-024-ROUTE",
+      "AT-TD-024-HANDLER",
+      "AT-TD-024-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-024",
+    "transitions": [
+      {
+        "on": "PAID",
+        "to": [
+          "MATTER_CLOSE_REVIEW"
+        ],
+        "businessAction": "CONFIRM_RISK_FEE"
+      },
+      {
+        "on": "UNPAID",
+        "to": [
+          "TD-024"
+        ],
+        "businessAction": "SCHEDULE_RISK_FEE_COLLECTION"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-024_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "RISK_FEE_FIELDS",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无风险代理识别、计算、审核和应收字段"
+    },
+    {
+      "code": "RISK_FEE_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少计算结果回转销售及催收处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-009",
+      "reason": "进度节点型收费的节点清单、金额计算方式、催收Owner如何定义？"
+    },
+    {
+      "type": "DECISION",
+      "ref": "Q-012",
+      "reason": "风险代理费计算规则是否由系统自动算，还是二级律师填写、一级审核？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "RISK_FEE_FIELDS",
+      "reason": "仓库无风险代理识别、计算、审核和应收字段"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "RISK_FEE_HANDLER",
+      "reason": "缺少计算结果回转销售及催收处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-024-OWNER",
+    "AT-TD-024-SLA",
+    "AT-TD-024-DOD",
+    "AT-TD-024-ROUTE",
+    "AT-TD-024-HANDLER",
+    "AT-TD-024-UI"
+  ]
+}

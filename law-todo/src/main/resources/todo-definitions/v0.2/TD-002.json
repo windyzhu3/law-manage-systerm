@@ -1,0 +1,154 @@
+{
+  "templateCode": "TD-002",
+  "templateName": "疑似无效主管复核",
+  "stage": "阶段1-2",
+  "businessType": "LEAD",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-002",
+    "event": {
+      "eventType": "LEAD_SUSPECT_INVALID_MARKED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "SUPERVISOR",
+        "sourceField": "ownerId",
+        "levels": 1,
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "law_partner_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "reviewResult",
+          "reviewOpinion"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "minutes": 1440,
+        "onDue": "DEFAULT_APPROVE"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-002",
+        "businessType": "LEAD",
+        "fields": [
+          {
+            "key": "reviewResult",
+            "type": "dict",
+            "label": "复核结果"
+          },
+          {
+            "key": "reviewOpinion",
+            "type": "textarea",
+            "label": "复核意见"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [
+      {
+        "config": {
+          "ruleKey": "td002-default-approve",
+          "actionType": "COMPLETE_DEFAULT",
+          "capability": "COMPLETE_DEFAULT",
+          "triggerAt": "DUE",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      }
+    ],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-002-OWNER",
+      "AT-TD-002-SLA",
+      "AT-TD-002-DOD",
+      "AT-TD-002-ROUTE",
+      "AT-TD-002-HANDLER",
+      "AT-TD-002-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-002",
+    "transitions": [
+      {
+        "on": "TRUE_INVALID",
+        "to": [
+          "END"
+        ],
+        "businessAction": "MOVE_DEAD_POOL"
+      },
+      {
+        "on": "MISJUDGED_VALID",
+        "to": [
+          "TD-001"
+        ],
+        "businessAction": "REOPEN_FIRST_CONTACT"
+      },
+      {
+        "on": "DUE",
+        "to": [
+          "END"
+        ],
+        "businessAction": "DEFAULT_APPROVE_INVALID"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-002_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "LEAD_INVALID_REVIEW_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少疑似无效事件生产者"
+    },
+    {
+      "code": "LEAD_INVALID_REVIEW_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少Dead-Pool/重开首联业务处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "LEAD_INVALID_REVIEW_EVENT",
+      "reason": "缺少疑似无效事件生产者"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "LEAD_INVALID_REVIEW_HANDLER",
+      "reason": "缺少Dead-Pool/重开首联业务处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-002-OWNER",
+    "AT-TD-002-SLA",
+    "AT-TD-002-DOD",
+    "AT-TD-002-ROUTE",
+    "AT-TD-002-HANDLER",
+    "AT-TD-002-UI"
+  ]
+}

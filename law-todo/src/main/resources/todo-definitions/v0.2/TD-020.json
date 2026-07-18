@@ -1,0 +1,160 @@
+{
+  "templateCode": "TD-020",
+  "templateName": "执行建联与强执判断",
+  "stage": "执行流程",
+  "businessType": "ENFORCEMENT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-020",
+    "event": {
+      "eventType": "ENFORCEMENT_ORDER_ACCEPTED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "secondaryAssistantId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "enforcement_secondary_assistant"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "contactedAt",
+          "enforcementApplied"
+        ],
+        "materials": [
+          {
+            "type": "CONTACT_SCREENSHOT",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-020",
+        "businessType": "ENFORCEMENT",
+        "fields": [
+          {
+            "key": "contactedAt",
+            "type": "datetime",
+            "label": "建联时间"
+          },
+          {
+            "key": "enforcementApplied",
+            "type": "dict",
+            "label": "是否已申请强执"
+          },
+          {
+            "key": "filingMode",
+            "type": "dict",
+            "label": "未申请时提交方式"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-003"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-020-OWNER",
+      "AT-TD-020-SLA",
+      "AT-TD-020-DOD",
+      "AT-TD-020-ROUTE",
+      "AT-TD-020-HANDLER",
+      "AT-TD-020-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-020",
+    "transitions": [
+      {
+        "on": "ALREADY_APPLIED",
+        "to": [
+          "TD-021"
+        ],
+        "businessAction": "ENTER_ENFORCEMENT_BUREAU_FLOW"
+      },
+      {
+        "on": "NOT_APPLIED",
+        "to": [
+          "TD-021"
+        ],
+        "businessAction": "PREPARE_AND_SUBMIT_ENFORCEMENT_APPLICATION"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-020_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "ENFORCEMENT_ROLES",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无执行助理角色映射"
+    },
+    {
+      "code": "ENFORCEMENT_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无强执申请/执行局状态模型"
+    },
+    {
+      "code": "ENFORCEMENT_CONTACT_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少建联与强执判断处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-003",
+      "reason": "执行案件中“一级助理/二级助理/执行部长”的组织角色是否新增？与原一级律师/二级律师/律师助理如何对应？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_ROLES",
+      "reason": "仓库无执行助理角色映射"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_DOMAIN",
+      "reason": "仓库无强执申请/执行局状态模型"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_CONTACT_HANDLER",
+      "reason": "缺少建联与强执判断处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-020-OWNER",
+    "AT-TD-020-SLA",
+    "AT-TD-020-DOD",
+    "AT-TD-020-ROUTE",
+    "AT-TD-020-HANDLER",
+    "AT-TD-020-UI"
+  ]
+}

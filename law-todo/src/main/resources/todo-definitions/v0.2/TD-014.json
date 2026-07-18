@@ -1,0 +1,133 @@
+{
+  "templateCode": "TD-014",
+  "templateName": "案管接收待办",
+  "stage": "阶段4-5",
+  "businessType": "CASE",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-014",
+    "event": {
+      "eventType": "CASE_HANDOFF_SUBMITTED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "caseManagerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "case_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "reviewResult",
+          "reviewOpinion"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-014",
+        "businessType": "CASE",
+        "fields": [
+          {
+            "key": "reviewResult",
+            "type": "dict",
+            "label": "材料核验结果"
+          },
+          {
+            "key": "reviewOpinion",
+            "type": "textarea",
+            "label": "退回/接收意见"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-014-OWNER",
+      "AT-TD-014-SLA",
+      "AT-TD-014-DOD",
+      "AT-TD-014-ROUTE",
+      "AT-TD-014-HANDLER",
+      "AT-TD-014-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-014",
+    "transitions": [
+      {
+        "on": "ACCEPTED",
+        "to": [
+          "TD-015"
+        ],
+        "businessAction": "ACCEPT_CASE_HANDOFF"
+      },
+      {
+        "on": "RETURNED",
+        "to": [
+          "TD-013"
+        ],
+        "businessAction": "RETURN_CASE_HANDOFF"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-014_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "CASE_HANDOFF_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "现有CASE_TRANSFER_REQUESTED是律师转案，不是销售转案"
+    },
+    {
+      "code": "CASE_HANDOFF_REVIEW_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少销售转案材料接收/退回处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CASE_HANDOFF_EVENT",
+      "reason": "现有CASE_TRANSFER_REQUESTED是律师转案，不是销售转案"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CASE_HANDOFF_REVIEW_HANDLER",
+      "reason": "缺少销售转案材料接收/退回处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-014-OWNER",
+    "AT-TD-014-SLA",
+    "AT-TD-014-DOD",
+    "AT-TD-014-ROUTE",
+    "AT-TD-014-HANDLER",
+    "AT-TD-014-UI"
+  ]
+}

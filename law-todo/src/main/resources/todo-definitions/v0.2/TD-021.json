@@ -1,0 +1,166 @@
+{
+  "templateCode": "TD-021",
+  "templateName": "执行服务节点待办",
+  "stage": "执行流程",
+  "businessType": "ENFORCEMENT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-021",
+    "event": {
+      "eventType": "ENFORCEMENT_SERVICE_NODE_READY",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "enforcement_secondary_assistant"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "nodeType",
+          "progressResult",
+          "reportedAt"
+        ],
+        "materials": [
+          {
+            "type": "ENFORCEMENT_PROGRESS_PROOF",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "nodeDurationsDays": [
+          5,
+          15,
+          30
+        ],
+        "repeat": true
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-021",
+        "businessType": "ENFORCEMENT",
+        "fields": [
+          {
+            "key": "nodeType",
+            "type": "dict",
+            "label": "执行节点类型"
+          },
+          {
+            "key": "progressResult",
+            "type": "textarea",
+            "label": "进展结果"
+          },
+          {
+            "key": "reportedAt",
+            "type": "datetime",
+            "label": "上报时间"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-003"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-021-OWNER",
+      "AT-TD-021-SLA",
+      "AT-TD-021-DOD",
+      "AT-TD-021-ROUTE",
+      "AT-TD-021-HANDLER",
+      "AT-TD-021-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-021",
+    "transitions": [
+      {
+        "on": "NEXT_NODE",
+        "to": [
+          "TD-021"
+        ],
+        "businessAction": "ADVANCE_ENFORCEMENT_NODE"
+      },
+      {
+        "on": "CLOSE",
+        "to": [
+          "TD-025"
+        ],
+        "businessAction": "SUBMIT_ENFORCEMENT_CLOSE_REVIEW"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-021_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "ENFORCEMENT_ROLES",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无执行助理/律师角色映射"
+    },
+    {
+      "code": "ENFORCEMENT_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无执行服务分流、节点和周期上报表"
+    },
+    {
+      "code": "ENFORCEMENT_NODE_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少执行节点上报和循环处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-003",
+      "reason": "执行案件中“一级助理/二级助理/执行部长”的组织角色是否新增？与原一级律师/二级律师/律师助理如何对应？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_ROLES",
+      "reason": "仓库无执行助理/律师角色映射"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_DOMAIN",
+      "reason": "仓库无执行服务分流、节点和周期上报表"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_NODE_HANDLER",
+      "reason": "缺少执行节点上报和循环处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-021-OWNER",
+    "AT-TD-021-SLA",
+    "AT-TD-021-DOD",
+    "AT-TD-021-ROUTE",
+    "AT-TD-021-HANDLER",
+    "AT-TD-021-UI"
+  ]
+}

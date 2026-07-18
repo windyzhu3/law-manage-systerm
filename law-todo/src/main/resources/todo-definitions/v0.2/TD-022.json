@@ -1,0 +1,138 @@
+{
+  "templateCode": "TD-022",
+  "templateName": "综法庭审笔录待办",
+  "stage": "阶段7",
+  "businessType": "MATTER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-022",
+    "event": {
+      "eventType": "MATTER_HEARING_COMPLETED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "secondaryLawyerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "lawyer"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "hearingDate",
+          "hearingSummary"
+        ],
+        "materials": [
+          {
+            "type": "HEARING_MINUTES",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "HEARING_MINUTES_UPLOAD"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-022",
+        "businessType": "MATTER",
+        "fields": [
+          {
+            "key": "hearingDate",
+            "type": "date",
+            "label": "开庭日期"
+          },
+          {
+            "key": "hearingSummary",
+            "type": "textarea",
+            "label": "庭审摘要"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-010"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-022-OWNER",
+      "AT-TD-022-SLA",
+      "AT-TD-022-DOD",
+      "AT-TD-022-ROUTE",
+      "AT-TD-022-HANDLER",
+      "AT-TD-022-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-022",
+    "transitions": [
+      {
+        "on": "COMPLETE",
+        "to": [
+          "TD-023"
+        ],
+        "businessAction": "WRITE_HEARING_MINUTES"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-022_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "MATTER_DOCUMENT_SUPPLY",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "HEARING_COMPLETED_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "现有MATTER_NODE_COMPLETED未形成明确开庭事件契约"
+    },
+    {
+      "code": "HEARING_MINUTES_HANDLER",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有MATTER_DOCUMENT_SUPPLY未绑定TD-022且未控制后续门槛"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-010",
+      "reason": "T10庭审笔录是否必须上传才允许进入裁判文书跟进？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "HEARING_COMPLETED_EVENT",
+      "reason": "现有MATTER_NODE_COMPLETED未形成明确开庭事件契约"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "HEARING_MINUTES_HANDLER",
+      "reason": "现有MATTER_DOCUMENT_SUPPLY未绑定TD-022且未控制后续门槛"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-022-OWNER",
+    "AT-TD-022-SLA",
+    "AT-TD-022-DOD",
+    "AT-TD-022-ROUTE",
+    "AT-TD-022-HANDLER",
+    "AT-TD-022-UI"
+  ]
+}

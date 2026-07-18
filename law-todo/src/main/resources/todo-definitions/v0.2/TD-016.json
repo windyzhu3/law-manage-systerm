@@ -1,0 +1,164 @@
+{
+  "templateCode": "TD-016",
+  "templateName": "综法分案待办",
+  "stage": "阶段6",
+  "businessType": "CASE",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-016",
+    "event": {
+      "eventType": "CASE_CLASSIFIED_COMPREHENSIVE",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "partnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "law_partner_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "primaryLawyerId",
+          "secondaryLawyerId",
+          "assignmentAction"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-016",
+        "businessType": "CASE",
+        "fields": [
+          {
+            "key": "primaryLawyerId",
+            "type": "user",
+            "label": "一级律师"
+          },
+          {
+            "key": "secondaryLawyerId",
+            "type": "user",
+            "label": "二级律师"
+          },
+          {
+            "key": "assignmentAction",
+            "type": "dict",
+            "label": "分案动作"
+          },
+          {
+            "key": "rejectReason",
+            "type": "dict",
+            "label": "拒接理由"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-004",
+      "Q-005"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-016-OWNER",
+      "AT-TD-016-SLA",
+      "AT-TD-016-DOD",
+      "AT-TD-016-ROUTE",
+      "AT-TD-016-HANDLER",
+      "AT-TD-016-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-016",
+    "transitions": [
+      {
+        "on": "ACCEPTED",
+        "to": [
+          "MATTER_CLIENT_CONTACT"
+        ],
+        "businessAction": "ASSIGN_CASE"
+      },
+      {
+        "on": "REASSIGN",
+        "to": [
+          "TD-016"
+        ],
+        "businessAction": "REASSIGN_CASE"
+      },
+      {
+        "on": "REFUND",
+        "to": [
+          "END"
+        ],
+        "businessAction": "TERMINATE_REFUND_AND_REFER"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-016_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "CASE_ASSIGN",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "COMPREHENSIVE_CLASSIFIED_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少综法分类完成事件"
+    },
+    {
+      "code": "HIERARCHICAL_ASSIGNMENT_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "现有CASE_ASSIGN仅单层分案，未覆盖合伙人→一级→二级及拒接审核"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-004",
+      "reason": "合伙人律师分配与律师助理初评是否并存？如并存，前后顺序是什么？"
+    },
+    {
+      "type": "DECISION",
+      "ref": "Q-005",
+      "reason": "拒接理由①由一级律师审核后，是否仍保留合伙人最终兜底？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "COMPREHENSIVE_CLASSIFIED_EVENT",
+      "reason": "缺少综法分类完成事件"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "HIERARCHICAL_ASSIGNMENT_HANDLER",
+      "reason": "现有CASE_ASSIGN仅单层分案，未覆盖合伙人→一级→二级及拒接审核"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-016-OWNER",
+    "AT-TD-016-SLA",
+    "AT-TD-016-DOD",
+    "AT-TD-016-ROUTE",
+    "AT-TD-016-HANDLER",
+    "AT-TD-016-UI"
+  ]
+}

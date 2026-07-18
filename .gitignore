@@ -8,6 +8,9 @@
 target/
 !.mvn/wrapper/maven-wrapper.jar
 
+__pycache__/
+*.py[cod]
+
 # Repository-local JDK installed by bin/setup-jdk17.ps1
 .jdk/
 .run/

@@ -1,0 +1,260 @@
+{
+  "templateCode": "TD-007",
+  "templateName": "冲突初筛/豁免",
+  "stage": "阶段3",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-007",
+    "event": {
+      "eventType": "CONFLICT_SCREENING_FAILED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "partnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "law_partner_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "subjectType",
+          "conflictResult"
+        ],
+        "materials": [],
+        "conditionalRequired": [
+          {
+            "when": {
+              "field": "subjectType",
+              "equals": "NATURAL_PERSON"
+            },
+            "field": "naturalPersonName"
+          },
+          {
+            "when": {
+              "field": "subjectType",
+              "equals": "NATURAL_PERSON"
+            },
+            "field": "idCardNo"
+          },
+          {
+            "when": {
+              "field": "subjectType",
+              "equals": "NATURAL_PERSON"
+            },
+            "field": "opposingPartyName"
+          },
+          {
+            "when": {
+              "field": "subjectType",
+              "equals": "ENTERPRISE"
+            },
+            "field": "enterpriseName"
+          },
+          {
+            "when": {
+              "field": "subjectType",
+              "equals": "ENTERPRISE"
+            },
+            "field": "unifiedSocialCreditCode"
+          },
+          {
+            "when": {
+              "field": "conflictResult",
+              "equals": "CONFLICT"
+            },
+            "field": "waiverResult"
+          },
+          {
+            "when": {
+              "field": "waiverResult",
+              "equals": "WAIVED"
+            },
+            "field": "waiverReason"
+          },
+          {
+            "when": {
+              "field": "waiverResult",
+              "equals": "WAIVED"
+            },
+            "field": "waiverAt"
+          },
+          {
+            "when": {
+              "field": "waiverResult",
+              "equals": "WAIVED"
+            },
+            "field": "waiverSignature"
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "screeningMode": "REAL_TIME",
+        "waiverPolicy": "CONFIGURED"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-007",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "subjectType",
+            "type": "dict",
+            "label": "冲突主体类型"
+          },
+          {
+            "key": "naturalPersonName",
+            "type": "text",
+            "label": "自然人姓名"
+          },
+          {
+            "key": "idCardNo",
+            "type": "text",
+            "label": "身份证号"
+          },
+          {
+            "key": "opposingPartyName",
+            "type": "text",
+            "label": "对方当事人"
+          },
+          {
+            "key": "enterpriseName",
+            "type": "text",
+            "label": "企业名称"
+          },
+          {
+            "key": "unifiedSocialCreditCode",
+            "type": "text",
+            "label": "统一社会信用代码"
+          },
+          {
+            "key": "conflictResult",
+            "type": "dict",
+            "label": "冲突初筛结果"
+          },
+          {
+            "key": "waiverResult",
+            "type": "dict",
+            "label": "豁免结果"
+          },
+          {
+            "key": "waiverReason",
+            "type": "textarea",
+            "label": "豁免理由"
+          },
+          {
+            "key": "waiverAt",
+            "type": "datetime",
+            "label": "豁免时间"
+          },
+          {
+            "key": "waiverSignature",
+            "type": "file",
+            "label": "豁免电子签"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-007-OWNER",
+      "AT-TD-007-SLA",
+      "AT-TD-007-DOD",
+      "AT-TD-007-ROUTE",
+      "AT-TD-007-HANDLER",
+      "AT-TD-007-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-007",
+    "transitions": [
+      {
+        "on": "NO_CONFLICT",
+        "to": [
+          "TD-008"
+        ]
+      },
+      {
+        "on": "WAIVED",
+        "to": [
+          "TD-008"
+        ],
+        "businessAction": "AUDIT_CONFLICT_WAIVER"
+      },
+      {
+        "on": "REJECTED",
+        "to": [
+          "END"
+        ],
+        "businessAction": "TERMINATE_REFUND_AND_REFER"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-007_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "CONFLICT_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无冲突主体、初筛、豁免及电子签数据模型"
+    },
+    {
+      "code": "CONFLICT_WAIVER_SIGNATURE_BINDING",
+      "repositoryStatus": "MISSING",
+      "reason": "动态表单文件字段尚未绑定冲突豁免电子签业务材料"
+    },
+    {
+      "code": "CONFLICT_WAIVER_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少豁免与终止退款业务处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CONFLICT_DOMAIN",
+      "reason": "仓库无冲突主体、初筛、豁免及电子签数据模型"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CONFLICT_WAIVER_SIGNATURE_BINDING",
+      "reason": "动态表单文件字段尚未绑定冲突豁免电子签业务材料"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CONFLICT_WAIVER_HANDLER",
+      "reason": "缺少豁免与终止退款业务处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-007-OWNER",
+    "AT-TD-007-SLA",
+    "AT-TD-007-DOD",
+    "AT-TD-007-ROUTE",
+    "AT-TD-007-HANDLER",
+    "AT-TD-007-UI"
+  ]
+}

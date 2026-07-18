@@ -1,0 +1,184 @@
+{
+  "templateCode": "TD-004",
+  "templateName": "5天实质进展待办",
+  "stage": "阶段3",
+  "businessType": "CUSTOMER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-004",
+    "event": {
+      "eventType": "LEAD_FIRST_CONTACT_VALID",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "progressType",
+          "progressAt"
+        ],
+        "materials": [
+          {
+            "type": "FOLLOWUP_PROOF",
+            "minCount": 1,
+            "label": "录音、截图、报价或外访凭证"
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "minutes": 7200,
+        "thresholds": [
+          80,
+          100,
+          150
+        ],
+        "repeat": true
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-004",
+        "businessType": "CUSTOMER",
+        "fields": [
+          {
+            "key": "progressType",
+            "type": "dict",
+            "label": "实质进展类型"
+          },
+          {
+            "key": "progressAt",
+            "type": "datetime",
+            "label": "进展时间"
+          },
+          {
+            "key": "remark",
+            "type": "textarea",
+            "label": "进展说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [
+      {
+        "config": {
+          "ruleKey": "td004-sla-80",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_80",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      },
+      {
+        "config": {
+          "ruleKey": "td004-sla-100",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_100",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      },
+      {
+        "config": {
+          "ruleKey": "td004-sla-150",
+          "actionType": "ESCALATE",
+          "capability": "ESCALATE",
+          "triggerAt": "SLA_150",
+          "maxAttempts": 3,
+          "retryDelayMinutes": 5,
+          "claimTimeoutMinutes": 15
+        }
+      }
+    ],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-004-OWNER",
+      "AT-TD-004-SLA",
+      "AT-TD-004-DOD",
+      "AT-TD-004-ROUTE",
+      "AT-TD-004-HANDLER",
+      "AT-TD-004-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-004",
+    "transitions": [
+      {
+        "on": "PROGRESS",
+        "to": [
+          "TD-004"
+        ],
+        "businessAction": "REFRESH_FIVE_DAY_WINDOW"
+      },
+      {
+        "on": "NO_PROGRESS_30_DAYS",
+        "to": [
+          "TD-005"
+        ],
+        "businessAction": "MARK_NO_PROGRESS"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-004_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "CUSTOMER_PROGRESS_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少首联有效到客户跟进事件"
+    },
+    {
+      "code": "CUSTOMER_PROGRESS_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少六类进展留痕和刷新周期处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CUSTOMER_PROGRESS_EVENT",
+      "reason": "缺少首联有效到客户跟进事件"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CUSTOMER_PROGRESS_HANDLER",
+      "reason": "缺少六类进展留痕和刷新周期处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-004-OWNER",
+    "AT-TD-004-SLA",
+    "AT-TD-004-DOD",
+    "AT-TD-004-ROUTE",
+    "AT-TD-004-HANDLER",
+    "AT-TD-004-UI"
+  ]
+}

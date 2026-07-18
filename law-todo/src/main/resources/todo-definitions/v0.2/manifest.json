@@ -1,0 +1,132 @@
+{
+  "catalogVersion": "v0.2",
+  "definitionSchemaVersion": 1,
+  "source": "待办事项驱动律所管理系统_整体需求PRD_更新确认版_v0.2.docx",
+  "templates": [
+    {
+      "templateCode": "TD-001",
+      "resource": "TD-001.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-002",
+      "resource": "TD-002.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-003",
+      "resource": "TD-003.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-004",
+      "resource": "TD-004.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-005",
+      "resource": "TD-005.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-006",
+      "resource": "TD-006.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-007",
+      "resource": "TD-007.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-008",
+      "resource": "TD-008.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-009",
+      "resource": "TD-009.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-010",
+      "resource": "TD-010.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-011",
+      "resource": "TD-011.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-012",
+      "resource": "TD-012.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-013",
+      "resource": "TD-013.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-014",
+      "resource": "TD-014.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-015",
+      "resource": "TD-015.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-016",
+      "resource": "TD-016.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-017",
+      "resource": "TD-017.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-018",
+      "resource": "TD-018.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-019",
+      "resource": "TD-019.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-020",
+      "resource": "TD-020.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-021",
+      "resource": "TD-021.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-022",
+      "resource": "TD-022.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-023",
+      "resource": "TD-023.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-024",
+      "resource": "TD-024.json",
+      "foundationState": "BLOCKED"
+    },
+    {
+      "templateCode": "TD-025",
+      "resource": "TD-025.json",
+      "foundationState": "BLOCKED"
+    }
+  ]
+}

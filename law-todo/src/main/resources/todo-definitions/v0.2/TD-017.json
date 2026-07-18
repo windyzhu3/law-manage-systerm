@@ -1,0 +1,142 @@
+{
+  "templateCode": "TD-017",
+  "templateName": "非诉业务分案待办",
+  "stage": "非诉流程",
+  "businessType": "NON_LITIGATION",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-017",
+    "event": {
+      "eventType": "CASE_CLASSIFIED_NON_LITIGATION",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "primaryLawyerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "lawyer"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "serviceTypes",
+          "assigneeMode",
+          "secondaryLawyerId"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "NON_LITIGATION_ASSIGNMENT"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-017",
+        "businessType": "NON_LITIGATION",
+        "fields": [
+          {
+            "key": "serviceTypes",
+            "type": "dict",
+            "label": "非诉业务类型"
+          },
+          {
+            "key": "assigneeMode",
+            "type": "dict",
+            "label": "自办/分派"
+          },
+          {
+            "key": "secondaryLawyerId",
+            "type": "user",
+            "label": "二级律师"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-017-OWNER",
+      "AT-TD-017-SLA",
+      "AT-TD-017-DOD",
+      "AT-TD-017-ROUTE",
+      "AT-TD-017-HANDLER",
+      "AT-TD-017-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-017",
+    "transitions": [
+      {
+        "on": "ASSIGNED",
+        "to": [
+          "TD-018"
+        ],
+        "businessAction": "CREATE_NON_LITIGATION_WORK"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-017_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "NON_LITIGATION_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无非诉事项、业务标签和办理状态表"
+    },
+    {
+      "code": "NON_LITIGATION_MULTI_SELECT_UI",
+      "repositoryStatus": "MISSING",
+      "reason": "现有动态表单字典组件不支持非诉业务类型多选"
+    },
+    {
+      "code": "NON_LITIGATION_ASSIGN_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少自办/分派业务处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "NON_LITIGATION_DOMAIN",
+      "reason": "仓库无非诉事项、业务标签和办理状态表"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "NON_LITIGATION_MULTI_SELECT_UI",
+      "reason": "现有动态表单字典组件不支持非诉业务类型多选"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "NON_LITIGATION_ASSIGN_HANDLER",
+      "reason": "缺少自办/分派业务处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-017-OWNER",
+    "AT-TD-017-SLA",
+    "AT-TD-017-DOD",
+    "AT-TD-017-ROUTE",
+    "AT-TD-017-HANDLER",
+    "AT-TD-017-UI"
+  ]
+}

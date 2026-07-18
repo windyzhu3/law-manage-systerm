@@ -1,0 +1,166 @@
+{
+  "templateCode": "TD-025",
+  "templateName": "归档交接/归档待办",
+  "stage": "阶段7",
+  "businessType": "MATTER",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-025",
+    "event": {
+      "eventType": "CASE_CLOSED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "assistantId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "case_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "handoffResult",
+          "archiveNo"
+        ],
+        "materials": [
+          {
+            "type": "ARCHIVE_HANDOFF_FORM",
+            "minCount": 1
+          },
+          {
+            "type": "ARCHIVE_SCAN",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "phases": [
+          {
+            "code": "HANDOFF",
+            "minutes": 9600
+          },
+          {
+            "code": "ARCHIVE",
+            "minutes": 4800
+          }
+        ]
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-025",
+        "businessType": "MATTER",
+        "fields": [
+          {
+            "key": "handoffResult",
+            "type": "dict",
+            "label": "归档交接结果"
+          },
+          {
+            "key": "archiveNo",
+            "type": "text",
+            "label": "归档编号"
+          },
+          {
+            "key": "archiveOpinion",
+            "type": "textarea",
+            "label": "归档意见"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-025-OWNER",
+      "AT-TD-025-SLA",
+      "AT-TD-025-DOD",
+      "AT-TD-025-ROUTE",
+      "AT-TD-025-HANDLER",
+      "AT-TD-025-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-025",
+    "transitions": [
+      {
+        "on": "HANDOFF_COMPLETE",
+        "to": [
+          "TD-025"
+        ],
+        "businessAction": "ASSIGN_ARCHIVIST"
+      },
+      {
+        "on": "ARCHIVED",
+        "to": [
+          "END"
+        ],
+        "businessAction": "CALCULATE_PERFORMANCE"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-025_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "CASE_ARCHIVE_CONFIRM",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "TD025_HANDLER_ALIAS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有CASE_ARCHIVE_CONFIRM只覆盖档案管理员确认，未覆盖20日交接阶段"
+    },
+    {
+      "code": "LAWYER_ASSISTANT_ROLE_MAPPING",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无律师助理稳定角色映射"
+    },
+    {
+      "code": "PERFORMANCE_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无归档完成后的绩效规则/结果表与处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "TD025_HANDLER_ALIAS",
+      "reason": "现有CASE_ARCHIVE_CONFIRM只覆盖档案管理员确认，未覆盖20日交接阶段"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "LAWYER_ASSISTANT_ROLE_MAPPING",
+      "reason": "仓库无律师助理稳定角色映射"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "PERFORMANCE_DOMAIN",
+      "reason": "仓库无归档完成后的绩效规则/结果表与处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-025-OWNER",
+    "AT-TD-025-SLA",
+    "AT-TD-025-DOD",
+    "AT-TD-025-ROUTE",
+    "AT-TD-025-HANDLER",
+    "AT-TD-025-UI"
+  ]
+}

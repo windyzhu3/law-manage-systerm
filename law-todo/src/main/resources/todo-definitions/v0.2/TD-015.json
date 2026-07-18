@@ -1,0 +1,146 @@
+{
+  "templateCode": "TD-015",
+  "templateName": "案管分类待办",
+  "stage": "阶段4-5",
+  "businessType": "CASE",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-015",
+    "event": {
+      "eventType": "CASE_HANDOFF_ACCEPTED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "caseManagerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "case_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "businessLine"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-015",
+        "businessType": "CASE",
+        "fields": [
+          {
+            "key": "businessLine",
+            "type": "dict",
+            "label": "业务线分类"
+          },
+          {
+            "key": "classificationOpinion",
+            "type": "textarea",
+            "label": "分类说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-001"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-015-OWNER",
+      "AT-TD-015-SLA",
+      "AT-TD-015-DOD",
+      "AT-TD-015-ROUTE",
+      "AT-TD-015-HANDLER",
+      "AT-TD-015-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-015",
+    "transitions": [
+      {
+        "on": "COMPREHENSIVE",
+        "to": [
+          "TD-016"
+        ],
+        "businessAction": "CLASSIFY_CASE"
+      },
+      {
+        "on": "NON_LITIGATION",
+        "to": [
+          "TD-017"
+        ],
+        "businessAction": "CLASSIFY_CASE"
+      },
+      {
+        "on": "ENFORCEMENT",
+        "to": [
+          "TD-019"
+        ],
+        "businessAction": "CLASSIFY_CASE"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-015_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "CASE_CLASSIFICATION_FIELDS",
+      "repositoryStatus": "MISSING",
+      "reason": "案件表无业务线分类及复核状态"
+    },
+    {
+      "code": "CASE_CLASSIFICATION_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少分类落库和三业务线路由处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-001",
+      "reason": "案管分类标签是否由案管单人确认，还是需案管主管复核？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CASE_CLASSIFICATION_FIELDS",
+      "reason": "案件表无业务线分类及复核状态"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CASE_CLASSIFICATION_HANDLER",
+      "reason": "缺少分类落库和三业务线路由处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-015-OWNER",
+    "AT-TD-015-SLA",
+    "AT-TD-015-DOD",
+    "AT-TD-015-ROUTE",
+    "AT-TD-015-HANDLER",
+    "AT-TD-015-UI"
+  ]
+}

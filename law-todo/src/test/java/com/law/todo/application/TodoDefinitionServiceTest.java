@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -9,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +24,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.dao.DuplicateKeyException;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
@@ -257,6 +263,50 @@ class TodoDefinitionServiceTest
         verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
     }
 
+    @Test void prdCatalogueBlocksPublishingTemplatesWhoseBusinessHandlersAreMissing()
+    {
+        Map<String,Object> invalidReview=blockedPrdDraft(20L,"TD-002");
+        Map<String,Object> discountApproval=blockedPrdDraft(60L,"TD-006");
+        when(mapper.selectTemplateVersionById(20L)).thenReturn(invalidReview);
+        when(mapper.selectTemplateVersionById(60L)).thenReturn(discountApproval);
+        when(mapper.selectEventCatalog(anyString(),org.mockito.ArgumentMatchers.eq(1))).thenAnswer(invocation->Map.of(
+                "event_type",invocation.getArgument(0),"payload_version",1,
+                "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        TodoDefinitionService service=service();
+
+        for(long versionId:new long[]{20L,60L})
+        {
+            TodoDefinitionService.PreflightResult preflight=service.preflight(versionId);
+            assertFalse(preflight.publishable());
+            assertTrue(preflight.report().errors().stream()
+                    .anyMatch(issue->"TODO_PRD_TEMPLATE_BLOCKED".equals(issue.code())));
+            TodoException error=assertThrows(TodoException.class,()->service.publish(
+                    new PublishDraftCommand("prd-blocked-"+versionId,versionId),actor));
+            assertEquals("TODO_DEFINITION_PREFLIGHT_FAILED",error.getBusinessCode());
+        }
+        verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
+    }
+
+    @Test void prdProductionBlockCannotBeBypassedByMarkingFoundationReady()
+    {
+        Map<String,Object> blocked=blockedPrdDraft(20L,"TD-002");
+        blocked.put("prd_foundation_state","READY");
+        blocked.put("prd_production_state","BLOCKED");
+        when(mapper.selectTemplateVersionById(20L)).thenReturn(blocked);
+        when(mapper.selectEventCatalog(anyString(),org.mockito.ArgumentMatchers.eq(1))).thenAnswer(invocation->Map.of(
+                "event_type",invocation.getArgument(0),"payload_version",1,
+                "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+
+        TodoDefinitionService.PreflightResult result=service().preflight(20L);
+
+        assertFalse(result.publishable());
+        assertTrue(result.report().errors().stream()
+                .anyMatch(issue->"TODO_PRD_TEMPLATE_BLOCKED".equals(issue.code())));
+        verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
+    }
+
     @Test void failedPreflightDoesNotRollBackItsPersistedReport() throws Exception
     {
         Transactional transaction=TodoDefinitionService.class
@@ -384,6 +434,31 @@ class TodoDefinitionServiceTest
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}
     private TodoDefinitionCompiler compiler(){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
     private void registeredEvent(){when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of("event_type","LEAD_CREATED","payload_version",1,"payload_schema_json","{\"type\":\"object\"}","status","ACTIVE"));}
+
+    private Map<String,Object> blockedPrdDraft(Long versionId,String code)
+    {
+        try(InputStream input=getClass().getResourceAsStream("/todo-definitions/v0.2/"+code+".json"))
+        {
+            if(input==null)throw new IllegalStateException("Missing PRD definition resource: "+code);
+            JSONObject envelope=JSON.parseObject(new String(input.readAllBytes(),StandardCharsets.UTF_8));
+            TodoDefinitionDocument definition=new TodoDefinitionCodec().read(
+                    envelope.getJSONObject("definition").toJSONString());
+            Map<String,Object> row=new HashMap<>();row.put("version_id",versionId);row.put("template_id",versionId);
+            row.put("version_no",1);row.put("status","DRAFT");row.put("template_code",code);
+            row.put("event_type",definition.event().eventType());row.put("payload_version",1);
+            row.put("owner_rule_json",JSON.toJSONString(definition.owner().config()));
+            row.put("dod_rule_json",JSON.toJSONString(definition.dod().config()));
+            row.put("sla_rule_json",JSON.toJSONString(definition.sla().config()));
+            row.put("next_rule_json",JSON.toJSONString(definition.routing().config()));
+            row.put("ui_schema_json",JSON.toJSONString(definition.ui().config()));
+            row.put("definition_json",new TodoDefinitionCodec().canonicalJson(definition));
+            row.put("prd_foundation_state","BLOCKED");
+            row.put("prd_production_state","BLOCKED");
+            row.put("prd_blockers_json",envelope.getJSONArray("blockers").toJSONString());
+            return row;
+        }
+        catch(java.io.IOException failure){throw new IllegalStateException(failure);}
+    }
     private UpdateDraftCommand update(Long id){return new UpdateDraftCommand("edit-1",id,"\"OWNER\"","{}",null,null,"{}");}
     private Map<String,Object> draft(String sla,String next){Map<String,Object> value=new HashMap<>();value.put("version_id",9L);value.put("template_id",1L);value.put("version_no",2);value.put("status","DRAFT");value.put("template_code","TD-001");value.put("event_type","LEAD_CREATED");value.put("payload_version",1);value.put("owner_rule_json","\"OWNER\"");value.put("dod_rule_json","{}");value.put("sla_rule_json",sla);value.put("next_rule_json",next);value.put("ui_schema_json","{}");return value;}
 }

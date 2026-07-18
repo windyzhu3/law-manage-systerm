@@ -1,0 +1,151 @@
+{
+  "templateCode": "TD-006",
+  "templateName": "执行案件折扣审批",
+  "stage": "阶段3",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-006",
+    "event": {
+      "eventType": "QUOTE_DISCOUNT_APPROVAL_REQUESTED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "approvalOwnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "law_partner_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "discountPercent",
+          "discountReason",
+          "approvalResult"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "EXECUTION_DISCOUNT_APPROVAL"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-006",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "discountPercent",
+            "type": "number",
+            "label": "折扣比例"
+          },
+          {
+            "key": "discountReason",
+            "type": "textarea",
+            "label": "折扣理由"
+          },
+          {
+            "key": "approvalResult",
+            "type": "dict",
+            "label": "审批结果"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-006-OWNER",
+      "AT-TD-006-SLA",
+      "AT-TD-006-DOD",
+      "AT-TD-006-ROUTE",
+      "AT-TD-006-HANDLER",
+      "AT-TD-006-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-006",
+    "transitions": [
+      {
+        "on": "APPROVED",
+        "to": [
+          "TD-007"
+        ],
+        "businessAction": "APPROVE_QUOTE"
+      },
+      {
+        "on": "REJECTED",
+        "to": [
+          "TD-004"
+        ],
+        "businessAction": "RETURN_TO_FOLLOWUP"
+      }
+    ],
+    "notes": [
+      "≤20%销售、≤40%组长、≤50%部长、>50%主任+合伙人"
+    ]
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-006_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "QUOTE_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无独立报价/折扣审批表与页面"
+    },
+    {
+      "code": "QUOTE_APPROVAL_OWNER_ROUTING",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库未实现按折扣比例解析销售/组长/部长/主任+合伙人的审批Owner"
+    },
+    {
+      "code": "QUOTE_DISCOUNT_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少分层审批业务处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "QUOTE_DOMAIN",
+      "reason": "仓库无独立报价/折扣审批表与页面"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "QUOTE_APPROVAL_OWNER_ROUTING",
+      "reason": "仓库未实现按折扣比例解析销售/组长/部长/主任+合伙人的审批Owner"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "QUOTE_DISCOUNT_HANDLER",
+      "reason": "缺少分层审批业务处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-006-OWNER",
+    "AT-TD-006-SLA",
+    "AT-TD-006-DOD",
+    "AT-TD-006-ROUTE",
+    "AT-TD-006-HANDLER",
+    "AT-TD-006-UI"
+  ]
+}

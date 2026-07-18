@@ -1,0 +1,139 @@
+{
+  "templateCode": "TD-009",
+  "templateName": "合同审批待办",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-009",
+    "event": {
+      "eventType": "CONTRACT_SUBMITTED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "partnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "law_partner_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "auditResult",
+          "opinion",
+          "riskReviewResult"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "policyCode": "CONTRACT_APPROVAL"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-009",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "auditResult",
+            "type": "dict",
+            "label": "审批结果"
+          },
+          {
+            "key": "opinion",
+            "type": "textarea",
+            "label": "审批意见"
+          },
+          {
+            "key": "riskReviewResult",
+            "type": "dict",
+            "label": "纯风险特殊审"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-009-OWNER",
+      "AT-TD-009-SLA",
+      "AT-TD-009-DOD",
+      "AT-TD-009-ROUTE",
+      "AT-TD-009-HANDLER",
+      "AT-TD-009-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-009",
+    "transitions": [
+      {
+        "on": "APPROVED",
+        "to": [
+          "TD-010"
+        ],
+        "businessAction": "APPROVE_CONTRACT"
+      },
+      {
+        "on": "REJECTED",
+        "to": [
+          "TD-008"
+        ],
+        "businessAction": "RETURN_CONTRACT_DRAFT"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-009_COMPLETE",
+    "repositoryStatus": "ADAPTER_REQUIRED",
+    "existingCandidate": "CONTRACT_REVIEW",
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "TD009_HANDLER_ALIAS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "现有CONTRACT_REVIEW处理器未绑定TD-009"
+    },
+    {
+      "code": "PURE_RISK_REVIEW_FIELDS",
+      "repositoryStatus": "ADAPTER_REQUIRED",
+      "reason": "合同审批处理器未覆盖PRD纯风险特殊审字段"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "TD009_HANDLER_ALIAS",
+      "reason": "现有CONTRACT_REVIEW处理器未绑定TD-009"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "PURE_RISK_REVIEW_FIELDS",
+      "reason": "合同审批处理器未覆盖PRD纯风险特殊审字段"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-009-OWNER",
+    "AT-TD-009-SLA",
+    "AT-TD-009-DOD",
+    "AT-TD-009-ROUTE",
+    "AT-TD-009-HANDLER",
+    "AT-TD-009-UI"
+  ]
+}

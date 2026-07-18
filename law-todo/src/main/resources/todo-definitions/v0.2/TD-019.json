@@ -1,0 +1,155 @@
+{
+  "templateCode": "TD-019",
+  "templateName": "执行接单待办",
+  "stage": "执行流程",
+  "businessType": "ENFORCEMENT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-019",
+    "event": {
+      "eventType": "CASE_CLASSIFIED_ENFORCEMENT",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "primaryAssistantId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "enforcement_primary_assistant"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "acceptanceResult",
+          "rejectReason"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 480
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-019",
+        "businessType": "ENFORCEMENT",
+        "fields": [
+          {
+            "key": "acceptanceResult",
+            "type": "dict",
+            "label": "接单结果"
+          },
+          {
+            "key": "rejectReason",
+            "type": "dict",
+            "label": "拒接理由"
+          },
+          {
+            "key": "rejectOpinion",
+            "type": "textarea",
+            "label": "拒接说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-003"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-019-OWNER",
+      "AT-TD-019-SLA",
+      "AT-TD-019-DOD",
+      "AT-TD-019-ROUTE",
+      "AT-TD-019-HANDLER",
+      "AT-TD-019-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-019",
+    "transitions": [
+      {
+        "on": "ACCEPTED",
+        "to": [
+          "TD-020"
+        ],
+        "businessAction": "ACCEPT_ENFORCEMENT_ORDER"
+      },
+      {
+        "on": "REJECTED",
+        "to": [
+          "ENFORCEMENT_REJECTION_REVIEW"
+        ],
+        "businessAction": "SUBMIT_REJECTION_REVIEW"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-019_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "ENFORCEMENT_ROLES",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无一级助理/二级助理/执行部长角色映射"
+    },
+    {
+      "code": "ENFORCEMENT_DOMAIN",
+      "repositoryStatus": "MISSING",
+      "reason": "仓库无执行接单、拒接审核和退款状态表"
+    },
+    {
+      "code": "ENFORCEMENT_ACCEPT_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少执行接单/拒接处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-003",
+      "reason": "执行案件中“一级助理/二级助理/执行部长”的组织角色是否新增？与原一级律师/二级律师/律师助理如何对应？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_ROLES",
+      "reason": "仓库无一级助理/二级助理/执行部长角色映射"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_DOMAIN",
+      "reason": "仓库无执行接单、拒接审核和退款状态表"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "ENFORCEMENT_ACCEPT_HANDLER",
+      "reason": "缺少执行接单/拒接处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-019-OWNER",
+    "AT-TD-019-SLA",
+    "AT-TD-019-DOD",
+    "AT-TD-019-ROUTE",
+    "AT-TD-019-HANDLER",
+    "AT-TD-019-UI"
+  ]
+}

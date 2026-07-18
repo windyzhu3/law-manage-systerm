@@ -1,0 +1,155 @@
+{
+  "templateCode": "TD-011",
+  "templateName": "缴费/催收待办",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-011",
+    "event": {
+      "eventType": "RECEIVABLE_DUE",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "salesOwnerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "finance_manager"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "receivableType",
+          "collectionResult",
+          "amount"
+        ],
+        "materials": []
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "DEFAULT",
+        "timeWindowsDays": [
+          7,
+          15
+        ],
+        "nodePolicyRef": "Q-009"
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-011",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "receivableType",
+            "type": "dict",
+            "label": "应收类型"
+          },
+          {
+            "key": "collectionResult",
+            "type": "dict",
+            "label": "催收结果"
+          },
+          {
+            "key": "amount",
+            "type": "number",
+            "label": "应收金额"
+          },
+          {
+            "key": "nextCollectionAt",
+            "type": "datetime",
+            "label": "下次催收时间"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [
+      "Q-009"
+    ],
+    "acceptanceRefs": [
+      "AT-TD-011-OWNER",
+      "AT-TD-011-SLA",
+      "AT-TD-011-DOD",
+      "AT-TD-011-ROUTE",
+      "AT-TD-011-HANDLER",
+      "AT-TD-011-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-011",
+    "transitions": [
+      {
+        "on": "PAID",
+        "to": [
+          "TD-012"
+        ],
+        "businessAction": "CONFIRM_RECEIPT"
+      },
+      {
+        "on": "UNPAID",
+        "to": [
+          "TD-011"
+        ],
+        "businessAction": "SCHEDULE_COLLECTION"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-011_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "RECEIVABLE_DUE_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少时间型/节点型统一应收事件"
+    },
+    {
+      "code": "COLLECTION_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "现有PAYMENT_CONFIRM为财务确认收款，不等同销售催收处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "DECISION",
+      "ref": "Q-009",
+      "reason": "进度节点型收费的节点清单、金额计算方式、催收Owner如何定义？"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "RECEIVABLE_DUE_EVENT",
+      "reason": "缺少时间型/节点型统一应收事件"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "COLLECTION_HANDLER",
+      "reason": "现有PAYMENT_CONFIRM为财务确认收款，不等同销售催收处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-011-OWNER",
+    "AT-TD-011-SLA",
+    "AT-TD-011-DOD",
+    "AT-TD-011-ROUTE",
+    "AT-TD-011-HANDLER",
+    "AT-TD-011-UI"
+  ]
+}

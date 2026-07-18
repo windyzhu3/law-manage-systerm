@@ -1,0 +1,170 @@
+{
+  "templateCode": "TD-013",
+  "templateName": "转案材料补齐",
+  "stage": "阶段4-5",
+  "businessType": "CONTRACT",
+  "definitionPackageState": "READY",
+  "foundationState": "BLOCKED",
+  "productionState": "BLOCKED",
+  "definition": {
+    "schemaVersion": 1,
+    "templateCode": "TD-013",
+    "event": {
+      "eventType": "DEAL_CONFIRMED",
+      "payloadVersion": 1,
+      "condition": {}
+    },
+    "owner": {
+      "config": {
+        "type": "PAYLOAD",
+        "field": "ownerId",
+        "fallback": {
+          "type": "ROLE",
+          "roleKey": "sales"
+        }
+      }
+    },
+    "dod": {
+      "config": {
+        "requiredFields": [
+          "materialsConfirmed"
+        ],
+        "materials": [
+          {
+            "type": "SIGNED_CONTRACT",
+            "minCount": 1
+          },
+          {
+            "type": "PAYMENT_PROOF",
+            "minCount": 1
+          },
+          {
+            "type": "AUTHORIZATION",
+            "minCount": 1
+          },
+          {
+            "type": "CLIENT_ID",
+            "minCount": 1
+          },
+          {
+            "type": "OPPOSING_PARTY_INFO",
+            "minCount": 1
+          },
+          {
+            "type": "EVIDENCE",
+            "minCount": 1
+          },
+          {
+            "type": "CASE_REGISTRATION",
+            "minCount": 1
+          },
+          {
+            "type": "RISK_NOTICE",
+            "minCount": 1
+          },
+          {
+            "type": "LEGAL_AID_NOTICE",
+            "minCount": 1
+          },
+          {
+            "type": "CONSULTATION_RECORD",
+            "minCount": 1
+          },
+          {
+            "type": "CASE_SCORE",
+            "minCount": 1
+          }
+        ]
+      }
+    },
+    "sla": {
+      "config": {
+        "calendarCode": "WORKDAY",
+        "minutes": 960
+      }
+    },
+    "ui": {
+      "config": {
+        "formCode": "TD-013",
+        "businessType": "CONTRACT",
+        "fields": [
+          {
+            "key": "materialsConfirmed",
+            "type": "dict",
+            "label": "11项材料确认"
+          },
+          {
+            "key": "remark",
+            "type": "textarea",
+            "label": "补充说明"
+          }
+        ]
+      }
+    },
+    "routing": {
+      "config": {}
+    },
+    "autoActions": [],
+    "decisionRefs": [],
+    "acceptanceRefs": [
+      "AT-TD-013-OWNER",
+      "AT-TD-013-SLA",
+      "AT-TD-013-DOD",
+      "AT-TD-013-ROUTE",
+      "AT-TD-013-HANDLER",
+      "AT-TD-013-UI"
+    ]
+  },
+  "routingPlan": {
+    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "start": "TD-013",
+    "transitions": [
+      {
+        "on": "COMPLETE",
+        "to": [
+          "TD-014"
+        ],
+        "businessAction": "SUBMIT_CASE_HANDOFF"
+      }
+    ],
+    "notes": []
+  },
+  "handlerCapability": {
+    "requiredCode": "TD-013_COMPLETE",
+    "repositoryStatus": "MISSING",
+    "existingCandidate": null,
+    "requireBusinessWriteback": true
+  },
+  "businessDependencies": [
+    {
+      "code": "DEAL_CONFIRMED_EVENT",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少统一成交确认事件"
+    },
+    {
+      "code": "CASE_HANDOFF_MATERIAL_HANDLER",
+      "repositoryStatus": "MISSING",
+      "reason": "缺少11项材料对象化校验和提交处理器"
+    }
+  ],
+  "blockers": [
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "DEAL_CONFIRMED_EVENT",
+      "reason": "缺少统一成交确认事件"
+    },
+    {
+      "type": "BUSINESS_DEPENDENCY",
+      "ref": "CASE_HANDOFF_MATERIAL_HANDLER",
+      "reason": "缺少11项材料对象化校验和提交处理器"
+    }
+  ],
+  "acceptanceRefs": [
+    "AT-TD-013-OWNER",
+    "AT-TD-013-SLA",
+    "AT-TD-013-DOD",
+    "AT-TD-013-ROUTE",
+    "AT-TD-013-HANDLER",
+    "AT-TD-013-UI"
+  ]
+}
