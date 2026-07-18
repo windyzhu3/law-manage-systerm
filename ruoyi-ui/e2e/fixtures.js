@@ -1,4 +1,4 @@
-async function setupTodo(page, todo, capture) {
+async function setupTodo(page, todo, capture, formView = {}) {
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
   await page.addInitScript(() => { document.cookie = 'Admin-Token=e2e-token; path=/' })
   await page.route('**/prod-api/**', async route => {
@@ -7,6 +7,17 @@ async function setupTodo(page, todo, capture) {
     if (path === '/getRouters') return json(route, [{ path: '/', component: 'Layout', children: [{ path: 'todo-center', component: 'todo/index', name: 'TodoCenter', meta: { title: '待办中心', icon: 'clipboard' } }] }])
     if (path === '/todo/dashboard') return json(route, { mine: 1, candidate: 0, overdue: 0 })
     if (path.startsWith('/todo/list')) return json(route, null, { rows: [todo], total: 1 })
+    if (path === `/todo/${todo.todo_id || todo.todoId}/form`) {
+      return json(route, {
+        todoId: todo.todo_id || todo.todoId,
+        businessType: formView.businessType || 'CASE',
+        businessId: formView.businessId || 1,
+        ui: formView.ui || { config: { fields: [] } },
+        dod: formView.dod || { config: {} },
+        defaults: formView.defaults || {},
+        materials: formView.materials || []
+      })
+    }
     if (/\/todo\/\d+\/complete$/.test(path)) { capture.body = route.request().postDataJSON(); return json(route, todo) }
     if (path.startsWith('/system/dict/data/type/')) return json(route, [])
     if (path === '/system/config/configKey/sys.index.skinName') return json(route, '')

@@ -2,6 +2,7 @@ package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.domain.TodoException;
 
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionDiffServiceTest
@@ -87,6 +89,17 @@ class TodoDefinitionDiffServiceTest
         assertEquals(result.changes().stream().map(change->change.path()).sorted().toList(),result.changes().stream().map(change->change.path()).toList());
     }
 
+    @Test void semantic_diff_rejects_versions_from_different_templates()
+    {
+        Map<String,Object> left=version("{\"schemaVersion\":1}");left.put("template_id",10L);
+        Map<String,Object> right=version("{\"schemaVersion\":1}");right.put("template_id",11L);
+        when(mapper.selectTemplateVersionById(1L)).thenReturn(left);
+        when(mapper.selectTemplateVersionById(2L)).thenReturn(right);
+
+        TodoException failure=assertThrows(TodoException.class,()->new TodoDefinitionDiffService(mapper).diff(1L,2L));
+        assertEquals("TODO_TEMPLATE_VERSION_DIFF_TEMPLATE_MISMATCH",failure.getBusinessCode());
+    }
+
     private String definition(String nodes,String edges,String actions,String decisions,String acceptances)
     {
         return "{\"schemaVersion\":1,\"templateCode\":\"T\",\"event\":{\"eventType\":\"E\",\"payloadVersion\":1,\"condition\":{}},"
@@ -97,6 +110,6 @@ class TodoDefinitionDiffServiceTest
 
     private Map<String,Object> version(String definition)
     {
-        Map<String,Object> row=new HashMap<>();row.put("definition_json",definition);row.put("status","PUBLISHED");return row;
+        Map<String,Object> row=new HashMap<>();row.put("definition_json",definition);row.put("status","PUBLISHED");row.put("template_id",99L);return row;
     }
 }

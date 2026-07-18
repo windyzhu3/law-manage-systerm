@@ -38,8 +38,12 @@ public class TodoDefinitionDiffService
 
     public TodoDefinitionDiffView diff(long leftVersionId,long rightVersionId)
     {
-        Object before=JSON.parse(codec.canonicalJson(definition(require(leftVersionId))));
-        Object after=JSON.parse(codec.canonicalJson(definition(require(rightVersionId))));
+        Map<String,Object> left=require(leftVersionId),right=require(rightVersionId);
+        Long leftTemplate=longValue(value(left,"template_id","templateId")),rightTemplate=longValue(value(right,"template_id","templateId"));
+        if(leftTemplate==null||rightTemplate==null)throw new TodoException("TODO_TEMPLATE_VERSION_TEMPLATE_MISSING","Template version is missing its template identity");
+        if(!leftTemplate.equals(rightTemplate))throw new TodoException("TODO_TEMPLATE_VERSION_DIFF_TEMPLATE_MISMATCH","Definition versions must belong to the same template");
+        Object before=JSON.parse(codec.canonicalJson(definition(left)));
+        Object after=JSON.parse(codec.canonicalJson(definition(right)));
         List<Change> changes=new ArrayList<>();
         compare("$",before,after,changes);
         changes.sort(Comparator.comparing(Change::path).thenComparing(change->change.type().name()));
@@ -114,5 +118,6 @@ public class TodoDefinitionDiffService
     private Map<String,Object> require(long id){Map<String,Object> row=mapper.selectTemplateVersionById(id);if(row==null||row.isEmpty())throw new TodoException("TODO_TEMPLATE_VERSION_NOT_FOUND","Template version not found");return row;}
     private TodoDefinitionDocument definition(Map<String,Object> row){String json=text(value(row,"definition_json","definitionJson"));return json==null||json.isBlank()?legacy.fromLegacy(row):codec.read(json);}
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
+    private Long longValue(Object value){try{return value==null?null:Long.valueOf(String.valueOf(value));}catch(NumberFormatException invalid){return null;}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
 }

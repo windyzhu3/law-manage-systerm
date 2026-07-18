@@ -10,7 +10,7 @@
       <el-table-column label="规则 Key" min-width="130"><template slot-scope="{ row }"><el-input v-model.trim="row.config.ruleKey" :disabled="readonly" maxlength="96" @change="commit" /></template></el-table-column>
       <el-table-column label="能力" min-width="150">
         <template slot-scope="{ row }">
-          <el-select v-model="row.config.actionType" :disabled="readonly" @change="selectCapability(row, $event)">
+          <el-select v-model="row.config.actionType" data-testid="auto-action-capability" :disabled="readonly" @change="selectCapability(row, $event)">
             <el-option v-for="item in catalog" :key="item.actionType" :label="item.actionType" :value="item.actionType" />
           </el-select>
         </template>
@@ -20,8 +20,8 @@
         <template slot-scope="{ row }">
           <div v-for="field in fields(row)" :key="field.name" class="field-line">
             <label>{{ field.label || field.name }}</label>
-            <el-input-number v-if="field.type === 'number'" v-model="row.config[field.name]" :disabled="readonly" :min="field.min || 1" controls-position="right" @change="commit" />
-            <el-input v-else v-model.trim="row.config[field.name]" :disabled="readonly" @change="commit" />
+            <el-input-number v-if="field.type === 'number'" v-model="row.config[field.name]" :data-testid="`auto-action-field-${field.name}`" :disabled="readonly" :min="field.min || 1" controls-position="right" @change="commit" />
+            <el-input v-else v-model.trim="row.config[field.name]" :data-testid="`auto-action-field-${field.name}`" :disabled="readonly" @change="commit" />
           </div>
           <el-input :value="json(row.config.precondition)" :disabled="readonly" placeholder="前置条件 JSON（可选）" @change="setPrecondition(row, $event)" />
         </template>
