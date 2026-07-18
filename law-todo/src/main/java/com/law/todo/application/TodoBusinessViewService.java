@@ -70,9 +70,9 @@ public class TodoBusinessViewService
 
     private Map<String,Object> withAllowedActions(Map<String,Object> row,Actor actor)
     {
-        Map<String,Object> view=new HashMap<>(row);Long todoId=longValue(value(row,"todo_id","todoId"));
-        TodoInstance todo=todoId==null?null:mapper.selectById(todoId);
-        view.put("allowedActions",todo==null?List.of():allowedActions(todo,actor));return view;
+        Map<String,Object> view=new HashMap<>(row);TodoInstance todo=new TodoInstance();todo.setTodoId(longValue(value(row,"todo_id","todoId")));
+        todo.setStatus(String.valueOf(value(row,"status","status")));todo.setOwnerId(longValue(value(row,"owner_id","ownerId")));todo.setOwnerDeptId(longValue(value(row,"owner_dept_id","ownerDeptId")));
+        view.put("allowedActions",todo.getTodoId()==null?List.of():allowedActions(todo,actor));return view;
     }
 
     private List<String> allowedActions(TodoInstance todo,Actor actor)

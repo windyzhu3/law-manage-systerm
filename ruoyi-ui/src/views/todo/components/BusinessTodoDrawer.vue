@@ -39,7 +39,7 @@ export default {
   name: 'BusinessTodoDrawer',
   components: { TodoDetailDrawer, TodoActionDialogs, TodoChainTimeline },
   props: { visible: Boolean, businessType: String, businessId: [Number, String] },
-  data() { return { loading: false, submitting: false, error: '', rows: [], chainNodes: [], detailOpen: false, detail: {}, actionOpen: false, action: '', selected: null } },
+  data() { return { loading: false, submitting: false, error: '', rows: [], chainNodes: [], detailOpen: false, detail: {}, actionOpen: false, action: '', selected: null, requestGeneration: 0 } },
   computed: {
     open: { get() { return this.visible }, set(value) { this.$emit('update:visible', value) } },
     validBusinessId() { return Number(this.businessId) > 0 }
@@ -53,14 +53,17 @@ export default {
     todoId(row) { return row.todoId || row.todo_id },
     reloadForBusiness() {
       this.rows = []; this.chainNodes = []; this.detail = {}; this.selected = null; this.detailOpen = false; this.actionOpen = false
+      this.requestGeneration++
       if (this.validBusinessId) this.load()
     },
     load() {
       if (!this.validBusinessId) return
+      const generation = ++this.requestGeneration
+      const businessKey = `${this.businessType}/${this.businessId}`
       this.loading = true; this.error = ''
-      listBusinessTodos(this.businessType, this.businessId, { pageNum: 1, pageSize: 100 }).then(response => { this.rows = response.rows || [] })
-        .catch(error => { this.error = error.msg || '待办加载失败' })
-        .finally(() => { this.loading = false })
+      listBusinessTodos(this.businessType, this.businessId, { pageNum: 1, pageSize: 100 }).then(response => { if (generation === this.requestGeneration && businessKey === `${this.businessType}/${this.businessId}`) this.rows = response.rows || [] })
+        .catch(error => { if (generation === this.requestGeneration) this.error = error.msg || '待办加载失败' })
+        .finally(() => { if (generation === this.requestGeneration) this.loading = false })
     },
     explicitActions(row) { return row.allowedActions || row.allowed_actions || row.actions || null },
     can(row, action) {

@@ -23,7 +23,7 @@ export default {
   name: 'BusinessTodoSummary',
   components: { BusinessTodoDrawer },
   props: { businessType: { type: String, required: true }, businessId: { type: [Number, String], required: true }, businessNo: String },
-  data() { return { loading: false, error: '', summary: {}, drawer: false } },
+  data() { return { loading: false, error: '', summary: {}, drawer: false, requestGeneration: 0 } },
   computed: { validBusinessId() { return Number(this.businessId) > 0 } },
   watch: {
     businessId: { immediate: true, handler() { this.reloadForBusiness() } },
@@ -32,17 +32,20 @@ export default {
   methods: {
     reloadForBusiness() {
       this.drawer = false
+      this.requestGeneration++
       this.summary = {}
       this.error = ''
       if (this.validBusinessId) this.load()
     },
     load() {
       if (!this.validBusinessId) return
+      const generation = ++this.requestGeneration
+      const businessKey = `${this.businessType}/${this.businessId}`
       this.loading = true
       this.error = ''
-      getBusinessTodoSummary(this.businessType, this.businessId).then(response => { this.summary = response.data || {} })
-        .catch(error => { this.error = error.msg || '待办摘要加载失败' })
-        .finally(() => { this.loading = false })
+      getBusinessTodoSummary(this.businessType, this.businessId).then(response => { if (generation === this.requestGeneration && businessKey === `${this.businessType}/${this.businessId}`) this.summary = response.data || {} })
+        .catch(error => { if (generation === this.requestGeneration) this.error = error.msg || '待办摘要加载失败' })
+        .finally(() => { if (generation === this.requestGeneration) this.loading = false })
     }
   }
 }

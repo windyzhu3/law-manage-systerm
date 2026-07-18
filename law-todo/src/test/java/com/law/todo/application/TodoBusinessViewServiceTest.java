@@ -64,8 +64,8 @@ class TodoBusinessViewServiceTest
     {
         when(access.supports("LEAD")).thenReturn(true);when(access.canView("LEAD",8L,7L,3L)).thenReturn(true);
         TodoInstance todo=new TodoInstance();todo.setTodoId(21L);todo.setStatus("SUBMITTED");todo.setOwnerId(9L);
-        when(mapper.selectBusinessTodos(anyMap())).thenReturn(List.of(Map.of("todo_id",21L,"status","SUBMITTED")));
-        when(mapper.selectById(21L)).thenReturn(todo);when(todoAccess.canOperate(todo,7L)).thenReturn(false);when(todoAccess.canReview(todo,7L)).thenReturn(true);
+        when(mapper.selectBusinessTodos(anyMap())).thenReturn(List.of(Map.of("todo_id",21L,"status","SUBMITTED","owner_id",9L)));
+        when(todoAccess.canOperate(org.mockito.ArgumentMatchers.any(TodoInstance.class),org.mockito.ArgumentMatchers.eq(7L))).thenReturn(false);when(todoAccess.canReview(org.mockito.ArgumentMatchers.any(TodoInstance.class),org.mockito.ArgumentMatchers.eq(7L))).thenReturn(true);
 
         List<Map<String,Object>> rows=service().businessTodos("LEAD",8L,actor);
 
