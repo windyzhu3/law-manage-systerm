@@ -21,6 +21,7 @@ public class OutboxBusinessEventPublisher implements BusinessEventPublisher
     {
         BusinessEventRecord event = new BusinessEventRecord();
         event.setEventType(command.getEventType().name());
+        event.setPayloadVersion(command.getPayloadVersion());
         event.setAggregateType(command.getAggregateType());
         event.setAggregateId(command.getAggregateId());
         event.setAggregateNo(command.getAggregateNo());

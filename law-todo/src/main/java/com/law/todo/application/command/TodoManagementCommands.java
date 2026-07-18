@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.AssertTrue;
 
 public final class TodoManagementCommands
 {
@@ -25,9 +26,15 @@ public final class TodoManagementCommands
         @NotBlank String businessType,
         @Pattern(regexp = "Y|N") String enabled,
         String conditionJson,
-        @Min(1) Integer payloadVersion) {
+        @Min(1) Integer payloadVersion,
+        @NotBlank String actionId,
+        @Min(0) Integer expectedVersion) {
         public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson)
-        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,1);}
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,1,null,null);}
+        public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson,Integer payloadVersion)
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,payloadVersion,null,null);}
+        @AssertTrue(message = "expectedVersion is required for trigger updates")
+        public boolean isExpectedVersionPresentForUpdate(){return triggerRuleId==null||expectedVersion!=null;}
     }
 
     public record PublishCommand(
@@ -47,7 +54,14 @@ public final class TodoManagementCommands
         @NotBlank @Pattern(regexp = "([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?") String workStart,
         @NotBlank @Pattern(regexp = "([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?") String workEnd,
         String exceptionJson,
-        @Pattern(regexp = "0|1") String status) { }
+        @Pattern(regexp = "0|1") String status,
+        @NotBlank String actionId,
+        @Min(0) Integer expectedVersion) {
+        public CalendarCommand(Long calendarId,String calendarCode,String calendarName,String timezone,String workDays,String workStart,String workEnd,String exceptionJson,String status)
+        {this(calendarId,calendarCode,calendarName,timezone,workDays,workStart,workEnd,exceptionJson,status,null,null);}
+        @AssertTrue(message = "expectedVersion is required for calendar updates")
+        public boolean isExpectedVersionPresentForUpdate(){return calendarId==null||expectedVersion!=null;}
+    }
 
     public record AttachmentCommand(
         String actionId,

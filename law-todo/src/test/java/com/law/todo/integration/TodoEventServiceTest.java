@@ -3,6 +3,7 @@ package com.law.todo.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.never;
@@ -16,10 +17,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
@@ -32,9 +36,17 @@ import com.law.todo.expression.ConditionEvaluator;
 import com.law.todo.spi.TodoOrganizationPort;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness=Strictness.LENIENT)
 class TodoEventServiceTest
 {
     @Mock TodoMapper mapper;
+    @BeforeEach void activeCatalog(){when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(Map.of("status","ACTIVE","payload_schema_json","{\"type\":\"object\",\"properties\":{\"ownerId\":{\"type\":\"integer\"}}}"));}
+
+    @Test void eventCarriesAnExplicitPayloadVersion()
+    {
+        assertEquals(2,new TodoEvent("evt","LEAD_ASSIGNED","LEAD",7L,"L-7",Map.of(),2).payloadVersion());
+        assertEquals(1,new TodoEvent("evt","LEAD_ASSIGNED","LEAD",7L,"L-7",Map.of()).payloadVersion());
+    }
 
     @Test void springConstructorExplicitlyInjectsConditionValidationDependencies() throws Exception
     {
@@ -97,11 +109,12 @@ class TodoEventServiceTest
         verify(mapper,never()).insertInstance(any());
     }
 
-    @Test void createsTodoForTrustedLegacyFlatConditionWithoutCatalog()
+    @Test void legacyFlatConditionUsesActiveCatalog()
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
         conditional.put("condition_json","{\"source\":\"ONLINE\",\"priority\":2}");
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(Map.of("status","ACTIVE","payload_schema_json","{\"type\":\"object\",\"properties\":{\"source\":{\"type\":\"string\"},\"priority\":{\"type\":\"number\"}}}"));
         TodoEvent matching=new TodoEvent("evt-2","LEAD_ASSIGNED","LEAD",8L,"L-8",Map.of("source","ONLINE","priority",2));
 
         List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(matching);
@@ -241,11 +254,9 @@ class TodoEventServiceTest
     {
         Map<String,Object> conditional=new java.util.HashMap<>(rule());
         conditional.put("condition_json","{\"$expression\":{\"version\":1,\"root\":{\"field\":\"ownerId\",\"operator\":\"EQ\",\"value\":8}}}");
-        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(conditional));when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(null);
 
-        List<TodoInstance> result=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event());
-
-        assertEquals(0,result.size());
+        assertThrows(TodoException.class,()->new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()));
         verify(mapper,never()).insertInstance(any());
     }
 

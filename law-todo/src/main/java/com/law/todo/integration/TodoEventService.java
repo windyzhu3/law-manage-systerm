@@ -48,10 +48,11 @@ public class TodoEventService
     public boolean supports(String eventType,String aggregateType){List<Map<String,Object>> rules=mapper.selectTriggerRules(eventType,aggregateType);return rules!=null&&!rules.isEmpty();}
     @Transactional public List<TodoInstance> handle(TodoEvent event)
     {
-        List<TodoInstance> result=new ArrayList<>();List<Map<String,Object>> rules=mapper.selectTriggerRules(event.eventType(),event.aggregateType());if(rules==null)return result;
+        List<TodoInstance> result=new ArrayList<>();String eventSchema=eventCatalog.payloadSchema(event.eventType(),event.payloadVersion());if(eventSchema==null)throw new TodoException("TODO_EVENT_CATALOG_REQUIRED","Event type and payload version must be active");List<Map<String,Object>> rules=mapper.selectTriggerRules(event.eventType(),event.aggregateType());if(rules==null)return result;
         for(Map<String,Object> rule:rules)
         {
-            String payloadSchema=eventCatalog.payloadSchema(event.eventType(),intValue(value(rule,"payload_version","payloadVersion"),1));if(!matches(rule,event.payload(),payloadSchema))continue;
+            int payloadVersion=intValue(value(rule,"payload_version","payloadVersion"),1);if(payloadVersion!=event.payloadVersion())continue;
+            if(!matches(rule,event.payload(),eventSchema))continue;
             Long version=longValue(value(rule,"template_version_id","templateVersionId"));
             String key=event.eventId()+":"+version+":"+event.aggregateId();
             TodoInstance existing=mapper.selectByTriggerKey(key);

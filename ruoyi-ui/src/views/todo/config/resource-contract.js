@@ -31,7 +31,8 @@ function triggerPayload(form) {
     triggerRuleId: field(form, 'trigger_rule_id', 'triggerRuleId'), eventType: event.eventType,
     payloadVersion: Number(event.payloadVersion || 1), conditionJson: JSON.stringify(event.condition || {}),
     templateId: Number(field(form, 'template_id', 'templateId')), templateVersionId: Number(field(form, 'template_version_id', 'templateVersionId')), businessType: field(form, 'business_type', 'businessType'),
-    enabled: form.enabled === false || form.enabled === 'N' ? 'N' : 'Y'
+    enabled: form.enabled === false || form.enabled === 'N' ? 'N' : 'Y', actionId: form.actionId,
+    expectedVersion: Number(field(form, 'version', 'version') || form.expectedVersion || 0)
   }
 }
 module.exports = { field, validateCalendar, validateDecision, triggerPayload }

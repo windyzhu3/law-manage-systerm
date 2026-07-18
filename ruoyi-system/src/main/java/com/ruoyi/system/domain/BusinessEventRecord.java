@@ -6,6 +6,7 @@ public class BusinessEventRecord
 {
     private Long eventId;
     private String eventType;
+    private Integer payloadVersion;
     private String aggregateType;
     private Long aggregateId;
     private String aggregateNo;
@@ -23,6 +24,8 @@ public class BusinessEventRecord
     public void setEventId(Long eventId) { this.eventId = eventId; }
     public String getEventType() { return eventType; }
     public void setEventType(String eventType) { this.eventType = eventType; }
+    public Integer getPayloadVersion() { return payloadVersion; }
+    public void setPayloadVersion(Integer payloadVersion) { this.payloadVersion = payloadVersion; }
     public String getAggregateType() { return aggregateType; }
     public void setAggregateType(String aggregateType) { this.aggregateType = aggregateType; }
     public Long getAggregateId() { return aggregateId; }

@@ -8,6 +8,8 @@ yarn-error.log*
 
 tests/**/coverage/
 tests/e2e/reports
+output/
+test-results/
 selenium-debug.log
 
 package-lock.json

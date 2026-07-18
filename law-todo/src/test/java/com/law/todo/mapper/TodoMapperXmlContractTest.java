@@ -114,6 +114,8 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("payload_version,template_id"));
             assertTrue(xml.contains("payload_version=coalesce(#{payloadVersion},1)"));
             assertTrue(xml.contains("select r.*,t.template_code"));
+            assertTrue(xml.contains("version=version+1 where trigger_rule_id=#{triggerRuleId} and version=#{expectedVersion}"));
+            assertTrue(xml.contains("version=version+1,update_time=sysdate() where calendar_id=#{calendarId} and version=#{expectedVersion}"));
         }
     }
 
