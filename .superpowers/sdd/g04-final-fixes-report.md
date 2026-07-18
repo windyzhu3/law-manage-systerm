@@ -6,11 +6,11 @@ Branch: `v0.2-Foundation`
 
 Review base: `5b7d2bea`
 
-Scope: five final-review findings only; local commits; no push
+Scope: five final-review findings plus the final generation-stage audit correction; local commits; no push
 
 ## Outcome and preserved invariants
 
-All five findings were implemented with an observed RED before production changes and a focused GREEN afterward. The final fresh MySQL/backend/frontend matrix is green. No default business line was selected, no historical case/Todo/governance state was changed, and no migration was added.
+All five original findings and the final audit lifecycle gap were implemented with an observed RED before production changes and a focused GREEN afterward. The final fresh MySQL/backend matrix is green; the backend-only audit correction did not change the already-green frontend. No default business line was selected, no historical case/Todo/governance state was changed, and no migration was added.
 
 The measured admission truth remains unchanged:
 
@@ -86,7 +86,7 @@ GREEN: 6/6 passed. Controller tests use real input/output streams and close-awar
 - artifacts close on both success and failure;
 - audit metadata/persistence failures do not mask a successful transfer or the original failed transfer.
 
-The method-level `@Log` was removed. `HistoricalMigrationExportAudit.begin(rowCount)` captures operator, department, IP, URI, and request method before the response leaves the request thread. Its transfer handle records exactly once inside the streaming callback. The adapter uses the correctly encoded title `G-04历史迁移异常清单` and stores only row count/outcome plus a generic transfer-failure description—never case names, CSV/body, temporary paths, or hashes.
+The method-level `@Log` was removed. The final lifecycle now calls `HistoricalMigrationExportAudit.begin()` before archive generation, attaches the row count through `generated(rowCount)` only after an artifact exists, and records one terminal result. Generation rejection records synchronously; transfer success/failure retains deferred callback timing. The adapter uses the correctly encoded title `G-04历史迁移异常清单` and stores only row count/outcome plus a generic failure description—never case names, CSV/body, temporary paths, SQL, hashes, business codes, or exception details.
 
 Commit: `fccd55c7 fix(todo): audit deferred G-04 exports`
 
@@ -119,6 +119,26 @@ GREEN on Linux: 10/10 passed, 0 skips. The writer creates the dedicated director
 Windows final result for this suite: 10 tests, 8 passed and 2 explicit capability-assumption skips.
 
 Commit: `5f15b4f5 fix(todo): canonicalize G-04 export root`
+
+### 6. Capture generation-stage export attempts
+
+RED command:
+
+```text
+mvn -pl ruoyi-admin -am "-Dtest=HistoricalMigrationPreflightApiTest,RuoYiHistoricalMigrationExportAuditTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Behavioral RED: 9 tests ran with 3 failures and no skips. Both mocked `TODO_MIGRATION_EXPORT_FAILED` and unsupported-gate rejections observed zero audit attempts because `exports.export(gateCode)` ran before `audit.begin(rowCount)`. The adapter also exposed the internal sentinel as `rowCount=-1` instead of the sanitized `UNAVAILABLE`. Changing the tests to the desired attempt lifecycle then produced the expected compile RED because `Attempt`/`begin()`/`generated(rowCount)` did not exist.
+
+GREEN command:
+
+```text
+mvn -pl ruoyi-admin -am "-Dtest=HistoricalMigrationPreflightApiTest,RuoYiHistoricalMigrationExportAuditTest,TodoHistoricalMigrationExportServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+GREEN: 15/15 passed with no failures, errors, or skips (`TodoHistoricalMigrationExportServiceTest` 5, controller 7, audit adapter 3). The controller now captures an attempt before generation. A generation exception invokes one failure record and rethrows the same `TodoException`; a generated artifact attaches its row count and retains deferred copy/close success/failure timing. An `AtomicBoolean` prevents duplicate terminal persistence. Metadata capture, row-count attachment, or log persistence failure is contained and cannot replace the generation/transfer outcome. Pre-generation logs use only `rowCount=UNAVAILABLE`, `outcome=FAILURE`, and `Historical migration export failed`.
+
+Commit: `0b82a721 fix(todo): audit G-04 generation failures`
 
 ## Changed files
 
@@ -156,19 +176,19 @@ Measured evidence/docs:
 
 ### Fresh MySQL/backend
 
-A disposable `mysql:8.4` container (`8.4.10`) was created on local port 13317. The exact eleven-file v0.15 baseline was imported and the configured test run migrated it through Flyway `0.20.27`.
+A disposable `mysql:8.4` container (`8.4.10`) was created on local port 13317. An initial container was discarded before testing when a PowerShell text pipe corrupted Chinese SQL bytes; the replacement was rebuilt from scratch and the exact eleven-file v0.15 baseline was imported byte-for-byte via `docker cp` plus an in-container redirect. The configured test run then migrated it through Flyway `0.20.27`.
 
-Focused command:
+Final audit-focused command:
 
 ```text
-mvn -pl ruoyi-admin -am "-Dtest=HistoricalMigrationExportArchiveWriterTest,TodoHistoricalMigrationExportServiceTest,TodoHistoricalMigrationPreflightServiceTest,HistoricalMigrationPreflightApiTest,RuoYiHistoricalMigrationExportAuditTest,HistoricalMigrationPreflightEndToEndTest,FlywayMigrationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+mvn -pl ruoyi-admin -am "-Dtest=HistoricalMigrationPreflightApiTest,RuoYiHistoricalMigrationExportAuditTest,TodoHistoricalMigrationExportServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
 ```
 
-Focused result:
+Final audit-focused result:
 
-- `law-todo`: 16 tests, 0 failures, 0 errors, 2 Windows symlink capability skips.
-- `ruoyi-admin`: 8 tests, 0 failures, 0 errors, 0 skips.
-- `HistoricalMigrationPreflightEndToEndTest` and `FlywayMigrationTest`: both executed against the disposable database; neither skipped.
+- `law-todo`: 5 tests, 0 failures, 0 errors, 0 skips.
+- `ruoyi-admin`: 10 tests, 0 failures, 0 errors, 0 skips.
+- Full verification below executed `HistoricalMigrationPreflightEndToEndTest` and `FlywayMigrationTest` against the disposable database; neither skipped.
 
 Full command:
 
@@ -184,10 +204,10 @@ Surefire XML totals from 149 suites:
 | `law-business` | 28 | 0 | 0 | 0 |
 | `law-todo` | 404 | 0 | 0 | 2 |
 | `ruoyi-system` | 123 | 0 | 0 | 0 |
-| `ruoyi-admin` | 48 | 0 | 0 | 0 |
-| **Total** | **675** | **0** | **0** | **2** |
+| `ruoyi-admin` | 52 | 0 | 0 | 0 |
+| **Total** | **679** | **0** | **0** | **2** |
 
-Thus 673 tests passed and the only two non-executions were the explicit Windows symlink capability assumptions; the equivalent supported Linux suite ran 10/10 with no skips.
+Thus 677 tests passed and the only two non-executions were the explicit Windows symlink capability assumptions; the equivalent supported Linux suite ran 10/10 with no skips.
 
 Live database truth after verification:
 
@@ -204,6 +224,8 @@ Foundation=2/8 NOT_ADMITTED (asserted by real-DB E2E)
 ```
 
 ### Frontend/browser
+
+The final audit correction is backend-only, so the frontend was not rerun as directed. The immediately preceding fix-wave evidence remains:
 
 Commands:
 
@@ -233,9 +255,9 @@ Results:
 The disposable database was removed after the live-truth query:
 
 ```text
-docker stop foundation-g04-final-fixes-20260719
-docker rm foundation-g04-final-fixes-20260719
-docker ps -a --filter name=foundation-g04-final-fixes-20260719
+docker stop foundation-g04-final-audit-20260719
+docker rm foundation-g04-final-audit-20260719
+docker ps -a --filter name=foundation-g04-final-audit-20260719
 ```
 
 The final listing was empty. Linux Maven containers used `--rm`.
@@ -244,7 +266,7 @@ The final listing was empty. Linux Maven containers used `--rm`.
 
 - Manifest key order and fixed identity fields prevent ambiguous or incomplete evidence metadata.
 - JSON content-type detection occurs in the G-04 wrapper, preserving all existing binary callers and preventing a logical error payload from being downloaded as evidence.
-- The deferred audit replaces premature aspect success with the actual transfer/close outcome, captures request metadata while the request context is available, is exactly-once per transfer handle, and deliberately excludes evidence content and sensitive file metadata.
+- The attempt audit replaces premature aspect success, begins before archive generation, attaches row count only after artifact creation, records generation failure immediately or the actual deferred transfer/close outcome, is exactly-once per attempt, and deliberately excludes evidence content, SQL, exception details, and sensitive file metadata.
 - Audit exceptions are contained so they cannot change export semantics; a warning remains in the server log for operational detection.
 - Cleanup is bounded in the request path, sanitized, applies equally to generation and artifact close, and has a last-resort JVM-exit fallback.
 - Canonical root validation rejects lexical-alias confusion and a detected link-target swap; files must be direct regular-file children of the canonical dedicated root.
@@ -255,7 +277,7 @@ The final listing was empty. Linux Maven containers used `--rm`.
 - Reviewed `git diff 5b7d2bea..HEAD` finding by finding and confirmed each implementation commit contains its production change plus the test that drove it.
 - Parsed every fresh Surefire XML report rather than relying only on Maven's reactor summary.
 - Confirmed the two Windows skips are named capability assumptions and reran the same suite on a supported Linux filesystem with zero skips.
-- Confirmed the endpoint no longer has method-level `@Log`; success/failure is emitted only inside the deferred callback.
+- Confirmed the endpoint no longer has method-level `@Log`; generation failures are recorded after the generation attempt fails, while transfer success/failure remains inside the deferred callback, with no premature success.
 - Confirmed `returnFullResponse` remains opt-in and the global Axios binary branch was not changed.
 - Confirmed all public cleanup/root failures retain `TODO_MIGRATION_EXPORT_FAILED` and the path-free message `Historical migration export could not be generated`.
 - Confirmed `git diff --check` is clean and documentation totals match fresh XML/Playwright output.
