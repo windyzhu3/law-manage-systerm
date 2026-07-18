@@ -6,4 +6,6 @@ import java.util.Map;
 public interface TodoHistoricalMigrationReadinessMapper
 {
     List<Map<String,Object>> selectMigrationReadiness(String gateCode);
+    Map<String,Object> selectHistoricalMigrationPreflightCounts();
+    List<Map<String,Object>> selectHistoricalCaseGroups();
 }

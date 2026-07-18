@@ -13,4 +13,19 @@
     where r.gate_code=#{gateCode}
     order by r.sort_order,r.requirement_id
   </select>
+  <select id="selectHistoricalMigrationPreflightCounts" resultType="java.util.Map">
+    select
+      (select count(*) from biz_case where del_flag='0') active_case_count,
+      (select count(*) from biz_case where del_flag&lt;&gt;'0') deleted_case_count,
+      (select count(*) from todo_instance) historical_todo_count,
+      (select count(*) from todo_instance i left join todo_template_version v
+        on v.version_id=i.template_version_id where v.version_id is null) orphan_todo_version_count
+  </select>
+  <select id="selectHistoricalCaseGroups" resultType="java.util.Map">
+    select coalesce(case_status,'&lt;NULL&gt;') case_status,
+           coalesce(case_type,'&lt;NULL&gt;') case_type,count(*) case_count
+    from biz_case where del_flag='0'
+    group by coalesce(case_status,'&lt;NULL&gt;'),coalesce(case_type,'&lt;NULL&gt;')
+    order by case_count desc,case_status,case_type
+  </select>
 </mapper>
