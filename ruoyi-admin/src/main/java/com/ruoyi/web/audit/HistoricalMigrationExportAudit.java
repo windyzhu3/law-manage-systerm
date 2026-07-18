@@ -2,10 +2,11 @@ package com.ruoyi.web.audit;
 
 public interface HistoricalMigrationExportAudit
 {
-    Transfer begin(long rowCount);
+    Attempt begin();
 
-    interface Transfer
+    interface Attempt
     {
+        void generated(long rowCount);
         void success();
         void failure();
     }

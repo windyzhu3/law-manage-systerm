@@ -26,6 +26,7 @@ import com.law.todo.application.TodoHistoricalMigrationExportService;
 import com.law.todo.application.TodoHistoricalMigrationPreflightService;
 import com.law.todo.application.TodoHistoricalMigrationReadinessService;
 import com.law.todo.application.view.HistoricalMigrationExportArtifact;
+import com.law.todo.domain.TodoException;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.web.audit.HistoricalMigrationExportAudit;
 import com.ruoyi.web.controller.todo.TodoHistoricalMigrationReadinessController;
@@ -78,6 +79,8 @@ class HistoricalMigrationPreflightApiTest
         response.getBody().writeTo(output);
         assertEquals(3,output.size());
         assertEquals("SUCCESS",audit.outcome);
+        assertEquals(1,audit.successRecords);
+        assertEquals(0,audit.failureRecords);
         assertTrue(input.closed);
     }
 
@@ -95,6 +98,8 @@ class HistoricalMigrationPreflightApiTest
 
         assertThrows(IOException.class,()->response.getBody().writeTo(disconnected));
         assertEquals("FAILURE",audit.outcome);
+        assertEquals(0,audit.successRecords);
+        assertEquals(1,audit.failureRecords);
         assertTrue(input.closed);
     }
 
@@ -115,6 +120,62 @@ class HistoricalMigrationPreflightApiTest
             @Override public void write(int value) throws IOException {throw disconnect;}
         }));
         assertSame(disconnect,observed);
+
+        TodoHistoricalMigrationExportService beginFailureExports=mock(TodoHistoricalMigrationExportService.class);
+        when(beginFailureExports.export("G-04"))
+                .thenReturn(artifact(new TrackingInputStream(new byte[]{4,5}),2L,1L));
+        ResponseEntity<StreamingResponseBody> beginFailure=
+                controller(beginFailureExports,new ThrowingBeginAudit()).exceptionExport("G-04");
+        ByteArrayOutputStream beginFailureOutput=new ByteArrayOutputStream();
+        beginFailure.getBody().writeTo(beginFailureOutput);
+        assertEquals(2,beginFailureOutput.size());
+    }
+
+    @Test void auditsArchiveGenerationFailureExactlyOnceAndPreservesTheStableException()
+    {
+        TodoException failure=new TodoException("TODO_MIGRATION_EXPORT_FAILED",
+                "Historical migration export could not be generated");
+        assertGenerationFailureIsAudited("G-04",failure);
+    }
+
+    @Test void auditsUnsupportedGateExactlyOnceAndPreservesTheStableException()
+    {
+        TodoException failure=new TodoException("TODO_MIGRATION_GATE_UNSUPPORTED","Only G-04 is supported");
+        assertGenerationFailureIsAudited("G-05",failure);
+    }
+
+    @Test void auditFailureNeverMasksTheOriginalGenerationFailure()
+    {
+        assertAuditFailureDoesNotMaskGenerationFailure(new ThrowingAudit());
+        assertAuditFailureDoesNotMaskGenerationFailure(new ThrowingBeginAudit());
+    }
+
+    private static void assertGenerationFailureIsAudited(String gateCode,TodoException failure)
+    {
+        TodoHistoricalMigrationExportService exports=mock(TodoHistoricalMigrationExportService.class);
+        when(exports.export(gateCode)).thenThrow(failure);
+        RecordingAudit audit=new RecordingAudit();
+
+        TodoException observed=assertThrows(TodoException.class,
+                ()->controller(exports,audit).exceptionExport(gateCode));
+
+        assertSame(failure,observed,"Auditing must not replace the stable generation exception");
+        assertEquals(1,audit.attempts,"Every export attempt must be captured before generation starts");
+        assertEquals(0,audit.successRecords,"Generation failure must never record success");
+        assertEquals(1,audit.failureRecords,"Generation failure must be recorded exactly once");
+    }
+
+    private static void assertAuditFailureDoesNotMaskGenerationFailure(HistoricalMigrationExportAudit audit)
+    {
+        TodoException failure=new TodoException("TODO_MIGRATION_EXPORT_FAILED",
+                "Historical migration export could not be generated");
+        TodoHistoricalMigrationExportService exports=mock(TodoHistoricalMigrationExportService.class);
+        when(exports.export("G-04")).thenThrow(failure);
+
+        TodoException observed=assertThrows(TodoException.class,
+                ()->controller(exports,audit).exceptionExport("G-04"));
+
+        assertSame(failure,observed);
     }
 
     private static HistoricalMigrationExportArtifact artifact(TrackingInputStream input,long size,long rows)
@@ -142,26 +203,36 @@ class HistoricalMigrationPreflightApiTest
 
     private static final class RecordingAudit implements HistoricalMigrationExportAudit
     {
+        private int attempts;
+        private int successRecords;
+        private int failureRecords;
         private long rowCount=-1;
         private String outcome;
-        @Override public Transfer begin(long rows)
+        @Override public Attempt begin()
         {
-            rowCount=rows;
-            return new Transfer() {
-                @Override public void success(){outcome="SUCCESS";}
-                @Override public void failure(){outcome="FAILURE";}
+            attempts++;
+            return new Attempt() {
+                @Override public void generated(long rows){rowCount=rows;}
+                @Override public void success(){successRecords++;outcome="SUCCESS";}
+                @Override public void failure(){failureRecords++;outcome="FAILURE";}
             };
         }
     }
 
     private static final class ThrowingAudit implements HistoricalMigrationExportAudit
     {
-        @Override public Transfer begin(long rows)
+        @Override public Attempt begin()
         {
-            return new Transfer() {
+            return new Attempt() {
+                @Override public void generated(long rows){throw new IllegalStateException("audit unavailable");}
                 @Override public void success(){throw new IllegalStateException("audit unavailable");}
                 @Override public void failure(){throw new IllegalStateException("audit unavailable");}
             };
         }
+    }
+
+    private static final class ThrowingBeginAudit implements HistoricalMigrationExportAudit
+    {
+        @Override public Attempt begin(){throw new IllegalStateException("audit metadata unavailable");}
     }
 }

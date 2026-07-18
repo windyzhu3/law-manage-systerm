@@ -54,15 +54,23 @@ public class TodoHistoricalMigrationReadinessController
     public ResponseEntity<StreamingResponseBody> exceptionExport(
             @RequestParam(defaultValue="G-04") String gateCode)
     {
-        HistoricalMigrationExportArtifact artifact=exports.export(gateCode);
-        HistoricalMigrationExportAudit.Transfer transferAudit=beginAudit(artifact.rowCount());
+        HistoricalMigrationExportAudit.Attempt exportAudit=beginAudit();
+        HistoricalMigrationExportArtifact artifact;
+        try {
+            artifact=exports.export(gateCode);
+            recordAudit(()->exportAudit.generated(artifact.rowCount()));
+        }
+        catch(RuntimeException generationFailure) {
+            recordAudit(exportAudit::failure);
+            throw generationFailure;
+        }
         StreamingResponseBody body=output->{
             try(artifact) {artifact.input().transferTo(output);}
             catch(IOException|RuntimeException failure) {
-                recordAudit(transferAudit::failure);
+                recordAudit(exportAudit::failure);
                 throw failure;
             }
-            recordAudit(transferAudit::success);
+            recordAudit(exportAudit::success);
         };
         return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/zip"))
                 .contentLength(artifact.sizeBytes())
@@ -75,12 +83,13 @@ public class TodoHistoricalMigrationReadinessController
                 .body(body);
     }
 
-    private HistoricalMigrationExportAudit.Transfer beginAudit(long rowCount)
+    private HistoricalMigrationExportAudit.Attempt beginAudit()
     {
-        try {return audit.begin(rowCount);}
+        try {return audit.begin();}
         catch(RuntimeException failure) {
             LOG.warn("Historical migration export audit metadata could not be captured");
-            return new HistoricalMigrationExportAudit.Transfer() {
+            return new HistoricalMigrationExportAudit.Attempt() {
+                @Override public void generated(long rowCount){ }
                 @Override public void success(){ }
                 @Override public void failure(){ }
             };

@@ -1,6 +1,7 @@
 package com.ruoyi.web.audit;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -39,14 +40,16 @@ public class RuoYiHistoricalMigrationExportAudit implements HistoricalMigrationE
             LongSupplier milliseconds)
     {this.logs=logs;this.metadata=metadata;this.milliseconds=milliseconds;}
 
-    @Override public Transfer begin(long rowCount)
+    @Override public Attempt begin()
     {
         long startedAt=milliseconds.getAsLong();
         Metadata captured=metadata.get();
+        AtomicLong rowCount=new AtomicLong(-1L);
         AtomicBoolean recorded=new AtomicBoolean();
-        return new Transfer() {
-            @Override public void success(){record("SUCCESS",rowCount,startedAt,captured,recorded);}
-            @Override public void failure(){record("FAILURE",rowCount,startedAt,captured,recorded);}
+        return new Attempt() {
+            @Override public void generated(long rows){rowCount.set(rows);}
+            @Override public void success(){record("SUCCESS",rowCount.get(),startedAt,captured,recorded);}
+            @Override public void failure(){record("FAILURE",rowCount.get(),startedAt,captured,recorded);}
         };
     }
 
@@ -63,10 +66,11 @@ public class RuoYiHistoricalMigrationExportAudit implements HistoricalMigrationE
         log.setDeptName(StringUtils.substring(captured.departmentName(),0,50));
         log.setOperIp(StringUtils.substring(captured.ipAddress(),0,128));
         log.setOperUrl(StringUtils.substring(captured.requestUri(),0,255));
-        log.setOperParam("rowCount="+rowCount);
-        log.setJsonResult("outcome="+outcome+",rowCount="+rowCount);
+        String recordedRowCount=rowCount<0?"UNAVAILABLE":String.valueOf(rowCount);
+        log.setOperParam("rowCount="+recordedRowCount);
+        log.setJsonResult("outcome="+outcome+",rowCount="+recordedRowCount);
         log.setStatus("SUCCESS".equals(outcome)?BusinessStatus.SUCCESS.ordinal():BusinessStatus.FAIL.ordinal());
-        if(!"SUCCESS".equals(outcome))log.setErrorMsg("Historical migration export transfer failed");
+        if(!"SUCCESS".equals(outcome))log.setErrorMsg("Historical migration export failed");
         log.setCostTime(Math.max(0L,milliseconds.getAsLong()-startedAt));
         logs.insertOperlog(log);
     }
