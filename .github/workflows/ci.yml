@@ -109,4 +109,4 @@ jobs:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,FileMaterialEndToEndTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest -Dsurefire.failIfNoSpecifiedTests=false test

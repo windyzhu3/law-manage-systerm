@@ -52,11 +52,11 @@ async function setupConfig(page) {
       ]
     },
     fileSecurity: {
-      gateCode: 'G-05', total: 7, ready: 5, sourceUnresolved: 2, runtimeMissing: 0, gateReady: false,
+      gateCode: 'G-05', total: 7, ready: 6, sourceUnresolved: 1, runtimeMissing: 0, gateReady: false,
       objectModelReady: true, tokenControlReady: true, accessAuditReady: true, cleanupCompensationReady: true,
       requirements: [
         { requirementId: 1, requirementCode: 'SINGLE_USE_RELATION_TOKEN', requirementName: '单次关系绑定访问令牌', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'FileObjectService.java:229-236' },
-        { requirementId: 2, requirementCode: 'PRD_MATERIAL_TYPE_E2E', requirementName: 'PRD材料类型端到端验收', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'admission-report.md:109' },
+        { requirementId: 2, requirementCode: 'PRD_MATERIAL_TYPE_E2E', requirementName: 'PRD材料类型端到端验收', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'FileMaterialEndToEndTest.java' },
         { requirementId: 3, requirementCode: 'SECURITY_REVIEW_SIGNOFF', requirementName: '独立安全评审签字', sourceStatus: 'NEEDS_REVIEW', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'gap-analysis.md:327' }
       ]
     },
@@ -393,7 +393,9 @@ test('file security readiness separates technical controls from independent revi
   await expect(pane.getByText('SINGLE_USE_RELATION_TOKEN', { exact: true })).toBeVisible()
   await expect(pane.getByText('PRD_MATERIAL_TYPE_E2E', { exact: true })).toBeVisible()
   await expect(pane.getByText('SECURITY_REVIEW_SIGNOFF', { exact: true })).toBeVisible()
-  await expect(pane.getByText('待验收证据', { exact: true })).toBeVisible()
+  const materialRow = pane.locator('.el-table__row').filter({ hasText: 'PRD_MATERIAL_TYPE_E2E' })
+  await expect(materialRow.getByText('仓库已确认', { exact: true })).toBeVisible()
+  await expect(materialRow.getByText('已就绪', { exact: true })).toBeVisible()
   await expect(pane.getByText('待安全评审', { exact: true })).toBeVisible()
 })
 

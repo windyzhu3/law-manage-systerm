@@ -23,4 +23,16 @@ class FileSecurityReadinessMigrationContractTest
         assertFalse(sql.contains("insert into sys_role_menu"));
         assertFalse(sql.contains("'approved'"));
     }
+
+    @Test void forward_evidence_migration_confirms_only_the_prd_material_e2e() throws Exception
+    {
+        String sql=Files.readString(Path.of("..","ruoyi-admin","src","main","resources","db","migration",
+                "V0_20_22__foundation_prd_material_e2e_evidence.sql")).toLowerCase().replaceAll("\\s+"," ");
+        assertTrue(sql.contains("requirement_code='prd_material_type_e2e'"));
+        assertTrue(sql.contains("source_status='confirmed'"));
+        assertTrue(sql.contains("filematerialendtoendtest.java"));
+        assertFalse(sql.contains("security_review_signoff"));
+        assertFalse(sql.contains("todo_admission_evidence"));
+        assertFalse(sql.contains("'approved'"));
+    }
 }

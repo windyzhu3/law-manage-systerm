@@ -39,7 +39,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.21", current.getVersion().getVersion());
+        assertEquals("0.20.22", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -155,9 +155,12 @@ class FlywayMigrationTest
             System.getenv("TODO_MIGRATION_DB_PASSWORD")))
         {
             assertEquals(7L,count(connection,"select count(*) from todo_foundation_file_security_requirement where gate_code='G-05'"));
-            assertEquals(5L,count(connection,"select count(*) from todo_foundation_file_security_requirement where source_status='CONFIRMED'"));
-            assertEquals(1L,count(connection,"select count(*) from todo_foundation_file_security_requirement where source_status='NEEDS_EVIDENCE'"));
+            assertEquals(6L,count(connection,"select count(*) from todo_foundation_file_security_requirement where source_status='CONFIRMED'"));
+            assertEquals(0L,count(connection,"select count(*) from todo_foundation_file_security_requirement where source_status='NEEDS_EVIDENCE'"));
             assertEquals(1L,count(connection,"select count(*) from todo_foundation_file_security_requirement where source_status='NEEDS_REVIEW'"));
+            assertEquals(1L,count(connection,"select count(*) from todo_foundation_file_security_requirement "
+                +"where requirement_code='PRD_MATERIAL_TYPE_E2E' and source_status='CONFIRMED' "
+                +"and source_ref like '%FileMaterialEndToEndTest.java'"));
             assertEquals(5L,count(connection,"select count(*) from information_schema.tables where table_schema=database() and table_name in ('file_object','file_object_version','file_business_relation','file_access_log','file_storage_cleanup')"));
             assertEquals(4L,count(connection,"select count(*) from information_schema.columns where table_schema=database() and table_name='file_access_token' and column_name in ('token_hash','relation_id','actor_id','consumed_at')"));
             assertEquals(1L,count(connection,"select count(distinct index_name) from information_schema.statistics where table_schema=database() and table_name='file_access_token' and index_name='uk_file_access_token_hash' and non_unique=0"));
