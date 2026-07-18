@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.FilterInputStream;
@@ -179,6 +180,54 @@ class HistoricalMigrationExportArchiveWriterTest
         assertEquals(1,cleanup.fallbackRegistrations);
     }
 
+    @Test void createsTemporaryFilesThroughTheCanonicalRootPathWhenSymlinksAreSupported() throws Exception
+    {
+        Path realRoot=temporaryDirectory.resolve("canonical-root");
+        Files.createDirectory(realRoot);
+        Path configuredAlias=temporaryDirectory.resolve("configured-root");
+        createSymbolicLinkOrSkip(configuredAlias,realRoot);
+        ControlledCleanup cleanup=new ControlledCleanup(0,0);
+        HistoricalMigrationExportArchiveWriter writer=new HistoricalMigrationExportArchiveWriter(configuredAlias,
+                Clock.fixed(GENERATED_AT,ZoneOffset.UTC),cleanup);
+
+        HistoricalMigrationExportArtifact artifact=writer.write(List.of(candidate()).iterator());
+
+        assertNotNull(cleanup.openedZip);
+        assertEquals(realRoot.toRealPath(),cleanup.openedZip.getParent());
+        assertEquals(realRoot.toRealPath(),cleanup.openedZip.getParent().toRealPath());
+        assertTrue(cleanup.openedZip.toRealPath().startsWith(realRoot.toRealPath()));
+        artifact.close();
+        try(var files=Files.list(realRoot)){assertTrue(files.findAny().isEmpty());}
+    }
+
+    @Test void rejectsAResolvedRootThatIsLaterSwappedToAnOutsideSymlink() throws Exception
+    {
+        Path dedicatedRoot=temporaryDirectory.resolve("dedicated-root");
+        Path outsideRoot=temporaryDirectory.resolve("outside-root");
+        Files.createDirectory(dedicatedRoot);
+        Files.createDirectory(outsideRoot);
+        HistoricalMigrationExportArchiveWriter writer=new HistoricalMigrationExportArchiveWriter(dedicatedRoot,
+                Clock.fixed(GENERATED_AT,ZoneOffset.UTC));
+        try(HistoricalMigrationExportArtifact initial=writer.write(List.of(candidate()).iterator())) {
+            initial.input().readAllBytes();
+        }
+        Path parkedRoot=temporaryDirectory.resolve("parked-root");
+        Files.move(dedicatedRoot,parkedRoot);
+        createSymbolicLinkOrSkip(dedicatedRoot,outsideRoot);
+
+        TodoException failure=null;
+        try(HistoricalMigrationExportArtifact unsafe=writer.write(List.of(candidate()).iterator())) {
+            unsafe.input().readAllBytes();
+        }
+        catch(TodoException expected) {failure=expected;}
+
+        assertNotNull(failure,"A symlink-swapped canonical root must be rejected");
+        assertEquals("TODO_MIGRATION_EXPORT_FAILED",failure.getBusinessCode());
+        assertEquals("Historical migration export could not be generated",failure.getMessage());
+        assertFalse(failure.getMessage().contains(outsideRoot.toString()));
+        try(var files=Files.list(outsideRoot)){assertTrue(files.findAny().isEmpty());}
+    }
+
     private HistoricalMigrationExportArchiveWriter writer()
     {return new HistoricalMigrationExportArchiveWriter(temporaryDirectory,Clock.fixed(GENERATED_AT,ZoneOffset.UTC));}
 
@@ -192,6 +241,14 @@ class HistoricalMigrationExportArchiveWriterTest
     {
         try(var paths=Files.list(temporaryDirectory)) { assertTrue(paths.noneMatch(Files::isRegularFile)); }
         catch(IOException exception) { throw new AssertionError(exception); }
+    }
+
+    private static void createSymbolicLinkOrSkip(Path link,Path target)
+    {
+        try {Files.createSymbolicLink(link,target);}
+        catch(UnsupportedOperationException|IOException|SecurityException unsupported) {
+            assumeTrue(false,"Symbolic links are unavailable on this OS/filesystem: "+unsupported.getClass().getSimpleName());
+        }
     }
 
     private static Map<String,byte[]> zipEntries(byte[] bytes) throws IOException
@@ -216,6 +273,7 @@ class HistoricalMigrationExportArchiveWriterTest
         private int csvDeleteAttempts;
         private int fallbackRegistrations;
         private final boolean failCsvDeletion;
+        private Path openedZip;
 
         private ControlledCleanup(int closeFailures,int deleteFailures)
         {this(closeFailures,deleteFailures,false);}
@@ -225,6 +283,7 @@ class HistoricalMigrationExportArchiveWriterTest
 
         @Override public InputStream open(Path zip) throws IOException
         {
+            openedZip=zip;
             return new FilterInputStream(Files.newInputStream(zip)) {
                 @Override public void close() throws IOException
                 {

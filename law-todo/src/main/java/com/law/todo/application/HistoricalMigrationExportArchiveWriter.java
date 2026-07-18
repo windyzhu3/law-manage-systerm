@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -45,6 +46,7 @@ public class HistoricalMigrationExportArchiveWriter
     private final Path root;
     private final Clock clock;
     private final HistoricalMigrationExportArchiveCleanup cleanup;
+    private volatile Path canonicalRoot;
 
     public HistoricalMigrationExportArchiveWriter(
             @Value("${todo.migration-export.temp-dir:${java.io.tmpdir}/law-todo-migration-export}") String root)
@@ -60,13 +62,13 @@ public class HistoricalMigrationExportArchiveWriter
     {
         Path csv=null,zip=null;
         try {
-            Files.createDirectories(root);
-            csv=temporaryFile("historical-case-exceptions-", ".csv");
+            Path dedicatedRoot=canonicalRoot();
+            csv=temporaryFile(dedicatedRoot,"historical-case-exceptions-", ".csv");
             MessageDigest digest=MessageDigest.getInstance("SHA-256");
             long rows=writeCsv(csv,candidates,digest);
             String csvSha256=java.util.HexFormat.of().formatHex(digest.digest());
             Instant generatedAt=clock.instant();
-            zip=temporaryFile("historical-migration-export-", ".zip");
+            zip=temporaryFile(dedicatedRoot,"historical-migration-export-", ".zip");
             writeZip(zip,csv,manifest(rows,csvSha256,generatedAt),generatedAt);
             IOException csvCleanupFailure=deleteWithRetries(csv,true);csv=null;
             if(csvCleanupFailure!=null)throw csvCleanupFailure;
@@ -78,14 +80,43 @@ public class HistoricalMigrationExportArchiveWriter
         }
     }
 
-    private Path temporaryFile(String prefix,String suffix) throws IOException
+    private Path canonicalRoot() throws IOException
     {
-        Path file=Files.createTempFile(root,prefix,suffix).toAbsolutePath().normalize();
-        if(!file.startsWith(root)) {
+        Path resolved=canonicalRoot;
+        if(resolved==null)synchronized(this) {
+            resolved=canonicalRoot;
+            if(resolved==null) {
+                Files.createDirectories(root);
+                resolved=root.toRealPath();
+                if(!Files.isDirectory(resolved,LinkOption.NOFOLLOW_LINKS))
+                    throw new IOException("Historical migration export root is unsafe");
+                canonicalRoot=resolved;
+            }
+        }
+        validateCanonicalRoot(resolved);
+        return resolved;
+    }
+
+    private static void validateCanonicalRoot(Path canonicalRoot) throws IOException
+    {
+        Path observed=canonicalRoot.toRealPath();
+        if(!observed.equals(canonicalRoot)||!Files.isDirectory(canonicalRoot,LinkOption.NOFOLLOW_LINKS))
+            throw new IOException("Historical migration export root is unsafe");
+    }
+
+    private Path temporaryFile(Path canonicalRoot,String prefix,String suffix) throws IOException
+    {
+        validateCanonicalRoot(canonicalRoot);
+        Path file=Files.createTempFile(canonicalRoot,prefix,suffix);
+        Path realParent=file.getParent().toRealPath();
+        Path realFile=file.toRealPath();
+        if(!realParent.equals(canonicalRoot)||!realFile.startsWith(canonicalRoot)
+                ||!canonicalRoot.equals(realFile.getParent())
+                ||!Files.isRegularFile(realFile,LinkOption.NOFOLLOW_LINKS)) {
             deleteWithRetries(file,true);
             throw new IOException("Temporary export file escaped the dedicated root");
         }
-        return file;
+        return realFile;
     }
 
     private long writeCsv(Path csv,Iterator<HistoricalMigrationCaseCandidate> candidates,MessageDigest digest) throws IOException
