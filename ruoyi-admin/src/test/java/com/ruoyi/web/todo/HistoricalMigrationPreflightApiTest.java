@@ -1,10 +1,12 @@
 package com.ruoyi.web.todo;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
@@ -12,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +26,8 @@ import com.law.todo.application.TodoHistoricalMigrationExportService;
 import com.law.todo.application.TodoHistoricalMigrationPreflightService;
 import com.law.todo.application.TodoHistoricalMigrationReadinessService;
 import com.law.todo.application.view.HistoricalMigrationExportArtifact;
+import com.ruoyi.common.annotation.Log;
+import com.ruoyi.web.audit.HistoricalMigrationExportAudit;
 import com.ruoyi.web.controller.todo.TodoHistoricalMigrationReadinessController;
 
 class HistoricalMigrationPreflightApiTest
@@ -40,17 +45,16 @@ class HistoricalMigrationPreflightApiTest
     @Test void exposesControlledZipResponseWithDedicatedPermission() throws Exception
     {
         TodoHistoricalMigrationExportService exports=mock(TodoHistoricalMigrationExportService.class);
-        HistoricalMigrationExportArtifact artifact=mock(HistoricalMigrationExportArtifact.class);
-        when(artifact.input()).thenReturn(new ByteArrayInputStream(new byte[]{1,2,3}));
-        when(artifact.sizeBytes()).thenReturn(3L);
-        when(artifact.rowCount()).thenReturn(2L);
-        when(artifact.csvSha256()).thenReturn(SHA);
+        TrackingInputStream input=new TrackingInputStream(new byte[]{1,2,3});
+        HistoricalMigrationExportArtifact artifact=artifact(input,3L,2L);
         when(exports.export("G-04")).thenReturn(artifact);
-        TodoHistoricalMigrationReadinessController controller=controller(exports);
+        RecordingAudit audit=new RecordingAudit();
+        TodoHistoricalMigrationReadinessController controller=controller(exports,audit);
 
         Method method=TodoHistoricalMigrationReadinessController.class.getDeclaredMethod("exceptionExport",String.class);
         assertPermission(method,"todo:admission:export");
         assertGetMapping(method,"/exception-export");
+        assertNull(method.getAnnotation(Log.class),"Deferred exports must not use premature @AfterReturning audit");
 
         ResponseEntity<StreamingResponseBody> response=controller.exceptionExport("G-04");
         assertEquals("application/zip",response.getHeaders().getContentType().toString());
@@ -61,32 +65,66 @@ class HistoricalMigrationPreflightApiTest
         assertEquals("no-store",response.getHeaders().getCacheControl());
         assertEquals("nosniff",response.getHeaders().getFirst("X-Content-Type-Options"));
         assertEquals(3L,response.getHeaders().getContentLength());
+        assertEquals(2L,audit.rowCount);
+        assertNull(audit.outcome,"No success audit may be recorded before the deferred body runs");
 
-        ByteArrayOutputStream output=new ByteArrayOutputStream();
+        ByteArrayOutputStream output=new ByteArrayOutputStream() {
+            @Override public synchronized void write(byte[] bytes,int offset,int length)
+            {
+                assertNull(audit.outcome,"Success must wait until the complete copy finishes");
+                super.write(bytes,offset,length);
+            }
+        };
         response.getBody().writeTo(output);
         assertEquals(3,output.size());
-        verify(artifact).close();
+        assertEquals("SUCCESS",audit.outcome);
+        assertTrue(input.closed);
     }
 
     @Test void closesArtifactWhenClientDisconnects() throws Exception
     {
         TodoHistoricalMigrationExportService exports=mock(TodoHistoricalMigrationExportService.class);
-        HistoricalMigrationExportArtifact artifact=mock(HistoricalMigrationExportArtifact.class);
-        when(artifact.input()).thenReturn(new ByteArrayInputStream(new byte[]{1,2,3}));
+        TrackingInputStream input=new TrackingInputStream(new byte[]{1,2,3});
+        HistoricalMigrationExportArtifact artifact=artifact(input,3L,2L);
         when(exports.export("G-04")).thenReturn(artifact);
-        ResponseEntity<StreamingResponseBody> response=controller(exports).exceptionExport("G-04");
+        RecordingAudit audit=new RecordingAudit();
+        ResponseEntity<StreamingResponseBody> response=controller(exports,audit).exceptionExport("G-04");
         OutputStream disconnected=new OutputStream() {
             @Override public void write(int value) throws IOException {throw new IOException("client disconnected");}
         };
 
         assertThrows(IOException.class,()->response.getBody().writeTo(disconnected));
-        verify(artifact).close();
+        assertEquals("FAILURE",audit.outcome);
+        assertTrue(input.closed);
     }
 
-    private static TodoHistoricalMigrationReadinessController controller(TodoHistoricalMigrationExportService exports)
+    @Test void auditFailureNeverMasksSuccessfulOrFailedTransfer() throws Exception
+    {
+        TodoHistoricalMigrationExportService successfulExports=mock(TodoHistoricalMigrationExportService.class);
+        when(successfulExports.export("G-04")).thenReturn(artifact(new TrackingInputStream(new byte[]{1,2,3}),3L,2L));
+        ResponseEntity<StreamingResponseBody> success=controller(successfulExports,new ThrowingAudit()).exceptionExport("G-04");
+        ByteArrayOutputStream copied=new ByteArrayOutputStream();
+        success.getBody().writeTo(copied);
+        assertEquals(3,copied.size());
+
+        TodoHistoricalMigrationExportService failedExports=mock(TodoHistoricalMigrationExportService.class);
+        when(failedExports.export("G-04")).thenReturn(artifact(new TrackingInputStream(new byte[]{1}),1L,1L));
+        ResponseEntity<StreamingResponseBody> failure=controller(failedExports,new ThrowingAudit()).exceptionExport("G-04");
+        IOException disconnect=new IOException("client disconnected");
+        IOException observed=assertThrows(IOException.class,()->failure.getBody().writeTo(new OutputStream() {
+            @Override public void write(int value) throws IOException {throw disconnect;}
+        }));
+        assertSame(disconnect,observed);
+    }
+
+    private static HistoricalMigrationExportArtifact artifact(TrackingInputStream input,long size,long rows)
+    {return new HistoricalMigrationExportArtifact(input,size,rows,SHA,Instant.EPOCH);}
+
+    private static TodoHistoricalMigrationReadinessController controller(TodoHistoricalMigrationExportService exports,
+            HistoricalMigrationExportAudit audit)
     {
         return new TodoHistoricalMigrationReadinessController(mock(TodoHistoricalMigrationReadinessService.class),
-                mock(TodoHistoricalMigrationPreflightService.class),exports);
+                mock(TodoHistoricalMigrationPreflightService.class),exports,audit);
     }
 
     private static void assertPermission(Method method,String permission)
@@ -94,4 +132,36 @@ class HistoricalMigrationPreflightApiTest
 
     private static void assertGetMapping(Method method,String path)
     {assertEquals(path,method.getAnnotation(GetMapping.class).value()[0]);}
+
+    private static final class TrackingInputStream extends ByteArrayInputStream
+    {
+        private boolean closed;
+        private TrackingInputStream(byte[] bytes){super(bytes);}
+        @Override public void close() throws IOException {closed=true;super.close();}
+    }
+
+    private static final class RecordingAudit implements HistoricalMigrationExportAudit
+    {
+        private long rowCount=-1;
+        private String outcome;
+        @Override public Transfer begin(long rows)
+        {
+            rowCount=rows;
+            return new Transfer() {
+                @Override public void success(){outcome="SUCCESS";}
+                @Override public void failure(){outcome="FAILURE";}
+            };
+        }
+    }
+
+    private static final class ThrowingAudit implements HistoricalMigrationExportAudit
+    {
+        @Override public Transfer begin(long rows)
+        {
+            return new Transfer() {
+                @Override public void success(){throw new IllegalStateException("audit unavailable");}
+                @Override public void failure(){throw new IllegalStateException("audit unavailable");}
+            };
+        }
+    }
 }
