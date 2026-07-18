@@ -39,7 +39,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.24", current.getVersion().getVersion());
+        assertEquals("0.20.25", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -183,6 +183,8 @@ class FlywayMigrationTest
             assertEquals(3L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='CONFIRMED'"));
             assertEquals(1L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='NEEDS_DECISION'"));
             assertEquals(4L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='NEEDS_EVIDENCE'"));
+            assertEquals(4L,count(connection,"select count(*) from todo_foundation_migration_requirement where gate_code='G-04' "
+                + "and source_status='NEEDS_EVIDENCE' and source_ref='doc/reviews/v0.2-foundation-g04-historical-migration-review-package.md'"));
             assertEquals(0L,count(connection,"select count(*) from information_schema.columns where table_schema=database() and table_name='biz_case' and column_name='business_line'"));
             assertEquals(0L,count(connection,"select count(*) from todo_instance i left join todo_template_version v on v.version_id=i.template_version_id where v.version_id is null"));
         }
