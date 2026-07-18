@@ -69,4 +69,10 @@ for(const name of ['getBusinessTodoSummary','listBusinessTodos','getTodoChain'])
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)
 const embedded=fs.readFileSync('src/views/todo/components/BusinessTodoSummary.vue','utf8')+fs.readFileSync('src/views/todo/components/BusinessTodoDrawer.vue','utf8')+fs.readFileSync('src/views/todo/components/TodoChainTimeline.vue','utf8')
 for(const marker of ['activeCount','overdueCount','ownerIds','nearestDueAt','listBusinessTodos','getTodoChain','独立']) if(!embedded.includes(marker)&&marker!=='独立') throw new Error(`missing business todo marker ${marker}`)
+for(const marker of ['data-testid="business-todo-summary"','Number(this.businessId) > 0','todo-detail-drawer','todo-action-dialogs','getTodo(','@extension-requested="refreshChanged"','fileObjectIds']) if(!embedded.includes(marker)) throw new Error(`missing business todo runtime marker ${marker}`)
+for(const [file,type,id,no] of [
+  ['src/views/lead/components/LeadDetailDrawer.vue','LEAD','lead.leadId','lead.leadNo'],
+  ['src/views/customer/components/CustomerDetailDrawer.vue','CUSTOMER','customer.customerId','customer.customerNo'],
+  ['src/views/finance/components/CaseFinanceDrawer.vue','FINANCE','caseId','summary.caseNo']
+]) { const content=fs.readFileSync(file,'utf8');for(const marker of ['business-todo-summary',`business-type="${type}"`,id,no]) if(!content.includes(marker)) throw new Error(`missing ${type} todo embedding ${marker}`) }
 for(const marker of ['visible','dept','cc','openChain','todo-chain-timeline']) if(!page.includes(marker)&&!fs.readFileSync('src/views/todo/index.vue','utf8').includes(marker)) throw new Error(`missing todo center expansion ${marker}`)

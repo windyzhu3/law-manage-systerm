@@ -33,6 +33,7 @@
         </div>
       </section>
 
+      <business-todo-summary v-if="Number(caseId) > 0" business-type="FINANCE" :business-id="caseId" :business-no="summary.caseNo" />
       <section class="finance-kpis">
         <article v-for="item in cards" :key="item.key">
           <i :class="item.icon" />
@@ -177,9 +178,11 @@
 
 <script>
 import { getCaseFinance } from '@/api/finance'
+import BusinessTodoSummary from '@/views/todo/components/BusinessTodoSummary'
 
 export default {
   name: 'CaseFinanceDrawer',
+  components: { BusinessTodoSummary },
   props: {
     visible: { type: Boolean, default: false },
     caseId: { type: [String, Number], default: null },

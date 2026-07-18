@@ -29,6 +29,7 @@
         </div>
       </section>
 
+      <business-todo-summary v-if="Number(customer.customerId) > 0" business-type="CUSTOMER" :business-id="customer.customerId" :business-no="customer.customerNo" />
       <div class="detail-grid">
         <section class="info-card span-2">
           <header><h4>基础信息</h4></header>
@@ -106,9 +107,11 @@
 <script>
 import businessUi from '@/views/business/mixins/businessUi'
 import customerLifecycle from '@/views/business/mixins/customerLifecycle'
+import BusinessTodoSummary from '@/views/todo/components/BusinessTodoSummary'
 
 export default {
   name: 'CustomerDetailDrawer',
+  components: { BusinessTodoSummary },
   mixins: [businessUi, customerLifecycle],
   dicts: ['law_customer_type', 'law_customer_level', 'law_customer_industry', 'law_contact_relation', 'law_customer_follow_type', 'law_customer_status', 'law_contract_status'],
   props: {

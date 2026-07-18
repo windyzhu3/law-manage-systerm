@@ -1,2 +1,101 @@
-<template><el-drawer title="业务待办" :visible.sync="open" size="680px" append-to-body><div class="body"><el-alert v-if="error" :title="error" type="error" show-icon/><el-table v-loading="loading" :data="rows"><el-table-column prop="todo_no" label="待办编号" width="150"/><el-table-column prop="title" label="标题"/><el-table-column prop="status" label="状态" width="110"/><el-table-column prop="due_at" label="截止时间" width="170"/><el-table-column label="操作" width="80"><template slot-scope="{row}"><el-button type="text" @click="chain(row)">链路</el-button></template></el-table-column></el-table><todo-chain-timeline v-if="chainNodes.length" :nodes="chainNodes"/></div></el-drawer></template>
-<script>import {listBusinessTodos,getTodoChain} from '@/api/todo';import TodoChainTimeline from './TodoChainTimeline';export default{name:'BusinessTodoDrawer',components:{TodoChainTimeline},props:{visible:Boolean,businessType:String,businessId:[Number,String]},data(){return{loading:false,error:'',rows:[],chainNodes:[]}},computed:{open:{get(){return this.visible},set(v){this.$emit('update:visible',v)}}},watch:{visible(v){if(v)this.load()}},methods:{load(){this.loading=true;this.error='';listBusinessTodos(this.businessType,this.businessId,{pageNum:1,pageSize:100}).then(r=>{this.rows=r.rows||[]}).catch(e=>{this.error=e.msg||'待办加载失败'}).finally(()=>{this.loading=false})},chain(row){getTodoChain(row.root_todo_id||row.todo_id).then(r=>{this.chainNodes=(r.data&&r.data.nodes)||[]})}}}</script><style scoped>.body{padding:18px}</style>
+<template>
+  <el-drawer title="业务待办" :visible.sync="open" size="760px" append-to-body>
+    <div class="body">
+      <el-alert v-if="error" :title="error" type="error" show-icon />
+      <el-table v-loading="loading" :data="rows" @row-click="openDetail">
+        <el-table-column prop="todo_no" label="待办编号" width="150" />
+        <el-table-column prop="title" label="标题" />
+        <el-table-column prop="status" label="状态" width="110" />
+        <el-table-column prop="due_at" label="截止时间" width="170" />
+        <el-table-column label="操作" width="250">
+          <template slot-scope="{ row }">
+            <el-button v-if="can(row, 'claim')" v-hasPermi="['todo:claim']" type="text" @click.stop="openAction(row, 'claim')">领取</el-button>
+            <el-button v-if="can(row, 'start')" v-hasPermi="['todo:start']" type="text" @click.stop="openAction(row, 'start')">开始</el-button>
+            <el-button v-if="can(row, 'submit')" v-hasPermi="['todo:submit']" type="text" @click.stop="openAction(row, 'submit')">提交</el-button>
+            <el-button v-if="can(row, 'complete')" v-hasPermi="['todo:complete']" type="text" @click.stop="openAction(row, 'complete')">完成</el-button>
+            <el-button v-if="can(row, 'return')" v-hasPermi="['todo:return']" type="text" @click.stop="openAction(row, 'return')">退回</el-button>
+            <el-button v-if="can(row, 'transfer')" v-hasPermi="['todo:transfer']" type="text" @click.stop="openAction(row, 'transfer')">转派</el-button>
+            <el-button v-if="can(row, 'cancel')" v-hasPermi="['todo:cancel']" type="text" @click.stop="openAction(row, 'cancel')">取消</el-button>
+            <el-button v-hasPermi="['todo:chain:query']" type="text" @click.stop="chain(row)">链路</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <todo-chain-timeline v-if="chainNodes.length" :nodes="chainNodes" />
+    </div>
+    <todo-detail-drawer :visible.sync="detailOpen" :detail="detail" @extension-requested="refreshChanged" />
+    <todo-action-dialogs :visible.sync="actionOpen" :todo="selected || {}" :action="action" :submitting="submitting" @submit="execute" />
+  </el-drawer>
+</template>
+
+<script>
+import { listBusinessTodos, getTodo, getTodoChain, claimTodo, startTodo, submitTodo, completeTodo, returnTodo, transferTodo, cancelTodo } from '@/api/todo'
+import TodoDetailDrawer from './TodoDetailDrawer'
+import TodoActionDialogs from './TodoActionDialogs'
+import TodoChainTimeline from './TodoChainTimeline'
+
+const actions = { claim: claimTodo, start: startTodo, submit: submitTodo, complete: completeTodo, return: returnTodo, transfer: transferTodo, cancel: cancelTodo }
+const statusActions = {
+  CREATED: ['claim', 'cancel'],
+  CLAIMED: ['start', 'transfer', 'cancel'],
+  IN_PROGRESS: ['submit', 'transfer', 'cancel'],
+  SUBMITTED: ['complete', 'return', 'transfer', 'cancel'],
+  RETURNED: ['start', 'transfer', 'cancel']
+}
+
+export default {
+  name: 'BusinessTodoDrawer',
+  components: { TodoDetailDrawer, TodoActionDialogs, TodoChainTimeline },
+  props: { visible: Boolean, businessType: String, businessId: [Number, String] },
+  data() { return { loading: false, submitting: false, error: '', rows: [], chainNodes: [], detailOpen: false, detail: {}, actionOpen: false, action: '', selected: null } },
+  computed: {
+    open: { get() { return this.visible }, set(value) { this.$emit('update:visible', value) } },
+    validBusinessId() { return Number(this.businessId) > 0 }
+  },
+  watch: {
+    visible(value) { if (value) this.reloadForBusiness() },
+    businessId() { if (this.open) this.reloadForBusiness() },
+    businessType() { if (this.open) this.reloadForBusiness() }
+  },
+  methods: {
+    todoId(row) { return row.todoId || row.todo_id },
+    reloadForBusiness() {
+      this.rows = []; this.chainNodes = []; this.detail = {}; this.selected = null; this.detailOpen = false; this.actionOpen = false
+      if (this.validBusinessId) this.load()
+    },
+    load() {
+      if (!this.validBusinessId) return
+      this.loading = true; this.error = ''
+      listBusinessTodos(this.businessType, this.businessId, { pageNum: 1, pageSize: 100 }).then(response => { this.rows = response.rows || [] })
+        .catch(error => { this.error = error.msg || '待办加载失败' })
+        .finally(() => { this.loading = false })
+    },
+    explicitActions(row) { return row.allowedActions || row.allowed_actions || row.actions || null },
+    can(row, action) {
+      const allowed = this.explicitActions(row)
+      if (Array.isArray(allowed)) return allowed.map(item => String(item).toLowerCase()).includes(action)
+      return (statusActions[String(row.status || '').toUpperCase()] || []).includes(action)
+    },
+    openDetail(row) {
+      const id = this.todoId(row)
+      if (Number(id) <= 0) return
+      getTodo(id).then(response => { this.detail = response.data || {}; this.detailOpen = true })
+    },
+    openAction(row, action) { this.selected = row; this.action = action; this.actionOpen = true },
+    execute(form) {
+      const id = this.todoId(this.selected || {})
+      if (!(Number(id) > 0) || !actions[this.action]) return
+      this.submitting = true
+      const payload = { actionId: `business-${Date.now()}-${Math.random().toString(16).slice(2)}`, opinion: form.opinion, fields: form.fields, fileObjectIds: form.fileObjectIds }
+      actions[this.action](id, payload).then(() => { this.$modal.msgSuccess('处理成功'); this.actionOpen = false; this.refreshChanged() }).finally(() => { this.submitting = false })
+    },
+    refreshChanged() { this.load(); this.$emit('changed') },
+    chain(row) {
+      const id = row.rootTodoId || row.root_todo_id || this.todoId(row)
+      if (!(Number(id) > 0)) return
+      getTodoChain(id).then(response => { this.chainNodes = (response.data && response.data.nodes) || [] })
+    }
+  }
+}
+</script>
+
+<style scoped>.body{padding:18px}</style>
