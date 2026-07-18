@@ -35,16 +35,24 @@ public class HistoricalMigrationExportArchiveWriter
             "reviewer_user_id","reviewed_at");
     private static final byte[] BOM={(byte)0xEF,(byte)0xBB,(byte)0xBF};
     private static final List<String> ALLOWED_LINES=List.of("NON_LITIGATION","COMPREHENSIVE","EXECUTION");
+    private static final HistoricalMigrationExportArchiveCleanup FILE_SYSTEM_CLEANUP=new HistoricalMigrationExportArchiveCleanup() {
+        @Override public InputStream open(Path zip) throws IOException { return Files.newInputStream(zip); }
+        @Override public void delete(Path zip) throws IOException { Files.deleteIfExists(zip); }
+    };
 
     private final Path root;
     private final Clock clock;
+    private final HistoricalMigrationExportArchiveCleanup cleanup;
 
     public HistoricalMigrationExportArchiveWriter(
             @Value("${todo.migration-export.temp-dir:${java.io.tmpdir}/law-todo-migration-export}") String root)
     { this(Path.of(root),Clock.systemUTC()); }
 
     HistoricalMigrationExportArchiveWriter(Path root,Clock clock)
-    { this.root=root.toAbsolutePath().normalize();this.clock=clock; }
+    { this(root,clock,FILE_SYSTEM_CLEANUP); }
+
+    HistoricalMigrationExportArchiveWriter(Path root,Clock clock,HistoricalMigrationExportArchiveCleanup cleanup)
+    { this.root=root.toAbsolutePath().normalize();this.clock=clock;this.cleanup=cleanup; }
 
     public HistoricalMigrationExportArtifact write(Iterator<HistoricalMigrationCaseCandidate> candidates)
     {
@@ -148,27 +156,44 @@ public class HistoricalMigrationExportArchiveWriter
         return text.replace("\"","\"\"");
     }
 
-    private static InputStream cleanupOnClose(Path zip) throws IOException
+    private InputStream cleanupOnClose(Path zip) throws IOException
     {
-        return new FilterInputStream(Files.newInputStream(zip)) {
-            private boolean closed;
+        return new FilterInputStream(cleanup.open(zip)) {
+            private boolean inputCloseAttempted;
+            private boolean zipDeleted;
             @Override public void close() throws IOException
             {
-                if(closed)return;
-                closed=true;
-                try {
-                    super.close();
-                    Files.deleteIfExists(zip);
-                } catch(IOException exception) {
-                    throw new IOException("Historical migration export could not be cleaned up");
+                IOException failure=null;
+                if(!inputCloseAttempted) {
+                    inputCloseAttempted=true;
+                    try { super.close(); }
+                    catch(IOException exception) { failure=cleanupFailure(); }
                 }
+                if(!zipDeleted)try {
+                    cleanup.delete(zip);
+                    zipDeleted=true;
+                } catch(IOException exception) {
+                    IOException deletionFailure=cleanupFailure();
+                    if(failure==null)failure=deletionFailure;
+                    else failure.addSuppressed(deletionFailure);
+                }
+                if(failure!=null)throw failure;
             }
         };
     }
+
+    private static IOException cleanupFailure()
+    { return new IOException("Historical migration export could not be cleaned up"); }
 
     private static void delete(Path path)
     {
         if(path==null)return;
         try { Files.deleteIfExists(path); } catch(IOException ignored) { }
     }
+}
+
+interface HistoricalMigrationExportArchiveCleanup
+{
+    InputStream open(Path zip) throws IOException;
+    void delete(Path zip) throws IOException;
 }

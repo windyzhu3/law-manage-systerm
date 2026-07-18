@@ -3,6 +3,7 @@ package com.law.todo.application;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
+import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -100,8 +101,53 @@ class HistoricalMigrationExportArchiveWriterTest
         assertNoRegularFiles();
     }
 
+    @Test void closeFailureStillAttemptsZipDeletionAndSuccessfulCloseIsIdempotent() throws Exception
+    {
+        ControlledCleanup cleanup=new ControlledCleanup(1,0);
+        HistoricalMigrationExportArtifact artifact=writer(cleanup).write(List.of(candidate()).iterator());
+
+        IOException failure=assertThrows(IOException.class,artifact::close);
+        assertEquals("Historical migration export could not be cleaned up",failure.getMessage());
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(1,cleanup.deleteAttempts);
+        assertNoRegularFiles();
+
+        artifact.close();
+        artifact.close();
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(1,cleanup.deleteAttempts);
+    }
+
+    @Test void closeCombinesFailuresWithoutPathsAndRetriesFailedDeletion() throws Exception
+    {
+        ControlledCleanup cleanup=new ControlledCleanup(1,1);
+        HistoricalMigrationExportArtifact artifact=writer(cleanup).write(List.of(candidate()).iterator());
+
+        IOException failure=assertThrows(IOException.class,artifact::close);
+        assertEquals("Historical migration export could not be cleaned up",failure.getMessage());
+        assertEquals(1,failure.getSuppressed().length);
+        assertEquals("Historical migration export could not be cleaned up",failure.getSuppressed()[0].getMessage());
+        assertFalse(failure.getMessage().contains(temporaryDirectory.toString()));
+        assertFalse(failure.getSuppressed()[0].getMessage().contains(temporaryDirectory.toString()));
+        assertFalse(failure.getMessage().contains("sensitive archive content"));
+        assertFalse(failure.getSuppressed()[0].getMessage().contains("sensitive archive content"));
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(1,cleanup.deleteAttempts);
+
+        artifact.close();
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(2,cleanup.deleteAttempts);
+        assertNoRegularFiles();
+    }
+
     private HistoricalMigrationExportArchiveWriter writer()
     {return new HistoricalMigrationExportArchiveWriter(temporaryDirectory,Clock.fixed(GENERATED_AT,ZoneOffset.UTC));}
+
+    private HistoricalMigrationExportArchiveWriter writer(HistoricalMigrationExportArchiveCleanup cleanup)
+    {return new HistoricalMigrationExportArchiveWriter(temporaryDirectory,Clock.fixed(GENERATED_AT,ZoneOffset.UTC),cleanup);}
+
+    private static HistoricalMigrationCaseCandidate candidate()
+    {return new HistoricalMigrationCaseCandidate(1L,"CASE-001","name","CIVIL","OPEN",null,null,null);}
 
     private void assertNoRegularFiles()
     {
@@ -121,6 +167,36 @@ class HistoricalMigrationExportArchiveWriterTest
 
     private static String sha256(byte[] value) throws Exception
     {return java.util.HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));}
+
+    private static final class ControlledCleanup implements HistoricalMigrationExportArchiveCleanup
+    {
+        private int remainingCloseFailures;
+        private int remainingDeleteFailures;
+        private int closeAttempts;
+        private int deleteAttempts;
+
+        private ControlledCleanup(int closeFailures,int deleteFailures)
+        {remainingCloseFailures=closeFailures;remainingDeleteFailures=deleteFailures;}
+
+        @Override public InputStream open(Path zip) throws IOException
+        {
+            return new FilterInputStream(Files.newInputStream(zip)) {
+                @Override public void close() throws IOException
+                {
+                    closeAttempts++;
+                    super.close();
+                    if(remainingCloseFailures-- > 0)throw new IOException("failed to close "+zip+": sensitive archive content");
+                }
+            };
+        }
+
+        @Override public void delete(Path zip) throws IOException
+        {
+            deleteAttempts++;
+            if(remainingDeleteFailures-- > 0)throw new IOException("failed to delete "+zip+": sensitive archive content");
+            Files.deleteIfExists(zip);
+        }
+    }
 
     private static final class CountingCandidates implements Iterator<HistoricalMigrationCaseCandidate>
     {
