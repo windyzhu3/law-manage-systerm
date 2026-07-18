@@ -21,6 +21,7 @@ const required = [
   ,'src/views/todo/config/components/FoundationResourceReadiness.vue'
   ,'src/views/todo/config/components/HistoricalMigrationReadiness.vue'
   ,'src/views/todo/config/components/FileSecurityReadiness.vue'
+  ,'src/views/todo/config/components/FinanceReadiness.vue'
   ,'src/api/todo-operations.js'
   ,'src/views/todo/operations/index.vue'
   ,'src/views/todo/operations/components/OperationsMetrics.vue'
@@ -73,12 +74,14 @@ for(const name of ['listAdmissionEvidence','getAdmissionEvidenceGovernanceOption
 if(!definitionApi.includes('export function getFoundationResourceReadiness')) throw new Error('missing foundation resource readiness api')
 if(!definitionApi.includes('export function getHistoricalMigrationReadiness')) throw new Error('missing historical migration readiness api')
 if(!definitionApi.includes('export function getFileSecurityReadiness')) throw new Error('missing file security readiness api')
+if(!definitionApi.includes('export function getFinanceReadiness')) throw new Error('missing finance readiness api')
 const foundationResources=fs.readFileSync('src/views/todo/config/components/FoundationResourceReadiness.vue','utf8')
 for(const marker of ['SOURCE_UNRESOLVED','RUNTIME_MISSING','RUNTIME_INCOMPLETE','READY','gateReady','expectedValuesJson']) if(!foundationResources.includes(marker)) throw new Error(`missing foundation resource marker ${marker}`)
 const historicalMigration=fs.readFileSync('src/views/todo/config/components/HistoricalMigrationReadiness.vue','utf8')
 for(const marker of ['NEEDS_DECISION','NEEDS_EVIDENCE','SOURCE_UNRESOLVED','RUNTIME_MISSING','RUNTIME_INVALID','gateReady','orphanTodoVersionCount','caseBusinessLineColumnExists']) if(!historicalMigration.includes(marker)) throw new Error(`missing historical migration marker ${marker}`)
 const fileSecurity=fs.readFileSync('src/views/todo/config/components/FileSecurityReadiness.vue','utf8')
 for(const marker of ['NEEDS_EVIDENCE','NEEDS_REVIEW','SOURCE_UNRESOLVED','RUNTIME_MISSING','gateReady','tokenControlReady','accessAuditReady','cleanupCompensationReady']) if(!fileSecurity.includes(marker)) throw new Error(`missing file security marker ${marker}`)
+const financeReadiness=fs.readFileSync('src/views/todo/config/components/FinanceReadiness.vue','utf8');for(const marker of ['NEEDS_DECISION','NEEDS_REVIEW','SOURCE_UNRESOLVED','RUNTIME_MISSING','gateReady','nodeFeeColumns','riskSchemaObjects'])if(!financeReadiness.includes(marker))throw new Error(`missing finance readiness marker ${marker}`)
 const admissionEvidence=fs.readFileSync('src/views/todo/config/components/AdmissionEvidenceRegistry.vue','utf8')
 for(const marker of ['todo:admission:edit','独立评审人','artifactRef','APPROVED','validateAdmissionEvidence']) if(!admissionEvidence.includes(marker)) throw new Error(`missing admission evidence marker ${marker}`)
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)

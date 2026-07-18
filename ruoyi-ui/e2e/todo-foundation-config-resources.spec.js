@@ -46,6 +46,19 @@ async function setupConfig(page) {
         { requirementId: 2, requirementCode: 'PRD_MATERIAL_TYPE_E2E', requirementName: 'PRD材料类型端到端验收', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'admission-report.md:109' },
         { requirementId: 3, requirementCode: 'SECURITY_REVIEW_SIGNOFF', requirementName: '独立安全评审签字', sourceStatus: 'NEEDS_REVIEW', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'gap-analysis.md:327' }
       ]
+    },
+    financeReadiness: {
+      gateCode: 'G-06', total: 9, ready: 3, sourceUnresolved: 3, runtimeMissing: 3, gateReady: false,
+      feePlanCoreColumns: 4, nodeFeeColumns: 0, financeSupportTables: 0, riskSchemaObjects: 0,
+      requirements: [
+        { requirementId: 1, requirementCode: 'FEE_PLAN_CORE_PRECISION', requirementName: '收费计划金额精度与状态字段', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'biz_contract_fee_plan' },
+        { requirementId: 2, requirementCode: 'NODE_FEE_SCHEMA', requirementName: '节点收费触发字段', sourceStatus: 'CONFIRMED', readinessStatus: 'RUNTIME_MISSING', decisionRef: 'Q-009', sourceRef: 'information_schema.columns' },
+        { requirementId: 3, requirementCode: 'RECEIVABLE_SUPPORT_TABLES', requirementName: '应收、催收、退款事实表', sourceStatus: 'CONFIRMED', readinessStatus: 'RUNTIME_MISSING', decisionRef: 'Q-009', sourceRef: 'information_schema.tables' },
+        { requirementId: 4, requirementCode: 'RISK_FEE_SCHEMA', requirementName: '风险收费计算结构', sourceStatus: 'CONFIRMED', readinessStatus: 'RUNTIME_MISSING', decisionRef: 'Q-012', sourceRef: 'information_schema' },
+        { requirementId: 5, requirementCode: 'Q009_NODE_COLLECTION_POLICY', requirementName: '收费节点与催收责任规则', sourceStatus: 'NEEDS_DECISION', readinessStatus: 'SOURCE_UNRESOLVED', decisionRef: 'Q-009', sourceRef: 'gap-analysis.md:Q-009' },
+        { requirementId: 6, requirementCode: 'Q012_RISK_FORMULA_POLICY', requirementName: '风险收费公式与舍入规则', sourceStatus: 'NEEDS_DECISION', readinessStatus: 'SOURCE_UNRESOLVED', decisionRef: 'Q-012', sourceRef: 'gap-analysis.md:Q-012' },
+        { requirementId: 7, requirementCode: 'FINANCE_BUSINESS_SIGNOFF', requirementName: '财务与业务联合签字', sourceStatus: 'NEEDS_REVIEW', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'admission-report.md:G-06' }
+      ]
     }
   }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
@@ -74,6 +87,7 @@ async function setupConfig(page) {
     if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
     if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
     if (path === '/todo/foundation-file-security') return json(route, state.fileSecurity)
+    if (path === '/todo/foundation-finance') return json(route, state.financeReadiness)
     if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
       state.admissionUpdates++
       const id = Number(path.split('/').pop())
@@ -299,4 +313,21 @@ test('file security readiness separates technical controls from independent revi
   await expect(pane.getByText('SECURITY_REVIEW_SIGNOFF', { exact: true })).toBeVisible()
   await expect(pane.getByText('待验收证据', { exact: true })).toBeVisible()
   await expect(pane.getByText('待安全评审', { exact: true })).toBeVisible()
+})
+
+test('finance readiness separates repository capabilities from schema and decision blockers', async ({ page }) => {
+  await setupConfig(page)
+  await page.getByRole('tab', { name: '财务准入' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('G-06 财务门禁未就绪，不能批准准入证据')).toBeVisible()
+  await expect(pane.getByText('FEE_PLAN_CORE_PRECISION', { exact: true })).toBeVisible()
+  await expect(pane.getByText('NODE_FEE_SCHEMA', { exact: true })).toBeVisible()
+  await expect(pane.getByText('Q009_NODE_COLLECTION_POLICY', { exact: true })).toBeVisible()
+  await expect(pane.getByText('Q012_RISK_FORMULA_POLICY', { exact: true })).toBeVisible()
+  await expect(pane.getByText('FINANCE_BUSINESS_SIGNOFF', { exact: true })).toBeVisible()
+  await expect(pane.getByText('Q-009', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('Q-012', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('待业务决策', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('待财务签字', { exact: true })).toBeVisible()
+  await expect(pane.getByText('结构缺失', { exact: true }).first()).toBeVisible()
 })

@@ -39,3 +39,4 @@ export function updateAdmissionEvidence(evidenceId, data) { return request({ url
 export function getFoundationResourceReadiness(gateCode = 'G-02') { return request({ url: '/todo/foundation-resources', method: 'get', params: { gateCode } }) }
 export function getHistoricalMigrationReadiness(gateCode = 'G-04') { return request({ url: '/todo/foundation-migration', method: 'get', params: { gateCode } }) }
 export function getFileSecurityReadiness(gateCode = 'G-05') { return request({ url: '/todo/foundation-file-security', method: 'get', params: { gateCode } }) }
+export function getFinanceReadiness(gateCode = 'G-06') { return request({ url: '/todo/foundation-finance', method: 'get', params: { gateCode } }) }

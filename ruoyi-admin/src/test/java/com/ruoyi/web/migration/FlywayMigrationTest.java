@@ -34,7 +34,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.19", current.getVersion().getVersion());
+        assertEquals("0.20.20", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -42,6 +42,36 @@ class FlywayMigrationTest
         verifyFoundationResourceReadinessSchema(url);
         verifyHistoricalMigrationReadinessSchema(url);
         verifyFileSecurityReadinessSchema(url);
+        verifyFinanceReadinessSchema(url);
+    }
+
+    private void verifyFinanceReadinessSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(9L, count(connection,
+                "select count(*) from todo_foundation_finance_requirement where gate_code='G-06'"));
+            assertEquals(6L, count(connection,
+                "select count(*) from todo_foundation_finance_requirement where source_status='CONFIRMED'"));
+            assertEquals(2L, count(connection,
+                "select count(*) from todo_foundation_finance_requirement where source_status='NEEDS_DECISION'"));
+            assertEquals(1L, count(connection,
+                "select count(*) from todo_foundation_finance_requirement where source_status='NEEDS_REVIEW'"));
+            assertEquals(4L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='biz_contract_fee_plan' "
+                    + "and column_name in ('receivable_amount','received_amount','confirm_status','invoice_status')"));
+            assertEquals(0L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='biz_contract_fee_plan' "
+                    + "and column_name in ('trigger_type','trigger_node_code','trigger_business_id',"
+                    + "'collection_owner_id','due_rule_json','risk_fee_calc_id')"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Finance readiness database invariants failed", exception);
+        }
     }
 
     private void verifyFileSecurityReadinessSchema(String url)

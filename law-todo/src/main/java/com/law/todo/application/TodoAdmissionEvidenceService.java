@@ -26,9 +26,10 @@ public class TodoAdmissionEvidenceService
     private final TodoFoundationResourceService resources;
     private final TodoHistoricalMigrationReadinessService migrations;
     private final TodoFileSecurityReadinessService fileSecurity;
+    private final TodoFinanceReadinessService finance;
     public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper,TodoFoundationResourceService resources,
-            TodoHistoricalMigrationReadinessService migrations,TodoFileSecurityReadinessService fileSecurity)
-    {this.mapper=mapper;this.resources=resources;this.migrations=migrations;this.fileSecurity=fileSecurity;}
+            TodoHistoricalMigrationReadinessService migrations,TodoFileSecurityReadinessService fileSecurity,TodoFinanceReadinessService finance)
+    {this.mapper=mapper;this.resources=resources;this.migrations=migrations;this.fileSecurity=fileSecurity;this.finance=finance;}
 
     @Transactional(readOnly=true)
     public List<TodoAdmissionEvidenceView> list(){return mapper.selectEvidence().stream().map(this::view).toList();}
@@ -83,6 +84,8 @@ public class TodoAdmissionEvidenceService
             fail("TODO_ADMISSION_MIGRATION_NOT_READY","G-04 cannot be approved while the historical migration contract is unresolved or invalid");
         if("APPROVED".equals(command.status())&&"G-05".equals(text(value(current,"gate_code","gateCode")))&&!fileSecurity.gateReady("G-05"))
             fail("TODO_ADMISSION_FILE_SECURITY_NOT_READY","G-05 cannot be approved before all file controls and review evidence are ready");
+        if("APPROVED".equals(command.status())&&"G-06".equals(text(value(current,"gate_code","gateCode")))&&!finance.gateReady("G-06"))
+            fail("TODO_ADMISSION_FINANCE_NOT_READY","G-06 cannot be approved before finance schemas, decisions and sign-off are ready");
     }
 
     private void validateRequiredAccountability(UpdateAdmissionEvidenceCommand command)

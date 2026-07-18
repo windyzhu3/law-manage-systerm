@@ -29,6 +29,7 @@ class TodoAdmissionEvidenceServiceTest
     @Mock TodoFoundationResourceService resources;
     @Mock TodoHistoricalMigrationReadinessService migrations;
     @Mock TodoFileSecurityReadinessService fileSecurity;
+    @Mock TodoFinanceReadinessService finance;
     private final Actor owner=new Actor(7L,"owner",3L);
     private final Actor reviewer=new Actor(9L,"reviewer",4L);
     private final LocalDateTime dueAt=LocalDateTime.of(2026,7,31,18,0);
@@ -120,6 +121,9 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).updateEvidenceConditionally(anyMap());
     }
 
+    @Test void g06CannotBeApprovedBeforeFinanceDecisionsAndSignoff()
+    {UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand("approve-g06",1L,0,7L,9L,dueAt,"APPROVED","repo://doc/g06.md","Finance approved");when(mapper.selectEvidenceById(1L)).thenReturn(row("G-06","IN_REVIEW",0));when(mapper.selectActiveUser(7L)).thenReturn(Map.of("user_id",7L));when(mapper.selectActiveUser(9L)).thenReturn(Map.of("user_id",9L));when(finance.gateReady("G-06")).thenReturn(false);TodoException error=assertThrows(TodoException.class,()->service().update(command,reviewer));assertEquals("TODO_ADMISSION_FINANCE_NOT_READY",error.getBusinessCode());verify(mapper,never()).insertEvidenceActionClaim(anyMap());}
+
     @Test void g05CannotBeApprovedBeforeSecurityReviewIsReady()
     {
         UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand(
@@ -173,7 +177,7 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).insertEvidenceActionClaim(anyMap());
     }
 
-    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources,migrations,fileSecurity);}
+    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources,migrations,fileSecurity,finance);}
     private Map<String,Object> row(String status,int version)
     {
         return row("G-02",status,version);

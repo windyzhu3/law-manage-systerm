@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoFinanceReadinessMapper">
+    <select id="selectFinanceReadiness" resultType="java.util.Map">
+        select r.*,
+        (select count(*)
+           from information_schema.columns c
+          where c.table_schema=database()
+            and c.table_name='biz_contract_fee_plan'
+            and c.column_name in ('receivable_amount','received_amount','confirm_status','invoice_status')
+            and (c.column_name not in ('receivable_amount','received_amount')
+                 or (c.numeric_precision=14 and c.numeric_scale=2))) fee_plan_core_column_count,
+        (select count(*)
+           from information_schema.columns c
+          where c.table_schema=database()
+            and c.table_name='biz_contract_fee_plan'
+            and c.column_name in ('trigger_type','trigger_node_code','trigger_business_id','collection_owner_id','due_rule_json','risk_fee_calc_id')) node_fee_column_count,
+        (select count(*)
+           from information_schema.tables t
+          where t.table_schema=database()
+            and t.table_name in ('biz_receivable_trigger','biz_collection_record','biz_refund')) finance_support_table_count,
+        ((select count(*)
+            from information_schema.tables t
+           where t.table_schema=database()
+             and t.table_name='biz_risk_fee_calculation')
+         +
+         (select count(*)
+            from information_schema.columns c
+           where c.table_schema=database()
+             and c.table_name='biz_contract'
+             and c.column_name in ('risk_agency_flag','risk_base','risk_ratio'))) risk_schema_object_count
+        from todo_foundation_finance_requirement r
+        where r.gate_code=#{gateCode}
+        order by r.sort_order,r.requirement_id
+    </select>
+</mapper>
