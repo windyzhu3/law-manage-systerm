@@ -25,6 +25,7 @@ const required = [
   ,'src/views/todo/config/components/AcceptanceReadiness.vue'
   ,'src/views/todo/config/components/AcceptanceScenarioDialog.vue'
   ,'src/views/todo/config/components/AcceptanceMappingDialog.vue'
+  ,'src/views/todo/config/components/FoundationAdmissionOverview.vue'
   ,'src/api/todo-operations.js'
   ,'src/views/todo/operations/index.vue'
   ,'src/views/todo/operations/components/OperationsMetrics.vue'
@@ -79,6 +80,7 @@ if(!definitionApi.includes('export function getHistoricalMigrationReadiness')) t
 if(!definitionApi.includes('export function getFileSecurityReadiness')) throw new Error('missing file security readiness api')
 if(!definitionApi.includes('export function getFinanceReadiness')) throw new Error('missing finance readiness api')
 for(const name of ['getAcceptanceReadiness','listAcceptanceScenarios','listAcceptanceMappings','getAcceptanceGovernanceOptions','createAcceptanceScenario','updateAcceptanceScenario','updateAcceptanceMapping','batchBindAcceptanceMappings']) if(!definitionApi.includes(`export function ${name}`)) throw new Error(`missing acceptance readiness api ${name}`)
+if(!definitionApi.includes('export function getFoundationAdmissionReadiness')) throw new Error('missing aggregate Foundation admission readiness api')
 const foundationResources=fs.readFileSync('src/views/todo/config/components/FoundationResourceReadiness.vue','utf8')
 for(const marker of ['SOURCE_UNRESOLVED','RUNTIME_MISSING','RUNTIME_INCOMPLETE','READY','gateReady','expectedValuesJson']) if(!foundationResources.includes(marker)) throw new Error(`missing foundation resource marker ${marker}`)
 const historicalMigration=fs.readFileSync('src/views/todo/config/components/HistoricalMigrationReadiness.vue','utf8')
@@ -94,6 +96,9 @@ const acceptanceMapping=fs.readFileSync('src/views/todo/config/components/Accept
 for(const marker of ['plannedTestRef','ownerUserId','reviewerUserId','version','actionId']) if(!acceptanceMapping.includes(marker)) throw new Error(`missing acceptance mapping marker ${marker}`)
 const admissionEvidence=fs.readFileSync('src/views/todo/config/components/AdmissionEvidenceRegistry.vue','utf8')
 for(const marker of ['todo:admission:edit','独立评审人','artifactRef','APPROVED','validateAdmissionEvidence']) if(!admissionEvidence.includes(marker)) throw new Error(`missing admission evidence marker ${marker}`)
+const admissionOverview=fs.readFileSync('src/views/todo/config/components/FoundationAdmissionOverview.vue','utf8')
+for(const marker of ['overallStatus','readyGateCount','totalGateCount','NOT_ADMITTED','blockers','技术就绪不替代']) if(!admissionOverview.includes(marker)) throw new Error(`missing aggregate admission marker ${marker}`)
+if(!configPage.includes('foundation-admission-overview')) throw new Error('missing aggregate admission overview tab')
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)
 const embedded=fs.readFileSync('src/views/todo/components/BusinessTodoSummary.vue','utf8')+fs.readFileSync('src/views/todo/components/BusinessTodoDrawer.vue','utf8')+fs.readFileSync('src/views/todo/components/TodoChainTimeline.vue','utf8')
 for(const marker of ['activeCount','overdueCount','ownerIds','nearestDueAt','listBusinessTodos','getTodoChain','独立']) if(!embedded.includes(marker)&&marker!=='独立') throw new Error(`missing business todo marker ${marker}`)

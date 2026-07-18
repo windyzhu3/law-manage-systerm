@@ -9,12 +9,17 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.junit.jupiter.api.Test;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 class FlywayMigrationTest
 {
@@ -44,6 +49,46 @@ class FlywayMigrationTest
         verifyFileSecurityReadinessSchema(url);
         verifyFinanceReadinessSchema(url);
         verifyAcceptanceReadinessSchema(url);
+        verifyFoundationAdmissionAggregateQuery(url);
+    }
+
+    private void verifyFoundationAdmissionAggregateQuery(String url)
+    {
+        try (InputStream resource = getClass().getResourceAsStream(
+                "/mapper/todo/TodoFoundationAdmissionReadinessMapper.xml");
+             Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertTrue(resource != null, "Foundation admission mapper must be available on the runtime classpath");
+            String mapperXml = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            Matcher select = Pattern.compile("<select[^>]*id=\"selectAdmissionFacts\"[^>]*>([\\s\\S]*?)</select>")
+                .matcher(mapperXml);
+            assertTrue(select.find(), "Foundation admission aggregate SQL must be present");
+            try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(select.group(1)))
+            {
+                assertTrue(rows.next());
+                assertEquals(12, rows.getInt("decision_total"));
+                assertEquals(0, rows.getInt("decision_accountable"));
+                assertEquals(8, rows.getInt("phase_one_total"));
+                assertEquals(0, rows.getInt("phase_one_closed"));
+                assertEquals(25, rows.getInt("prd_total"));
+                assertEquals(25, rows.getInt("prd_ready"));
+                assertEquals(25, rows.getInt("prd_valid_definition"));
+                assertEquals(150, rows.getInt("prd_acceptance_ref_total"));
+                assertEquals("OPEN", rows.getString("g02_evidence_status"));
+                assertEquals("OPEN", rows.getString("g04_evidence_status"));
+                assertEquals("OPEN", rows.getString("g05_evidence_status"));
+                assertEquals("OPEN", rows.getString("g06_evidence_status"));
+                assertEquals("OPEN", rows.getString("g07_evidence_status"));
+                assertEquals(1, rows.getInt("foundation_migration_present"));
+                assertEquals(0, rows.getInt("failed_migration_count"));
+                assertEquals(4, rows.getInt("core_idempotency_index_count"));
+            }
+        }
+        catch (SQLException | IOException exception)
+        {
+            throw new AssertionError("Foundation admission aggregate query failed", exception);
+        }
     }
 
     private void verifyAcceptanceReadinessSchema(String url)

@@ -17,6 +17,7 @@ import com.ruoyi.web.controller.todo.TodoFileSecurityReadinessController;
 import com.ruoyi.web.controller.todo.TodoFinanceReadinessController;
 import com.ruoyi.web.controller.todo.TodoAcceptanceReadinessController;
 import com.ruoyi.web.controller.todo.TodoAcceptanceEvidenceController;
+import com.ruoyi.web.controller.todo.TodoFoundationAdmissionReadinessController;
 import com.ruoyi.web.controller.todo.TodoTemplateController;
 
 class TodoDefinitionManagementApiTest
@@ -53,6 +54,7 @@ class TodoDefinitionManagementApiTest
         assertPermission(TodoAcceptanceEvidenceController.class,"updateScenario","todo:admission:edit");
         assertPermission(TodoAcceptanceEvidenceController.class,"updateMapping","todo:admission:edit");
         assertPermission(TodoAcceptanceEvidenceController.class,"batchBind","todo:admission:edit");
+        assertPermission(TodoFoundationAdmissionReadinessController.class,"readiness","todo:admission:view");
     }
 
     private void assertPermission(Class<?> type,String methodName,String permission)

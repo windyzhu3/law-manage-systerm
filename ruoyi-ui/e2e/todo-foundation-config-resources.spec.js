@@ -18,6 +18,19 @@ function formItem(dialog, label) {
 async function setupConfig(page) {
   const state = {
     triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0, acceptanceUpdates: 0,
+    foundationAdmission: {
+      overallStatus: 'NOT_ADMITTED', admitted: false, readyGateCount: 2, totalGateCount: 8,
+      gates: [
+        { gateCode: 'G-01', title: '阻断决策责任与冻结', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'NOT_REQUIRED', completed: 0, total: 20, summary: '0/12 已分配，0/8 阶段一已关闭', blockers: ['12 个阻断决策尚未全部分配责任人、责任角色和截止时间'] },
+        { gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'OPEN', completed: 0, total: 2, summary: '技术/来源门禁 BLOCKED，证据 OPEN', blockers: ['业务字典或稳定角色键尚未全部确认并落地'] },
+        { gateCode: 'G-03', title: 'TD-001～TD-025 定义包', status: 'READY', ready: true, technicalReady: true, evidenceStatus: 'NOT_REQUIRED', completed: 25, total: 25, summary: '25/25 READY，150/150 验收引用', blockers: [] },
+        { gateCode: 'G-04', title: '历史数据迁移方案', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'OPEN', completed: 0, total: 2, summary: '技术/来源门禁 BLOCKED，证据 OPEN', blockers: ['历史迁移方案或运行态校验尚未全部就绪'] },
+        { gateCode: 'G-05', title: '文件中心安全验收', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'OPEN', completed: 0, total: 2, summary: '技术/来源门禁 BLOCKED，证据 OPEN', blockers: ['文件安全运行态或来源要求尚未全部就绪'] },
+        { gateCode: 'G-06', title: '收费节点与风险公式', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'OPEN', completed: 0, total: 2, summary: '技术/来源门禁 BLOCKED，证据 OPEN', blockers: ['财务结构、公式决策或签字尚未全部就绪'] },
+        { gateCode: 'G-07', title: '阶段一验收包', status: 'BLOCKED', ready: false, technicalReady: false, evidenceStatus: 'OPEN', completed: 0, total: 2, summary: '技术/来源门禁 BLOCKED，证据 OPEN', blockers: ['阶段一场景、黄金数据、AT 映射或独立评审尚未全部就绪'] },
+        { gateCode: 'G-08', title: 'Flyway 与幂等约束', status: 'READY', ready: true, technicalReady: true, evidenceStatus: 'NOT_REQUIRED', completed: 6, total: 6, summary: '迁移 READY，失败 0，幂等索引 4/4', blockers: [] }
+      ]
+    },
     admissionEvidence: [{ evidenceId: 1, evidenceCode: 'G02-DICTIONARY-ROLE', gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'OPEN', deliveryPhase: 'PHASE_ONE', version: 0 }],
     foundationResources: {
       gateCode: 'G-02', total: 4, ready: 1, sourceUnresolved: 1, runtimeMissing: 1, runtimeIncomplete: 1, gateReady: false,
@@ -101,6 +114,7 @@ async function setupConfig(page) {
       statuses: ['OPEN', 'IN_REVIEW', 'APPROVED', 'REJECTED']
     })
     if (path === '/todo/admission-evidence' && request.method() === 'GET') return json(route, state.admissionEvidence)
+    if (path === '/todo/foundation-admission') return json(route, state.foundationAdmission)
     if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
     if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
     if (path === '/todo/foundation-file-security') return json(route, state.fileSecurity)
@@ -343,6 +357,19 @@ test('foundation resources expose repository source and runtime gaps without pro
   await expect(pane.getByText('来源待确认', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('运行态缺失', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('运行态不完整', { exact: true }).first()).toBeVisible()
+})
+
+test('aggregate admission truthfully remains two of eight until every gate is ready', async ({ page }) => {
+  await setupConfig(page)
+  await page.getByRole('tab', { name: '准入总览' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('NOT_ADMITTED', { exact: true })).toBeVisible()
+  await expect(pane.getByText('2/8', { exact: true })).toBeVisible()
+  await expect(pane.getByText('G-01', { exact: true })).toBeVisible()
+  await expect(pane.getByText('G-03', { exact: true })).toBeVisible()
+  await expect(pane.getByText('12 个阻断决策尚未全部分配责任人、责任角色和截止时间', { exact: true })).toBeVisible()
+  await expect(pane.getByText('技术就绪不替代授权业务决策、独立评审或签字。')).toBeVisible()
+  await expect(pane.getByText('ADMITTED_FOR_PHASE_ONE_BUSINESS_IMPLEMENTATION', { exact: true })).toHaveCount(0)
 })
 
 test('historical migration readiness exposes inventory and blockers without selecting defaults', async ({ page }) => {

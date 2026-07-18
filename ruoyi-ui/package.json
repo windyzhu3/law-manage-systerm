@@ -12,6 +12,7 @@
     "test:todo": "node scripts/check-todo-ui.js",
     "test:todo-schema": "node scripts/check-todo-schema-runtime.js",
     "test:encoding": "node scripts/check-source-encoding.js",
+    "test:foundation-ci": "node scripts/check-foundation-ci.js",
     "test:e2e": "node node_modules/@playwright/test/cli.js test"
   },
   "keywords": [

@@ -1,10 +1,10 @@
-name: V0.17 Todo Engine phase two quality gate
+name: V0.2 Foundation quality gate
 
 on:
   push:
-    branches: [V0.17]
+    branches: [v0.2-Foundation]
   pull_request:
-    branches: [main, V0.17]
+    branches: [main, v0.2-Foundation]
 
 permissions:
   contents: read
@@ -36,6 +36,10 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Verify Todo UI contract
         run: npm run test:todo
+      - name: Verify Todo schema runtime contract
+        run: npm run test:todo-schema
+      - name: Verify Foundation CI scope
+        run: npm run test:foundation-ci
       - name: Verify frontend source encoding
         run: npm run test:encoding
       - name: Build production bundle
