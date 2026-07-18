@@ -107,7 +107,7 @@ public class TodoFoundationAdmissionReadinessService
         boolean migration=integer(facts,"foundation_migration_present")==1;
         int failures=integer(facts,"failed_migration_count"),indexes=integer(facts,"core_idempotency_index_count");
         List<String> blockers=new ArrayList<>();
-        if(!migration)blockers.add("Foundation 终端 Flyway 迁移 0.20.22 尚未成功执行");
+        if(!migration)blockers.add("Foundation 终端 Flyway 迁移 0.20.23 尚未成功执行");
         if(failures!=0)blockers.add("Flyway 存在失败迁移记录");
         if(indexes!=EXPECTED_IDEMPOTENCY_INDEXES)blockers.add("核心事件、待办和动作幂等唯一索引必须恰好为 4 项");
         boolean ready=blockers.isEmpty();

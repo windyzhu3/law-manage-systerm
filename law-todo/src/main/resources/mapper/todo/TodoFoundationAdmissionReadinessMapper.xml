@@ -40,7 +40,7 @@
       (select e.status from todo_admission_evidence e where e.evidence_code='G05-FILE-SECURITY' limit 1) g05_evidence_status,
       (select e.status from todo_admission_evidence e where e.evidence_code='G06-FINANCE-FORMULA' limit 1) g06_evidence_status,
       (select e.status from todo_admission_evidence e where e.evidence_code='G07-PHASE-ONE-ACCEPTANCE' limit 1) g07_evidence_status,
-      exists(select 1 from flyway_schema_history h where h.version='0.20.22' and h.success=1) foundation_migration_present,
+      exists(select 1 from flyway_schema_history h where h.version='0.20.23' and h.success=1) foundation_migration_present,
       (select count(*) from flyway_schema_history h where h.success=0) failed_migration_count,
       (select count(distinct concat(s.table_name,':',s.index_name)) from information_schema.statistics s
         where s.table_schema=database() and s.non_unique=0 and
