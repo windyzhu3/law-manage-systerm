@@ -11,6 +11,7 @@
       <el-tab-pane label="历史迁移" name="migration"><historical-migration-readiness :report="historicalMigration" /></el-tab-pane>
       <el-tab-pane label="文件安全" name="fileSecurity"><file-security-readiness :report="fileSecurity" /></el-tab-pane>
       <el-tab-pane label="财务准入" name="finance"><finance-readiness :report="financeReadiness" /></el-tab-pane>
+      <el-tab-pane label="阶段一验收" name="acceptance"><acceptance-readiness :report="acceptanceReadiness" :scenarios="acceptanceScenarios" :mappings="acceptanceMappings" :options="acceptanceOptions" @refresh="loadAcceptance" @mapping-filter="loadAcceptanceMappings" /></el-tab-pane>
     </el-tabs>
     <version-drawer :visible.sync="drawer" :versions="versionRows" :template-id="current && current.template_id" @versions-refreshed="versionRows = $event" @publish="publishDraft" @copy-version="copyVersion" />
   </div>
@@ -26,19 +27,22 @@ import FoundationResourceReadiness from './components/FoundationResourceReadines
 import HistoricalMigrationReadiness from './components/HistoricalMigrationReadiness'
 import FileSecurityReadiness from './components/FileSecurityReadiness'
 import FinanceReadiness from './components/FinanceReadiness'
-import { listDefinitions, listDefinitionVersions, copyDefinition, copyDefinitionVersion, publishDefinition, listTriggerRules, listWorkCalendars, listTodoDecisions, listAdmissionEvidence, getFoundationResourceReadiness, getHistoricalMigrationReadiness, getFileSecurityReadiness, getFinanceReadiness } from '@/api/todo-definition'
+import AcceptanceReadiness from './components/AcceptanceReadiness'
+import { listDefinitions, listDefinitionVersions, copyDefinition, copyDefinitionVersion, publishDefinition, listTriggerRules, listWorkCalendars, listTodoDecisions, listAdmissionEvidence, getFoundationResourceReadiness, getHistoricalMigrationReadiness, getFileSecurityReadiness, getFinanceReadiness, getAcceptanceReadiness, listAcceptanceScenarios, listAcceptanceMappings, getAcceptanceGovernanceOptions } from '@/api/todo-definition'
 
 export default {
-  name: 'TodoConfig', components: { TemplateList, VersionDrawer, TriggerRuleTable, WorkCalendarTable, DecisionRegistry, AdmissionEvidenceRegistry, FoundationResourceReadiness, HistoricalMigrationReadiness, FileSecurityReadiness, FinanceReadiness },
-  data() { return { tab: 'templates', loading: false, templates: [], triggers: [], calendars: [], decisions: [], admissionEvidence: [], foundationResources: { resources: [] }, historicalMigration: { requirements: [] }, fileSecurity: { requirements: [] }, financeReadiness: { requirements: [] }, versionRows: [], drawer: false, current: null } },
+  name: 'TodoConfig', components: { TemplateList, VersionDrawer, TriggerRuleTable, WorkCalendarTable, DecisionRegistry, AdmissionEvidenceRegistry, FoundationResourceReadiness, HistoricalMigrationReadiness, FileSecurityReadiness, FinanceReadiness, AcceptanceReadiness },
+  data() { return { tab: 'templates', loading: false, templates: [], triggers: [], calendars: [], decisions: [], admissionEvidence: [], foundationResources: { resources: [] }, historicalMigration: { requirements: [] }, fileSecurity: { requirements: [] }, financeReadiness: { requirements: [] }, acceptanceReadiness: { requirements: [] }, acceptanceScenarios: [], acceptanceMappings: [], acceptanceOptions: {}, versionRows: [], drawer: false, current: null } },
   created() { this.load() },
   methods: {
     load() {
       this.loading = true
-      return Promise.all([listDefinitions(), listTriggerRules(), listWorkCalendars(), listTodoDecisions(), listAdmissionEvidence(), getFoundationResourceReadiness(), getHistoricalMigrationReadiness(), getFileSecurityReadiness(), getFinanceReadiness()])
-        .then(([templates, triggers, calendars, decisions, admission, resources, migration, fileSecurity, finance]) => { this.templates = templates.data || []; this.triggers = triggers.data || []; this.calendars = calendars.data || []; this.decisions = decisions.data || []; this.admissionEvidence = admission.data || []; this.foundationResources = resources.data || { resources: [] }; this.historicalMigration = migration.data || { requirements: [] }; this.fileSecurity = fileSecurity.data || { requirements: [] }; this.financeReadiness = finance.data || { requirements: [] } })
+      return Promise.all([listDefinitions(), listTriggerRules(), listWorkCalendars(), listTodoDecisions(), listAdmissionEvidence(), getFoundationResourceReadiness(), getHistoricalMigrationReadiness(), getFileSecurityReadiness(), getFinanceReadiness(), getAcceptanceReadiness(), listAcceptanceScenarios(), listAcceptanceMappings(), getAcceptanceGovernanceOptions()])
+        .then(([templates, triggers, calendars, decisions, admission, resources, migration, fileSecurity, finance, acceptance, scenarios, mappings, options]) => { this.templates = templates.data || []; this.triggers = triggers.data || []; this.calendars = calendars.data || []; this.decisions = decisions.data || []; this.admissionEvidence = admission.data || []; this.foundationResources = resources.data || { resources: [] }; this.historicalMigration = migration.data || { requirements: [] }; this.fileSecurity = fileSecurity.data || { requirements: [] }; this.financeReadiness = finance.data || { requirements: [] }; this.acceptanceReadiness = acceptance.data || { requirements: [] }; this.acceptanceScenarios = scenarios.data || []; this.acceptanceMappings = mappings.data || []; this.acceptanceOptions = options.data || {} })
         .finally(() => { this.loading = false })
     },
+    loadAcceptance() { return Promise.all([getAcceptanceReadiness(), listAcceptanceScenarios(), listAcceptanceMappings(), getAcceptanceGovernanceOptions()]).then(([readiness, scenarios, mappings, options]) => { this.acceptanceReadiness = readiness.data || { requirements: [] }; this.acceptanceScenarios = scenarios.data || []; this.acceptanceMappings = mappings.data || []; this.acceptanceOptions = options.data || {} }) },
+    loadAcceptanceMappings(filters) { return listAcceptanceMappings(filters).then(response => { this.acceptanceMappings = response.data || [] }) },
     versions(row) { this.current = row; listDefinitionVersions(row.template_id).then(response => { this.versionRows = response.data || []; this.drawer = true }) },
     copyTemplate(row) { this.$prompt('请输入新模板编码', '复制模板', { inputPattern: /^[A-Z][A-Z0-9_]+$/ }).then(({ value }) => copyDefinition(row.template_id, { actionId: `copy-${Date.now()}`, newTemplateCode: value, newTemplateName: `${row.template_name}副本` })).then(() => { this.$modal.msgSuccess('已创建草稿副本'); this.load() }) },
     copyVersion(row) { copyDefinitionVersion(this.current.template_id, row.version_no, { actionId: `copy-version-${Date.now()}`, newVersionNo: Math.max(...this.versionRows.map(version => version.version_no)) + 1 }).then(() => this.versions(this.current)) },

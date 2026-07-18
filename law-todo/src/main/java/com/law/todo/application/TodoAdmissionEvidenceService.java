@@ -27,9 +27,11 @@ public class TodoAdmissionEvidenceService
     private final TodoHistoricalMigrationReadinessService migrations;
     private final TodoFileSecurityReadinessService fileSecurity;
     private final TodoFinanceReadinessService finance;
+    private final TodoAcceptanceReadinessService acceptance;
     public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper,TodoFoundationResourceService resources,
-            TodoHistoricalMigrationReadinessService migrations,TodoFileSecurityReadinessService fileSecurity,TodoFinanceReadinessService finance)
-    {this.mapper=mapper;this.resources=resources;this.migrations=migrations;this.fileSecurity=fileSecurity;this.finance=finance;}
+            TodoHistoricalMigrationReadinessService migrations,TodoFileSecurityReadinessService fileSecurity,
+            TodoFinanceReadinessService finance,TodoAcceptanceReadinessService acceptance)
+    {this.mapper=mapper;this.resources=resources;this.migrations=migrations;this.fileSecurity=fileSecurity;this.finance=finance;this.acceptance=acceptance;}
 
     @Transactional(readOnly=true)
     public List<TodoAdmissionEvidenceView> list(){return mapper.selectEvidence().stream().map(this::view).toList();}
@@ -86,6 +88,8 @@ public class TodoAdmissionEvidenceService
             fail("TODO_ADMISSION_FILE_SECURITY_NOT_READY","G-05 cannot be approved before all file controls and review evidence are ready");
         if("APPROVED".equals(command.status())&&"G-06".equals(text(value(current,"gate_code","gateCode")))&&!finance.gateReady("G-06"))
             fail("TODO_ADMISSION_FINANCE_NOT_READY","G-06 cannot be approved before finance schemas, decisions and sign-off are ready");
+        if("APPROVED".equals(command.status())&&"G-07".equals(text(value(current,"gate_code","gateCode")))&&!acceptance.gateReady("G-07"))
+            fail("TODO_ADMISSION_ACCEPTANCE_NOT_READY","G-07 cannot be approved before scenarios, data, AT mappings and independent review are ready");
     }
 
     private void validateRequiredAccountability(UpdateAdmissionEvidenceCommand command)

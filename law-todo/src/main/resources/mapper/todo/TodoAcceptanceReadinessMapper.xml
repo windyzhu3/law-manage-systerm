@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoAcceptanceReadinessMapper">
+  <select id="selectAcceptanceReadiness" resultType="java.util.Map">
+    with phase_catalog as (
+      select distinct c.template_code,acceptance.acceptance_ref,
+        substring_index(acceptance.acceptance_ref,'-',-1) dimension_code
+      from todo_prd_definition_catalog c
+      join json_table(c.acceptance_refs_json,'$[*]'
+        columns(acceptance_ref varchar(64) path '$')) acceptance on true
+      where c.template_code in
+        ('TD-001','TD-002','TD-003','TD-004','TD-005','TD-006','TD-007','TD-008','TD-009','TD-010',
+         'TD-011','TD-012','TD-013','TD-014','TD-015','TD-016','TD-022','TD-023','TD-025')
+    ), readiness_state as (
+      select
+        (select count(distinct template_code) from phase_catalog) phase_one_template_count,
+        (select count(*) from phase_catalog) catalog_at_count,
+        (select count(*) from todo_acceptance_ref_mapping) mapping_at_count,
+        ((select count(*) from phase_catalog c left join todo_acceptance_ref_mapping m
+            on m.acceptance_ref=c.acceptance_ref and m.template_code=c.template_code
+              and m.dimension_code=c.dimension_code where m.mapping_id is null)
+         +
+         (select count(*) from todo_acceptance_ref_mapping m left join phase_catalog c
+            on c.acceptance_ref=m.acceptance_ref and c.template_code=m.template_code
+              and c.dimension_code=m.dimension_code where c.acceptance_ref is null)) catalog_mismatch_count,
+        (select count(*) from todo_acceptance_scenario where delivery_phase='PHASE_ONE') scenario_count,
+        (select count(*) from todo_acceptance_scenario scenario
+          join sys_user owner on owner.user_id=scenario.owner_user_id and owner.status='0' and owner.del_flag='0'
+          join sys_user acceptor on acceptor.user_id=scenario.acceptor_user_id and acceptor.status='0' and acceptor.del_flag='0'
+          join sys_user reviewer on reviewer.user_id=scenario.reviewer_user_id and reviewer.status='0' and reviewer.del_flag='0'
+          where scenario.delivery_phase='PHASE_ONE' and scenario.status='APPROVED'
+          and scenario.due_at is not null and scenario.reviewer_user_id&lt;&gt;scenario.owner_user_id
+          and scenario.reviewer_user_id&lt;&gt;scenario.acceptor_user_id
+          and scenario.conclusion is not null and trim(scenario.conclusion)&lt;&gt;''
+          and scenario.reviewed_by is not null and scenario.reviewed_time is not null)
+          approved_scenario_count,
+        (select count(*) from todo_acceptance_scenario where scenario_code='PHASE_ONE_GOLDEN_PATH') golden_scenario_count,
+        (select count(*) from todo_acceptance_scenario where scenario_code='PHASE_ONE_GOLDEN_PATH'
+          and status='APPROVED' and dataset_ref is not null and trim(dataset_ref)&lt;&gt;''
+          and dataset_checksum regexp '^[0-9a-fA-F]{64}$' and dataset_version&gt;0)
+          golden_scenario_ready_count,
+        (select count(*) from todo_acceptance_scenario scenario
+          join sys_user owner on owner.user_id=scenario.owner_user_id and owner.status='0' and owner.del_flag='0'
+          join sys_user acceptor on acceptor.user_id=scenario.acceptor_user_id and acceptor.status='0' and acceptor.del_flag='0'
+          join sys_user reviewer on reviewer.user_id=scenario.reviewer_user_id and reviewer.status='0' and reviewer.del_flag='0'
+          where scenario.delivery_phase='PHASE_ONE' and scenario.due_at is not null
+          and scenario.reviewer_user_id&lt;&gt;scenario.owner_user_id
+          and scenario.reviewer_user_id&lt;&gt;scenario.acceptor_user_id)
+          scenario_accountability_count,
+        (select count(*) from todo_acceptance_ref_mapping where scenario_id is not null
+          and planned_test_ref is not null and trim(planned_test_ref)&lt;&gt;'' and status&lt;&gt;'UNMAPPED') mapped_at_count,
+        (select count(*) from todo_acceptance_ref_mapping mapping
+          join sys_user owner on owner.user_id=mapping.owner_user_id and owner.status='0' and owner.del_flag='0'
+          join sys_user reviewer on reviewer.user_id=mapping.reviewer_user_id and reviewer.status='0' and reviewer.del_flag='0'
+          where mapping.due_at is not null and mapping.reviewer_user_id&lt;&gt;mapping.owner_user_id)
+          mapping_accountability_count,
+        (select count(*) from todo_acceptance_ref_mapping where status in ('IN_REVIEW','APPROVED')) in_review_at_count,
+        (select count(*) from todo_acceptance_ref_mapping m join todo_acceptance_scenario s on s.scenario_id=m.scenario_id
+          join sys_user owner on owner.user_id=m.owner_user_id and owner.status='0' and owner.del_flag='0'
+          join sys_user reviewer on reviewer.user_id=m.reviewer_user_id and reviewer.status='0' and reviewer.del_flag='0'
+          where m.status='APPROVED' and s.status='APPROVED'
+          and m.planned_test_ref is not null and trim(m.planned_test_ref)&lt;&gt;''
+          and m.owner_user_id is not null and m.reviewer_user_id is not null and m.due_at is not null
+          and m.reviewer_user_id&lt;&gt;m.owner_user_id and m.conclusion is not null and trim(m.conclusion)&lt;&gt;''
+          and m.reviewed_by is not null and m.reviewed_time is not null) approved_at_count,
+        0 mock_business_evidence_count
+    )
+    select r.*,s.*
+    from todo_foundation_acceptance_requirement r
+    cross join readiness_state s
+    where r.gate_code=#{gateCode}
+    order by r.sort_order,r.requirement_id
+  </select>
+</mapper>

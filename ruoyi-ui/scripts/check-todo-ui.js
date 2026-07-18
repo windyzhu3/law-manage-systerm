@@ -22,6 +22,9 @@ const required = [
   ,'src/views/todo/config/components/HistoricalMigrationReadiness.vue'
   ,'src/views/todo/config/components/FileSecurityReadiness.vue'
   ,'src/views/todo/config/components/FinanceReadiness.vue'
+  ,'src/views/todo/config/components/AcceptanceReadiness.vue'
+  ,'src/views/todo/config/components/AcceptanceScenarioDialog.vue'
+  ,'src/views/todo/config/components/AcceptanceMappingDialog.vue'
   ,'src/api/todo-operations.js'
   ,'src/views/todo/operations/index.vue'
   ,'src/views/todo/operations/components/OperationsMetrics.vue'
@@ -75,6 +78,7 @@ if(!definitionApi.includes('export function getFoundationResourceReadiness')) th
 if(!definitionApi.includes('export function getHistoricalMigrationReadiness')) throw new Error('missing historical migration readiness api')
 if(!definitionApi.includes('export function getFileSecurityReadiness')) throw new Error('missing file security readiness api')
 if(!definitionApi.includes('export function getFinanceReadiness')) throw new Error('missing finance readiness api')
+for(const name of ['getAcceptanceReadiness','listAcceptanceScenarios','listAcceptanceMappings','getAcceptanceGovernanceOptions','createAcceptanceScenario','updateAcceptanceScenario','updateAcceptanceMapping','batchBindAcceptanceMappings']) if(!definitionApi.includes(`export function ${name}`)) throw new Error(`missing acceptance readiness api ${name}`)
 const foundationResources=fs.readFileSync('src/views/todo/config/components/FoundationResourceReadiness.vue','utf8')
 for(const marker of ['SOURCE_UNRESOLVED','RUNTIME_MISSING','RUNTIME_INCOMPLETE','READY','gateReady','expectedValuesJson']) if(!foundationResources.includes(marker)) throw new Error(`missing foundation resource marker ${marker}`)
 const historicalMigration=fs.readFileSync('src/views/todo/config/components/HistoricalMigrationReadiness.vue','utf8')
@@ -82,6 +86,12 @@ for(const marker of ['NEEDS_DECISION','NEEDS_EVIDENCE','SOURCE_UNRESOLVED','RUNT
 const fileSecurity=fs.readFileSync('src/views/todo/config/components/FileSecurityReadiness.vue','utf8')
 for(const marker of ['NEEDS_EVIDENCE','NEEDS_REVIEW','SOURCE_UNRESOLVED','RUNTIME_MISSING','gateReady','tokenControlReady','accessAuditReady','cleanupCompensationReady']) if(!fileSecurity.includes(marker)) throw new Error(`missing file security marker ${marker}`)
 const financeReadiness=fs.readFileSync('src/views/todo/config/components/FinanceReadiness.vue','utf8');for(const marker of ['NEEDS_DECISION','NEEDS_REVIEW','SOURCE_UNRESOLVED','RUNTIME_MISSING','gateReady','nodeFeeColumns','riskSchemaObjects'])if(!financeReadiness.includes(marker))throw new Error(`missing finance readiness marker ${marker}`)
+const acceptanceReadiness=fs.readFileSync('src/views/todo/config/components/AcceptanceReadiness.vue','utf8')
+for(const marker of ['19','114','现有 28 个 Mock E2E 不计入 G-07','RUNTIME_INCOMPLETE','gateReady','独立 Reviewer','batchBindAcceptanceMappings','templateCode','dimensionCode','status']) if(!acceptanceReadiness.includes(marker)) throw new Error(`missing acceptance readiness marker ${marker}`)
+const acceptanceScenario=fs.readFileSync('src/views/todo/config/components/AcceptanceScenarioDialog.vue','utf8')
+for(const marker of ['datasetRef','datasetChecksum','datasetVersion','ownerUserId','acceptorUserId','reviewerUserId','version','actionId']) if(!acceptanceScenario.includes(marker)) throw new Error(`missing acceptance scenario marker ${marker}`)
+const acceptanceMapping=fs.readFileSync('src/views/todo/config/components/AcceptanceMappingDialog.vue','utf8')
+for(const marker of ['plannedTestRef','ownerUserId','reviewerUserId','version','actionId']) if(!acceptanceMapping.includes(marker)) throw new Error(`missing acceptance mapping marker ${marker}`)
 const admissionEvidence=fs.readFileSync('src/views/todo/config/components/AdmissionEvidenceRegistry.vue','utf8')
 for(const marker of ['todo:admission:edit','独立评审人','artifactRef','APPROVED','validateAdmissionEvidence']) if(!admissionEvidence.includes(marker)) throw new Error(`missing admission evidence marker ${marker}`)
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)

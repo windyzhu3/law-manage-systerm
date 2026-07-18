@@ -34,7 +34,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.20", current.getVersion().getVersion());
+        assertEquals("0.20.21", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -43,6 +43,36 @@ class FlywayMigrationTest
         verifyHistoricalMigrationReadinessSchema(url);
         verifyFileSecurityReadinessSchema(url);
         verifyFinanceReadinessSchema(url);
+        verifyAcceptanceReadinessSchema(url);
+    }
+
+    private void verifyAcceptanceReadinessSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(8L, count(connection,
+                "select count(*) from todo_foundation_acceptance_requirement where gate_code='G-07'"));
+            assertEquals(19L, count(connection,
+                "select count(distinct template_code) from todo_acceptance_ref_mapping"));
+            assertEquals(114L, count(connection,
+                "select count(*) from todo_acceptance_ref_mapping"));
+            assertEquals(114L, count(connection,
+                "select count(*) from todo_acceptance_ref_mapping where status='UNMAPPED' "
+                    + "and scenario_id is null and planned_test_ref is null and evidence_note is null "
+                    + "and owner_user_id is null and reviewer_user_id is null"));
+            assertEquals(0L, count(connection, "select count(*) from todo_acceptance_scenario"));
+            assertEquals(0L, count(connection, "select count(*) from todo_acceptance_action"));
+            assertEquals(0L, count(connection,
+                "select count(*) from todo_trigger_rule r join todo_template t on t.template_id=r.template_id "
+                    + "where t.template_code in ('TD-001','TD-002','TD-003','TD-004','TD-005','TD-006',"
+                    + "'TD-007','TD-008','TD-009','TD-010','TD-011','TD-012','TD-013','TD-014','TD-015',"
+                    + "'TD-016','TD-022','TD-023','TD-025') and r.enabled='Y'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Acceptance readiness database invariants failed", exception);
+        }
     }
 
     private void verifyFinanceReadinessSchema(String url)

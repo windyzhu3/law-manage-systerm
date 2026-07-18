@@ -17,7 +17,7 @@ function formItem(dialog, label) {
 
 async function setupConfig(page) {
   const state = {
-    triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0,
+    triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0, acceptanceUpdates: 0,
     admissionEvidence: [{ evidenceId: 1, evidenceCode: 'G02-DICTIONARY-ROLE', gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'OPEN', deliveryPhase: 'PHASE_ONE', version: 0 }],
     foundationResources: {
       gateCode: 'G-02', total: 4, ready: 1, sourceUnresolved: 1, runtimeMissing: 1, runtimeIncomplete: 1, gateReady: false,
@@ -59,7 +59,24 @@ async function setupConfig(page) {
         { requirementId: 6, requirementCode: 'Q012_RISK_FORMULA_POLICY', requirementName: '风险收费公式与舍入规则', sourceStatus: 'NEEDS_DECISION', readinessStatus: 'SOURCE_UNRESOLVED', decisionRef: 'Q-012', sourceRef: 'gap-analysis.md:Q-012' },
         { requirementId: 7, requirementCode: 'FINANCE_BUSINESS_SIGNOFF', requirementName: '财务与业务联合签字', sourceStatus: 'NEEDS_REVIEW', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'admission-report.md:G-06' }
       ]
-    }
+    },
+    acceptanceReadiness: {
+      gateCode: 'G-07', total: 8, ready: 3, sourceUnresolved: 0, runtimeMissing: 4, runtimeIncomplete: 1, gateReady: false,
+      phaseOneTemplateCount: 19, catalogAtCount: 114, mappingAtCount: 114, catalogMismatchCount: 0,
+      scenarioCount: 0, approvedScenarioCount: 0, goldenScenarioCount: 0, goldenScenarioReadyCount: 0,
+      scenarioAccountabilityCount: 0, mappedAtCount: 0, mappingAccountabilityCount: 0, inReviewAtCount: 0, approvedAtCount: 0, mockBusinessEvidenceCount: 0,
+      requirements: [
+        { requirementId: 1, requirementCode: 'PHASE_ONE_SCOPE_MANIFEST', requirementName: '阶段一19模板范围', readinessStatus: 'READY', sourceRef: 'template-matrix.md' },
+        { requirementId: 2, requirementCode: 'PHASE_ONE_AT_CATALOG', requirementName: '阶段一114项AT目录', readinessStatus: 'READY', sourceRef: 'definition-catalog' },
+        { requirementId: 3, requirementCode: 'PHASE_ONE_SCENARIO_CATALOG', requirementName: '阶段一E2E场景清单', readinessStatus: 'RUNTIME_MISSING', sourceRef: 'gap-analysis.md' },
+        { requirementId: 4, requirementCode: 'PHASE_ONE_AT_MAPPING', requirementName: '114项AT到场景映射', readinessStatus: 'RUNTIME_INCOMPLETE', sourceRef: 'template-matrix.md' }
+      ]
+    },
+    acceptanceScenarios: [],
+    acceptanceMappings: [
+      { mappingId: 21, acceptanceRef: 'AT-TD-001-OWNER', templateCode: 'TD-001', dimensionCode: 'OWNER', status: 'UNMAPPED', version: 0 },
+      { mappingId: 22, acceptanceRef: 'AT-TD-001-SLA', templateCode: 'TD-001', dimensionCode: 'SLA', status: 'UNMAPPED', version: 0 }
+    ]
   }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
   await page.addInitScript(() => { document.cookie = 'Admin-Token=e2e-token; path=/' })
@@ -88,6 +105,44 @@ async function setupConfig(page) {
     if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
     if (path === '/todo/foundation-file-security') return json(route, state.fileSecurity)
     if (path === '/todo/foundation-finance') return json(route, state.financeReadiness)
+    if (path === '/todo/foundation-acceptance') return json(route, state.acceptanceReadiness)
+    if (path === '/todo/acceptance-governance-options') return json(route, {
+      users: [
+        { user_id: 7, user_name: 'owner', nick_name: 'Owner' },
+        { user_id: 8, user_name: 'acceptor', nick_name: 'Acceptor' },
+        { user_id: 9, user_name: 'reviewer', nick_name: 'Reviewer' }
+      ],
+      scenarioStatuses: ['DRAFT', 'IN_REVIEW', 'APPROVED', 'REJECTED'],
+      mappingStatuses: ['UNMAPPED', 'MAPPED', 'IN_REVIEW', 'APPROVED', 'REJECTED'],
+      dimensions: ['OWNER', 'SLA', 'DOD', 'ROUTE', 'HANDLER', 'UI']
+    })
+    if (path === '/todo/acceptance-scenarios') {
+      if (request.method() === 'GET') return json(route, state.acceptanceScenarios)
+      const item = { ...body, scenarioId: state.acceptanceScenarios.length + 11, deliveryPhase: 'PHASE_ONE', version: 0 }
+      state.acceptanceScenarios.push(item); state.acceptanceReadiness.scenarioCount = state.acceptanceScenarios.length
+      return json(route, item)
+    }
+    if (/^\/todo\/acceptance-scenarios\/\d+$/.test(path)) {
+      const id = Number(path.split('/').pop()); state.acceptanceUpdates++
+      state.acceptanceScenarios = state.acceptanceScenarios.map(row => row.scenarioId === id ? { ...row, ...body, version: row.version + 1 } : row)
+      return json(route, state.acceptanceScenarios.find(row => row.scenarioId === id))
+    }
+    if (path === '/todo/acceptance-mappings/batch-bind') {
+      state.acceptanceUpdates++
+      const ids = body.mappings.map(item => item.mappingId)
+      state.acceptanceMappings = state.acceptanceMappings.map(row => ids.includes(row.mappingId) ? { ...row, scenarioId: body.scenarioId, plannedTestRef: body.plannedTestRef, evidenceNote: body.evidenceNote, status: 'MAPPED', version: row.version + 1 } : row)
+      return json(route, state.acceptanceMappings.filter(row => ids.includes(row.mappingId)))
+    }
+    if (path === '/todo/acceptance-mappings' && request.method() === 'GET') {
+      const url = new URL(request.url()); let rows = state.acceptanceMappings
+      for (const key of ['templateCode', 'dimensionCode', 'status']) if (url.searchParams.get(key)) rows = rows.filter(row => row[key] === url.searchParams.get(key))
+      return json(route, rows)
+    }
+    if (/^\/todo\/acceptance-mappings\/\d+$/.test(path)) {
+      const id = Number(path.split('/').pop()); state.acceptanceUpdates++
+      state.acceptanceMappings = state.acceptanceMappings.map(row => row.mappingId === id ? { ...row, ...body, scenarioCode: state.acceptanceScenarios.find(item => item.scenarioId === body.scenarioId)?.scenarioCode, version: row.version + 1 } : row)
+      return json(route, state.acceptanceMappings.find(row => row.mappingId === id))
+    }
     if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
       state.admissionUpdates++
       const id = Number(path.split('/').pop())
@@ -330,4 +385,49 @@ test('finance readiness separates repository capabilities from schema and decisi
   await expect(pane.getByText('待业务决策', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('待财务签字', { exact: true })).toBeVisible()
   await expect(pane.getByText('结构缺失', { exact: true }).first()).toBeVisible()
+})
+
+test('phase-one acceptance governs scenarios mappings and batch bind without mock credit', async ({ page }) => {
+  const state = await setupConfig(page)
+  await page.getByRole('tab', { name: '阶段一验收' }).click()
+  let pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('G-07 阶段一验收门禁未就绪，不能批准准入证据')).toBeVisible()
+  await expect(pane.getByText('现有 28 个 Mock E2E 不计入 G-07')).toBeVisible()
+  await expect(pane.getByText('19/19', { exact: true })).toBeVisible()
+  await expect(pane.getByText('114/114', { exact: true })).toBeVisible()
+  await expect(pane.getByText('独立 Reviewer', { exact: true }).first()).toBeVisible()
+
+  await pane.getByRole('button', { name: '新增场景' }).click()
+  let dialog = page.getByRole('dialog')
+  await formItem(dialog, '场景编码').locator('input').fill('PHASE_ONE_GOLDEN_PATH')
+  await formItem(dialog, '场景名称').locator('input').fill('一期黄金路径')
+  await formItem(dialog, '业务路径').locator('input').fill('线索→客户/合同→转案→案管分类→综法办理→归档')
+  await dialog.getByRole('button', { name: '保存' }).click()
+  await expect(pane.getByText('PHASE_ONE_GOLDEN_PATH', { exact: true }).first()).toBeVisible()
+  expect(state.acceptanceScenarios).toHaveLength(1)
+
+  const rows = pane.locator('.el-table').last().locator('.el-table__body-wrapper tbody tr')
+  await rows.nth(0).locator('.el-checkbox').click()
+  await rows.nth(1).locator('.el-checkbox').click()
+  await pane.getByRole('button', { name: '批量绑定' }).click()
+  dialog = page.getByRole('dialog')
+  await choose(page, formItem(dialog, '验收场景'), 'PHASE_ONE_GOLDEN_PATH｜一期黄金路径')
+  await formItem(dialog, '计划测试引用').locator('input').fill('e2e/phase-one-golden.spec.js#golden')
+  await dialog.getByRole('button', { name: '绑定为 MAPPED' }).click()
+  await expect.poll(() => state.acceptanceMappings.every(row => row.status === 'MAPPED')).toBeTruthy()
+  expect(state.acceptanceMappings.some(row => row.status === 'APPROVED')).toBeFalsy()
+
+  await pane.locator('.section-card').last().getByRole('button', { name: '编辑', exact: true }).first().click()
+  dialog = page.getByRole('dialog')
+  await expect(formItem(dialog, '计划测试引用').locator('input')).toHaveValue('e2e/phase-one-golden.spec.js#golden')
+  await dialog.getByRole('button', { name: '保存' }).click()
+  expect(state.acceptanceUpdates).toBeGreaterThanOrEqual(2)
+
+  await page.reload(); await page.getByRole('tab', { name: '阶段一验收' }).click()
+  pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('PHASE_ONE_GOLDEN_PATH', { exact: true }).first()).toBeVisible()
+  await choose(page, pane.locator('.filters .el-form-item').filter({ hasText: '状态' }).first(), 'MAPPED')
+  await pane.getByRole('button', { name: '查询' }).click()
+  await expect(pane.getByText('AT-TD-001-OWNER', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('AT-TD-001-SLA', { exact: true }).first()).toBeVisible()
 })

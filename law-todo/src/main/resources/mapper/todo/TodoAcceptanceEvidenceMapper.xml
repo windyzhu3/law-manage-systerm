@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoAcceptanceEvidenceMapper">
+  <sql id="scenarioColumns">
+    s.*,owner.user_name owner_user_name,owner.nick_name owner_nick_name,
+    acceptor.user_name acceptor_user_name,acceptor.nick_name acceptor_nick_name,
+    reviewer.user_name reviewer_user_name,reviewer.nick_name reviewer_nick_name
+  </sql>
+  <sql id="mappingColumns">
+    m.*,s.scenario_code,s.scenario_name,s.status scenario_status,
+    owner.user_name owner_user_name,owner.nick_name owner_nick_name,
+    reviewer.user_name reviewer_user_name,reviewer.nick_name reviewer_nick_name
+  </sql>
+  <select id="selectScenarios" resultType="java.util.Map">
+    select <include refid="scenarioColumns"/> from todo_acceptance_scenario s
+    left join sys_user owner on owner.user_id=s.owner_user_id
+    left join sys_user acceptor on acceptor.user_id=s.acceptor_user_id
+    left join sys_user reviewer on reviewer.user_id=s.reviewer_user_id
+    order by s.scenario_code
+  </select>
+  <select id="selectScenarioById" resultType="java.util.Map">
+    select <include refid="scenarioColumns"/> from todo_acceptance_scenario s
+    left join sys_user owner on owner.user_id=s.owner_user_id
+    left join sys_user acceptor on acceptor.user_id=s.acceptor_user_id
+    left join sys_user reviewer on reviewer.user_id=s.reviewer_user_id
+    where s.scenario_id=#{scenarioId}
+  </select>
+  <select id="selectScenarioByCode" resultType="java.util.Map">
+    select scenario_id,scenario_code,status,version from todo_acceptance_scenario where scenario_code=#{scenarioCode}
+  </select>
+  <select id="selectMappings" resultType="java.util.Map">
+    select <include refid="mappingColumns"/> from todo_acceptance_ref_mapping m
+    left join todo_acceptance_scenario s on s.scenario_id=m.scenario_id
+    left join sys_user owner on owner.user_id=m.owner_user_id
+    left join sys_user reviewer on reviewer.user_id=m.reviewer_user_id
+    <where>
+      <if test="templateCode != null and templateCode != ''">m.template_code=#{templateCode}</if>
+      <if test="dimensionCode != null and dimensionCode != ''">and m.dimension_code=#{dimensionCode}</if>
+      <if test="status != null and status != ''">and m.status=#{status}</if>
+    </where>
+    order by m.template_code,m.dimension_code,m.acceptance_ref
+  </select>
+  <select id="selectMappingById" resultType="java.util.Map">
+    select <include refid="mappingColumns"/> from todo_acceptance_ref_mapping m
+    left join todo_acceptance_scenario s on s.scenario_id=m.scenario_id
+    left join sys_user owner on owner.user_id=m.owner_user_id
+    left join sys_user reviewer on reviewer.user_id=m.reviewer_user_id
+    where m.mapping_id=#{mappingId}
+  </select>
+  <select id="selectActiveUsers" resultType="java.util.Map">
+    select user_id,user_name,nick_name,dept_id from sys_user where status='0' and del_flag='0' order by user_id
+  </select>
+  <select id="selectActiveUser" resultType="java.util.Map">
+    select user_id,user_name,nick_name,dept_id from sys_user where user_id=#{userId} and status='0' and del_flag='0'
+  </select>
+  <insert id="insertScenario" useGeneratedKeys="true" keyProperty="scenarioId">
+    insert into todo_acceptance_scenario
+      (scenario_code,scenario_name,delivery_phase,business_path,preconditions_json,steps_json,
+       expected_outcomes_json,dataset_ref,dataset_checksum,dataset_version,owner_user_id,acceptor_user_id,
+       reviewer_user_id,due_at,status,conclusion,create_by)
+    values
+      (#{scenarioCode},#{scenarioName},'PHASE_ONE',#{businessPath},cast(#{preconditionsJson} as json),
+       cast(#{stepsJson} as json),cast(#{expectedOutcomesJson} as json),#{datasetRef},#{datasetChecksum},
+       #{datasetVersion},#{ownerUserId},#{acceptorUserId},#{reviewerUserId},#{dueAt},#{status},#{conclusion},#{createBy})
+  </insert>
+  <update id="updateScenarioConditionally">
+    update todo_acceptance_scenario set scenario_name=#{scenarioName},business_path=#{businessPath},
+      preconditions_json=cast(#{preconditionsJson} as json),steps_json=cast(#{stepsJson} as json),
+      expected_outcomes_json=cast(#{expectedOutcomesJson} as json),dataset_ref=#{datasetRef},
+      dataset_checksum=#{datasetChecksum},dataset_version=#{datasetVersion},owner_user_id=#{ownerUserId},
+      acceptor_user_id=#{acceptorUserId},reviewer_user_id=#{reviewerUserId},due_at=#{dueAt},status=#{status},
+      conclusion=#{conclusion},reviewed_by=#{reviewedBy},
+      reviewed_time=case when #{status} in ('APPROVED','REJECTED') then sysdate() else null end,
+      update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where scenario_id=#{scenarioId} and version=#{expectedVersion} and status=#{expectedStatus}
+  </update>
+  <update id="updateMappingConditionally">
+    update todo_acceptance_ref_mapping set scenario_id=#{scenarioId},planned_test_ref=#{plannedTestRef},
+      evidence_note=#{evidenceNote},owner_user_id=#{ownerUserId},reviewer_user_id=#{reviewerUserId},due_at=#{dueAt},
+      status=#{status},conclusion=#{conclusion},reviewed_by=#{reviewedBy},
+      reviewed_time=case when #{status} in ('APPROVED','REJECTED') then sysdate() else null end,
+      update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where mapping_id=#{mappingId} and version=#{expectedVersion} and status=#{expectedStatus}
+  </update>
+  <insert id="insertActionClaim">
+    insert ignore into todo_acceptance_action
+      (action_id,entity_type,entity_id,action_type,action_status,request_fingerprint,
+       operator_id,operator_name,operator_dept_id,payload_json)
+    values
+      (#{actionId},#{entityType},#{entityId},#{actionType},'CLAIMED',#{requestFingerprint},
+       #{operatorId},#{operatorName},#{operatorDeptId},cast(#{payloadJson} as json))
+  </insert>
+  <select id="selectActionForUpdate" resultType="java.util.Map">
+    select * from todo_acceptance_action where action_id=#{actionId} for update
+  </select>
+  <update id="completeAction">
+    update todo_acceptance_action set action_status='APPLIED',result_entity_id=#{resultEntityId},completed_time=sysdate()
+    where action_id=#{actionId} and request_fingerprint=#{requestFingerprint} and action_status='CLAIMED'
+  </update>
+</mapper>

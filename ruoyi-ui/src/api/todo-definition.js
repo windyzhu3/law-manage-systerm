@@ -40,3 +40,11 @@ export function getFoundationResourceReadiness(gateCode = 'G-02') { return reque
 export function getHistoricalMigrationReadiness(gateCode = 'G-04') { return request({ url: '/todo/foundation-migration', method: 'get', params: { gateCode } }) }
 export function getFileSecurityReadiness(gateCode = 'G-05') { return request({ url: '/todo/foundation-file-security', method: 'get', params: { gateCode } }) }
 export function getFinanceReadiness(gateCode = 'G-06') { return request({ url: '/todo/foundation-finance', method: 'get', params: { gateCode } }) }
+export function getAcceptanceReadiness(gateCode = 'G-07') { return request({ url: '/todo/foundation-acceptance', method: 'get', params: { gateCode } }) }
+export function listAcceptanceScenarios() { return request({ url: '/todo/acceptance-scenarios', method: 'get' }) }
+export function listAcceptanceMappings(params) { return request({ url: '/todo/acceptance-mappings', method: 'get', params }) }
+export function getAcceptanceGovernanceOptions() { return request({ url: '/todo/acceptance-governance-options', method: 'get' }) }
+export function createAcceptanceScenario(data) { return request({ url: '/todo/acceptance-scenarios', method: 'post', data }) }
+export function updateAcceptanceScenario(scenarioId, data) { return request({ url: `/todo/acceptance-scenarios/${scenarioId}`, method: 'put', data }) }
+export function updateAcceptanceMapping(mappingId, data) { return request({ url: `/todo/acceptance-mappings/${mappingId}`, method: 'put', data }) }
+export function batchBindAcceptanceMappings(data) { return request({ url: '/todo/acceptance-mappings/batch-bind', method: 'put', data }) }
