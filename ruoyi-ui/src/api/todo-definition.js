@@ -28,6 +28,7 @@ export function diffDefinitionVersions(leftVersionId, rightVersionId) { return r
 export function listTodoEventCatalog() { return request({ url: '/todo/event-catalog', method: 'get' }) }
 export function listTodoHandlerCatalog() { return request({ url: '/todo/handler-catalog', method: 'get' }) }
 export function listTodoValidatorCatalog() { return request({ url: '/todo/validator-catalog', method: 'get' }) }
+export function listTodoAutoActionCapabilities() { return request({ url: '/todo/auto-action-capabilities', method: 'get' }) }
 export function listTodoDecisions() { return request({ url: '/todo/decisions', method: 'get' }) }
 export function createTodoDecision(data) { return request({ url: '/todo/decisions', method: 'post', data }) }
 export function updateTodoDecision(decisionId, data) { return request({ url: `/todo/decisions/${decisionId}`, method: 'put', data }) }
