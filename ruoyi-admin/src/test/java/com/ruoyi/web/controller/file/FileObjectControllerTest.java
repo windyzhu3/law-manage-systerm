@@ -16,6 +16,8 @@ import com.law.file.domain.FileObject.FileVersion;
 import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.utils.SecurityUtils;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import com.ruoyi.common.utils.ip.IpUtils;
 
@@ -46,9 +48,31 @@ class FileObjectControllerTest
             ip.when(IpUtils::getIpAddr).thenReturn("127.0.0.1");
             var response=new FileObjectController(service).open("token");
             assertTrue(response.getHeaders().getFirst("Content-Disposition").startsWith("inline"));
+            assertEquals("nosniff",response.getHeaders().getFirst("X-Content-Type-Options"));
+            assertEquals("sandbox; default-src 'none'",response.getHeaders().getFirst("Content-Security-Policy"));
+            assertEquals("no-referrer",response.getHeaders().getFirst("Referrer-Policy"));
             verify(service,never()).completeAccess(any(),anyBoolean(),any());
             response.getBody().writeTo(new ByteArrayOutputStream());
             verify(service).completeAccess(receipt,true,null);
+        }
+    }
+
+    @Test void active_preview_content_is_forced_to_attachment_and_hardened()
+    {
+        FileObjectService service=mock(FileObjectService.class);
+        AccessReceipt receipt=new AccessReceipt("session-active",10L,21L,4L,"PREVIEW",7L,3L,"127.0.0.1");
+        when(service.open(eq("token"),any(),eq("127.0.0.1"))).thenReturn(new AccessContent(
+            new ByteArrayInputStream("<script>alert(1)</script>".getBytes()),"proof.html","text/html",25L,"PREVIEW",receipt));
+
+        try(var security=mockStatic(SecurityUtils.class);var ip=mockStatic(IpUtils.class)) {
+            security.when(SecurityUtils::getUserId).thenReturn(7L);security.when(SecurityUtils::getUsername).thenReturn("alice");security.when(SecurityUtils::getDeptId).thenReturn(3L);
+            ip.when(IpUtils::getIpAddr).thenReturn("127.0.0.1");
+            var response=new FileObjectController(service).open("token");
+            assertEquals(MediaType.APPLICATION_OCTET_STREAM,response.getHeaders().getContentType());
+            assertTrue(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION).startsWith("attachment"));
+            assertEquals("nosniff",response.getHeaders().getFirst("X-Content-Type-Options"));
+            assertEquals("sandbox; default-src 'none'",response.getHeaders().getFirst("Content-Security-Policy"));
+            assertEquals("no-referrer",response.getHeaders().getFirst("Referrer-Policy"));
         }
     }
 

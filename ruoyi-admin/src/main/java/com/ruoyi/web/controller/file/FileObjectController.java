@@ -2,6 +2,8 @@ package com.ruoyi.web.controller.file;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.Set;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -42,6 +44,8 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @RequestMapping("/files")
 public class FileObjectController extends BaseController
 {
+    private static final Set<String> INLINE_PREVIEW_TYPES=Set.of(
+        "application/pdf","image/png","image/jpeg","image/gif","image/webp","text/plain");
     private final FileObjectService service;
     public FileObjectController(FileObjectService service){this.service=service;}
 
@@ -114,14 +118,29 @@ public class FileObjectController extends BaseController
             }
             service.completeAccess(content.receipt(),true,null);
         };
-        MediaType media;try{media=MediaType.parseMediaType(content.contentType());}catch(Exception ignored){media=MediaType.APPLICATION_OCTET_STREAM;}
-        ContentDisposition disposition="PREVIEW".equals(content.accessType())
+        ResponsePolicy policy=responsePolicy(content);
+        ContentDisposition disposition=policy.inline()
             ?ContentDisposition.inline().filename(content.fileName(),StandardCharsets.UTF_8).build()
             :ContentDisposition.attachment().filename(content.fileName(),StandardCharsets.UTF_8).build();
-        return ResponseEntity.ok().contentType(media).contentLength(content.sizeBytes())
+        return ResponseEntity.ok().contentType(policy.mediaType()).contentLength(content.sizeBytes())
             .header(HttpHeaders.CONTENT_DISPOSITION,disposition.toString())
-            .header(HttpHeaders.CACHE_CONTROL,"no-store").body(body);
+            .header(HttpHeaders.CACHE_CONTROL,"no-store")
+            .header("X-Content-Type-Options","nosniff")
+            .header("Content-Security-Policy","sandbox; default-src 'none'")
+            .header("Referrer-Policy","no-referrer").body(body);
     }
+
+    private static ResponsePolicy responsePolicy(AccessContent content)
+    {
+        MediaType declared=parseMediaType(content.contentType());
+        String normalized=(declared.getType()+"/"+declared.getSubtype()).toLowerCase(Locale.ROOT);
+        boolean preview="PREVIEW".equals(content.accessType());
+        boolean inline=preview&&INLINE_PREVIEW_TYPES.contains(normalized);
+        return new ResponsePolicy(preview&&!inline?MediaType.APPLICATION_OCTET_STREAM:declared,inline);
+    }
+
+    private static MediaType parseMediaType(String value)
+    {try{return MediaType.parseMediaType(value);}catch(Exception ignored){return MediaType.APPLICATION_OCTET_STREAM;}}
 
     private FileActor actor(){return new FileActor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getDeptId());}
     private static VersionView version(FileVersion value){return new VersionView(value.fileObjectId(),value.fileVersionId(),value.versionNo(),value.originalFileName(),value.contentType(),value.sizeBytes(),value.sha256(),value.changeDescription(),value.createdAt());}
@@ -143,4 +162,5 @@ public class FileObjectController extends BaseController
     public record RelationView(Long relationId,Long fileObjectId,String businessType,Long businessId,String materialType,String visibility) { }
     public record AuditView(Long accessLogId,String accessSessionId,Long fileObjectId,Long fileVersionId,Long relationId,String businessType,Long businessId,String accessType,String eventType,String outcome,String failureCode,Long actorId,Long actorDeptId,String clientIp,java.time.Instant accessedAt) { }
     public record LifecycleView(Long lifecycleAuditId,Long fileObjectId,Long fileVersionId,Long relationId,String actionId,String eventType,String details,Long actorId,Long actorDeptId,java.time.Instant occurredAt) { }
+    private record ResponsePolicy(MediaType mediaType,boolean inline) { }
 }

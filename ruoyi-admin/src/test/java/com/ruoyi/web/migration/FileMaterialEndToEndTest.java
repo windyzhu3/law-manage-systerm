@@ -33,6 +33,8 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.law.file.application.FileObjectService;
@@ -116,6 +118,9 @@ class FileMaterialEndToEndTest
                 AccessTokenView preview=(AccessTokenView)controller.previewToken(version.fileObjectId(),relation.relationId()).get("data");
                 var previewResponse=controller.open(preview.token());
                 assertTrue(previewResponse.getHeaders().getFirst("Content-Disposition").startsWith("inline"));
+                assertEquals("nosniff",previewResponse.getHeaders().getFirst("X-Content-Type-Options"));
+                assertEquals("sandbox; default-src 'none'",previewResponse.getHeaders().getFirst("Content-Security-Policy"));
+                assertEquals("no-referrer",previewResponse.getHeaders().getFirst("Referrer-Policy"));
                 ByteArrayOutputStream previewBytes=new ByteArrayOutputStream();
                 previewResponse.getBody().writeTo(previewBytes);
                 assertArrayEquals(content,previewBytes.toByteArray());
@@ -124,6 +129,9 @@ class FileMaterialEndToEndTest
                 AccessTokenView download=(AccessTokenView)controller.downloadToken(version.fileObjectId(),relation.relationId()).get("data");
                 var downloadResponse=controller.open(download.token());
                 assertTrue(downloadResponse.getHeaders().getFirst("Content-Disposition").startsWith("attachment"));
+                assertEquals("nosniff",downloadResponse.getHeaders().getFirst("X-Content-Type-Options"));
+                assertEquals("sandbox; default-src 'none'",downloadResponse.getHeaders().getFirst("Content-Security-Policy"));
+                assertEquals("no-referrer",downloadResponse.getHeaders().getFirst("Referrer-Policy"));
                 ByteArrayOutputStream downloadBytes=new ByteArrayOutputStream();
                 downloadResponse.getBody().writeTo(downloadBytes);
                 assertArrayEquals(content,downloadBytes.toByteArray());
@@ -139,6 +147,29 @@ class FileMaterialEndToEndTest
                     &&"127.0.0.1".equals(value.clientIp())));
                 assertEquals(4,((List<?>)controller.accessLogs(version.fileObjectId()).get("data")).size());
             }
+
+            MaterialDefinition activeMaterial=materials.get(0);
+            byte[] activeContent="<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8);
+            RegisterUploadRequest activeRequest=new RegisterUploadRequest(UUID.randomUUID().toString(),"active.html",
+                "text/html",activeContent.length,sha256(activeContent),activeMaterial.businessType(),990000L,
+                activeMaterial.materialType(),"BUSINESS");
+            UploadIntentView activeIntent=(UploadIntentView)controller.register(activeRequest).get("data");
+            VersionView activeVersion=(VersionView)controller.complete(activeIntent.uploadIntentId(),
+                new MockMultipartFile("file","active.html","text/html",activeContent)).get("data");
+            var activeRelation=repository.findActiveRelations(activeVersion.fileObjectId()).get(0);
+            AccessTokenView activeToken=(AccessTokenView)controller.previewToken(activeVersion.fileObjectId(),
+                activeRelation.relationId()).get("data");
+            var activeResponse=controller.open(activeToken.token());
+            assertEquals(MediaType.APPLICATION_OCTET_STREAM,activeResponse.getHeaders().getContentType());
+            assertTrue(activeResponse.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION).startsWith("attachment"));
+            assertEquals("nosniff",activeResponse.getHeaders().getFirst("X-Content-Type-Options"));
+            assertEquals("sandbox; default-src 'none'",activeResponse.getHeaders().getFirst("Content-Security-Policy"));
+            assertEquals("no-referrer",activeResponse.getHeaders().getFirst("Referrer-Policy"));
+            ByteArrayOutputStream activeBytes=new ByteArrayOutputStream();
+            activeResponse.getBody().writeTo(activeBytes);
+            assertArrayEquals(activeContent,activeBytes.toByteArray());
+            assertThrows(FileException.class,()->controller.open(activeToken.token()));
+            assertEquals(2,repository.findAccessLogs(activeVersion.fileObjectId()).size());
         }
     }
 
