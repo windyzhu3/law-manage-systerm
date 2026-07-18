@@ -8,6 +8,8 @@
 
 **Tech Stack:** Java 17, Spring Boot, MyBatis Cursor, Fastjson2, MySQL 8.4, Flyway, JUnit 5, Mockito, Vue 2, Element UI, Axios, file-saver, Playwright.
 
+> Final-review amendment (2026-07-19): the hardening record at the end of this plan supersedes the original cleanup, controller `@Log`, and binary-response snippets where they differ.
+
 ## Global Constraints
 
 - Work only on `v0.2-Foundation`; commit locally and do not push without explicit user instruction.
@@ -236,14 +238,14 @@ HistoricalMigrationExportArchiveWriter(Path root,Clock clock) { this.root=root.t
 
 For every cell, convert null to empty text, prefix a single quote when the first character is one of `= + - @ tab CR`, replace `"` with `""`, surround the value with double quotes, join with comma and terminate each row with CRLF. Write BOM and header first. Candidate rows must contain empty proposed/reviewer/reviewed fields, `NO_REVIEWED_CLASSIFICATION`, and `PENDING`.
 
-Call `Files.createDirectories(root)`, create both files with `Files.createTempFile(root,...)`, and reject any normalized path that does not start with the normalized dedicated root. Generate the CSV in one temporary file while updating `MessageDigest.getInstance("SHA-256")`; then create a second temporary ZIP with these entries:
+Call `Files.createDirectories(root)`, resolve the dedicated root with `toRealPath()`, create both files with `Files.createTempFile(canonicalRoot,...)`, and reject a changed root or any created file whose real path/direct parent is outside that canonical root. Generate the CSV in one temporary file while updating `MessageDigest.getInstance("SHA-256")`; then create a second temporary ZIP with these entries:
 
 ```text
 historical-case-exceptions.csv
 manifest.json
 ```
 
-Serialize a `LinkedHashMap` manifest with `JSON.toJSONBytes`. Delete the CSV immediately after the ZIP is complete. Return a `FilterInputStream` whose idempotent `close()` deletes the ZIP. On every exception, delete both temporary files and throw:
+Serialize a `LinkedHashMap` manifest with the exact ordered keys `schemaVersion`, `gateCode`, `fileName`, `rowCount`, `csvSha256`, `generatedAt`, `classificationState`, and `allowedBusinessLines`. Delete the CSV immediately after the ZIP is complete. Return a `FilterInputStream` whose idempotent successful `close()` deletes the ZIP. Every cleanup call retries deletion up to three times in that same call; after permanent failure it registers `deleteOnExit` and returns only a sanitized failure. Generation failure uses the same cleanup. On every public failure, throw:
 
 ```java
 new TodoException("TODO_MIGRATION_EXPORT_FAILED","Historical migration export could not be generated")
@@ -369,11 +371,10 @@ private static void requireGate(String value) {
 }
 ```
 
-The controller creates a `StreamingResponseBody` that closes the artifact in a try-with-resources block and copies `artifact.input()` to the response. Set `Content-Type: application/zip`, `Content-Disposition: attachment; filename="g04-historical-case-preflight.zip"`, `X-Exception-Row-Count`, `X-Exception-CSV-SHA256`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and `Content-Length` from the artifact; then annotate with:
+The controller creates a `StreamingResponseBody` that closes the artifact in a try-with-resources block and copies `artifact.input()` to the response. Set `Content-Type: application/zip`, `Content-Disposition: attachment; filename="g04-historical-case-preflight.zip"`, `X-Exception-Row-Count`, `X-Exception-CSV-SHA256`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, and `Content-Length` from the artifact. Use an injected `HistoricalMigrationExportAudit` collaborator: capture request/operator metadata before returning the deferred body; record success only after copy/close completes or failure in the callback catch path; never allow audit failure to mask transfer; never log case/body/path/hash. The endpoint annotations are:
 
 ```java
 @PreAuthorize("@ss.hasPermi('todo:admission:export')")
-@Log(title="G-04历史迁移异常清单",businessType=BusinessType.EXPORT)
 @GetMapping("/exception-export")
 ```
 
@@ -476,7 +477,7 @@ export function getHistoricalMigrationPreflight(gateCode = 'G-04') {
 }
 export function exportHistoricalMigrationExceptions(gateCode = 'G-04') {
   return request({ url: '/todo/foundation-migration/exception-export', method: 'get', params: { gateCode },
-    responseType: 'blob', returnFullResponse: true }).then(response => ({
+    responseType: 'blob', returnFullResponse: true }).then(unwrapHistoricalMigrationExportResponse).then(response => ({
       blob: response.data,
       rowCount: Number(response.headers['x-exception-row-count'] || 0),
       csvSha256: response.headers['x-exception-csv-sha256'] || ''
@@ -497,11 +498,12 @@ methods: {
       .finally(() => { this.preflightLoading = false })
   },
   exportExceptions() {
-    this.exporting = true
+    this.exporting = true; this.exportError = ''
     return exportHistoricalMigrationExceptions().then(result => {
       saveAs(result.blob,'g04-historical-case-preflight.zip')
       this.lastExport = { rowCount: result.rowCount, csvSha256: result.csvSha256, classificationState: 'UNREVIEWED' }
-    }).finally(() => { this.exporting = false })
+    }).catch(error => { this.exportError = formatStableBusinessError(error) })
+      .finally(() => { this.exporting = false })
   }
 }
 ```
@@ -602,7 +604,7 @@ npm run build:prod
 npm run test:e2e
 ```
 
-Parse all Surefire XML and require zero failures, errors and skips. Require every Playwright test to pass. Query live truth: Flyway `0.20.27`, G-04 source counts unchanged, G-05 still 6/7, five evidence items OPEN, twelve decisions OPEN, aggregate `2/8 NOT_ADMITTED`.
+Parse all Surefire XML and require zero failures/errors and zero unexplained skips. Any explicit OS capability assumption must be exercised on a supported Linux filesystem with zero skips. Require every Playwright test to pass. Query live truth: Flyway `0.20.27`, G-04 source counts unchanged, G-05 still 6/7, five evidence items OPEN, twelve decisions OPEN, aggregate `2/8 NOT_ADMITTED`.
 
 - [x] **Step 5: Audit, remove the database and commit locally**
 
@@ -615,3 +617,11 @@ git commit -m "test(migration): record G04 preflight evidence"
 ```
 
 Do not push. This slice must end with G-04 still blocked by Q-001, signed exception classification, architecture/case/DBA rehearsal evidence and independent approval.
+
+## Final-review hardening evidence (2026-07-19)
+
+The final review added five TDD fixes without changing historical or governance data: the complete eight-key ordered Manifest; JSON/problem+json Blob rejection before save/success state; callback-time success/failure audit with the correctly encoded title `G-04历史迁移异常清单`; three-attempt same-call cleanup plus `deleteOnExit` fallback; and canonical-root/symlink-swap enforcement. `returnFullResponse` remains opt-in and unchanged for other binary callers.
+
+Fresh disposable MySQL 8.4 verification reached Flyway `0.20.27`. `mvn clean verify` produced 149 Surefire suites and 675 tests: 673 passed, 0 failed, 0 errored, and 2 Windows-only symlink capability tests explicitly skipped. Module totals were `law-file 72`, `law-business 28`, `law-todo 404`, `ruoyi-system 123`, and `ruoyi-admin 48`. On Linux with symlink support, the focused archive-writer suite passed 10/10 with 0 skips. Frontend contract, Schema, UTF-8, Foundation CI contract, and production build passed; focused historical-migration Playwright passed 4/4 and the full suite passed 34/34.
+
+The evidence remains truthful and blocked: G-04 sources are `3 CONFIRMED + 1 NEEDS_DECISION + 4 NEEDS_EVIDENCE`, Q-001 and `G04-HISTORICAL-MIGRATION` remain `OPEN`, no default business line was selected, and Foundation remains `2/8 NOT_ADMITTED`.
