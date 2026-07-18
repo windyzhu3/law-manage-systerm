@@ -34,11 +34,34 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.16", current.getVersion().getVersion());
+        assertEquals("0.20.17", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
         verifyAdmissionEvidenceSchema(url);
+        verifyFoundationResourceReadinessSchema(url);
+    }
+
+    private void verifyFoundationResourceReadinessSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(51L,count(connection,"select count(*) from todo_foundation_resource_requirement where gate_code='G-02'"));
+            assertEquals(40L,count(connection,"select count(*) from todo_foundation_resource_requirement where resource_type='DICTIONARY'"));
+            assertEquals(11L,count(connection,"select count(*) from todo_foundation_resource_requirement where resource_type='ROLE'"));
+            assertEquals(39L,count(connection,"select count(*) from todo_foundation_resource_requirement where source_status='NEEDS_DECISION'"));
+            assertEquals(5L,count(connection,"select count(*) from todo_foundation_resource_requirement where source_status='CONFLICTING' and decision_ref='Q-003'"));
+            assertEquals(3L,count(connection,"select count(*) from todo_foundation_resource_requirement where expected_values_json is not null"));
+            assertEquals(3L,count(connection,"select json_length(expected_values_json) from todo_foundation_resource_requirement where resource_code='law_business_line'"));
+            assertEquals(13L,count(connection,"select count(*) from todo_foundation_resource_requirement r "
+                + "join json_table(coalesce(r.expected_values_json,json_array()), '$[*]' "
+                + "columns(expected_value varchar(100) path '$.value',expected_label varchar(100) path '$.label')) expected"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Foundation resource readiness database invariants failed",exception);
+        }
     }
 
     private void verifyAdmissionEvidenceSchema(String url)

@@ -23,7 +23,8 @@ public class TodoAdmissionEvidenceService
 {
     private static final List<String> STATUSES=List.of("OPEN","IN_REVIEW","APPROVED","REJECTED");
     private final TodoAdmissionEvidenceMapper mapper;
-    public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper){this.mapper=mapper;}
+    private final TodoFoundationResourceService resources;
+    public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper,TodoFoundationResourceService resources){this.mapper=mapper;this.resources=resources;}
 
     @Transactional(readOnly=true)
     public List<TodoAdmissionEvidenceView> list(){return mapper.selectEvidence().stream().map(this::view).toList();}
@@ -72,6 +73,8 @@ public class TodoAdmissionEvidenceService
         boolean valid=(from.equals(command.status())&&!terminal(from))||("OPEN".equals(from)&&"IN_REVIEW".equals(command.status()))
                 ||("IN_REVIEW".equals(from)&&terminal(command.status()))||("REJECTED".equals(from)&&"IN_REVIEW".equals(command.status()));
         if(!valid)fail("TODO_ADMISSION_STATE_INVALID","Admission evidence state transition is invalid");
+        if("APPROVED".equals(command.status())&&"G-02".equals(text(value(current,"gate_code","gateCode")))&&!resources.gateReady("G-02"))
+            fail("TODO_ADMISSION_RESOURCE_NOT_READY","G-02 cannot be approved while repository resources are unresolved or missing at runtime");
     }
 
     private void validateRequiredAccountability(UpdateAdmissionEvidenceCommand command)

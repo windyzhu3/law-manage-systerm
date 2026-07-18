@@ -18,6 +18,7 @@ const required = [
   ,'src/views/todo/config/definition-codec.js'
   ,'src/views/todo/config/components/TriggerRuleTable.vue'
   ,'src/views/todo/config/components/WorkCalendarTable.vue'
+  ,'src/views/todo/config/components/FoundationResourceReadiness.vue'
   ,'src/api/todo-operations.js'
   ,'src/views/todo/operations/index.vue'
   ,'src/views/todo/operations/components/OperationsMetrics.vue'
@@ -67,6 +68,9 @@ for(const marker of ['DEAD','replayDeadEvent','force-complete','force-cancel','s
 
 for(const name of ['getBusinessTodoSummary','listBusinessTodos','getTodoChain']) if(!api.includes(`export function ${name}`)) throw new Error(`missing business todo api ${name}`)
 for(const name of ['listAdmissionEvidence','getAdmissionEvidenceGovernanceOptions','updateAdmissionEvidence']) if(!definitionApi.includes(`export function ${name}`)) throw new Error(`missing admission evidence api ${name}`)
+if(!definitionApi.includes('export function getFoundationResourceReadiness')) throw new Error('missing foundation resource readiness api')
+const foundationResources=fs.readFileSync('src/views/todo/config/components/FoundationResourceReadiness.vue','utf8')
+for(const marker of ['SOURCE_UNRESOLVED','RUNTIME_MISSING','RUNTIME_INCOMPLETE','READY','gateReady','expectedValuesJson']) if(!foundationResources.includes(marker)) throw new Error(`missing foundation resource marker ${marker}`)
 const admissionEvidence=fs.readFileSync('src/views/todo/config/components/AdmissionEvidenceRegistry.vue','utf8')
 for(const marker of ['todo:admission:edit','独立评审人','artifactRef','APPROVED','validateAdmissionEvidence']) if(!admissionEvidence.includes(marker)) throw new Error(`missing admission evidence marker ${marker}`)
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)

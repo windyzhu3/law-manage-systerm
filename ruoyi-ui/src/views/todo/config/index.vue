@@ -7,6 +7,7 @@
       <el-tab-pane label="工作日历" name="calendars"><work-calendar-table :rows="calendars" :on-refresh="load" /></el-tab-pane>
       <el-tab-pane label="决策登记" name="decisions"><decision-registry :rows="decisions" :on-refresh="load" /></el-tab-pane>
       <el-tab-pane label="准入证据" name="admission"><admission-evidence-registry :rows="admissionEvidence" :on-refresh="load" /></el-tab-pane>
+      <el-tab-pane label="基础资源" name="resources"><foundation-resource-readiness :report="foundationResources" /></el-tab-pane>
     </el-tabs>
     <version-drawer :visible.sync="drawer" :versions="versionRows" :template-id="current && current.template_id" @versions-refreshed="versionRows = $event" @publish="publishDraft" @copy-version="copyVersion" />
   </div>
@@ -18,17 +19,18 @@ import TriggerRuleTable from './components/TriggerRuleTable'
 import WorkCalendarTable from './components/WorkCalendarTable'
 import DecisionRegistry from './components/DecisionRegistry'
 import AdmissionEvidenceRegistry from './components/AdmissionEvidenceRegistry'
-import { listDefinitions, listDefinitionVersions, copyDefinition, copyDefinitionVersion, publishDefinition, listTriggerRules, listWorkCalendars, listTodoDecisions, listAdmissionEvidence } from '@/api/todo-definition'
+import FoundationResourceReadiness from './components/FoundationResourceReadiness'
+import { listDefinitions, listDefinitionVersions, copyDefinition, copyDefinitionVersion, publishDefinition, listTriggerRules, listWorkCalendars, listTodoDecisions, listAdmissionEvidence, getFoundationResourceReadiness } from '@/api/todo-definition'
 
 export default {
-  name: 'TodoConfig', components: { TemplateList, VersionDrawer, TriggerRuleTable, WorkCalendarTable, DecisionRegistry, AdmissionEvidenceRegistry },
-  data() { return { tab: 'templates', loading: false, templates: [], triggers: [], calendars: [], decisions: [], admissionEvidence: [], versionRows: [], drawer: false, current: null } },
+  name: 'TodoConfig', components: { TemplateList, VersionDrawer, TriggerRuleTable, WorkCalendarTable, DecisionRegistry, AdmissionEvidenceRegistry, FoundationResourceReadiness },
+  data() { return { tab: 'templates', loading: false, templates: [], triggers: [], calendars: [], decisions: [], admissionEvidence: [], foundationResources: { resources: [] }, versionRows: [], drawer: false, current: null } },
   created() { this.load() },
   methods: {
     load() {
       this.loading = true
-      return Promise.all([listDefinitions(), listTriggerRules(), listWorkCalendars(), listTodoDecisions(), listAdmissionEvidence()])
-        .then(([templates, triggers, calendars, decisions, admission]) => { this.templates = templates.data || []; this.triggers = triggers.data || []; this.calendars = calendars.data || []; this.decisions = decisions.data || []; this.admissionEvidence = admission.data || [] })
+      return Promise.all([listDefinitions(), listTriggerRules(), listWorkCalendars(), listTodoDecisions(), listAdmissionEvidence(), getFoundationResourceReadiness()])
+        .then(([templates, triggers, calendars, decisions, admission, resources]) => { this.templates = templates.data || []; this.triggers = triggers.data || []; this.calendars = calendars.data || []; this.decisions = decisions.data || []; this.admissionEvidence = admission.data || []; this.foundationResources = resources.data || { resources: [] } })
         .finally(() => { this.loading = false })
     },
     versions(row) { this.current = row; listDefinitionVersions(row.template_id).then(response => { this.versionRows = response.data || []; this.drawer = true }) },

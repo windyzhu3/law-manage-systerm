@@ -26,6 +26,7 @@ import com.law.todo.mapper.TodoAdmissionEvidenceMapper;
 class TodoAdmissionEvidenceServiceTest
 {
     @Mock TodoAdmissionEvidenceMapper mapper;
+    @Mock TodoFoundationResourceService resources;
     private final Actor owner=new Actor(7L,"owner",3L);
     private final Actor reviewer=new Actor(9L,"reviewer",4L);
     private final LocalDateTime dueAt=LocalDateTime.of(2026,7,31,18,0);
@@ -72,6 +73,7 @@ class TodoAdmissionEvidenceServiceTest
         when(mapper.selectEvidenceById(1L)).thenReturn(row("IN_REVIEW",0),row("APPROVED",1));
         when(mapper.selectActiveUser(7L)).thenReturn(Map.of("user_id",7L));
         when(mapper.selectActiveUser(9L)).thenReturn(Map.of("user_id",9L));
+        when(resources.gateReady("G-02")).thenReturn(true);
         String fingerprint=TodoAdmissionEvidenceService.fingerprint(command,reviewer);
         when(mapper.insertEvidenceActionClaim(anyMap())).thenReturn(1);
         when(mapper.selectEvidenceActionForUpdate("approve-g02")).thenReturn(action(fingerprint,null,reviewer.userId()));
@@ -84,6 +86,21 @@ class TodoAdmissionEvidenceServiceTest
         assertEquals(9L,result.reviewerUserId());
         verify(mapper).updateEvidenceConditionally(org.mockito.ArgumentMatchers.argThat(value->
                 "reviewer".equals(value.get("reviewedBy"))&&"APPROVED".equals(value.get("status"))));
+    }
+
+    @Test void g02CannotBeApprovedWhileRepositoryResourcesAreNotReady()
+    {
+        UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand(
+                "approve-g02",1L,0,7L,9L,dueAt,"APPROVED","repo://doc/g02.md","Approved dictionary and role contract");
+        when(mapper.selectEvidenceById(1L)).thenReturn(row("IN_REVIEW",0));
+        when(mapper.selectActiveUser(7L)).thenReturn(Map.of("user_id",7L));
+        when(mapper.selectActiveUser(9L)).thenReturn(Map.of("user_id",9L));
+        when(resources.gateReady("G-02")).thenReturn(false);
+
+        TodoException error=assertThrows(TodoException.class,()->service().update(command,reviewer));
+
+        assertEquals("TODO_ADMISSION_RESOURCE_NOT_READY",error.getBusinessCode());
+        verify(mapper,never()).insertEvidenceActionClaim(anyMap());
     }
 
     @Test void identicalReplayReturnsRecordedEvidenceWithoutAnotherUpdate()
@@ -124,7 +141,7 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).insertEvidenceActionClaim(anyMap());
     }
 
-    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper);}
+    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources);}
     private Map<String,Object> row(String status,int version)
     {
         Map<String,Object> row=new HashMap<>();row.put("evidence_id",1L);row.put("evidence_code","G02-DICTIONARY-ROLE");

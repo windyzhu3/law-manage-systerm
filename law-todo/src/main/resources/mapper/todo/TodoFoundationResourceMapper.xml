@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoFoundationResourceMapper">
+  <select id="selectResourceReadiness" resultType="java.util.Map">
+    select r.*,
+      case when r.resource_type='ROLE'
+        then exists(select 1 from sys_role role where role.role_key=r.resource_code and role.status='0' and role.del_flag='0')
+        else exists(select 1 from sys_dict_type type where type.dict_type=r.resource_code and type.status='0') end resource_exists,
+      case when r.resource_type='ROLE'
+        then (select count(*) from sys_role role where role.role_key=r.resource_code and role.status='0' and role.del_flag='0')
+        else (select count(*) from sys_dict_data data where data.dict_type=r.resource_code and data.status='0') end active_item_count,
+      coalesce(json_length(r.expected_values_json),0) expected_item_count,
+      case when r.resource_type='ROLE' then 0 else
+        (select count(*)
+         from json_table(coalesce(r.expected_values_json,json_array()), '$[*]'
+           columns(expected_value varchar(100) path '$.value',expected_label varchar(100) path '$.label')) expected
+         where exists(select 1 from sys_dict_data data where data.dict_type=r.resource_code and data.status='0'
+           and (expected.expected_value is null or data.dict_value=expected.expected_value)
+           and (expected.expected_label is null or data.dict_label=expected.expected_label))) end matched_expected_item_count
+    from todo_foundation_resource_requirement r
+    where r.gate_code=#{gateCode}
+    order by r.delivery_phase,r.domain_code,r.resource_type,r.resource_code
+  </select>
+</mapper>

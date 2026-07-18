@@ -18,7 +18,16 @@ function formItem(dialog, label) {
 async function setupConfig(page) {
   const state = {
     triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0,
-    admissionEvidence: [{ evidenceId: 1, evidenceCode: 'G02-DICTIONARY-ROLE', gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'OPEN', deliveryPhase: 'PHASE_ONE', version: 0 }]
+    admissionEvidence: [{ evidenceId: 1, evidenceCode: 'G02-DICTIONARY-ROLE', gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'OPEN', deliveryPhase: 'PHASE_ONE', version: 0 }],
+    foundationResources: {
+      gateCode: 'G-02', total: 4, ready: 1, sourceUnresolved: 1, runtimeMissing: 1, runtimeIncomplete: 1, gateReady: false,
+      resources: [
+        { resourceId: 1, resourceType: 'DICTIONARY', resourceCode: 'law_business_line', domainCode: 'QUOTE_CONTRACT', deliveryPhase: 'PHASE_ONE', sourceStatus: 'CONFIRMED', expectedValuesJson: '[{"value":"NON_LITIGATION"},{"value":"COMPREHENSIVE"},{"value":"EXECUTION"}]', minimumActiveItems: 3, activeItemCount: 3, expectedItemCount: 3, readinessStatus: 'READY', sourceRef: 'doc/v0.2-prd-readiness-gap-analysis.md:185', remark: '仓库明确三条业务线稳定值' },
+        { resourceId: 2, resourceType: 'DICTIONARY', resourceCode: 'law_lead_invalid_level', domainCode: 'LEAD_CUSTOMER', deliveryPhase: 'PHASE_ONE', sourceStatus: 'NEEDS_DECISION', decisionRef: 'Q-008', minimumActiveItems: 1, activeItemCount: 0, expectedItemCount: 0, readinessStatus: 'SOURCE_UNRESOLVED' },
+        { resourceId: 3, resourceType: 'ROLE', resourceCode: 'sales', domainCode: 'CROSS_DOMAIN', deliveryPhase: 'PHASE_ONE', sourceStatus: 'CONFIRMED', minimumActiveItems: 1, activeItemCount: 0, expectedItemCount: 0, readinessStatus: 'RUNTIME_MISSING' },
+        { resourceId: 4, resourceType: 'DICTIONARY', resourceCode: 'law_followup_progress_type', domainCode: 'LEAD_CUSTOMER', deliveryPhase: 'PHASE_ONE', sourceStatus: 'CONFIRMED', minimumActiveItems: 6, activeItemCount: 4, expectedItemCount: 6, readinessStatus: 'RUNTIME_INCOMPLETE' }
+      ]
+    }
   }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
   await page.addInitScript(() => { document.cookie = 'Admin-Token=e2e-token; path=/' })
@@ -43,6 +52,7 @@ async function setupConfig(page) {
       statuses: ['OPEN', 'IN_REVIEW', 'APPROVED', 'REJECTED']
     })
     if (path === '/todo/admission-evidence' && request.method() === 'GET') return json(route, state.admissionEvidence)
+    if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
     if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
       state.admissionUpdates++
       const id = Number(path.split('/').pop())
@@ -230,4 +240,17 @@ test('admission evidence requires independent review and survives submit and app
   await page.reload(); await page.getByRole('tab', { name: '准入证据' }).click()
   await expect(page.locator('.el-tab-pane:not([aria-hidden="true"])').getByText('APPROVED', { exact: true })).toBeVisible()
   await expect(page.getByText('Owner', { exact: false }).first()).toBeVisible()
+})
+
+test('foundation resources expose repository source and runtime gaps without promoting values', async ({ page }) => {
+  await setupConfig(page)
+  await page.getByRole('tab', { name: '基础资源' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('G-02 资源门禁未就绪，不能批准准入证据')).toBeVisible()
+  await expect(pane.getByText('law_business_line', { exact: false })).toBeVisible()
+  await expect(pane.getByText('NON_LITIGATION、COMPREHENSIVE、EXECUTION', { exact: true })).toBeVisible()
+  await expect(pane.getByText('Q-008', { exact: true })).toBeVisible()
+  await expect(pane.getByText('来源待确认', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('运行态缺失', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('运行态不完整', { exact: true }).first()).toBeVisible()
 })
