@@ -47,10 +47,12 @@ test('business summary clears stale data and does not request an invalid id', as
 
 test('a delayed A response cannot overwrite a newer B business summary', async ({ page }) => {
   const state = await setupBusinessTodoRuntime(page)
-  await page.goto('/todo/race/a'); await expect.poll(() => state.summaryRequests).toContain('CASE/201'); await page.goto('/todo/race/b')
+  await page.goto('/todo/race/a'); await expect.poll(() => state.summaryRequests).toContain('CASE/201'); await page.getByRole('button', { name: '查看全部' }).click()
+  await page.getByText('Domain TODO', { exact: true }).click(); await page.getByRole('button', { name: '链路', exact: true }).click(); await page.goto('/todo/race/b')
   await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
   await page.waitForTimeout(400)
   await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
+  await expect(page.getByText('TODO PROFILE')).toHaveCount(0); await expect(page.getByText('A chain', { exact: true })).toHaveCount(0)
   expect(state.summaryRequests).toEqual(expect.arrayContaining(['CASE/201', 'CASE/202']))
 })
 
@@ -104,10 +106,11 @@ async function setupBusinessTodoRuntime(page, includeInvalid = false, failComple
     }
     if (path === '/todo/901') {
       state.detailRequests++
+      if (state.summaryRequests.includes('CASE/201') && !state.summaryRequests.includes('CASE/202')) await new Promise(resolve => setTimeout(resolve, 300))
       return json(route, { todo: { todo_id: 901, todo_no: 'TD-901', title: 'Domain TODO', status: 'SUBMITTED', business_type: 'LEAD', business_id: 104 }, actions: [], attachments: [], materials: [], relations: [] })
     }
     if (path === '/todo/901/form') return json(route, { todoId: 901, businessType: 'LEAD', businessId: 104, ui: { config: { fields: [] } }, dod: { config: {} }, defaults: {}, materials: [] })
-    if (path === '/todo/chain/901') { state.chainRequests++; return json(route, { nodes: [{ todo_id: 901, title: 'Domain TODO' }] }) }
+    if (path === '/todo/chain/901') { state.chainRequests++; if (state.summaryRequests.includes('CASE/201') && !state.summaryRequests.includes('CASE/202')) await new Promise(resolve => setTimeout(resolve, 300)); return json(route, { nodes: [{ todo_id: 901, title: 'A chain' }] }) }
     if (/^\/todo\/901\/(complete|return|transfer)$/.test(path)) { const action=path.split('/').pop();state.actionPayloads[action]=request.postDataJSON();if(action==='complete')state.completePayload=state.actionPayloads[action];return json(route, null, failComplete&&action==='complete' ? { code: 500, msg: 'complete failed', data: null } : undefined) }
     if (path.startsWith('/system/dict/data/type/') || path === '/system/config/configKey/sys.index.skinName') return json(route, [])
     return json(route, {})

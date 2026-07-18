@@ -73,7 +73,11 @@ export default {
     openDetail(row) {
       const id = this.todoId(row)
       if (Number(id) <= 0) return
-      getTodo(id).then(response => { this.detail = response.data || {}; this.detailOpen = true })
+      const generation = this.requestGeneration
+      const businessKey = `${this.businessType}/${this.businessId}`
+      getTodo(id).then(response => {
+        if (generation === this.requestGeneration && businessKey === `${this.businessType}/${this.businessId}`) { this.detail = response.data || {}; this.detailOpen = true }
+      })
     },
     openAction(row, action) { this.selected = row; this.action = action; this.actionOpen = true },
     execute(form) {
@@ -87,7 +91,11 @@ export default {
     chain(row) {
       const id = row.rootTodoId || row.root_todo_id || this.todoId(row)
       if (!(Number(id) > 0)) return
-      getTodoChain(id).then(response => { this.chainNodes = (response.data && response.data.nodes) || [] })
+      const generation = this.requestGeneration
+      const businessKey = `${this.businessType}/${this.businessId}`
+      getTodoChain(id).then(response => {
+        if (generation === this.requestGeneration && businessKey === `${this.businessType}/${this.businessId}`) this.chainNodes = (response.data && response.data.nodes) || []
+      })
     }
   }
 }
