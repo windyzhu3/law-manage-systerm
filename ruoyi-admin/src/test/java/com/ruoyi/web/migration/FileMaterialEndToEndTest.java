@@ -10,6 +10,7 @@ import static org.mockito.Mockito.mockStatic;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.sql.Connection;
@@ -19,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import javax.sql.DataSource;
 
@@ -61,7 +64,7 @@ class FileMaterialEndToEndTest
     private static final long DEPT_ID=3L;
 
     @Test
-    void every_prd_material_type_uploads_previews_downloads_and_persists_access_audit(@TempDir Path storageRoot)
+    void every_prd_material_type_and_allowed_content_pass_while_spoofs_are_rejected(@TempDir Path storageRoot)
         throws Exception
     {
         String url=System.getenv("TODO_MIGRATION_DB_URL");
@@ -149,29 +152,73 @@ class FileMaterialEndToEndTest
                 assertEquals(4,((List<?>)controller.accessLogs(version.fileObjectId()).get("data")).size());
             }
 
-            MaterialDefinition activeMaterial=materials.get(0);
-            byte[] activeContent="<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8);
-            RegisterUploadRequest activeRequest=new RegisterUploadRequest(UUID.randomUUID().toString(),"active.html",
-                "text/html",activeContent.length,sha256(activeContent),activeMaterial.businessType(),990000L,
-                activeMaterial.materialType(),"BUSINESS");
-            UploadIntentView activeIntent=(UploadIntentView)controller.register(activeRequest).get("data");
-            VersionView activeVersion=(VersionView)controller.complete(activeIntent.uploadIntentId(),
-                new MockMultipartFile("file","active.html","text/html",activeContent)).get("data");
-            var activeRelation=repository.findActiveRelations(activeVersion.fileObjectId()).get(0);
-            AccessTokenView activeToken=(AccessTokenView)controller.previewToken(activeVersion.fileObjectId(),
-                activeRelation.relationId()).get("data");
-            var activeResponse=controller.open(activeToken.token());
-            assertEquals(MediaType.APPLICATION_OCTET_STREAM,activeResponse.getHeaders().getContentType());
-            assertTrue(activeResponse.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION).startsWith("attachment"));
-            assertEquals("nosniff",activeResponse.getHeaders().getFirst("X-Content-Type-Options"));
-            assertEquals("sandbox; default-src 'none'",activeResponse.getHeaders().getFirst("Content-Security-Policy"));
-            assertEquals("no-referrer",activeResponse.getHeaders().getFirst("Referrer-Policy"));
-            ByteArrayOutputStream activeBytes=new ByteArrayOutputStream();
-            activeResponse.getBody().writeTo(activeBytes);
-            assertArrayEquals(activeContent,activeBytes.toByteArray());
-            assertThrows(FileException.class,()->controller.open(activeToken.token()));
-            assertEquals(2,repository.findAccessLogs(activeVersion.fileObjectId()).size());
+            MaterialDefinition securityMaterial=materials.get(0);
+            assertCode("FILE_CONTENT_TYPE_BLOCKED",()->controller.register(new RegisterUploadRequest(
+                UUID.randomUUID().toString(),"active.svg","image/svg+xml",4,sha256("<svg".getBytes(StandardCharsets.UTF_8)),
+                securityMaterial.businessType(),990000L,securityMaterial.materialType(),"BUSINESS")));
+
+            byte[] spoofedPdf="<!doctype html><html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8);
+            RegisterUploadRequest spoofedRequest=request("spoofed.pdf","application/pdf",spoofedPdf,
+                securityMaterial,990001L);
+            UploadIntentView spoofedIntent=(UploadIntentView)controller.register(spoofedRequest).get("data");
+            assertCode("FILE_CONTENT_TYPE_BLOCKED",()->controller.complete(spoofedIntent.uploadIntentId(),
+                new MockMultipartFile("file","spoofed.pdf","application/pdf",spoofedPdf)));
+            assertEquals(null,repository.findCurrentVersion(spoofedIntent.fileObjectId()));
+            try(var stagedFiles=Files.walk(storageRoot.resolve(".staged")))
+            {assertEquals(0,stagedFiles.filter(Files::isRegularFile).count());}
+
+            byte[] pdf="%PDF-1.7\n% foundation content\n".getBytes(StandardCharsets.US_ASCII);
+            VersionView pdfVersion=upload(controller,request("proof.pdf","application/pdf",pdf,
+                securityMaterial,990002L),pdf);
+            var pdfRelation=repository.findActiveRelations(pdfVersion.fileObjectId()).get(0);
+            AccessTokenView pdfToken=(AccessTokenView)controller.previewToken(pdfVersion.fileObjectId(),
+                pdfRelation.relationId()).get("data");
+            var pdfResponse=controller.open(pdfToken.token());
+            assertEquals(MediaType.APPLICATION_PDF,pdfResponse.getHeaders().getContentType());
+            assertTrue(pdfResponse.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION).startsWith("inline"));
+
+            byte[] docx=docx();
+            String docxMime="application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            VersionView docxVersion=upload(controller,request("evidence.docx",docxMime,docx,
+                securityMaterial,990003L),docx);
+            var docxRelation=repository.findActiveRelations(docxVersion.fileObjectId()).get(0);
+            AccessTokenView docxToken=(AccessTokenView)controller.previewToken(docxVersion.fileObjectId(),
+                docxRelation.relationId()).get("data");
+            var docxResponse=controller.open(docxToken.token());
+            assertEquals(MediaType.APPLICATION_OCTET_STREAM,docxResponse.getHeaders().getContentType());
+            assertTrue(docxResponse.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION).startsWith("attachment"));
         }
+    }
+
+    private static RegisterUploadRequest request(String fileName,String contentType,byte[] content,
+        MaterialDefinition material,long businessId) throws Exception
+    {return new RegisterUploadRequest(UUID.randomUUID().toString(),fileName,contentType,content.length,sha256(content),
+        material.businessType(),businessId,material.materialType(),"BUSINESS");}
+
+    private static VersionView upload(FileObjectController controller,RegisterUploadRequest request,byte[] content)
+        throws Exception
+    {
+        UploadIntentView intent=(UploadIntentView)controller.register(request).get("data");
+        return (VersionView)controller.complete(intent.uploadIntentId(),new MockMultipartFile("file",
+            request.originalFileName(),request.contentType(),content)).get("data");
+    }
+
+    private static byte[] docx() throws Exception
+    {
+        ByteArrayOutputStream output=new ByteArrayOutputStream();
+        try(ZipOutputStream zip=new ZipOutputStream(output))
+        {
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write("<w:document/>".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        return output.toByteArray();
+    }
+
+    private static void assertCode(String code,ThrowingAction action) throws Exception
+    {
+        FileException error=assertThrows(FileException.class,action::run);
+        assertEquals(code,error.getBusinessCode());
     }
 
     private static List<MaterialDefinition> prdMaterials(DataSource dataSource) throws Exception
@@ -191,5 +238,6 @@ class FileMaterialEndToEndTest
     private static String sha256(byte[] value) throws Exception
     {return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value));}
 
+    @FunctionalInterface private interface ThrowingAction { void run() throws Exception; }
     private record MaterialDefinition(String businessType,String materialType) { }
 }
