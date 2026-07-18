@@ -39,7 +39,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.23", current.getVersion().getVersion());
+        assertEquals("0.20.24", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -202,11 +202,17 @@ class FlywayMigrationTest
             assertEquals(11L,count(connection,"select count(*) from todo_foundation_resource_requirement where resource_type='ROLE'"));
             assertEquals(39L,count(connection,"select count(*) from todo_foundation_resource_requirement where source_status='NEEDS_DECISION'"));
             assertEquals(5L,count(connection,"select count(*) from todo_foundation_resource_requirement where source_status='CONFLICTING' and decision_ref='Q-003'"));
+            assertEquals(7L,count(connection,"select count(*) from todo_foundation_resource_requirement where source_status='CONFIRMED'"));
             assertEquals(3L,count(connection,"select count(*) from todo_foundation_resource_requirement where expected_values_json is not null"));
             assertEquals(3L,count(connection,"select json_length(expected_values_json) from todo_foundation_resource_requirement where resource_code='law_business_line'"));
             assertEquals(13L,count(connection,"select count(*) from todo_foundation_resource_requirement r "
                 + "join json_table(coalesce(r.expected_values_json,json_array()), '$[*]' "
                 + "columns(expected_value varchar(100) path '$.value',expected_label varchar(100) path '$.label')) expected"));
+            assertEquals(1L,count(connection,"select count(*) from sys_dict_type where dict_type='law_business_line' and status='0'"));
+            assertEquals(3L,count(connection,"select count(*) from sys_dict_data where dict_type='law_business_line' and status='0' "
+                + "and dict_value in ('NON_LITIGATION','COMPREHENSIVE','EXECUTION')"));
+            assertEquals(1L,count(connection,"select count(*) from sys_role where role_key='sales' and status='0' and del_flag='0'"));
+            assertEquals(0L,count(connection,"select count(*) from sys_role_menu rm join sys_role r on r.role_id=rm.role_id where r.role_key='sales'"));
         }
         catch (SQLException exception)
         {
