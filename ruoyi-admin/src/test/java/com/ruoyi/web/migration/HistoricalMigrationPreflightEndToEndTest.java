@@ -85,7 +85,7 @@ class HistoricalMigrationPreflightEndToEndTest
             "reviewer_user_id","reviewed_at");
 
     @Test
-    void preflightAndExportPreserveHistoricalAndGovernanceState(@TempDir Path artifactRoot) throws Exception
+    void preflightAndExportAreReadOnlyAndDeterministic(@TempDir Path artifactRoot) throws Exception
     {
         String url=System.getenv("TODO_MIGRATION_DB_URL");
         assumeTrue(url!=null&&!url.isBlank(),"Migration database is provided by the CI quality gate");
@@ -143,16 +143,12 @@ class HistoricalMigrationPreflightEndToEndTest
             assertFixtureCount(dataSource,"g04-e2e",0);
         }
         assertArtifactRootEmpty(artifactRoot);
+        assertRollbackGuardRemovesPartiallyInsertedBatchAfterFailure(dataSource);
     }
 
-    @Test
-    void rollbackGuardRemovesPartiallyInsertedBatchAfterFailure() throws Exception
+    private static void assertRollbackGuardRemovesPartiallyInsertedBatchAfterFailure(DataSource dataSource)
+            throws Exception
     {
-        String url=System.getenv("TODO_MIGRATION_DB_URL");
-        assumeTrue(url!=null&&!url.isBlank(),"Migration database is provided by the CI quality gate");
-        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,
-                System.getenv("TODO_MIGRATION_DB_USER"),System.getenv("TODO_MIGRATION_DB_PASSWORD"));
-
         BatchUpdateException failure;
         try(Connection connection=dataSource.getConnection()) {
             failure=assertThrows(BatchUpdateException.class,()->withRollback(connection,transaction->{
