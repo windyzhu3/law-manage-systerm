@@ -24,6 +24,8 @@ import java.util.zip.ZipInputStream;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
@@ -125,26 +127,56 @@ class HistoricalMigrationExportArchiveWriterTest
         assertEquals(1,cleanup.deleteAttempts);
     }
 
-    @Test void closeCombinesFailuresWithoutPathsAndRetriesFailedDeletion() throws Exception
+    @ParameterizedTest
+    @ValueSource(ints={1,2})
+    void closeRetriesTransientDeletionWithinOneProductionCall(int transientFailures) throws Exception
     {
-        ControlledCleanup cleanup=new ControlledCleanup(1,1);
+        ControlledCleanup cleanup=new ControlledCleanup(0,transientFailures);
+        HistoricalMigrationExportArtifact artifact=writer(cleanup).write(List.of(candidate()).iterator());
+
+        artifact.close();
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(transientFailures+1,cleanup.deleteAttempts);
+        assertEquals(0,cleanup.fallbackRegistrations);
+        assertNoRegularFiles();
+
+        artifact.close();
+        assertEquals(1,cleanup.closeAttempts);
+        assertEquals(transientFailures+1,cleanup.deleteAttempts);
+    }
+
+    @Test void generationFailureUsesTheSameBoundedDeletionRetry()
+    {
+        ControlledCleanup cleanup=new ControlledCleanup(0,2,true);
+        Iterator<HistoricalMigrationCaseCandidate> failing=new Iterator<>() {
+            @Override public boolean hasNext(){return true;}
+            @Override public HistoricalMigrationCaseCandidate next(){throw new IllegalStateException("cursor failed");}
+        };
+
+        TodoException failure=assertThrows(TodoException.class,()->writer(cleanup).write(failing));
+        assertEquals("TODO_MIGRATION_EXPORT_FAILED",failure.getBusinessCode());
+        assertEquals("Historical migration export could not be generated",failure.getMessage());
+        assertEquals(3,cleanup.csvDeleteAttempts);
+        assertEquals(0,cleanup.fallbackRegistrations);
+        assertNoRegularFiles();
+    }
+
+    @Test void permanentDeletionFailureIsSanitizedAndRegistersOneExitFallback() throws Exception
+    {
+        ControlledCleanup cleanup=new ControlledCleanup(0,Integer.MAX_VALUE);
         HistoricalMigrationExportArtifact artifact=writer(cleanup).write(List.of(candidate()).iterator());
 
         IOException failure=assertThrows(IOException.class,artifact::close);
         assertEquals("Historical migration export could not be cleaned up",failure.getMessage());
-        assertEquals(1,failure.getSuppressed().length);
-        assertEquals("Historical migration export could not be cleaned up",failure.getSuppressed()[0].getMessage());
         assertFalse(failure.getMessage().contains(temporaryDirectory.toString()));
-        assertFalse(failure.getSuppressed()[0].getMessage().contains(temporaryDirectory.toString()));
         assertFalse(failure.getMessage().contains("sensitive archive content"));
-        assertFalse(failure.getSuppressed()[0].getMessage().contains("sensitive archive content"));
-        assertEquals(1,cleanup.closeAttempts);
-        assertEquals(1,cleanup.deleteAttempts);
+        assertEquals(3,cleanup.deleteAttempts);
+        assertEquals(1,cleanup.fallbackRegistrations);
 
-        artifact.close();
-        assertEquals(1,cleanup.closeAttempts);
-        assertEquals(2,cleanup.deleteAttempts);
-        assertNoRegularFiles();
+        IOException repeated=assertThrows(IOException.class,artifact::close);
+        assertEquals("Historical migration export could not be cleaned up",repeated.getMessage());
+        assertEquals(6,cleanup.deleteAttempts);
+        assertEquals(1,cleanup.fallbackRegistrations);
     }
 
     private HistoricalMigrationExportArchiveWriter writer()
@@ -181,9 +213,15 @@ class HistoricalMigrationExportArchiveWriterTest
         private int remainingDeleteFailures;
         private int closeAttempts;
         private int deleteAttempts;
+        private int csvDeleteAttempts;
+        private int fallbackRegistrations;
+        private final boolean failCsvDeletion;
 
         private ControlledCleanup(int closeFailures,int deleteFailures)
-        {remainingCloseFailures=closeFailures;remainingDeleteFailures=deleteFailures;}
+        {this(closeFailures,deleteFailures,false);}
+
+        private ControlledCleanup(int closeFailures,int deleteFailures,boolean failCsvDeletion)
+        {remainingCloseFailures=closeFailures;remainingDeleteFailures=deleteFailures;this.failCsvDeletion=failCsvDeletion;}
 
         @Override public InputStream open(Path zip) throws IOException
         {
@@ -199,10 +237,15 @@ class HistoricalMigrationExportArchiveWriterTest
 
         @Override public void delete(Path zip) throws IOException
         {
-            deleteAttempts++;
-            if(remainingDeleteFailures-- > 0)throw new IOException("failed to delete "+zip+": sensitive archive content");
+            boolean csv=zip.toString().endsWith(".csv");
+            if(csv)csvDeleteAttempts++;else deleteAttempts++;
+            if((!csv||failCsvDeletion)&&remainingDeleteFailures-- > 0)
+                throw new IOException("failed to delete "+zip+": sensitive archive content");
             Files.deleteIfExists(zip);
         }
+
+        @Override public void registerDeleteOnExit(Path zip)
+        {fallbackRegistrations++;}
     }
 
     private static final class CountingCandidates implements Iterator<HistoricalMigrationCaseCandidate>

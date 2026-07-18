@@ -35,9 +35,11 @@ public class HistoricalMigrationExportArchiveWriter
             "reviewer_user_id","reviewed_at");
     private static final byte[] BOM={(byte)0xEF,(byte)0xBB,(byte)0xBF};
     private static final List<String> ALLOWED_LINES=List.of("NON_LITIGATION","COMPREHENSIVE","EXECUTION");
+    private static final int DELETE_ATTEMPTS=3;
     private static final HistoricalMigrationExportArchiveCleanup FILE_SYSTEM_CLEANUP=new HistoricalMigrationExportArchiveCleanup() {
         @Override public InputStream open(Path zip) throws IOException { return Files.newInputStream(zip); }
         @Override public void delete(Path zip) throws IOException { Files.deleteIfExists(zip); }
+        @Override public void registerDeleteOnExit(Path zip) { zip.toFile().deleteOnExit(); }
     };
 
     private final Path root;
@@ -66,11 +68,12 @@ public class HistoricalMigrationExportArchiveWriter
             Instant generatedAt=clock.instant();
             zip=temporaryFile("historical-migration-export-", ".zip");
             writeZip(zip,csv,manifest(rows,csvSha256,generatedAt),generatedAt);
-            Files.deleteIfExists(csv);csv=null;
+            IOException csvCleanupFailure=deleteWithRetries(csv,true);csv=null;
+            if(csvCleanupFailure!=null)throw csvCleanupFailure;
             long size=Files.size(zip);
             return new HistoricalMigrationExportArtifact(cleanupOnClose(zip),size,rows,csvSha256,generatedAt);
         } catch(Exception exception) {
-            delete(csv);delete(zip);
+            deleteWithRetries(csv,true);deleteWithRetries(zip,true);
             throw new TodoException("TODO_MIGRATION_EXPORT_FAILED","Historical migration export could not be generated");
         }
     }
@@ -79,7 +82,7 @@ public class HistoricalMigrationExportArchiveWriter
     {
         Path file=Files.createTempFile(root,prefix,suffix).toAbsolutePath().normalize();
         if(!file.startsWith(root)) {
-            delete(file);
+            deleteWithRetries(file,true);
             throw new IOException("Temporary export file escaped the dedicated root");
         }
         return file;
@@ -164,6 +167,7 @@ public class HistoricalMigrationExportArchiveWriter
         return new FilterInputStream(cleanup.open(zip)) {
             private boolean inputCloseAttempted;
             private boolean zipDeleted;
+            private boolean fallbackRegistered;
             @Override public void close() throws IOException
             {
                 IOException failure=null;
@@ -172,31 +176,41 @@ public class HistoricalMigrationExportArchiveWriter
                     try { super.close(); }
                     catch(IOException exception) { failure=cleanupFailure(); }
                 }
-                if(!zipDeleted)try {
-                    cleanup.delete(zip);
-                    zipDeleted=true;
-                } catch(IOException exception) {
-                    IOException deletionFailure=cleanupFailure();
-                    if(failure==null)failure=deletionFailure;
-                    else failure.addSuppressed(deletionFailure);
+                if(!zipDeleted) {
+                    boolean registerFallback=!fallbackRegistered;
+                    IOException deletionFailure=deleteWithRetries(zip,registerFallback);
+                    if(deletionFailure==null)zipDeleted=true;
+                    else {
+                        if(registerFallback)fallbackRegistered=true;
+                        if(failure==null)failure=deletionFailure;
+                        else failure.addSuppressed(deletionFailure);
+                    }
                 }
                 if(failure!=null)throw failure;
             }
         };
     }
 
+    private IOException deleteWithRetries(Path path,boolean registerFallback)
+    {
+        if(path==null)return null;
+        for(int attempt=0;attempt<DELETE_ATTEMPTS;attempt++) {
+            try {cleanup.delete(path);return null;}
+            catch(IOException|RuntimeException ignored) { }
+        }
+        if(registerFallback)try {cleanup.registerDeleteOnExit(path);}
+        catch(RuntimeException ignored) { }
+        return cleanupFailure();
+    }
+
     private static IOException cleanupFailure()
     { return new IOException("Historical migration export could not be cleaned up"); }
 
-    private static void delete(Path path)
-    {
-        if(path==null)return;
-        try { Files.deleteIfExists(path); } catch(IOException ignored) { }
-    }
 }
 
 interface HistoricalMigrationExportArchiveCleanup
 {
     InputStream open(Path zip) throws IOException;
     void delete(Path zip) throws IOException;
+    void registerDeleteOnExit(Path zip);
 }
