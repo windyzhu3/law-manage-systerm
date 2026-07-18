@@ -28,6 +28,7 @@ class TodoAdmissionEvidenceServiceTest
     @Mock TodoAdmissionEvidenceMapper mapper;
     @Mock TodoFoundationResourceService resources;
     @Mock TodoHistoricalMigrationReadinessService migrations;
+    @Mock TodoFileSecurityReadinessService fileSecurity;
     private final Actor owner=new Actor(7L,"owner",3L);
     private final Actor reviewer=new Actor(9L,"reviewer",4L);
     private final LocalDateTime dueAt=LocalDateTime.of(2026,7,31,18,0);
@@ -119,6 +120,21 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).updateEvidenceConditionally(anyMap());
     }
 
+    @Test void g05CannotBeApprovedBeforeSecurityReviewIsReady()
+    {
+        UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand(
+                "approve-g05",1L,0,7L,9L,dueAt,"APPROVED","repo://doc/g05.md","Security review passed");
+        when(mapper.selectEvidenceById(1L)).thenReturn(row("G-05","IN_REVIEW",0));
+        when(mapper.selectActiveUser(7L)).thenReturn(Map.of("user_id",7L));
+        when(mapper.selectActiveUser(9L)).thenReturn(Map.of("user_id",9L));
+        when(fileSecurity.gateReady("G-05")).thenReturn(false);
+
+        TodoException error=assertThrows(TodoException.class,()->service().update(command,reviewer));
+
+        assertEquals("TODO_ADMISSION_FILE_SECURITY_NOT_READY",error.getBusinessCode());
+        verify(mapper,never()).insertEvidenceActionClaim(anyMap());
+    }
+
     @Test void g04CannotBeApprovedWhileHistoricalMigrationContractIsNotReady()
     {
         UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand(
@@ -157,7 +173,7 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).insertEvidenceActionClaim(anyMap());
     }
 
-    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources,migrations);}
+    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources,migrations,fileSecurity);}
     private Map<String,Object> row(String status,int version)
     {
         return row("G-02",status,version);

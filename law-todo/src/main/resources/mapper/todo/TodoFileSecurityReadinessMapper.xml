@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoFileSecurityReadinessMapper">
+  <select id="selectSecurityReadiness" resultType="java.util.Map">
+    select r.*,
+      (select count(*) from information_schema.tables t where t.table_schema=database() and t.table_name in ('file_object','file_object_version','file_business_relation')) object_model_table_count,
+      3 expected_object_model_table_count,
+      (select count(*) from information_schema.columns c where c.table_schema=database() and c.table_name='file_access_token' and c.column_name in ('token_hash','relation_id','actor_id','consumed_at')) token_security_column_count,
+      (select count(distinct s.index_name) from information_schema.statistics s where s.table_schema=database() and s.table_name='file_access_token' and s.index_name='uk_file_access_token_hash' and s.non_unique=0) token_unique_index_count,
+      exists(select 1 from information_schema.tables t where t.table_schema=database() and t.table_name='file_access_log') access_log_table_exists,
+      exists(select 1 from information_schema.tables t where t.table_schema=database() and t.table_name='file_storage_cleanup') cleanup_table_exists
+    from todo_foundation_file_security_requirement r
+    where r.gate_code=#{gateCode}
+    order by r.sort_order,r.requirement_id
+  </select>
+</mapper>

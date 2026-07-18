@@ -37,6 +37,15 @@ async function setupConfig(page) {
         { requirementId: 3, requirementCode: 'BACKFILL_VALIDATION_SQL', requirementName: '回填校验SQL', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'doc/v0.2-foundation-admission-report.md:105' },
         { requirementId: 4, requirementCode: 'TODO_VERSION_REFERENCE', requirementName: '历史待办固定版本引用', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'V0_16_1__todo_engine.sql:22' }
       ]
+    },
+    fileSecurity: {
+      gateCode: 'G-05', total: 7, ready: 5, sourceUnresolved: 2, runtimeMissing: 0, gateReady: false,
+      objectModelReady: true, tokenControlReady: true, accessAuditReady: true, cleanupCompensationReady: true,
+      requirements: [
+        { requirementId: 1, requirementCode: 'SINGLE_USE_RELATION_TOKEN', requirementName: '单次关系绑定访问令牌', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'FileObjectService.java:229-236' },
+        { requirementId: 2, requirementCode: 'PRD_MATERIAL_TYPE_E2E', requirementName: 'PRD材料类型端到端验收', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'admission-report.md:109' },
+        { requirementId: 3, requirementCode: 'SECURITY_REVIEW_SIGNOFF', requirementName: '独立安全评审签字', sourceStatus: 'NEEDS_REVIEW', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'gap-analysis.md:327' }
+      ]
     }
   }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
@@ -64,6 +73,7 @@ async function setupConfig(page) {
     if (path === '/todo/admission-evidence' && request.method() === 'GET') return json(route, state.admissionEvidence)
     if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
     if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
+    if (path === '/todo/foundation-file-security') return json(route, state.fileSecurity)
     if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
       state.admissionUpdates++
       const id = Number(path.split('/').pop())
@@ -277,4 +287,16 @@ test('historical migration readiness exposes inventory and blockers without sele
   await expect(pane.getByText('待迁移证据', { exact: true })).toBeVisible()
   await expect(pane.getByText('缺失', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('7', { exact: true }).first()).toBeVisible()
+})
+
+test('file security readiness separates technical controls from independent review', async ({ page }) => {
+  await setupConfig(page)
+  await page.getByRole('tab', { name: '文件安全' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('G-05 文件安全门禁未就绪，不能批准准入证据')).toBeVisible()
+  await expect(pane.getByText('SINGLE_USE_RELATION_TOKEN', { exact: true })).toBeVisible()
+  await expect(pane.getByText('PRD_MATERIAL_TYPE_E2E', { exact: true })).toBeVisible()
+  await expect(pane.getByText('SECURITY_REVIEW_SIGNOFF', { exact: true })).toBeVisible()
+  await expect(pane.getByText('待验收证据', { exact: true })).toBeVisible()
+  await expect(pane.getByText('待安全评审', { exact: true })).toBeVisible()
 })

@@ -38,3 +38,4 @@ export function getAdmissionEvidenceGovernanceOptions() { return request({ url: 
 export function updateAdmissionEvidence(evidenceId, data) { return request({ url: `/todo/admission-evidence/${evidenceId}`, method: 'put', data }) }
 export function getFoundationResourceReadiness(gateCode = 'G-02') { return request({ url: '/todo/foundation-resources', method: 'get', params: { gateCode } }) }
 export function getHistoricalMigrationReadiness(gateCode = 'G-04') { return request({ url: '/todo/foundation-migration', method: 'get', params: { gateCode } }) }
+export function getFileSecurityReadiness(gateCode = 'G-05') { return request({ url: '/todo/foundation-file-security', method: 'get', params: { gateCode } }) }
