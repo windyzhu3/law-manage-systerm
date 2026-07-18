@@ -55,6 +55,8 @@ const definitionForm = fs.readFileSync('src/views/todo/config/components/Definit
 for (const marker of ['event-condition-builder','owner-rule-builder','dod-form-builder','sla-rule-builder','hydrateDefinition','serializeDefinition','规则预览']) if (!definitionForm.includes(marker)) throw new Error(`missing visual definition marker ${marker}`)
 const definitionCodec = fs.readFileSync('src/views/todo/config/definition-codec.js','utf8')
 for (const marker of ['hydrateDefinition','serializeDefinition','toDraftPayload','autoActions','acceptanceRefs']) if (!definitionCodec.includes(marker)) throw new Error(`missing definition codec marker ${marker}`)
+const autoActionEditor=fs.readFileSync('src/views/todo/config/components/AutoActionEditor.vue','utf8')
+for(const marker of ['field.type === \'number\'','el-input-number','el-input','required && !String(value || \'\').trim()','listTodoAutoActionCapabilities']) if(!autoActionEditor.includes(marker)) throw new Error(`missing catalog-driven auto action field marker ${marker}`)
 const configPage=fs.readFileSync('src/views/todo/config/index.vue','utf8')
 for(const marker of ["v-hasPermi",'copyDefinition','publishDefinition','发布后该版本不可修改']) if(!configPage.includes(marker)&&!fs.readFileSync('src/views/todo/config/components/TemplateList.vue','utf8').includes(marker)&&!fs.readFileSync('src/views/todo/config/components/VersionDrawer.vue','utf8').includes(marker)) throw new Error(`missing config marker ${marker}`)
 

@@ -37,13 +37,22 @@ public interface TodoAutoActionCapability
         public Descriptor
         {
             Objects.requireNonNull(actionType,"actionType");triggerAt=List.copyOf(triggerAt);
-            retryFields=List.copyOf(retryFields);requiredFields=List.copyOf(requiredFields);
+            retryFields=normalizeRetryFields(retryFields);requiredFields=List.copyOf(requiredFields);
         }
         public static List<Field> commonRetryFields()
         {
             return List.of(new Field("maxAttempts","number",false,1,3,"Maximum attempts","TODO_AUTO_ACTION_NUMBER_INVALID"),
                     new Field("retryDelayMinutes","number",false,1,5,"Retry delay minutes","TODO_AUTO_ACTION_NUMBER_INVALID"),
                     new Field("claimTimeoutMinutes","number",false,1,15,"Claim timeout minutes","TODO_AUTO_ACTION_NUMBER_INVALID"));
+        }
+        private static List<Field> normalizeRetryFields(List<Field> supplied)
+        {
+            Map<String,Field> declared=new java.util.LinkedHashMap<>();
+            for(Field field:supplied==null?List.<Field>of():supplied)declared.put(field.name(),field);
+            List<Field> normalized=new java.util.ArrayList<>();
+            for(Field standard:commonRetryFields())normalized.add(declared.remove(standard.name()));
+            for(int index=0;index<normalized.size();index++)if(normalized.get(index)==null)normalized.set(index,commonRetryFields().get(index));
+            normalized.addAll(declared.values());return List.copyOf(normalized);
         }
         public Field retryField(String name)
         {

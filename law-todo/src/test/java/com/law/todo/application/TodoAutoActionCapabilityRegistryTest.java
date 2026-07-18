@@ -31,6 +31,15 @@ import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 class TodoAutoActionCapabilityRegistryTest
 {
+    @Test void descriptorNormalizesMissingRetrySchemaForCustomCapabilities()
+    {
+        TodoAutoActionCapability.Descriptor descriptor=new TodoAutoActionCapability.Descriptor("CUSTOM_NOTIFY",List.of("DUE"),List.of(),List.of());
+
+        assertEquals(List.of("maxAttempts","retryDelayMinutes","claimTimeoutMinutes"),descriptor.retryFields().stream().map(TodoAutoActionCapability.Field::name).toList());
+        assertEquals(3,descriptor.retryField("maxAttempts").defaultValue());
+        assertEquals(15,descriptor.retryField("claimTimeoutMinutes").defaultValue());
+    }
+
     @Test void registeredCustomCapabilityDrivesCatalogCompilerAndRuntime()
     {
         TodoAutoActionCapability custom=mock(TodoAutoActionCapability.class);
