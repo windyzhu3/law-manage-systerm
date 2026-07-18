@@ -53,7 +53,7 @@ async function setupConfig(page, options = {}) {
     },
     historicalMigrationPreflight: {
       gateCode: 'G-04', generatedAt: '2026-07-18T08:30:00Z', activeCaseCount: 12, deletedCaseCount: 3,
-      historicalTodoCount: 7, orphanTodoVersionCount: 0, exceptionCandidateCount: 12,
+      historicalTodoCount: 7, orphanTodoVersionCount: 0, exceptionCandidateCount: 13,
       groups: [
         { caseStatus: 'OPEN', caseType: 'LITIGATION', caseCount: 8 },
         { caseStatus: 'CLOSED', caseType: '<NULL>', caseCount: 4 }
@@ -406,7 +406,8 @@ test('historical migration readiness exposes inventory and blockers without sele
   await expect(pane.getByText('缺失', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('7', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('异常候选案件')).toBeVisible()
-  await expect(pane.getByText('12', { exact: true }).last()).toBeVisible()
+  const candidateCard = pane.locator('.preflight-summary-grid .el-card').filter({ hasText: '异常候选案件' })
+  await expect(candidateCard.getByText('13', { exact: true })).toBeVisible()
   const openGroup = pane.locator('.preflight-groups .el-table__row').filter({ hasText: 'OPEN' })
   await expect(openGroup.getByText('LITIGATION', { exact: true })).toBeVisible()
   await expect(openGroup.getByText('8', { exact: true })).toBeVisible()
