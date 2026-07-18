@@ -45,7 +45,7 @@ public class FileObjectService
         String expectedSha256,String businessType,Long businessId,String materialType,String visibility) { }
     public record RegisterVersionCommand(String actionId,String originalFileName,String contentType,long expectedSize,
         String expectedSha256,String changeDescription) { }
-    public record UploadIntentView(String uploadIntentId,Long fileObjectId,int versionNo,String status,Instant expiresAt) { }
+    public record UploadIntentView(String uploadIntentId,Long fileObjectId,Long relationId,int versionNo,String status,Instant expiresAt) { }
     public record AccessTokenView(Long fileObjectId,Long relationId,String accessType,String token,Instant expiresAt) { }
     @FunctionalInterface public interface TokenGenerator { String generate(int bytes); }
 
@@ -72,7 +72,7 @@ public class FileObjectService
         validate(command);access.requireCanWrite(command.businessType(),command.businessId(),actor);
         String fingerprint=requestFingerprint(command);
         UploadIntent prior=repository.findUploadIntentByIdempotency(actor.userId(),command.actionId());
-        if(prior!=null)return replay(prior,fingerprint);
+        if(prior!=null)return replay(prior,fingerprint,relationId(prior.fileObjectId(),command,actor));
         RelationAction reused=repository.findRelationAction(actor.userId(),command.actionId());
         if(reused!=null)actionConflict();
 
@@ -95,7 +95,7 @@ public class FileObjectService
             command.expectedSha256().toLowerCase(Locale.ROOT),"Initial version",fingerprint,actor.userId(),
             "REGISTERED",null,expires);
         if(repository.insertUploadIntent(intent)!=1)conflict("Unable to register upload intent");
-        return view(intent);
+        return view(intent,relation.relationId());
     }
 
     @Transactional public UploadIntentView addVersion(Long fileObjectId,RegisterVersionCommand command,FileActor actor)
@@ -103,7 +103,7 @@ public class FileObjectService
         validate(command);access.requireCanWrite(fileObjectId,actor);
         UploadIntent prior=repository.findUploadIntentByIdempotency(actor.userId(),command.actionId());
         String fingerprint=versionFingerprint(fileObjectId,command);
-        if(prior!=null)return replay(prior,fingerprint);
+        if(prior!=null)return replay(prior,fingerprint,null);
         FileObject object=repository.findById(fileObjectId);if(object==null)notFound();
         int reserved=object.nextVersionNo();
         if(repository.reserveNextVersion(fileObjectId,reserved,object.version())!=1)
@@ -114,7 +114,7 @@ public class FileObjectService
             command.expectedSha256().toLowerCase(Locale.ROOT),command.changeDescription(),fingerprint,actor.userId(),
             "REGISTERED",null,expires);
         if(repository.insertUploadIntent(intent)!=1)conflict("Unable to register version intent");
-        return view(intent);
+        return view(intent,null);
     }
 
     @Transactional(noRollbackFor=FileUploadUnavailableException.class)
@@ -328,10 +328,24 @@ public class FileObjectService
             actor.userId(),actor.deptId(),ip,at);
     }
 
-    private UploadIntentView replay(UploadIntent prior,String fingerprint)
-    {if(!fingerprint.equals(prior.requestFingerprint()))conflict("Idempotency key was reused with different metadata");return view(prior);}
-    private static UploadIntentView view(UploadIntent intent)
-    {return new UploadIntentView(intent.uploadIntentId(),intent.fileObjectId(),intent.targetVersionNo(),intent.status(),intent.expiresAt());}
+    private UploadIntentView replay(UploadIntent prior,String fingerprint,Long relationId)
+    {if(!fingerprint.equals(prior.requestFingerprint()))conflict("Idempotency key was reused with different metadata");return view(prior,relationId);}
+    private static UploadIntentView view(UploadIntent intent,Long relationId)
+    {return new UploadIntentView(intent.uploadIntentId(),intent.fileObjectId(),relationId,intent.targetVersionNo(),intent.status(),intent.expiresAt());}
+    private Long relationId(Long fileObjectId,RegisterUploadCommand command,FileActor actor)
+    {
+        Scope expected=scope(command.visibility(),actor);
+        List<FileBusinessRelation> relations=repository.findActiveRelations(fileObjectId);
+        if(relations==null)return null;
+        return relations.stream().filter(relation->relation.active()
+                &&Objects.equals(command.businessType(),relation.businessType())
+                &&Objects.equals(command.businessId(),relation.businessId())
+                &&Objects.equals(command.materialType(),relation.materialType())
+                &&Objects.equals(expected.visibility(),relation.visibility())
+                &&Objects.equals(expected.deptId(),relation.scopeDeptId())
+                &&Objects.equals(expected.userId(),relation.scopeUserId()))
+            .map(FileBusinessRelation::relationId).findFirst().orElse(null);
+    }
     private static FileBusinessRelation inactive(FileBusinessRelation relation)
     {return new FileBusinessRelation(relation.relationId(),relation.fileObjectId(),relation.businessType(),relation.businessId(),
         relation.materialType(),relation.visibility(),relation.scopeDeptId(),relation.scopeUserId(),

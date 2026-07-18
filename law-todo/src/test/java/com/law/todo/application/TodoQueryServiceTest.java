@@ -62,6 +62,7 @@ class TodoQueryServiceTest
         var form=new TodoQueryService(mapper,access,files).form(2L,new Actor(7L,"alice",3L));
 
         assertEquals("CONTRACT",form.businessType());assertEquals(77L,form.businessId());
+        assertEquals(12L,form.materials().get(0).relationId());
         assertEquals(41L,form.materials().get(0).fileObjectId());
         assertEquals(2,form.extensionPolicy().remainingRequestCount());
         assertEquals(true,form.extensionPolicy().proofRequired());

@@ -35,12 +35,13 @@ const required = [
   ,'src/views/todo/components/BusinessTodoSummary.vue'
   ,'src/views/todo/components/BusinessTodoDrawer.vue'
   ,'src/views/todo/components/TodoChainTimeline.vue'
+  ,'src/components/BusinessFile/BusinessFilePicker.vue'
 ]
 for (const file of required) {
   if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
 }
 const api = fs.readFileSync('src/api/todo.js', 'utf8')
-for (const name of ['getTodoDashboard', 'listTodo', 'getTodo', 'claimTodo', 'startTodo', 'submitTodo', 'completeTodo', 'returnTodo', 'transferTodo', 'cancelTodo', 'addTodoAttachment']) {
+for (const name of ['getTodoDashboard', 'listTodo', 'getTodo', 'claimTodo', 'startTodo', 'submitTodo', 'completeTodo', 'returnTodo', 'transferTodo', 'cancelTodo', 'addTodoAttachment', 'getBusinessFilePreviewToken', 'getBusinessFileDownloadToken', 'listBusinessFileVersions', 'openBusinessFileContent']) {
   if (!api.includes(`export function ${name}`)) throw new Error(`missing api ${name}`)
 }
 const page = fs.readFileSync('src/views/todo/index.vue', 'utf8')
@@ -54,6 +55,8 @@ for (const marker of ['detail.todo', 'detail.actions', 'detail.attachments', 'de
 const actions = fs.readFileSync('src/views/todo/components/TodoActionDialogs.vue', 'utf8')
 for (const marker of ['todo-dynamic-form', 'getTodoForm', 'fileObjectIds', 'createActionPayload']) if (!actions.includes(marker)) throw new Error(`missing schema runtime action marker ${marker}`)
 if (/template_?code|templateCode/i.test(actions)) throw new Error('todo actions must not branch by template code')
+const filePicker = fs.readFileSync('src/components/BusinessFile/BusinessFilePicker.vue', 'utf8')
+for (const marker of ['relationId', '预览', '下载', '版本', '未授权', 'getBusinessFilePreviewToken', 'getBusinessFileDownloadToken', 'listBusinessFileVersions', 'openBusinessFileContent']) if (!filePicker.includes(marker)) throw new Error(`missing authorized file access marker ${marker}`)
 console.log('todo ui contract ok')
 
 const definitionApi = fs.readFileSync('src/api/todo-definition.js', 'utf8')

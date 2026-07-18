@@ -18,7 +18,7 @@ public record TodoFormView(Long todoId, String action, String businessType, Long
         materials = materials == null ? List.of() : List.copyOf(materials);
     }
 
-    public record MaterialState(Long fileObjectId, String materialType, String fileName) { }
+    public record MaterialState(Long relationId, Long fileObjectId, String materialType, String fileName) { }
     public record ExtensionPolicyView(Long policyVersionId,int maxExtensionCount,int approvedExtensionCount,
         int remainingRequestCount,long maxExtensionValue,String maxExtensionUnit,boolean proofRequired,
         String pendingSlaMode,LocalDateTime currentDueAt) { }

@@ -29,3 +29,7 @@ export function completeBusinessFileUpload(uploadIntentId, file) {
     headers: { 'Content-Type': 'multipart/form-data', repeatSubmit: false }
   })
 }
+export function getBusinessFilePreviewToken(fileObjectId, relationId) { return request({ url: `/files/${fileObjectId}/preview-token`, method: 'get', params: { relationId } }) }
+export function getBusinessFileDownloadToken(fileObjectId, relationId) { return request({ url: `/files/${fileObjectId}/download-token`, method: 'get', params: { relationId } }) }
+export function listBusinessFileVersions(fileObjectId) { return request({ url: `/files/${fileObjectId}/versions`, method: 'get' }) }
+export function openBusinessFileContent(token) { return request({ url: `/files/access/${encodeURIComponent(token)}`, method: 'get', responseType: 'blob' }) }

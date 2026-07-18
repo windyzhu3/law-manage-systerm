@@ -54,10 +54,27 @@ class FileObjectServiceTest
         var command=upload();
         UploadIntent existing=intent("REGISTERED",null);
         when(repository.findUploadIntentByIdempotency(7L,"idem-1")).thenReturn(existing);
+        when(repository.findActiveRelations(10L)).thenReturn(List.of(relation()));
         var result=service.registerUpload(command,actor);
         assertEquals("intent-1",result.uploadIntentId());
         assertEquals(10L,result.fileObjectId());
+        assertEquals(1L,result.relationId());
         verify(repository,never()).insertFileObject(any());
+    }
+
+    @Test void initial_registration_returns_the_created_relation_authorization()
+    {
+        FileObject object=new FileObject(10L,"proof.pdf",0,1,"PENDING",7L,0);
+        when(repository.insertFileObject(any())).thenReturn(object);
+        when(repository.insertRelation(any())).thenReturn(relation());
+        when(repository.insertRelationAction(any())).thenReturn(1);
+        when(repository.insertLifecycleAudit(any())).thenReturn(1);
+        when(repository.insertUploadIntent(any())).thenReturn(1);
+
+        var result=service.registerUpload(upload(),actor);
+
+        assertEquals(10L,result.fileObjectId());
+        assertEquals(1L,result.relationId());
     }
 
     @Test void same_logical_file_reserves_version_with_change_description()

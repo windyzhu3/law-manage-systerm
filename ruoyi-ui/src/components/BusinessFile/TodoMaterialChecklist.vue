@@ -9,16 +9,16 @@
         </el-tag>
       </div>
       <business-file-picker
-        v-if="!readonly"
+        v-if="!readonly || item.values.length"
         :value="item.values"
         :business-type="businessType"
         :business-id="businessId"
         :material-type="item.materialType"
         :limit="Math.max(item.minCount, item.limit || item.minCount)"
+        :disabled="readonly"
         @input="setFiles(item.materialType, $event)"
       />
-      <span v-else-if="!item.values.length" class="missing">未提供</span>
-      <ul v-else><li v-for="file in item.values" :key="file.fileObjectId">{{ file.fileName || `文件 #${file.fileObjectId}` }}</li></ul>
+      <span v-else class="missing">未提供</span>
     </div>
   </div>
 </template>

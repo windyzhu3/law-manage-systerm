@@ -51,7 +51,7 @@ public class TodoQueryService
     {
         if(fileMaterials==null)return List.of();
         return fileMaterials.list(todo.getBusinessType(),todo.getBusinessId(),new FileActor(actor.userId(),actor.userName(),actor.deptId()))
-            .stream().map(value->new MaterialState(value.fileObjectId(),value.materialType(),value.fileName())).toList();
+            .stream().map(value->new MaterialState(value.relationId(),value.fileObjectId(),value.materialType(),value.fileName())).toList();
     }
     private ExtensionPolicyView extensionPolicy(Long todoId)
     {

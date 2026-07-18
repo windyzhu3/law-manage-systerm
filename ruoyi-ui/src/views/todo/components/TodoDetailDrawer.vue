@@ -71,7 +71,7 @@ export default {
     actions() { return this.detail.actions || [] },
     attachments() { return this.detail.attachments || [] },
     materials() {
-      if (this.detail.materials) return this.detail.materials
+      if (this.detail.materials && this.detail.materials.length) return this.detail.materials
       if (this.formView && this.formView.materials) return this.formView.materials
       return []
     },
