@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoAdmissionEvidenceMapper">
+  <sql id="evidenceColumns">
+    e.*,owner.user_name owner_user_name,owner.nick_name owner_nick_name,
+    reviewer.user_name reviewer_user_name,reviewer.nick_name reviewer_nick_name
+  </sql>
+  <select id="selectEvidence" resultType="java.util.Map">
+    select <include refid="evidenceColumns"/>
+    from todo_admission_evidence e
+    left join sys_user owner on owner.user_id=e.owner_user_id
+    left join sys_user reviewer on reviewer.user_id=e.reviewer_user_id
+    order by e.gate_code,e.evidence_code
+  </select>
+  <select id="selectEvidenceById" resultType="java.util.Map">
+    select <include refid="evidenceColumns"/>
+    from todo_admission_evidence e
+    left join sys_user owner on owner.user_id=e.owner_user_id
+    left join sys_user reviewer on reviewer.user_id=e.reviewer_user_id
+    where e.evidence_id=#{evidenceId}
+  </select>
+  <select id="selectActiveUser" resultType="java.util.Map">
+    select user_id,user_name,nick_name,dept_id from sys_user where user_id=#{userId} and status='0' and del_flag='0'
+  </select>
+  <select id="selectActiveUsers" resultType="java.util.Map">
+    select user_id,user_name,nick_name,dept_id from sys_user where status='0' and del_flag='0' order by user_id
+  </select>
+  <insert id="insertEvidenceActionClaim">
+    insert ignore into todo_admission_evidence_action(action_id,evidence_id,action_type,action_status,request_fingerprint,operator_id,operator_name,operator_dept_id,payload_json)
+    values(#{actionId},#{evidenceId},'UPDATE_EVIDENCE','CLAIMED',#{requestFingerprint},#{operatorId},#{operatorName},#{operatorDeptId},#{payloadJson})
+  </insert>
+  <select id="selectEvidenceActionForUpdate" resultType="java.util.Map">
+    select * from todo_admission_evidence_action where action_id=#{actionId} for update
+  </select>
+  <update id="updateEvidenceConditionally">
+    update todo_admission_evidence
+    set owner_user_id=#{ownerUserId},reviewer_user_id=#{reviewerUserId},due_at=#{dueAt},status=#{status},
+        artifact_ref=#{artifactRef},conclusion=#{conclusion},reviewed_by=#{reviewedBy},
+        reviewed_time=case when #{status} in ('APPROVED','REJECTED') then sysdate() else null end,
+        update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where evidence_id=#{evidenceId} and version=#{expectedVersion}
+  </update>
+  <update id="completeEvidenceAction">
+    update todo_admission_evidence_action set action_status='APPLIED',evidence_id=#{evidenceId},completed_time=sysdate()
+    where action_id=#{actionId} and request_fingerprint=#{requestFingerprint} and action_status='CLAIMED'
+  </update>
+</mapper>

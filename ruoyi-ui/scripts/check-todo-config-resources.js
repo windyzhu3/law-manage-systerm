@@ -1,5 +1,5 @@
 const assert = require('assert')
-const { validateCalendar, validateDecision, triggerPayload } = require('../src/views/todo/config/resource-contract')
+const { validateCalendar, validateDecision, validateAdmissionEvidence, triggerPayload } = require('../src/views/todo/config/resource-contract')
 
 assert.throws(() => validateCalendar({ timezone: 'Invalid/Timezone', workDays: [1], workStart: '18:00', workEnd: '09:00', exceptions: { 'not-a-date': true } }), /timezone|time|date/i)
 assert.deepStrictEqual(validateCalendar({ timezone: 'Asia/Shanghai', workDays: [1, 2, 3, 4, 5], workStart: '09:00', workEnd: '18:00', exceptions: { '2026-07-20': false } }).workDays, '1,2,3,4,5')
@@ -7,6 +7,9 @@ assert.throws(() => validateDecision({ code: 'DECISION_1', title: 'decision', st
 assert.throws(() => validateDecision({ code: 'DECISION_1', title: 'decision', blocking: true, status: 'OPEN', deliveryPhase: 'PHASE_ONE' }), /owner/i)
 assert.throws(() => validateDecision({ code: 'DECISION_1', title: 'decision', blocking: true, status: 'OPEN', ownerUserId: 8, ownerRoleKey: 'product_owner', deliveryPhase: 'PHASE_ONE' }), /due/i)
 assert.strictEqual(validateDecision({ code: 'DECISION_1', title: 'decision', blocking: true, status: 'OPEN', ownerUserId: 8, ownerRoleKey: 'product_owner', dueAt: '2026-07-31 18:00:00', deliveryPhase: 'PHASE_ONE' }).ownerUserId, 8)
+assert.throws(() => validateAdmissionEvidence({ status: 'IN_REVIEW', ownerUserId: 7, reviewerUserId: 9, dueAt: '2026-07-31 18:00:00' }), /artifact/i)
+assert.throws(() => validateAdmissionEvidence({ status: 'OPEN', ownerUserId: 7, reviewerUserId: 7, dueAt: '2026-07-31 18:00:00' }), /independent/i)
+assert.strictEqual(validateAdmissionEvidence({ status: 'APPROVED', ownerUserId: 7, reviewerUserId: 9, dueAt: '2026-07-31 18:00:00', artifactRef: 'repo://doc/g02.md', conclusion: 'approved' }).status, 'APPROVED')
 assert.deepStrictEqual(triggerPayload({ triggerRuleId: 4, event: { eventType: 'LEAD_ASSIGNED', payloadVersion: 1, condition: { field: 'stage', operator: 'EQ', value: 'READY' } }, templateId: 2, templateVersionId: 3, businessType: 'LEAD', enabled: true, actionId: 'trigger-4-save', expectedVersion: 7 }), { triggerRuleId: 4, eventType: 'LEAD_ASSIGNED', payloadVersion: 1, conditionJson: JSON.stringify({ field: 'stage', operator: 'EQ', value: 'READY' }), templateId: 2, templateVersionId: 3, businessType: 'LEAD', enabled: 'Y', actionId: 'trigger-4-save', expectedVersion: 7 })
 assert.deepStrictEqual(triggerPayload({ trigger_rule_id: 4, template_id: 2, template_version_id: 3, business_type: 'LEAD', enabled: 'N', event: { eventType: 'LEAD_ASSIGNED', payloadVersion: 2, condition: {} } }).templateId, 2)
 assert.throws(() => validateCalendar({ timezone: 'Asia/Shanghai', workDays: [1], workStart: '09:00', workEnd: '18:00', exceptions: { '2026-02-31': false } }), /date/i)

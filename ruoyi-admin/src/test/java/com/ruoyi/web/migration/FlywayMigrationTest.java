@@ -34,10 +34,29 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.15", current.getVersion().getVersion());
+        assertEquals("0.20.16", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
+        verifyAdmissionEvidenceSchema(url);
+    }
+
+    private void verifyAdmissionEvidenceSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(5L, count(connection,"select count(*) from todo_admission_evidence"));
+            assertEquals(5L, count(connection,"select count(*) from todo_admission_evidence where status='OPEN' "
+                + "and owner_user_id is null and reviewer_user_id is null and due_at is null and artifact_ref is null"));
+            assertEquals(5L, count(connection,"select count(distinct gate_code) from todo_admission_evidence "
+                + "where gate_code in ('G-02','G-04','G-05','G-06','G-07')"));
+            assertEquals(2L, count(connection,"select count(*) from sys_menu where perms in ('todo:admission:view','todo:admission:edit')"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Admission evidence database invariants failed", exception);
+        }
     }
 
     private void verifyDecisionAccountabilitySchema(String url)

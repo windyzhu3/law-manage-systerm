@@ -31,6 +31,16 @@ function validateDecision(form) {
   return { ...form }
 }
 
+function validateAdmissionEvidence(form) {
+  if (!['OPEN', 'IN_REVIEW', 'APPROVED', 'REJECTED'].includes(form.status)) throw new Error('status is invalid')
+  if (!(Number(form.ownerUserId) > 0)) throw new Error('owner is required')
+  if (!(Number(form.reviewerUserId) > 0)) throw new Error('reviewer is required')
+  if (Number(form.ownerUserId) === Number(form.reviewerUserId)) throw new Error('independent reviewer is required')
+  if (!String(form.dueAt || '').trim()) throw new Error('due date is required')
+  if (form.status !== 'OPEN' && (!String(form.artifactRef || '').trim() || !String(form.conclusion || '').trim())) throw new Error('artifact and conclusion are required')
+  return { ...form }
+}
+
 function triggerPayload(form) {
   const event = form.event || {}
   return {
@@ -41,4 +51,4 @@ function triggerPayload(form) {
     expectedVersion: Number(field(form, 'version', 'version') || form.expectedVersion || 0)
   }
 }
-module.exports = { field, validateCalendar, validateDecision, triggerPayload }
+module.exports = { field, validateCalendar, validateDecision, validateAdmissionEvidence, triggerPayload }

@@ -10,6 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.ruoyi.web.controller.todo.TodoDefinitionCatalogController;
+import com.ruoyi.web.controller.todo.TodoAdmissionEvidenceController;
 import com.ruoyi.web.controller.todo.TodoTemplateController;
 
 class TodoDefinitionManagementApiTest
@@ -31,6 +32,9 @@ class TodoDefinitionManagementApiTest
         assertPermission(TodoDefinitionCatalogController.class,"decisionGovernanceOptions","todo:decision:view");
         assertPermission(TodoDefinitionCatalogController.class,"createDecision","todo:decision:edit");
         assertPermission(TodoDefinitionCatalogController.class,"updateDecision","todo:decision:edit");
+        assertPermission(TodoAdmissionEvidenceController.class,"list","todo:admission:view");
+        assertPermission(TodoAdmissionEvidenceController.class,"governanceOptions","todo:admission:view");
+        assertPermission(TodoAdmissionEvidenceController.class,"update","todo:admission:edit");
     }
 
     private void assertPermission(Class<?> type,String methodName,String permission)

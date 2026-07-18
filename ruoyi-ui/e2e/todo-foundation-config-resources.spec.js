@@ -6,7 +6,9 @@ async function json(route, data, envelope) {
 
 async function choose(page, formItem, label) {
   await formItem.locator('input').click()
-  await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').getByText(label, { exact: true }).click()
+  const dropdown = page.locator('.el-select-dropdown:visible').last()
+  await dropdown.locator('.el-select-dropdown__item').getByText(label, { exact: true }).click()
+  await expect(dropdown).toBeHidden()
 }
 
 function formItem(dialog, label) {
@@ -14,7 +16,10 @@ function formItem(dialog, label) {
 }
 
 async function setupConfig(page) {
-  const state = { triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0 }
+  const state = {
+    triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0,
+    admissionEvidence: [{ evidenceId: 1, evidenceCode: 'G02-DICTIONARY-ROLE', gateCode: 'G-02', title: '业务字典与稳定角色键', status: 'OPEN', deliveryPhase: 'PHASE_ONE', version: 0 }]
+  }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
   await page.addInitScript(() => { document.cookie = 'Admin-Token=e2e-token; path=/' })
   await page.route('**/prod-api/**', async route => {
@@ -30,6 +35,23 @@ async function setupConfig(page) {
       roles: [{ role_id: 3, role_key: 'product_owner', role_name: 'Product Owner' }],
       deliveryPhases: ['PHASE_ONE', 'PHASE_TWO', 'CROSS_PHASE']
     })
+    if (path === '/todo/admission-evidence/governance-options') return json(route, {
+      users: [
+        { user_id: 7, user_name: 'owner', nick_name: 'Owner' },
+        { user_id: 9, user_name: 'reviewer', nick_name: 'Reviewer' }
+      ],
+      statuses: ['OPEN', 'IN_REVIEW', 'APPROVED', 'REJECTED']
+    })
+    if (path === '/todo/admission-evidence' && request.method() === 'GET') return json(route, state.admissionEvidence)
+    if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
+      state.admissionUpdates++
+      const id = Number(path.split('/').pop())
+      state.admissionEvidence = state.admissionEvidence.map(row => row.evidenceId === id ? {
+        ...row, ...body, version: row.version + 1,
+        ownerNickName: body.ownerUserId === 7 ? 'Owner' : '', reviewerNickName: body.reviewerUserId === 9 ? 'Reviewer' : ''
+      } : row)
+      return json(route, state.admissionEvidence.find(row => row.evidenceId === id))
+    }
     if (path === '/todo/template/1/versions') return json(route, [{ version_id: 10, version_no: 1, status: 'PUBLISHED' }])
     if (path === '/todo/template/trigger') {
       if (request.method() === 'GET') return json(route, state.triggers)
@@ -177,4 +199,35 @@ test('decision requires a conclusion and displays impacted template codes', asyn
   await page.getByRole('button', { name: '重新打开' }).click()
   await page.getByRole('dialog').getByRole('button', { name: '保存' }).click()
   await expect(page.locator('.el-tab-pane:not([aria-hidden="true"])').getByText('OPEN', { exact: true })).toBeVisible()
+})
+
+test('admission evidence requires independent review and survives submit and approval reloads', async ({ page }) => {
+  const state = await setupConfig(page)
+  await page.getByRole('tab', { name: '准入证据' }).click()
+  await expect(page.getByText('G02-DICTIONARY-ROLE', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '登记' }).click()
+  let dialog = page.getByRole('dialog')
+  await choose(page, formItem(dialog, '责任人'), 'Owner（owner）')
+  await choose(page, formItem(dialog, '独立评审人'), 'Reviewer（reviewer）')
+  await formItem(dialog, '截止时间').locator('input').fill('2026-07-31 18:00:00')
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.el-picker-panel:visible')).toHaveCount(0)
+  await choose(page, formItem(dialog, '状态'), 'IN_REVIEW')
+  await formItem(dialog, '证据引用').locator('input').fill('repo://doc/g02.md')
+  await formItem(dialog, '提交/评审结论').locator('textarea').fill('提交业务字典冻结清单')
+  await dialog.getByRole('button', { name: '保存' }).click()
+  await expect(page.locator('.el-tab-pane:not([aria-hidden="true"])').getByText('IN_REVIEW', { exact: true })).toBeVisible()
+  expect(state.admissionUpdates).toBe(1)
+  expect(state.admissionEvidence[0].ownerUserId).toBe(7)
+  expect(state.admissionEvidence[0].reviewerUserId).toBe(9)
+
+  await page.getByRole('button', { name: '登记' }).click()
+  dialog = page.getByRole('dialog')
+  await choose(page, formItem(dialog, '状态'), 'APPROVED')
+  await formItem(dialog, '提交/评审结论').locator('textarea').fill('独立评审通过')
+  await dialog.getByRole('button', { name: '保存' }).click()
+  expect(state.admissionUpdates).toBe(2)
+  await page.reload(); await page.getByRole('tab', { name: '准入证据' }).click()
+  await expect(page.locator('.el-tab-pane:not([aria-hidden="true"])').getByText('APPROVED', { exact: true })).toBeVisible()
+  await expect(page.getByText('Owner', { exact: false }).first()).toBeVisible()
 })
