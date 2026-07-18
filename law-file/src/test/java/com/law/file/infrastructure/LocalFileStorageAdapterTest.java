@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import com.law.file.domain.FileException;
+import com.law.file.security.DetectedContentType;
 import com.law.file.spi.FileStoragePort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -44,5 +45,18 @@ class LocalFileStorageAdapterTest
         var abandoned=adapter.stage(new ByteArrayInputStream("abc".getBytes()),3L,hash);
         adapter.abort(abandoned);
         assertThrows(FileException.class,()->adapter.publish(abandoned,"objects/b"));
+    }
+
+    @Test void staged_content_is_inspected_only_inside_the_staging_area() throws Exception
+    {
+        LocalFileStorageAdapter adapter=new LocalFileStorageAdapter(root);
+        byte[] content="%PDF-1.7\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        String hash=java.util.HexFormat.of().formatHex(
+            java.security.MessageDigest.getInstance("SHA-256").digest(content));
+        var staged=adapter.stage(new ByteArrayInputStream(content),content.length,hash);
+
+        assertEquals(DetectedContentType.PDF,adapter.inspect(staged));
+        assertThrows(FileException.class,()->adapter.inspect(
+            new FileStoragePort.StagedObject("objects/not-staged",content.length,hash)));
     }
 }

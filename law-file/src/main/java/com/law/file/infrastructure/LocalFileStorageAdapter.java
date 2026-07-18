@@ -10,6 +10,7 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 import com.law.file.domain.FileException;
+import com.law.file.security.DetectedContentType;
 import com.law.file.spi.FileStoragePort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,14 @@ public class LocalFileStorageAdapter implements FileStoragePort
             return new StagedObject(stagingKey,size,actual);
         } catch(FileException error){throw error;}
           catch(Exception error){try{Files.deleteIfExists(temporary);}catch(Exception ignored){}throw new FileException("FILE_STORAGE_WRITE_FAILED","Unable to store file",error);}
+    }
+    @Override public DetectedContentType inspect(StagedObject staged)
+    {
+        if(staged==null||staged.stagingKey()==null||!staged.stagingKey().startsWith(".staged/"))
+            throw new FileException("FILE_STAGE_INVALID","Invalid staged object");
+        Path temporary=resolve(staged.stagingKey());
+        if(!Files.isRegularFile(temporary))throw new FileException("FILE_STAGE_NOT_FOUND","Staged content does not exist");
+        return FileContentInspector.inspect(temporary);
     }
     @Override public StoredObject publish(StagedObject staged,String objectKey)
     {
