@@ -47,9 +47,12 @@ test('business summary clears stale data and does not request an invalid id', as
 
 test('a delayed A response cannot overwrite a newer B business summary', async ({ page }) => {
   const state = await setupBusinessTodoRuntime(page)
-  await page.goto('/todo/race/a'); await expect.poll(() => state.summaryRequests).toContain('CASE/201'); await page.getByRole('button', { name: '查看全部' }).click()
-  await page.getByText('Domain TODO', { exact: true }).click(); await page.getByRole('button', { name: '链路', exact: true }).click(); await page.goto('/todo/race/b')
-  await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
+  await page.goto('/todo/race/CASE/201'); await expect.poll(() => state.summaryRequests).toContain('CASE/201'); await page.getByRole('button', { name: '查看全部' }).click()
+  await page.getByText('Domain TODO', { exact: true }).click(); await page.getByRole('button', { name: '链路', exact: true }).click()
+  await page.evaluate(() => { setTimeout(() => document.querySelector('#app').__vue__.$router.push('/todo/race/CASE/202'), 0) })
+  await page.waitForURL('**/todo/race/CASE/202')
+  await expect.poll(() => state.summaryRequests).toContain('CASE/202')
+  await expect(page.getByTestId('business-todo-summary').locator('.values span').first()).toContainText('2')
   await page.waitForTimeout(400)
   await expect(page.getByTestId('business-todo-summary').locator('.values').first()).toContainText('2')
   await expect(page.getByText('TODO PROFILE')).toHaveCount(0); await expect(page.getByText('A chain', { exact: true })).toHaveCount(0)
@@ -135,8 +138,7 @@ function routes(includeInvalid) {
     meta: { title: `Todo ${domain.type}` }
   }))
   if (includeInvalid) children.push({ path: 'todo/runtime/invalid', component: 'todo/components/BusinessTodoSummary', name: 'TodoRuntimeInvalid', props: { businessType: 'LEAD', businessId: 0, businessNo: 'LD-0' }, meta: { title: 'Todo Invalid' } })
-  children.push({ path: 'todo/race/a', component: 'todo/components/BusinessTodoSummary', name: 'TodoRaceA', props: { businessType: 'CASE', businessId: 201, businessNo: 'CS-A' }, meta: { title: 'Todo Race A' } })
-  children.push({ path: 'todo/race/b', component: 'todo/components/BusinessTodoSummary', name: 'TodoRaceB', props: { businessType: 'CASE', businessId: 202, businessNo: 'CS-B' }, meta: { title: 'Todo Race B' } })
+  children.push({ path: 'todo/race/:businessType/:businessId', component: 'todo/components/BusinessTodoSummary', name: 'TodoRace', props: true, meta: { title: 'Todo Race' } })
   return [{ path: '/', component: 'Layout', children }]
 }
 
