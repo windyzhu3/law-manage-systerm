@@ -65,10 +65,11 @@ public class TodoDefinitionSimulationService
     public TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners)
     {this(mapper,owners,List.of(),compiler(mapper));}
 
-    @Autowired
+    /** Legacy direct-construction support for tests without auto-action capabilities. */
     public TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,List<TodoCompletionHandler> handlers)
     {this(mapper,owners,handlers,compiler(mapper));}
 
+    @Autowired
     TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,
             List<TodoCompletionHandler> handlers,TodoDefinitionCompiler compiler)
     {this.mapper=mapper;this.owners=owners;this.handlers=handlers==null?List.of():List.copyOf(handlers);this.compiler=compiler;}
@@ -474,6 +475,7 @@ public class TodoDefinitionSimulationService
     {List<HandlerTrace> result=handlers.stream().map(handler->new HandlerTrace(handler.catalogCode(),handler.supportsSimulation()?"SIMULATABLE":"NOT_EXECUTED",handler.supportsSimulation(),handler.simulationDescription())).sorted(Comparator.comparing(HandlerTrace::code)).toList();for(HandlerTrace handler:result)if(!handler.simulatable())issues.add(new SimulationIssue("TODO_SIMULATION_HANDLER_NOT_EXECUTED","handlers."+handler.code(),"INFO",handler.reason()));return result;}
 
     private Map<String,Object> requireVersion(long id){Map<String,Object> row=mapper.selectTemplateVersionById(id);if(row==null||row.isEmpty())throw new TodoException("TODO_TEMPLATE_VERSION_NOT_FOUND","Template version not found");return row;}
+    /** Legacy direct-construction support for tests without auto-action capabilities. */
     private static TodoDefinitionCompiler compiler(TodoMapper mapper){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
     private void sort(List<SimulationIssue> issues){issues.sort(Comparator.comparing(SimulationIssue::code).thenComparing(SimulationIssue::path).thenComparing(SimulationIssue::message));}
     private WorkCalendar calendar(Map<String,Object> row){Set<DayOfWeek> days=EnumSet.noneOf(DayOfWeek.class);for(String day:text(value(row,"work_days","workDays")).split(","))days.add(DayOfWeek.of(Integer.parseInt(day.trim())));Map<LocalDate,Boolean> exceptions=new HashMap<>();String json=text(value(row,"exception_json","exceptionJson"));if(json!=null&&!json.isBlank())JSON.parseObject(json).forEach((k,v)->exceptions.put(LocalDate.parse(k),Boolean.valueOf(String.valueOf(v))));return new WorkCalendar(days,time(value(row,"work_start","workStart")),time(value(row,"work_end","workEnd")),exceptions);}

@@ -1,14 +1,11 @@
 package com.law.todo.application;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -21,6 +18,7 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoAutoActionCapability;
+import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 import com.law.todo.spi.TodoAutoActionCapability.AutoActionResult;
 import com.law.todo.spi.TodoAutoActionCapability.AutoActionStatus;
 import com.law.todo.expression.ConditionEvaluator;
@@ -30,45 +28,30 @@ import com.law.todo.expression.ConditionValidator;
 public class TodoAutoActionService
 {
     public static final Actor SERVICE_ACTOR = new Actor(-1L, "TODO_AUTO_ACTION", null);
-    private static final int DEFAULT_MAX_ATTEMPTS = 3;
-    private static final int DEFAULT_RETRY_MINUTES = 5;
-
     private final TodoMapper mapper;
-    private final Map<String, TodoAutoActionCapability> capabilities;
+    private final TodoAutoActionCapabilityRegistry capabilities;
     private final TodoAutoActionResultRecorder recorder;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
 
     public TodoAutoActionService(TodoMapper mapper, List<TodoAutoActionCapability> capabilities)
     {
-        this(mapper,capabilities,new TodoAutoActionResultRecorder(mapper));
+        this(mapper,new TodoAutoActionCapabilityRegistry(capabilities),new TodoAutoActionResultRecorder(mapper));
     }
 
-    @Autowired
     public TodoAutoActionService(TodoMapper mapper, List<TodoAutoActionCapability> capabilities,TodoAutoActionResultRecorder recorder)
+    {this(mapper,new TodoAutoActionCapabilityRegistry(capabilities),recorder);}
+
+    @Autowired
+    public TodoAutoActionService(TodoMapper mapper, TodoAutoActionCapabilityRegistry capabilities,TodoAutoActionResultRecorder recorder)
     {
         this.mapper = Objects.requireNonNull(mapper, "mapper");
         this.recorder=Objects.requireNonNull(recorder,"recorder");
-        List<TodoAutoActionCapability> supplied = capabilities == null ? List.of() : capabilities;
-        Map<String, TodoAutoActionCapability> registry;
-        try
-        {
-            registry = supplied.stream().collect(Collectors.toMap(TodoAutoActionCapability::actionType,
-                    Function.identity(), (left, right) -> { throw new IllegalStateException("Duplicate auto-action capability: " + left.actionType()); },
-                    LinkedHashMap::new));
-        }
-        catch (NullPointerException invalid)
-        {
-            throw new IllegalStateException("Auto-action capabilities require an action type", invalid);
-        }
-        for (String type : registry.keySet())
-            if (!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(type))
-                throw new IllegalStateException("Capability is not allow-listed: " + type);
-        this.capabilities = Collections.unmodifiableMap(registry);
+        this.capabilities=Objects.requireNonNull(capabilities,"capabilities");
     }
 
     public List<String> capabilityTypes()
     {
-        return capabilities.keySet().stream().sorted().toList();
+        return capabilities.types();
     }
 
     /**
@@ -81,9 +64,9 @@ public class TodoAutoActionService
         Map<String,Object> config = rule.config();RuntimeRule runtime=validateRuntimeRule(config);
         String actionType=runtime.actionType();String ruleKey=runtime.ruleKey();TodoAutoActionCapability capability=runtime.capability();
         String executionKey = executionKey(todo.getTodoId(), ruleKey);
-        int maxAttempts = positiveInt(config.get("maxAttempts"), DEFAULT_MAX_ATTEMPTS, "maxAttempts");
-        int retryMinutes = positiveInt(config.get("retryDelayMinutes"), DEFAULT_RETRY_MINUTES, "retryDelayMinutes");
-        int claimTimeoutMinutes=positiveInt(config.get("claimTimeoutMinutes"),15,"claimTimeoutMinutes");
+        int maxAttempts = positiveInt(config.get("maxAttempts"), runtime.descriptor().retryField("maxAttempts"));
+        int retryMinutes = positiveInt(config.get("retryDelayMinutes"), runtime.descriptor().retryField("retryDelayMinutes"));
+        int claimTimeoutMinutes=positiveInt(config.get("claimTimeoutMinutes"),runtime.descriptor().retryField("claimTimeoutMinutes"));
         Map<String,Object> claim = new HashMap<>();claim.put("executionKey", executionKey);claim.put("todoId", todo.getTodoId());
         claim.put("ruleKey", ruleKey);claim.put("actionType", actionType);claim.put("now", now);
         int inserted=mapper.insertAutoActionExecutionIfAbsent(claim);
@@ -233,18 +216,15 @@ public class TodoAutoActionService
         Map<String,Object> claim=new HashMap<>();claim.put("executionKey",executionKey);claim.put("todoId",todo.getTodoId());claim.put("ruleKey",ruleKey);claim.put("actionType",actionType);claim.put("now",now);
         int inserted=mapper.insertAutoActionExecutionIfAbsent(claim);Map<String,Object> execution=mapper.selectAutoActionExecution(executionKey);requireIdentity(execution,todo.getTodoId(),ruleKey,actionType);
         if(inserted==0)return;String code=invalid instanceof TodoException business?business.getBusinessCode():"TODO_AUTO_ACTION_RULE_INVALID";
-        record(executionKey,todo,ruleKey,actionType,number(value(execution,"attempt_count","attemptCount")),AutoActionResult.dead(code,invalid.getMessage()),now,DEFAULT_RETRY_MINUTES);
+        record(executionKey,todo,ruleKey,actionType,number(value(execution,"attempt_count","attemptCount")),AutoActionResult.dead(code,invalid.getMessage()),now,defaultRetryMinutes());
     }
 
     private RuntimeRule validateRuntimeRule(Map<String,Object> config)
     {
-        String actionType=text(first(config,"actionType","action"));if(!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(actionType))throw new TodoException("TODO_AUTO_ACTION_NOT_ALLOWED","Auto action is not allow-listed: "+actionType);
-        TodoAutoActionCapability capability=capabilities.get(actionType);if(capability==null)throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISSING","No registered capability for: "+actionType);
+        String actionType=text(first(config,"actionType","action"));TodoAutoActionCapability capability=capabilities.capability(actionType);if(capability==null)throw new TodoException("TODO_AUTO_ACTION_NOT_ALLOWED","Auto action capability is not registered: "+actionType);
         String declared=text(config.get("capability"));if(!actionType.equals(declared))throw new TodoException("TODO_AUTO_ACTION_CAPABILITY_MISMATCH","Declared capability does not match action type");
-        String ruleKey=requiredRuleKey(config);String trigger=text(config.get("triggerAt"));if(!java.util.Set.of("DUE","SLA_80","SLA_100","SLA_150").contains(trigger))throw new TodoException("TODO_AUTO_ACTION_TRIGGER_INVALID","triggerAt must use a governed due time");
-        if("TRANSFER".equals(actionType))positiveLong(config.get("targetOwnerId"),"TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID","targetOwnerId must be a positive integer");
-        positiveInt(config.get("maxAttempts"),DEFAULT_MAX_ATTEMPTS,"maxAttempts");positiveInt(config.get("retryDelayMinutes"),DEFAULT_RETRY_MINUTES,"retryDelayMinutes");positiveInt(config.get("claimTimeoutMinutes"),15,"claimTimeoutMinutes");
-        return new RuntimeRule(actionType,ruleKey,capability);
+        String ruleKey=requiredRuleKey(config);for(TodoAutoActionCapability.ValidationError error:capability.descriptor().validate(config))throw new TodoException(error.code(),error.message());
+        return new RuntimeRule(actionType,ruleKey,capability,capability.descriptor());
     }
 
     @SuppressWarnings("unchecked")
@@ -294,15 +274,15 @@ public class TodoAutoActionService
         if (key == null || key.isBlank() || key.length() > 96) throw new TodoException("TODO_AUTO_ACTION_RULE_KEY_INVALID", "ruleKey is required and limited to 96 characters");
         return key;
     }
-    private Long positiveLong(Object raw,String code,String message){try{Long value=raw==null?null:Long.valueOf(String.valueOf(raw));if(value==null||value<=0)throw new NumberFormatException();return value;}catch(NumberFormatException invalid){throw new TodoException(code,message);}}
     private String executionKey(Long todoId,String ruleKey){return "AUTO:"+todoId+":"+ruleKey;}
-    private int positiveInt(Object raw,int fallback,String field){if(raw==null)return fallback;int value=number(raw);if(value<=0)throw new TodoException("TODO_AUTO_ACTION_RULE_INVALID",field+" must be positive");return value;}
+    private int positiveInt(Object raw,TodoAutoActionCapability.Field field){if(raw==null)return field.defaultValue();try{int value=number(raw);if(field.min()!=null&&value<field.min())throw new NumberFormatException();return value;}catch(NumberFormatException invalid){throw new TodoException(field.invalidCode(),field.name()+" is invalid");}}
+    private int defaultRetryMinutes(){return TodoAutoActionCapability.Descriptor.commonRetryFields().stream().filter(field->field.name().equals("retryDelayMinutes")).findFirst().orElseThrow().defaultValue();}
     private int number(Object raw){return Integer.parseInt(String.valueOf(raw));}
     private Long longValue(Object raw){return raw==null?null:Long.valueOf(String.valueOf(raw));}
     private LocalDateTime date(Object raw){if(raw==null)return null;return raw instanceof LocalDateTime value?value:LocalDateTime.parse(String.valueOf(raw).replace(' ','T'));}
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private Object first(Map<String,Object> row,String first,String second){return row.containsKey(first)?row.get(first):row.get(second);}
     private String text(Object raw){return raw==null?null:String.valueOf(raw);}
-    private record RuntimeRule(String actionType,String ruleKey,TodoAutoActionCapability capability) { }
+    private record RuntimeRule(String actionType,String ruleKey,TodoAutoActionCapability capability,TodoAutoActionCapability.Descriptor descriptor) { }
 
 }

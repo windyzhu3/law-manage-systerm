@@ -28,6 +28,7 @@ import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 @Service
 public class TodoDefinitionService
@@ -49,8 +50,14 @@ public class TodoDefinitionService
 
     public TodoDefinitionService(TodoMapper mapper)
     {
-        this(mapper, new TodoDefinitionCompiler(new TodoDefinitionCodec(),
-                new TodoEventCatalogService(mapper), new TodoDecisionService(mapper)));
+        this(mapper,new TodoAutoActionCapabilityRegistry(List.of()));
+    }
+
+    /** Direct construction must supply the same capability registry as the executing application. */
+    public TodoDefinitionService(TodoMapper mapper,TodoAutoActionCapabilityRegistry autoActions)
+    {
+        this(mapper,new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
+                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions));
     }
 
     public List<Map<String, Object>> versions(Long templateId)

@@ -43,6 +43,8 @@ class TodoAutoActionServiceTest
     {
         when(complete.actionType()).thenReturn("COMPLETE_DEFAULT");
         lenient().when(transfer.actionType()).thenReturn("TRANSFER");
+        lenient().when(complete.descriptor()).thenCallRealMethod();
+        lenient().when(transfer.descriptor()).thenReturn(new TodoAutoActionCapability.Descriptor("TRANSFER",List.of("DUE","SLA_80","SLA_100","SLA_150"),TodoAutoActionCapability.Descriptor.commonRetryFields(),List.of(new TodoAutoActionCapability.Field("targetOwnerId","number",true,1,null,"Target owner","TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID"))));
         service = new TodoAutoActionService(mapper, List.of(complete,transfer));
     }
 

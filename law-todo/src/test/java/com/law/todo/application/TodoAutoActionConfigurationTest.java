@@ -20,11 +20,11 @@ import org.mockito.ArgumentCaptor;
 
 class TodoAutoActionConfigurationTest
 {
-    @Test void allAndOnlyAllowListedCapabilitiesDelegateToCommandBoundary()
+    @Test void registeredCapabilitiesDelegateToCommandBoundary()
     {
         TodoCommandService commands=mock(TodoCommandService.class);TodoNotificationPort notifications=mock(TodoNotificationPort.class);TodoSupervisorPort supervisors=mock(TodoSupervisorPort.class);TodoAutoActionConfiguration config=new TodoAutoActionConfiguration();
         List<TodoAutoActionCapability> values=List.of(config.completeDefaultCapability(commands),config.returnDefaultCapability(commands),config.escalationCapability(commands,notifications,supervisors),config.transferCapability(commands),config.returnPoolCapability(commands));
-        assertEquals(TodoAutoActionCapability.ALLOWED_ACTION_TYPES,new java.util.HashSet<>(values.stream().map(TodoAutoActionCapability::actionType).toList()));
+        assertEquals(List.of("COMPLETE_DEFAULT","ESCALATE","RETURN_DEFAULT","RETURN_POOL","TRANSFER"),values.stream().map(TodoAutoActionCapability::actionType).sorted().toList());
         TodoInstance todo=new TodoInstance();todo.setTodoId(4L);
         for(TodoAutoActionCapability value:values){Map<String,Object> rule=new java.util.HashMap<>();rule.put("ruleKey",value.actionType());rule.put("actionType",value.actionType());rule.put("capability",value.actionType());if("TRANSFER".equals(value.actionType()))rule.put("targetOwnerId",9L);value.execute(todo,new AutoActionRule(rule),TodoAutoActionService.SERVICE_ACTOR);}
         verify(commands).autoComplete(eq(4L),any(),eq(TodoAutoActionService.SERVICE_ACTOR));verify(commands).autoReturn(eq(4L),any(),eq(TodoAutoActionService.SERVICE_ACTOR));verify(commands).autoEscalate(eq(4L),any(),eq(TodoAutoActionService.SERVICE_ACTOR));verify(commands).autoTransfer(eq(4L),any(),eq(TodoAutoActionService.SERVICE_ACTOR));verify(commands).autoReturnPool(eq(4L),any(),eq(TodoAutoActionService.SERVICE_ACTOR));

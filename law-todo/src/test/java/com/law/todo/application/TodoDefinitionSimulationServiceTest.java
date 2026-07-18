@@ -21,10 +21,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.command.TodoDefinitionCommands.SimulateDefinitionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
+import com.law.todo.definition.catalog.TodoDecisionService;
+import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoOrganizationPort;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoAutoActionCapability;
+import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionSimulationServiceTest
@@ -417,7 +422,7 @@ class TodoDefinitionSimulationServiceTest
         String compiled=new TodoDefinitionCodec().canonicalJson(definition);when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("work_days","1,2,3,4,5","work_start","09:00:00","work_end","18:00:00","exception_json","{}"));
 
-        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver(),List.of(),compilerWithEscalation()).simulate(9L,
                 new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)));
 
         assertEquals("WOULD_SCHEDULE",result.autoActions().get(0).status());assertEquals(result.sla().remind80At(),result.autoActions().get(0).scheduledAt());
@@ -431,7 +436,7 @@ class TodoDefinitionSimulationServiceTest
         String compiled=new TodoDefinitionCodec().canonicalJson(value);when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(null);
 
-        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver(),List.of(),compilerWithEscalation()).simulate(9L,
                 new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)));
 
         assertEquals("UNSCHEDULABLE",result.autoActions().get(0).status());
@@ -480,5 +485,10 @@ class TodoDefinitionSimulationServiceTest
                         "start","task","nodes",List.of(Map.of("key","task","type","TASK","templateVersionId",9L),Map.of("key","end","type","END")),
                         "edges",List.of(Map.of("key","done","from","task","to","end")))),
                 List.of(),List.of(),List.of());
+    }
+    private TodoDefinitionCompiler compilerWithEscalation()
+    {
+        TodoAutoActionCapability escalation=new TodoAutoActionCapability(){public String actionType(){return "ESCALATE";}public AutoActionResult execute(com.law.todo.domain.model.TodoInstance todo,TodoDefinitionDocument.AutoActionRule rule,com.law.todo.application.command.TodoActionCommands.Actor actor){return AutoActionResult.success();}};
+        return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),new TodoAutoActionCapabilityRegistry(List.of(escalation)));
     }
 }

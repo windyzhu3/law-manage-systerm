@@ -21,6 +21,7 @@ import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.validation.TodoFormValidator;
 import com.law.todo.routing.RoutingGraphValidator;
 import com.law.todo.spi.TodoAutoActionCapability;
+import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 @Component
 public class TodoDefinitionCompiler
@@ -29,32 +30,37 @@ public class TodoDefinitionCompiler
     private final TodoEventCatalogService eventCatalog;
     private final TodoDecisionService decisions;
     private final ConditionValidator conditionValidator;
+    private final TodoAutoActionCapabilityRegistry autoActions;
 
     public TodoDefinitionCompiler(TodoEventCatalogService eventCatalog, TodoDecisionService decisions)
     {
-        this(new TodoDefinitionCodec(), eventCatalog, decisions, new ConditionValidator());
+        this(new TodoDefinitionCodec(), eventCatalog, decisions, new ConditionValidator(),new TodoAutoActionCapabilityRegistry(List.of()));
     }
 
     @Autowired
     public TodoDefinitionCompiler(TodoEventCatalogService eventCatalog, TodoDecisionService decisions,
-            ConditionValidator conditionValidator)
+            ConditionValidator conditionValidator,TodoAutoActionCapabilityRegistry autoActions)
     {
-        this(new TodoDefinitionCodec(), eventCatalog, decisions, conditionValidator);
+        this(new TodoDefinitionCodec(), eventCatalog, decisions, conditionValidator,autoActions);
     }
 
     public TodoDefinitionCompiler(TodoDefinitionCodec codec, TodoEventCatalogService eventCatalog,
             TodoDecisionService decisions)
     {
-        this(codec, eventCatalog, decisions, new ConditionValidator());
+        this(codec, eventCatalog, decisions, new ConditionValidator(),new TodoAutoActionCapabilityRegistry(List.of()));
     }
 
     public TodoDefinitionCompiler(TodoDefinitionCodec codec, TodoEventCatalogService eventCatalog,
             TodoDecisionService decisions, ConditionValidator conditionValidator)
+    {this(codec,eventCatalog,decisions,conditionValidator,new TodoAutoActionCapabilityRegistry(List.of()));}
+    public TodoDefinitionCompiler(TodoDefinitionCodec codec, TodoEventCatalogService eventCatalog,
+            TodoDecisionService decisions, ConditionValidator conditionValidator,TodoAutoActionCapabilityRegistry autoActions)
     {
         this.codec = Objects.requireNonNull(codec, "codec");
         this.eventCatalog = Objects.requireNonNull(eventCatalog, "eventCatalog");
         this.decisions = Objects.requireNonNull(decisions, "decisions");
         this.conditionValidator = Objects.requireNonNull(conditionValidator, "conditionValidator");
+        this.autoActions=Objects.requireNonNull(autoActions,"autoActions");
     }
 
     public DefinitionValidationReport compile(TodoDefinitionDocument definition)
@@ -95,12 +101,10 @@ public class TodoDefinitionCompiler
         {
             Map<String,Object> config=definition.autoActions().get(index).config();String path="autoActions["+index+"]";
             String type=text(config.containsKey("actionType")?config.get("actionType"):config.get("action"));
-            if(!TodoAutoActionCapability.ALLOWED_ACTION_TYPES.contains(type))errors.add(issue("TODO_AUTO_ACTION_NOT_ALLOWED",path+".actionType","Auto action is not allow-listed"));
+            TodoAutoActionCapability registered=autoActions.capability(type);if(registered==null)errors.add(issue("TODO_AUTO_ACTION_NOT_ALLOWED",path+".actionType","Auto action capability is not registered"));
             String key=text(config.get("ruleKey"));if(blank(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_REQUIRED",path+".ruleKey","ruleKey is required"));else if(key.length()>96)errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_INVALID",path+".ruleKey","ruleKey is limited to 96 characters"));else if(!keys.add(key))errors.add(issue("TODO_AUTO_ACTION_RULE_KEY_DUPLICATE",path+".ruleKey","ruleKey must be unique"));
-            String trigger=text(config.get("triggerAt"));if(!java.util.Set.of("DUE","SLA_80","SLA_100","SLA_150").contains(trigger))errors.add(issue("TODO_AUTO_ACTION_TRIGGER_INVALID",path+".triggerAt","triggerAt must use a governed SLA time"));
             String capability=text(config.get("capability"));if(capability==null||!capability.equals(type))errors.add(issue("TODO_AUTO_ACTION_CAPABILITY_MISMATCH",path+".capability","Capability is required and must match actionType"));
-            if("TRANSFER".equals(type))positiveLong(config.get("targetOwnerId"),path+".targetOwnerId",errors);
-            positive(config.get("maxAttempts"),path+".maxAttempts",errors);positive(config.get("retryDelayMinutes"),path+".retryDelayMinutes",errors);positive(config.get("claimTimeoutMinutes"),path+".claimTimeoutMinutes",errors);
+            if(registered!=null)for(TodoAutoActionCapability.ValidationError validation:registered.descriptor().validate(config))errors.add(issue(validation.code(),path+"."+validation.field(),validation.message()));
             if(config.get("precondition")!=null)
             {
                 try{if(!(config.get("precondition") instanceof Map<?,?> condition))throw new IllegalArgumentException("precondition must be an object");Map<String,Object> canonical=new HashMap<>();for(Map.Entry<?,?> entry:condition.entrySet()){if(!(entry.getKey() instanceof String conditionKey))throw new IllegalArgumentException("precondition keys must be strings");canonical.put(conditionKey,entry.getValue());}conditionValidator.decodeCanonical(canonical);}
@@ -108,8 +112,6 @@ public class TodoDefinitionCompiler
             }
         }
     }
-    private void positive(Object value,String path,List<ValidationIssue> errors){if(value==null)return;try{if(Integer.parseInt(String.valueOf(value))<=0)throw new NumberFormatException();}catch(NumberFormatException invalid){errors.add(issue("TODO_AUTO_ACTION_NUMBER_INVALID",path,"Value must be a positive integer"));}}
-    private void positiveLong(Object value,String path,List<ValidationIssue> errors){try{if(value==null||Long.parseLong(String.valueOf(value))<=0)throw new NumberFormatException();}catch(NumberFormatException invalid){errors.add(issue("TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID",path,"targetOwnerId must be a positive integer"));}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
 
     private void validateTaskReferences(TodoDefinitionDocument definition, CompilationContext context,

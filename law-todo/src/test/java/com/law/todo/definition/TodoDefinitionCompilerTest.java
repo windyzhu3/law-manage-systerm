@@ -34,6 +34,8 @@ import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
 import com.law.todo.definition.model.TodoDefinitionDocument.AutoActionRule;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.expression.ConditionValidator;
+import com.law.todo.spi.TodoAutoActionCapability;
+import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 @ExtendWith(MockitoExtension.class)
 class TodoDefinitionCompilerTest
@@ -127,8 +129,10 @@ class TodoDefinitionCompilerTest
         lenient().when(mapper.selectEventCatalog("LEAD_CREATED", 1)).thenReturn(Map.of(
                 "event_type", "LEAD_CREATED", "payload_version", 1,
                 "payload_schema_json", "{\"type\":\"object\"}", "status", "ACTIVE"));
-        compiler = new TodoDefinitionCompiler(new TodoDefinitionCodec(),
-                new TodoEventCatalogService(mapper), new TodoDecisionService(mapper));
+        TodoAutoActionCapability complete=capability("COMPLETE_DEFAULT",List.of());
+        TodoAutoActionCapability transfer=capability("TRANSFER",List.of(new TodoAutoActionCapability.Field("targetOwnerId","number",true,1,null,"Target owner","TODO_AUTO_ACTION_TRANSFER_OWNER_INVALID")));
+        compiler = new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
+                new TodoDecisionService(mapper),new ConditionValidator(),new TodoAutoActionCapabilityRegistry(List.of(complete,transfer)));
     }
 
     @Test
@@ -233,13 +237,17 @@ class TodoDefinitionCompilerTest
     {
         assertTrue(TodoDefinitionCompiler.class
                 .getConstructor(TodoEventCatalogService.class,TodoDecisionService.class,
-                        ConditionValidator.class)
+                        ConditionValidator.class,TodoAutoActionCapabilityRegistry.class)
                 .isAnnotationPresent(Autowired.class));
     }
 
     private TodoDefinitionDocument valid()
     {
         return definition("LEAD_CREATED", List.of());
+    }
+    private TodoAutoActionCapability capability(String type,List<TodoAutoActionCapability.Field> required)
+    {
+        return new TodoAutoActionCapability(){public String actionType(){return type;}public Descriptor descriptor(){return new Descriptor(type,List.of("DUE","SLA_80","SLA_100","SLA_150"),Descriptor.commonRetryFields(),required);}public AutoActionResult execute(com.law.todo.domain.model.TodoInstance todo,AutoActionRule rule,com.law.todo.application.command.TodoActionCommands.Actor actor){return AutoActionResult.success();}};
     }
 
     private TodoDefinitionDocument withRouting(RoutingGraph routing)
