@@ -39,17 +39,33 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.26", current.getVersion().getVersion());
+        assertEquals("0.20.27", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
         verifyAdmissionEvidenceSchema(url);
         verifyFoundationResourceReadinessSchema(url);
         verifyHistoricalMigrationReadinessSchema(url);
+        verifyHistoricalMigrationExportPermission(url);
         verifyFileSecurityReadinessSchema(url);
         verifyFinanceReadinessSchema(url);
         verifyAcceptanceReadinessSchema(url);
         verifyFoundationAdmissionAggregateQuery(url);
+    }
+
+    private void verifyHistoricalMigrationExportPermission(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(1L,count(connection,"select count(*) from sys_menu where perms='todo:admission:export'"));
+            assertEquals(0L,count(connection,"select count(*) from sys_role_menu rm join sys_menu m on m.menu_id=rm.menu_id "
+                    + "where m.perms='todo:admission:export'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Historical migration export permission invariants failed",exception);
+        }
     }
 
     private void verifyFoundationAdmissionAggregateQuery(String url)

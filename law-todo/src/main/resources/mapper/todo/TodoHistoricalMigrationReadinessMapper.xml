@@ -28,4 +28,8 @@
     group by coalesce(case_status,'&lt;NULL&gt;'),coalesce(case_type,'&lt;NULL&gt;')
     order by case_count desc,case_status,case_type
   </select>
+  <select id="streamHistoricalCaseCandidates" resultType="java.util.Map" fetchSize="-2147483648">
+    select case_id,case_no,case_name,case_type,case_status,contract_id,main_lawyer_id,dept_id
+    from biz_case where del_flag='0' order by case_id
+  </select>
 </mapper>
