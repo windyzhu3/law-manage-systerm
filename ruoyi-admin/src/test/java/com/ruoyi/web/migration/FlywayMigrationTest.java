@@ -39,7 +39,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.25", current.getVersion().getVersion());
+        assertEquals("0.20.26", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -133,6 +133,11 @@ class FlywayMigrationTest
                 "select count(*) from todo_foundation_finance_requirement where source_status='NEEDS_DECISION'"));
             assertEquals(1L, count(connection,
                 "select count(*) from todo_foundation_finance_requirement where source_status='NEEDS_REVIEW'"));
+            assertEquals(1L, count(connection,
+                "select count(*) from todo_foundation_finance_requirement "
+                    + "where gate_code='G-06' and requirement_code='FINANCE_BUSINESS_SIGNOFF' "
+                    + "and source_status='NEEDS_REVIEW' "
+                    + "and source_ref='doc/reviews/v0.2-foundation-g06-finance-formula-review-package.md'"));
             assertEquals(4L, count(connection,
                 "select count(*) from information_schema.columns where table_schema=database() "
                     + "and table_name='biz_contract_fee_plan' "
