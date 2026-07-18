@@ -40,7 +40,7 @@
 - Mapper produces: `Map<String,Object> selectHistoricalMigrationPreflightCounts()` and `List<Map<String,Object>> selectHistoricalCaseGroups()`.
 - HTTP produces: `GET /todo/foundation-migration/preflight?gateCode=G-04` protected by `todo:admission:view`.
 
-- [ ] **Step 1: Write failing service and API tests**
+- [x] **Step 1: Write failing service and API tests**
 
 Create records with these exact components:
 
@@ -75,7 +75,7 @@ verifyNoMoreInteractions(mapper);
 
 The API test reflects the new method and asserts `@GetMapping("/preflight")` plus `@PreAuthorize` containing `todo:admission:view`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```text
 mvn -pl ruoyi-admin -am "-Dtest=TodoHistoricalMigrationPreflightServiceTest,HistoricalMigrationPreflightApiTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
@@ -83,7 +83,7 @@ mvn -pl ruoyi-admin -am "-Dtest=TodoHistoricalMigrationPreflightServiceTest,Hist
 
 Expected: compilation fails because the records, service, Mapper methods and controller route do not exist.
 
-- [ ] **Step 3: Implement the minimal preflight path**
+- [x] **Step 3: Implement the minimal preflight path**
 
 Implement the service with an injectable clock and exact gate validation:
 
@@ -148,11 +148,11 @@ Add exact read-only SQL:
 
 Inject the new service into `TodoHistoricalMigrationReadinessController` and return `AjaxResult.success(preflight.preflight(gateCode))` from `/preflight`.
 
-- [ ] **Step 4: Run GREEN**
+- [x] **Step 4: Run GREEN**
 
 Run Step 2. Expected: all new service/API tests pass.
 
-- [ ] **Step 5: Commit Task 1**
+- [x] **Step 5: Commit Task 1**
 
 ```text
 git add law-todo/src/main/java/com/law/todo/application/view/HistoricalCaseGroupView.java law-todo/src/main/java/com/law/todo/application/view/TodoHistoricalMigrationPreflightView.java law-todo/src/main/java/com/law/todo/application/TodoHistoricalMigrationPreflightService.java law-todo/src/main/java/com/law/todo/mapper/TodoHistoricalMigrationReadinessMapper.java law-todo/src/main/resources/mapper/todo/TodoHistoricalMigrationReadinessMapper.xml ruoyi-admin/src/main/java/com/ruoyi/web/controller/todo/TodoHistoricalMigrationReadinessController.java law-todo/src/test/java/com/law/todo/application/TodoHistoricalMigrationPreflightServiceTest.java ruoyi-admin/src/test/java/com/ruoyi/web/todo/HistoricalMigrationPreflightApiTest.java
@@ -174,7 +174,7 @@ git commit -m "feat(migration): expose G04 historical preflight inventory"
 - Produces: `HistoricalMigrationExportArchiveWriter.write(Iterator<HistoricalMigrationCaseCandidate>): HistoricalMigrationExportArtifact`.
 - `HistoricalMigrationExportArtifact` owns a cleanup-on-close `InputStream` and exposes `sizeBytes`, `rowCount`, `csvSha256`, `generatedAt`.
 
-- [ ] **Step 1: Write failing archive tests**
+- [x] **Step 1: Write failing archive tests**
 
 Define the desired records in the test imports:
 
@@ -204,7 +204,7 @@ assertEquals(List.of("NON_LITIGATION","COMPREHENSIVE","EXECUTION"),manifest.getL
 After `artifact.close()`, assert the dedicated temporary root has no regular files. Add a failure test whose iterator throws after one row and assert the root is also empty and the business code is `TODO_MIGRATION_EXPORT_FAILED`.
 Add a 100,000-row generated iterator that counts each `next()` call and never stores source rows; assert the writer consumes it once, reports 100,000 rows, produces a readable ZIP, and removes both temporary files after close.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```text
 mvn -pl law-todo -am "-Dtest=HistoricalMigrationExportArchiveWriterTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
@@ -212,7 +212,7 @@ mvn -pl law-todo -am "-Dtest=HistoricalMigrationExportArchiveWriterTest" "-Dsure
 
 Expected: compilation fails because the candidate, artifact and writer are absent.
 
-- [ ] **Step 3: Implement deterministic CSV, manifest and cleanup**
+- [x] **Step 3: Implement deterministic CSV, manifest and cleanup**
 
 Use these exact CSV columns and constants:
 
@@ -249,11 +249,11 @@ Serialize a `LinkedHashMap` manifest with `JSON.toJSONBytes`. Delete the CSV imm
 new TodoException("TODO_MIGRATION_EXPORT_FAILED","Historical migration export could not be generated")
 ```
 
-- [ ] **Step 4: Run GREEN and repeat determinism**
+- [x] **Step 4: Run GREEN and repeat determinism**
 
 Run Step 2 twice. Expected: both runs pass; the CSV hashes asserted by the test are identical.
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```text
 git add law-todo/src/main/java/com/law/todo/application/view/HistoricalMigrationCaseCandidate.java law-todo/src/main/java/com/law/todo/application/view/HistoricalMigrationExportArtifact.java law-todo/src/main/java/com/law/todo/application/HistoricalMigrationExportArchiveWriter.java law-todo/src/test/java/com/law/todo/application/HistoricalMigrationExportArchiveWriterTest.java
@@ -280,7 +280,7 @@ git commit -m "feat(migration): create deterministic G04 evidence archive"
 - Service produces: `TodoHistoricalMigrationExportService.export(String): HistoricalMigrationExportArtifact` under `REPEATABLE_READ` read-only transaction.
 - HTTP produces: `GET /todo/foundation-migration/exception-export?gateCode=G-04` protected by `todo:admission:export`.
 
-- [ ] **Step 1: Write failing cursor, controller and migration contract tests**
+- [x] **Step 1: Write failing cursor, controller and migration contract tests**
 
 In the service test, mock a MyBatis `Cursor<Map<String,Object>>`, make its iterator return two maps, and assert the writer receives an iterator whose candidates retain all eight source fields. Return `active_case_count=2` from `selectHistoricalMigrationPreflightCounts()` and require it to equal `artifact.rowCount()`. Verify the cursor and mismatched artifact close after success, writer failure and count mismatch.
 
@@ -301,7 +301,7 @@ Execute the returned `StreamingResponseBody` once with a successful output strea
 
 The migration contract reads `V0_20_27__foundation_g04_preflight_export_permission.sql` and asserts one `todo:admission:export`, no `sys_role_menu`, and absence of `alter table biz_case`, `update biz_case`, `update todo_instance`, `todo_foundation_migration_requirement`, `todo_admission_evidence`, `approved`, `confirmed`.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```text
 mvn -pl ruoyi-admin -am "-Dtest=TodoHistoricalMigrationExportServiceTest,HistoricalMigrationPreflightPermissionContractTest,HistoricalMigrationPreflightApiTest,FlywayMigrationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
@@ -309,7 +309,7 @@ mvn -pl ruoyi-admin -am "-Dtest=TodoHistoricalMigrationExportServiceTest,Histori
 
 Expected: compilation and contract failures because the cursor service, endpoint and migration are absent and Flyway still ends at `0.20.26`.
 
-- [ ] **Step 3: Implement cursor mapping and export response**
+- [x] **Step 3: Implement cursor mapping and export response**
 
 Add this Mapper method and query:
 
@@ -393,7 +393,7 @@ where @permission_parent is not null
 
 Update `FlywayMigrationTest` terminal version to `0.20.27` and assert exactly one permission row with no automatic role grant.
 
-- [ ] **Step 4: Run GREEN and law-todo regression**
+- [x] **Step 4: Run GREEN and law-todo regression**
 
 ```text
 mvn -pl ruoyi-admin -am "-Dtest=TodoHistoricalMigrationExportServiceTest,HistoricalMigrationPreflightPermissionContractTest,HistoricalMigrationPreflightApiTest,FlywayMigrationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
@@ -402,7 +402,7 @@ mvn -pl law-todo -am test
 
 Expected: all focused tests and the complete `law-todo` suite pass.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```text
 git add law-todo/src/main/java/com/law/todo/application/TodoHistoricalMigrationExportService.java law-todo/src/main/java/com/law/todo/mapper/TodoHistoricalMigrationReadinessMapper.java law-todo/src/main/resources/mapper/todo/TodoHistoricalMigrationReadinessMapper.xml ruoyi-admin/src/main/java/com/ruoyi/web/controller/todo/TodoHistoricalMigrationReadinessController.java ruoyi-admin/src/main/resources/db/migration/V0_20_27__foundation_g04_preflight_export_permission.sql law-todo/src/test/java/com/law/todo/application/TodoHistoricalMigrationExportServiceTest.java law-todo/src/test/java/com/law/todo/integration/HistoricalMigrationPreflightPermissionContractTest.java ruoyi-admin/src/test/java/com/ruoyi/web/todo/HistoricalMigrationPreflightApiTest.java ruoyi-admin/src/test/java/com/ruoyi/web/migration/FlywayMigrationTest.java
@@ -425,7 +425,7 @@ git commit -m "feat(migration): secure G04 exception evidence export"
 - Binary request opt-in: `returnFullResponse: true` returns the Axios response only for blob/arraybuffer requests.
 - UI displays preflight data independently of the existing `report` prop and displays last export row count/hash.
 
-- [ ] **Step 1: Write failing frontend contract and Playwright expectations**
+- [x] **Step 1: Write failing frontend contract and Playwright expectations**
 
 Extend `check-todo-ui.js` to require these exact API names and component markers:
 
@@ -448,7 +448,7 @@ X-Exception-CSV-SHA256: 0123456789abcdef0123456789abcdef0123456789abcdef01234567
 Extend the historical migration E2E to assert grouped inventory, candidate count, warning text, a browser download named `g04-historical-case-preflight.zip`, and visible row count/hash after download. Add a second test where preflight returns HTTP 500 and assert the existing requirements table remains visible while only the local preflight alert reports failure.
 Add a third test whose mocked user lacks `todo:admission:export`; assert the inventory remains visible and the export button is absent.
 
-- [ ] **Step 2: Run RED**
+- [x] **Step 2: Run RED**
 
 ```text
 cd ruoyi-ui
@@ -458,7 +458,7 @@ npx playwright test e2e/todo-foundation-config-resources.spec.js --grep "histori
 
 Expected: the contract fails on missing APIs/markers and Playwright fails on missing preflight UI/export.
 
-- [ ] **Step 3: Implement isolated binary metadata and component state**
+- [x] **Step 3: Implement isolated binary metadata and component state**
 
 Change the binary branch in `request.js` without affecting existing callers:
 
@@ -508,7 +508,7 @@ methods: {
 
 Add summary cards and the grouped table, the `v-hasPermi="['todo:admission:export']"` button, last-export metadata, and the exact warning “清单尚未分类、尚未签字，不会自动改变 G-04”。 Do not change the existing readiness table or gate banner.
 
-- [ ] **Step 4: Run GREEN and frontend gates**
+- [x] **Step 4: Run GREEN and frontend gates**
 
 ```text
 cd ruoyi-ui
@@ -522,7 +522,7 @@ npx playwright test e2e/todo-foundation-config-resources.spec.js --grep "histori
 
 Expected: contracts/build pass and both historical migration Playwright scenarios pass.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```text
 git add ruoyi-ui/src/utils/request.js ruoyi-ui/src/api/todo-definition.js ruoyi-ui/src/views/todo/config/components/HistoricalMigrationReadiness.vue ruoyi-ui/scripts/check-todo-ui.js ruoyi-ui/e2e/todo-foundation-config-resources.spec.js
@@ -543,7 +543,7 @@ git commit -m "feat(migration): show and export G04 preflight evidence"
 - Consumes: fresh MySQL 8.4 from the exact v0.15 baseline, full Flyway chain through `0.20.27`, real MyBatis cursor and real archive writer.
 - Produces: measured evidence that preflight/export is accurate and does not mutate historical cases, Todo instances, G-04 sources or admission evidence.
 
-- [ ] **Step 1: Write the real-database E2E before running it**
+- [x] **Step 1: Write the real-database E2E before running it**
 
 Create `HistoricalMigrationPreflightEndToEndTest` using `TODO_MIGRATION_DB_URL/USER/PASSWORD`, Flyway, `SqlSession`, real `TodoHistoricalMigrationReadinessMapper`, fixed clock and `@TempDir`. Insert active/deleted case fixtures covering nulls, Chinese, quotes, newline and formula prefix. Before export, capture complete ordered Java row snapshots from `biz_case`, `todo_instance`, all eight G-04 requirements, `G04-HISTORICAL-MIGRATION`, and Q-001. Also capture this runtime invariant:
 
@@ -552,9 +552,9 @@ select count(*) from todo_instance i left join todo_template_version v
   on v.version_id=i.template_version_id where v.version_id is null;
 ```
 
-Use deterministic `select * ... order by` statements for every snapshot and require exact before/after `List<Map<String,Object>>` equality. Call real preflight/export, unzip and validate CSV/Manifest/hash, then repeat all snapshots and the orphan invariant. Assert `biz_case.business_line` remains absent, G-04 still has four `CONFIRMED` and four unresolved sources, its evidence is still `OPEN`, Q-001 is still `OPEN`, the existing Foundation readiness query still reports `NOT_ADMITTED`, and the artifact root is empty after close.
+Use deterministic `select * ... order by` statements for every snapshot and require exact before/after `List<Map<String,Object>>` equality. Call real preflight/export, unzip and validate CSV/Manifest/hash, then repeat all snapshots and the orphan invariant. Assert `biz_case.business_line` remains absent, G-04 still has exactly three `CONFIRMED`, one `NEEDS_DECISION` and four `NEEDS_EVIDENCE` sources (five unresolved total), its evidence is still `OPEN`, Q-001 is still `OPEN`, the existing Foundation readiness query still reports `NOT_ADMITTED`, and the artifact root is empty after close.
 
-- [ ] **Step 2: Run against a disposable MySQL 8.4**
+- [x] **Step 2: Run against a disposable MySQL 8.4**
 
 Create and initialize the disposable database with this exact PowerShell sequence (the fixed container name is reused in Step 5):
 
@@ -581,13 +581,13 @@ mvn -pl ruoyi-admin -am "-Dtest=HistoricalMigrationPreflightEndToEndTest,FlywayM
 
 Expected: Flyway reaches `0.20.27`; both tests pass with zero skips; business data and governance state checks remain unchanged.
 
-- [ ] **Step 3: Update review package and admission report from evidence**
+- [x] **Step 3: Update review package and admission report from evidence**
 
 Update the G-04 review package to cite the preflight API, deterministic CSV/Manifest, permission, formula protection, temp cleanup and real MySQL immutability test. Keep `PENDING_ARCHITECTURE_CASE_DBA_REVIEW`, default business line undecided, four sources `NEEDS_EVIDENCE`, evidence `OPEN`, and G-04 not ready.
 
 Update the admission report with terminal Flyway `0.20.27`, fresh Maven module totals, new preflight/export front/backend capability, unchanged `2/8 NOT_ADMITTED`, 12 OPEN decisions and five OPEN evidence items.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Against a fresh disposable MySQL 8.4:
 
@@ -604,7 +604,7 @@ npm run test:e2e
 
 Parse all Surefire XML and require zero failures, errors and skips. Require every Playwright test to pass. Query live truth: Flyway `0.20.27`, G-04 source counts unchanged, G-05 still 6/7, five evidence items OPEN, twelve decisions OPEN, aggregate `2/8 NOT_ADMITTED`.
 
-- [ ] **Step 5: Audit, remove the database and commit locally**
+- [x] **Step 5: Audit, remove the database and commit locally**
 
 ```text
 git diff --check
