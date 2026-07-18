@@ -3,6 +3,7 @@ package com.ruoyi.web.migration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.sql.BatchUpdateException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -95,54 +97,115 @@ class HistoricalMigrationPreflightEndToEndTest
 
         DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
         Configuration configuration=myBatis(dataSource);
-        try(SqlSession session=new SqlSessionFactoryBuilder().build(configuration).openSession(false)) {
-            Connection connection=session.getConnection();
-            connection.setAutoCommit(false);
-            connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
-            insertCaseFixtures(connection);
-            try {
-                Snapshot before=snapshot(connection);
-                List<Map<String,Object>> candidates=rows(connection,"select case_id,case_no,case_name,case_type,"
-                        +"case_status,contract_id,main_lawyer_id,dept_id from biz_case where del_flag='0' order by case_id");
-                long deleted=count(connection,"select count(*) from biz_case where del_flag<>'0'");
-                assertBaselineTruth(connection,before);
+        try {
+            try(SqlSession session=new SqlSessionFactoryBuilder().build(configuration).openSession(false)) {
+                withRollback(session.getConnection(),connection->{
+                    connection.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+                    insertCaseFixtures(connection);
+                    Snapshot before=snapshot(connection);
+                    List<Map<String,Object>> candidates=rows(connection,"select case_id,case_no,case_name,case_type,"
+                            +"case_status,contract_id,main_lawyer_id,dept_id from biz_case where del_flag='0' order by case_id");
+                    long deleted=count(connection,"select count(*) from biz_case where del_flag<>'0'");
+                    assertBaselineTruth(connection,before);
 
-                TodoHistoricalMigrationReadinessMapper migrationMapper=
-                        session.getMapper(TodoHistoricalMigrationReadinessMapper.class);
-                TodoHistoricalMigrationPreflightView preflight=preflight(migrationMapper).preflight("G-04");
-                assertEquals(GENERATED_AT,preflight.generatedAt());
-                assertEquals(candidates.size(),preflight.activeCaseCount());
-                assertEquals(candidates.size(),preflight.exceptionCandidateCount());
-                assertEquals(deleted,preflight.deletedCaseCount());
-                assertEquals(before.todoInstances().size(),preflight.historicalTodoCount());
-                assertEquals(before.orphanTodoVersionCount(),preflight.orphanTodoVersionCount());
-                assertEquals(expectedGroups(connection),preflight.groups());
+                    TodoHistoricalMigrationReadinessMapper migrationMapper=
+                            session.getMapper(TodoHistoricalMigrationReadinessMapper.class);
+                    TodoHistoricalMigrationPreflightView preflight=preflight(migrationMapper).preflight("G-04");
+                    assertEquals(GENERATED_AT,preflight.generatedAt());
+                    assertEquals(candidates.size(),preflight.activeCaseCount());
+                    assertEquals(candidates.size(),preflight.exceptionCandidateCount());
+                    assertEquals(deleted,preflight.deletedCaseCount());
+                    assertEquals(before.todoInstances().size(),preflight.historicalTodoCount());
+                    assertEquals(before.orphanTodoVersionCount(),preflight.orphanTodoVersionCount());
+                    assertEquals(expectedGroups(connection),preflight.groups());
 
-                HistoricalMigrationExportArchiveWriter writer=writer(artifactRoot);
-                TodoHistoricalMigrationExportService exports=new TodoHistoricalMigrationExportService(migrationMapper,writer);
-                byte[] archive;
-                try(HistoricalMigrationExportArtifact artifact=exports.export("G-04")) {
-                    archive=artifact.input().readAllBytes();
-                    assertEquals(candidates.size(),artifact.rowCount());
-                    assertEquals(GENERATED_AT,artifact.generatedAt());
-                    assertEquals(archive.length,artifact.sizeBytes());
-                    validateArchive(archive,artifact.csvSha256(),candidates);
-                }
-                assertArtifactRootEmpty(artifactRoot);
+                    HistoricalMigrationExportArchiveWriter writer=writer(artifactRoot);
+                    TodoHistoricalMigrationExportService exports=
+                            new TodoHistoricalMigrationExportService(migrationMapper,writer);
+                    byte[] archive;
+                    try(HistoricalMigrationExportArtifact artifact=exports.export("G-04")) {
+                        archive=artifact.input().readAllBytes();
+                        assertEquals(candidates.size(),artifact.rowCount());
+                        assertEquals(GENERATED_AT,artifact.generatedAt());
+                        assertEquals(archive.length,artifact.sizeBytes());
+                        validateArchive(archive,artifact.csvSha256(),candidates);
+                    }
+                    assertArtifactRootEmpty(artifactRoot);
 
-                Snapshot after=snapshot(connection);
-                assertEquals(before,after,"Preflight and export must not mutate business, Todo or governance rows");
-                assertBaselineTruth(connection,after);
-                assertFoundationNotAdmitted(session,migrationMapper);
-            }
-            finally {
-                connection.rollback();
+                    Snapshot after=snapshot(connection);
+                    assertEquals(before,after,"Preflight and export must not mutate business, Todo or governance rows");
+                    assertBaselineTruth(connection,after);
+                    assertFoundationNotAdmitted(session,migrationMapper);
+                });
             }
         }
-        try(Connection cleanupProof=dataSource.getConnection()) {
-            assertEquals(0,count(cleanupProof,"select count(*) from biz_case where create_by='g04-e2e'"));
+        finally {
+            assertFixtureCount(dataSource,"g04-e2e",0);
         }
         assertArtifactRootEmpty(artifactRoot);
+    }
+
+    @Test
+    void rollbackGuardRemovesPartiallyInsertedBatchAfterFailure() throws Exception
+    {
+        String url=System.getenv("TODO_MIGRATION_DB_URL");
+        assumeTrue(url!=null&&!url.isBlank(),"Migration database is provided by the CI quality gate");
+        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,
+                System.getenv("TODO_MIGRATION_DB_USER"),System.getenv("TODO_MIGRATION_DB_PASSWORD"));
+
+        BatchUpdateException failure;
+        try(Connection connection=dataSource.getConnection()) {
+            failure=assertThrows(BatchUpdateException.class,()->withRollback(connection,transaction->{
+                insertPartiallyFailingFixtures(transaction);
+            }));
+            connection.commit();
+        }
+        assertTrue(Arrays.stream(failure.getUpdateCounts()).anyMatch(value->value==1));
+        assertFixtureCount(dataSource,"g04-e2e-batch-failure",0);
+    }
+
+    private static void withRollback(Connection connection,SqlWork work) throws Exception
+    {
+        connection.setAutoCommit(false);
+        try {
+            work.run(connection);
+        }
+        finally {
+            connection.rollback();
+        }
+    }
+
+    private static void insertPartiallyFailingFixtures(Connection connection) throws Exception
+    {
+        String sql="insert into biz_case(case_no,case_name,contract_id,case_type,case_status,main_lawyer_id,dept_id,"
+                +"del_flag,create_by,create_time) values(?,?,?,?,?,?,?,?,?,?)";
+        try(PreparedStatement insert=connection.prepareStatement(sql)) {
+            addCase(insert,"G04-E2E-BATCH-FAILURE","partial batch fixture",984101L,
+                    "CIVIL","OPEN",null,null,"0","g04-e2e-batch-failure");
+            addCase(insert,"G04-E2E-BATCH-FAILURE","duplicate batch fixture",984102L,
+                    "CIVIL","OPEN",null,null,"0","g04-e2e-batch-failure");
+            try {
+                insert.executeBatch();
+            }
+            catch(BatchUpdateException failure) {
+                assertEquals(1,count(connection,
+                        "select count(*) from biz_case where create_by='g04-e2e-batch-failure'"));
+                throw failure;
+            }
+        }
+    }
+
+    private static void assertFixtureCount(DataSource dataSource,String createBy,long expected) throws Exception
+    {
+        try(Connection cleanupProof=dataSource.getConnection();
+                PreparedStatement select=cleanupProof.prepareStatement(
+                        "select count(*) from biz_case where create_by=?")) {
+            select.setString(1,createBy);
+            try(ResultSet result=select.executeQuery()) {
+                assertTrue(result.next());
+                assertEquals(expected,result.getLong(1));
+            }
+        }
     }
 
     private static Configuration myBatis(DataSource dataSource) throws Exception
@@ -172,12 +235,16 @@ class HistoricalMigrationPreflightEndToEndTest
 
     private static void addCase(PreparedStatement insert,String caseNo,String caseName,long contractId,String caseType,
             String caseStatus,Long lawyerId,Long deptId,String delFlag) throws Exception
+    {addCase(insert,caseNo,caseName,contractId,caseType,caseStatus,lawyerId,deptId,delFlag,"g04-e2e");}
+
+    private static void addCase(PreparedStatement insert,String caseNo,String caseName,long contractId,String caseType,
+            String caseStatus,Long lawyerId,Long deptId,String delFlag,String createBy) throws Exception
     {
         insert.setString(1,caseNo);insert.setString(2,caseName);insert.setLong(3,contractId);
         insert.setString(4,caseType);insert.setString(5,caseStatus);
         if(lawyerId==null)insert.setNull(6,java.sql.Types.BIGINT);else insert.setLong(6,lawyerId);
         if(deptId==null)insert.setNull(7,java.sql.Types.BIGINT);else insert.setLong(7,deptId);
-        insert.setString(8,delFlag);insert.setString(9,"g04-e2e");
+        insert.setString(8,delFlag);insert.setString(9,createBy);
         insert.setTimestamp(10,java.sql.Timestamp.from(GENERATED_AT));insert.addBatch();
     }
 
@@ -355,4 +422,8 @@ class HistoricalMigrationPreflightEndToEndTest
     private record Snapshot(List<Map<String,Object>> cases,List<Map<String,Object>> todoInstances,
             List<Map<String,Object>> g04Requirements,List<Map<String,Object>> g04Evidence,
             List<Map<String,Object>> q001,long orphanTodoVersionCount) { }
+
+    @FunctionalInterface
+    private interface SqlWork
+    {void run(Connection connection) throws Exception;}
 }
