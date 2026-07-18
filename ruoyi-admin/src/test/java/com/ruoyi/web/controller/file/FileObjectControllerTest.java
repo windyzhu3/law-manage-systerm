@@ -26,13 +26,15 @@ class FileObjectControllerTest
     @Test void completed_upload_response_exposes_file_object_id_but_never_storage_key_or_path() throws Exception
     {
         FileObjectService service=mock(FileObjectService.class);
-        when(service.completeUpload(eq("intent-1"),any(),any())).thenReturn(new FileVersion(21L,10L,1,
+        when(service.completeUpload(eq("intent-1"),any(),eq("proof.pdf"),eq("application/pdf"),any()))
+            .thenReturn(new FileVersion(21L,10L,1,
             "proof.pdf","application/pdf",3L,"hash","initial",7L,Instant.now()));
         try(var security=mockStatic(SecurityUtils.class)) {
             security.when(SecurityUtils::getUserId).thenReturn(7L);security.when(SecurityUtils::getUsername).thenReturn("alice");security.when(SecurityUtils::getDeptId).thenReturn(3L);
             AjaxResult response=new FileObjectController(service).complete("intent-1",new MockMultipartFile("file","proof.pdf","application/pdf","abc".getBytes()));
             String json=String.valueOf(response);
             assertTrue(json.contains("10"));assertFalse(json.contains("objects/internal-secret"));assertFalse(json.contains("objectKey"));
+            verify(service).completeUpload(eq("intent-1"),any(),eq("proof.pdf"),eq("application/pdf"),any());
         }
     }
 

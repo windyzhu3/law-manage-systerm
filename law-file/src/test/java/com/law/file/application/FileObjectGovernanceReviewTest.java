@@ -19,7 +19,9 @@ import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.repository.FileObjectRepository;
+import com.law.file.security.DetectedContentType;
 import com.law.file.security.FileAccessPolicy;
+import com.law.file.security.FileContentPolicy;
 import com.law.file.spi.FileCleanupAuditPort;
 import com.law.file.spi.FileStoragePort;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +44,8 @@ class FileObjectGovernanceReviewTest
     private FileObjectService service;
 
     @BeforeEach void setUp()
-    {service=new FileObjectService(repository,storage,access,cleanupAudit,Clock.fixed(now,ZoneOffset.UTC),bytes->"token-fixed");}
+    {service=new FileObjectService(repository,storage,access,cleanupAudit,new FileContentPolicy(),
+        Clock.fixed(now,ZoneOffset.UTC),bytes->"token-fixed");}
 
     @Test void public_version_metadata_never_contains_an_object_key()
     {
@@ -57,7 +60,8 @@ class FileObjectGovernanceReviewTest
         when(repository.expireUploadIntent("intent-1",now)).thenReturn(1);
 
         FileException error=assertThrows(FileException.class,
-            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
+            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+                "proof.pdf","application/pdf",actor));
 
         assertEquals("FILE_UPLOAD_UNAVAILABLE",error.getBusinessCode());
         verify(repository).expireUploadIntent("intent-1",now);
@@ -72,9 +76,11 @@ class FileObjectGovernanceReviewTest
             "fingerprint",99L,"REGISTERED",null,now.plusSeconds(60)));
 
         FileException missing=assertThrows(FileException.class,
-            ()->service.completeUpload("missing",new ByteArrayInputStream(new byte[0]),actor));
+            ()->service.completeUpload("missing",new ByteArrayInputStream(new byte[0]),
+                "proof.pdf","application/pdf",actor));
         FileException foreign=assertThrows(FileException.class,
-            ()->service.completeUpload("foreign",new ByteArrayInputStream(new byte[0]),actor));
+            ()->service.completeUpload("foreign",new ByteArrayInputStream(new byte[0]),
+                "proof.pdf","application/pdf",actor));
 
         assertEquals("FILE_UPLOAD_UNAVAILABLE",missing.getBusinessCode());
         assertEquals(missing.getBusinessCode(),foreign.getBusinessCode());
@@ -88,7 +94,8 @@ class FileObjectGovernanceReviewTest
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(completed);
         when(repository.findVersionById(21L)).thenReturn(stored);
 
-        assertEquals(21L,service.completeUpload("intent-1",new ByteArrayInputStream(new byte[0]),actor).fileVersionId());
+        assertEquals(21L,service.completeUpload("intent-1",new ByteArrayInputStream(new byte[0]),
+            "proof.pdf","application/pdf",actor).fileVersionId());
         verifyNoInteractions(storage);
     }
 
@@ -191,11 +198,13 @@ class FileObjectGovernanceReviewTest
         FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject("staged/1",3L,HASH);
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(storage.inspect(staged)).thenReturn(DetectedContentType.PDF);
         when(repository.insertVersion(any())).thenReturn(null);
         when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(31L);
 
         assertThrows(FileException.class,
-            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
+            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+                "proof.pdf","application/pdf",actor));
 
         verify(storage).abort(staged);
         verify(cleanupAudit).recordCleanupSuccess(31L,"UPLOAD_ABORTED",actor);
@@ -208,13 +217,15 @@ class FileObjectGovernanceReviewTest
         FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject("staged/1",3L,HASH);
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(storage.inspect(staged)).thenReturn(DetectedContentType.PDF);
         when(repository.insertVersion(any())).thenReturn(null);
         when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(32L);
         TransactionSynchronizationManager.initSynchronization();
         try
         {
             assertThrows(FileException.class,
-                ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
+                ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+                    "proof.pdf","application/pdf",actor));
 
             for(TransactionSynchronization synchronization:TransactionSynchronizationManager.getSynchronizations())
                 synchronization.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
@@ -235,13 +246,15 @@ class FileObjectGovernanceReviewTest
         FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject("staged/1",3L,HASH);
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(storage.inspect(staged)).thenReturn(DetectedContentType.PDF);
         when(repository.insertVersion(any())).thenReturn(null);
         when(cleanupAudit.beginCleanup(10L,"idem-1","STAGED","staged/1",actor)).thenReturn(33L);
         doThrow(new FileException("FILE_STORAGE_ABORT_FAILED","Unable to discard staged file"))
             .when(storage).abort(staged);
 
         assertThrows(FileException.class,
-            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor));
+            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+                "proof.pdf","application/pdf",actor));
 
         verify(cleanupAudit).recordCleanupFailure(33L,"FILE_STORAGE_ABORT_FAILED",
             "Unable to discard staged file",actor);

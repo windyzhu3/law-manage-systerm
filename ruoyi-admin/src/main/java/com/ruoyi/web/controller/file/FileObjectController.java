@@ -57,7 +57,8 @@ public class FileObjectController extends BaseController
     @PreAuthorize("@ss.hasPermi('file:object:upload')")
     @PostMapping("/{uploadIntentId}/complete")
     public AjaxResult complete(@PathVariable String uploadIntentId,@RequestParam("file") MultipartFile file) throws Exception
-    {try(InputStream input=file.getInputStream()){return success(version(service.completeUpload(uploadIntentId,input,actor())));}}
+    {try(InputStream input=file.getInputStream()){return success(version(service.completeUpload(uploadIntentId,input,
+        file.getOriginalFilename(),file.getContentType(),actor())));}}
 
     @PreAuthorize("@ss.hasPermi('file:object:upload')")
     @PostMapping("/{fileObjectId}/versions")

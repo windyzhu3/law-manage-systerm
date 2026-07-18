@@ -47,6 +47,7 @@ import com.law.file.infrastructure.LocalFileStorageAdapter;
 import com.law.file.infrastructure.MyBatisFileObjectRepository;
 import com.law.file.mapper.FileObjectMapper;
 import com.law.file.security.FileAccessPolicy;
+import com.law.file.security.FileContentPolicy;
 import com.law.file.spi.FileBusinessAccessChecker;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
@@ -93,7 +94,7 @@ class FileMaterialEndToEndTest
             };
             FileAccessPolicy access=new FileAccessPolicy(repository,List.of(checker));
             FileObjectService service=new FileObjectService(repository,new LocalFileStorageAdapter(storageRoot),access,
-                new FileCleanupAuditAdapter(repository));
+                new FileCleanupAuditAdapter(repository),new FileContentPolicy());
             FileObjectController controller=new FileObjectController(service);
             security.when(SecurityUtils::getUserId).thenReturn(ACTOR_ID);
             security.when(SecurityUtils::getUsername).thenReturn("foundation-file-e2e");

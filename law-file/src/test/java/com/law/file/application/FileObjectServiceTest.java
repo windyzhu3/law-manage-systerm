@@ -17,8 +17,10 @@ import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.repository.FileObjectRepository;
+import com.law.file.security.DetectedContentType;
 import com.law.file.security.FileAccessDeniedException;
 import com.law.file.security.FileAccessPolicy;
+import com.law.file.security.FileContentPolicy;
 import com.law.file.spi.FileCleanupAuditPort;
 import com.law.file.spi.FileStoragePort;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,7 +41,20 @@ class FileObjectServiceTest
     private final Instant now=Instant.parse("2026-07-17T01:00:00Z");
     private final Clock clock=Clock.fixed(now,ZoneOffset.UTC);
 
-    @BeforeEach void setUp(){service=new FileObjectService(repository,storage,access,cleanup,clock,bytes->"token-fixed");}
+    @BeforeEach void setUp(){service=new FileObjectService(repository,storage,access,cleanup,
+        new FileContentPolicy(),clock,bytes->"token-fixed");}
+
+    @Test void blocked_type_is_rejected_before_authorization_or_repository_writes()
+    {
+        var command=new FileObjectService.RegisterUploadCommand("active-1","active.svg","image/svg+xml",3L,HASH,
+            "CASE",9L,"CONTACT_PROOF","BUSINESS");
+
+        com.law.file.domain.FileException error=assertThrows(com.law.file.domain.FileException.class,
+            ()->service.registerUpload(command,actor));
+
+        assertEquals("FILE_CONTENT_TYPE_BLOCKED",error.getBusinessCode());
+        verifyNoInteractions(access,repository,storage);
+    }
 
     @Test void register_upload_authorizes_business_before_writing_metadata()
     {
@@ -96,6 +111,7 @@ class FileObjectServiceTest
         FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject(".staged/1",3L,HASH);
         when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
         when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(storage.inspect(staged)).thenReturn(DetectedContentType.PDF);
         when(repository.insertVersion(any())).thenAnswer(invocation->{
             StoredVersion value=invocation.getArgument(0);FileVersion v=value.metadata();
             return new StoredVersion(new FileVersion(21L,v.fileObjectId(),v.versionNo(),v.originalFileName(),v.contentType(),
@@ -106,12 +122,32 @@ class FileObjectServiceTest
         when(repository.insertLifecycleAudit(any())).thenReturn(1);
         when(storage.publish(staged,"objects/key")).thenReturn(new FileStoragePort.StoredObject("objects/key",3L,HASH));
 
-        FileVersion result=service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),actor);
+        FileVersion result=service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+            "proof.pdf","application/pdf",actor);
 
         assertEquals("Initial version",result.changeDescription());
         var order=inOrder(repository,storage);
         order.verify(repository).markUploadCompleted("intent-1",21L);
         order.verify(storage).publish(staged,"objects/key");
+    }
+
+    @Test void detected_mismatch_is_rejected_before_version_write_and_staged_content_is_cleaned()
+    {
+        UploadIntent intent=intent("REGISTERED",null);
+        FileStoragePort.StagedObject staged=new FileStoragePort.StagedObject(".staged/1",3L,HASH);
+        when(repository.findUploadIntentForUpdate("intent-1")).thenReturn(intent);
+        when(storage.stage(any(),eq(3L),eq(HASH))).thenReturn(staged);
+        when(storage.inspect(staged)).thenReturn(DetectedContentType.HTML);
+        when(cleanup.beginCleanup(10L,"idem-1","STAGED",".staged/1",actor)).thenReturn(31L);
+
+        com.law.file.domain.FileException error=assertThrows(com.law.file.domain.FileException.class,
+            ()->service.completeUpload("intent-1",new ByteArrayInputStream("abc".getBytes()),
+                "proof.pdf","application/pdf",actor));
+
+        assertEquals("FILE_CONTENT_TYPE_BLOCKED",error.getBusinessCode());
+        verify(repository,never()).insertVersion(any());
+        verify(storage).abort(staged);
+        verify(cleanup).recordCleanupSuccess(31L,"UPLOAD_ABORTED",actor);
     }
 
     @Test void denied_download_does_not_create_token()

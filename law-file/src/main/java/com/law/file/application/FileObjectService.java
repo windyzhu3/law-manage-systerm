@@ -31,6 +31,7 @@ import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.repository.FileObjectRepository;
 import com.law.file.security.FileAccessDeniedException;
 import com.law.file.security.FileAccessPolicy;
+import com.law.file.security.FileContentPolicy;
 import com.law.file.spi.FileCleanupAuditPort;
 import com.law.file.spi.FileStoragePort;
 import org.springframework.stereotype.Service;
@@ -53,23 +54,25 @@ public class FileObjectService
     private final FileStoragePort storage;
     private final FileAccessPolicy access;
     private final FileCleanupAuditPort cleanupAudit;
+    private final FileContentPolicy contentPolicy;
     private final Clock clock;
     private final TokenGenerator tokens;
 
     public FileObjectService(FileObjectRepository repository,FileStoragePort storage,FileAccessPolicy access,
-        FileCleanupAuditPort cleanupAudit)
-    {this(repository,storage,access,cleanupAudit,Clock.systemUTC(),FileObjectService::randomToken);}
+        FileCleanupAuditPort cleanupAudit,FileContentPolicy contentPolicy)
+    {this(repository,storage,access,cleanupAudit,contentPolicy,Clock.systemUTC(),FileObjectService::randomToken);}
 
     FileObjectService(FileObjectRepository repository,FileStoragePort storage,FileAccessPolicy access,
-        FileCleanupAuditPort cleanupAudit,Clock clock,TokenGenerator tokens)
+        FileCleanupAuditPort cleanupAudit,FileContentPolicy contentPolicy,Clock clock,TokenGenerator tokens)
     {
         this.repository=repository;this.storage=storage;this.access=access;this.cleanupAudit=cleanupAudit;
-        this.clock=clock;this.tokens=tokens;
+        this.contentPolicy=contentPolicy;this.clock=clock;this.tokens=tokens;
     }
 
     @Transactional public UploadIntentView registerUpload(RegisterUploadCommand command,FileActor actor)
     {
-        validate(command);access.requireCanWrite(command.businessType(),command.businessId(),actor);
+        validate(command);contentPolicy.validateRegistration(command.originalFileName(),command.contentType());
+        access.requireCanWrite(command.businessType(),command.businessId(),actor);
         String fingerprint=requestFingerprint(command);
         UploadIntent prior=repository.findUploadIntentByIdempotency(actor.userId(),command.actionId());
         if(prior!=null)return replay(prior,fingerprint,relationId(prior.fileObjectId(),command,actor));
@@ -100,7 +103,8 @@ public class FileObjectService
 
     @Transactional public UploadIntentView addVersion(Long fileObjectId,RegisterVersionCommand command,FileActor actor)
     {
-        validate(command);access.requireCanWrite(fileObjectId,actor);
+        validate(command);contentPolicy.validateRegistration(command.originalFileName(),command.contentType());
+        access.requireCanWrite(fileObjectId,actor);
         UploadIntent prior=repository.findUploadIntentByIdempotency(actor.userId(),command.actionId());
         String fingerprint=versionFingerprint(fileObjectId,command);
         if(prior!=null)return replay(prior,fingerprint,null);
@@ -118,7 +122,8 @@ public class FileObjectService
     }
 
     @Transactional(noRollbackFor=FileUploadUnavailableException.class)
-    public FileVersion completeUpload(String uploadIntentId,InputStream input,FileActor actor)
+    public FileVersion completeUpload(String uploadIntentId,InputStream input,String transportFileName,
+        String transportContentType,FileActor actor)
     {
         UploadIntent intent=repository.findUploadIntentForUpdate(uploadIntentId);
         if(intent==null||!actor.userId().equals(intent.actorId()))throw new FileUploadUnavailableException();
@@ -140,8 +145,10 @@ public class FileObjectService
         try
         {
             staged=storage.stage(input,intent.expectedSize(),intent.expectedSha256());
+            String verifiedContentType=contentPolicy.requireMatchingContent(intent.originalFileName(),intent.contentType(),
+                transportFileName,transportContentType,storage.inspect(staged));
             FileVersion metadata=new FileVersion(null,intent.fileObjectId(),intent.targetVersionNo(),
-                intent.originalFileName(),intent.contentType(),staged.size(),staged.sha256(),
+                intent.originalFileName(),verifiedContentType,staged.size(),staged.sha256(),
                 intent.changeDescription(),actor.userId(),now);
             StoredVersion inserted=repository.insertVersion(new StoredVersion(metadata,intent.objectKey()));
             if(inserted==null||inserted.metadata().fileVersionId()==null)conflict("File version already exists");
