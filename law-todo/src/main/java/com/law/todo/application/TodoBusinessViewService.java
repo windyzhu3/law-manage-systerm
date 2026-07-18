@@ -10,6 +10,8 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.view.TodoBusinessSummary;
 import com.law.todo.application.view.TodoChainView;
 import com.law.todo.domain.TodoException;
+import com.law.todo.domain.TodoAccessPolicy;
+import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoBusinessAccessChecker;
 import org.springframework.stereotype.Service;
@@ -19,10 +21,11 @@ public class TodoBusinessViewService
 {
     private final TodoMapper mapper;
     private final List<TodoBusinessAccessChecker> accessCheckers;
+    private final TodoAccessPolicy todoAccess;
 
-    public TodoBusinessViewService(TodoMapper mapper,List<TodoBusinessAccessChecker> accessCheckers)
+    public TodoBusinessViewService(TodoMapper mapper,List<TodoBusinessAccessChecker> accessCheckers,TodoAccessPolicy todoAccess)
     {
-        this.mapper=mapper;this.accessCheckers=accessCheckers;
+        this.mapper=mapper;this.accessCheckers=accessCheckers;this.todoAccess=todoAccess;
     }
 
     public TodoBusinessSummary summary(String businessType,Long businessId,Actor actor)
@@ -39,7 +42,9 @@ public class TodoBusinessViewService
 
     public List<Map<String,Object>> businessTodos(String businessType,Long businessId,Actor actor)
     {
-        return mapper.selectBusinessTodos(authorizedQuery(businessType,businessId,actor));
+        List<Map<String,Object>> rows=mapper.selectBusinessTodos(authorizedQuery(businessType,businessId,actor));
+        if(rows==null||rows.isEmpty())return List.of();
+        return rows.stream().map(row->withAllowedActions(row,actor)).toList();
     }
 
     public TodoChainView chain(Long rootTodoId,Actor actor)
@@ -63,7 +68,28 @@ public class TodoBusinessViewService
         query.put("currentUserId",actor.userId());query.put("currentDeptId",actor.deptId());return query;
     }
 
+    private Map<String,Object> withAllowedActions(Map<String,Object> row,Actor actor)
+    {
+        Map<String,Object> view=new HashMap<>(row);Long todoId=longValue(value(row,"todo_id","todoId"));
+        TodoInstance todo=todoId==null?null:mapper.selectById(todoId);
+        view.put("allowedActions",todo==null?List.of():allowedActions(todo,actor));return view;
+    }
+
+    private List<String> allowedActions(TodoInstance todo,Actor actor)
+    {
+        String status=todo.getStatus();List<String> actions=new java.util.ArrayList<>();
+        boolean owner=todoAccess.canOperate(todo,actor.userId());
+        if("CREATED".equals(status)&&todoAccess.canClaim(todo,actor.userId(),actor.deptId()))actions.add("claim");
+        if(("CLAIMED".equals(status)||"RETURNED".equals(status))&&owner)actions.add("start");
+        if("IN_PROGRESS".equals(status)&&owner)actions.add("submit");
+        if("SUBMITTED".equals(status)&&owner)actions.add("complete");
+        if("SUBMITTED".equals(status)&&todoAccess.canReview(todo,actor.userId()))actions.add("return");
+        if(!"COMPLETED".equals(status)&&!"CANCELLED".equals(status)&&owner){actions.add("transfer");actions.add("cancel");}
+        return actions;
+    }
+
     private static Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
+    private static Long longValue(Object value){return value==null?null:Long.valueOf(String.valueOf(value));}
     private static long number(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value==null?0:Long.parseLong(String.valueOf(value));}
     private static LocalDateTime date(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value instanceof LocalDateTime time?time:null;}
 }

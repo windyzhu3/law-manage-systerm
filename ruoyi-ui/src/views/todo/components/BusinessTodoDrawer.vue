@@ -34,13 +34,6 @@ import TodoActionDialogs from './TodoActionDialogs'
 import TodoChainTimeline from './TodoChainTimeline'
 
 const actions = { claim: claimTodo, start: startTodo, submit: submitTodo, complete: completeTodo, return: returnTodo, transfer: transferTodo, cancel: cancelTodo }
-const statusActions = {
-  CREATED: ['claim', 'cancel'],
-  CLAIMED: ['start', 'transfer', 'cancel'],
-  IN_PROGRESS: ['submit', 'transfer', 'cancel'],
-  SUBMITTED: ['complete', 'return', 'transfer', 'cancel'],
-  RETURNED: ['start', 'transfer', 'cancel']
-}
 
 export default {
   name: 'BusinessTodoDrawer',
@@ -72,8 +65,7 @@ export default {
     explicitActions(row) { return row.allowedActions || row.allowed_actions || row.actions || null },
     can(row, action) {
       const allowed = this.explicitActions(row)
-      if (Array.isArray(allowed)) return allowed.map(item => String(item).toLowerCase()).includes(action)
-      return (statusActions[String(row.status || '').toUpperCase()] || []).includes(action)
+      return Array.isArray(allowed) && allowed.map(item => String(item).toLowerCase()).includes(action)
     },
     openDetail(row) {
       const id = this.todoId(row)

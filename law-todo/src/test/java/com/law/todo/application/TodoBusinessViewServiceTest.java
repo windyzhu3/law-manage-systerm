@@ -18,13 +18,15 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.view.TodoBusinessSummary;
 import com.law.todo.application.view.TodoChainView;
 import com.law.todo.domain.TodoException;
+import com.law.todo.domain.TodoAccessPolicy;
+import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoBusinessAccessChecker;
 
 @ExtendWith(MockitoExtension.class)
 class TodoBusinessViewServiceTest
 {
-    @Mock TodoMapper mapper;@Mock TodoBusinessAccessChecker access;
+    @Mock TodoMapper mapper;@Mock TodoBusinessAccessChecker access;@Mock TodoAccessPolicy todoAccess;
     private final Actor actor=new Actor(7L,"alice",3L);
 
     @Test void summarizesVisibleBusinessTodos()
@@ -58,5 +60,17 @@ class TodoBusinessViewServiceTest
         assertEquals(1L,chain.rootTodoId());assertEquals(List.of(1L,2L,3L),chain.nodes().stream().map(row->Long.valueOf(String.valueOf(row.get("todo_id")))).toList());
     }
 
-    private TodoBusinessViewService service(){return new TodoBusinessViewService(mapper,List.of(access));}
+    @Test void exposesOnlyServerAuthorizedActionsForBusinessTodo()
+    {
+        when(access.supports("LEAD")).thenReturn(true);when(access.canView("LEAD",8L,7L,3L)).thenReturn(true);
+        TodoInstance todo=new TodoInstance();todo.setTodoId(21L);todo.setStatus("SUBMITTED");todo.setOwnerId(9L);
+        when(mapper.selectBusinessTodos(anyMap())).thenReturn(List.of(Map.of("todo_id",21L,"status","SUBMITTED")));
+        when(mapper.selectById(21L)).thenReturn(todo);when(todoAccess.canOperate(todo,7L)).thenReturn(false);when(todoAccess.canReview(todo,7L)).thenReturn(true);
+
+        List<Map<String,Object>> rows=service().businessTodos("LEAD",8L,actor);
+
+        assertEquals(List.of("return"),rows.get(0).get("allowedActions"));
+    }
+
+    private TodoBusinessViewService service(){return new TodoBusinessViewService(mapper,List.of(access),todoAccess);}
 }

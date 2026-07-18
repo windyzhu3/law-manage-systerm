@@ -45,6 +45,21 @@ test('business summary clears stale data and does not request an invalid id', as
   await expect(page.getByRole('button', { name: '查看全部' })).toBeDisabled()
 })
 
+test('business drawer sends canonical return and transfer actions', async ({ page }) => {
+  const state = await setupBusinessTodoRuntime(page)
+  await page.goto('/todo/runtime/lead'); await page.getByRole('button', { name: '查看全部' }).click()
+  await page.getByRole('button', { name: '退回', exact: true }).click()
+  await page.getByRole('dialog').locator('textarea').fill('needs revision')
+  await page.getByRole('dialog').getByRole('button', { name: '确认', exact: true }).click()
+  await expect.poll(() => state.actionPayloads.return && state.actionPayloads.return.opinion).toBe('needs revision')
+  await page.getByRole('button', { name: '转派', exact: true }).click()
+  await page.getByRole('dialog').getByRole('spinbutton').fill('2')
+  await page.getByRole('dialog').getByRole('button', { name: '确认', exact: true }).click()
+  await expect.poll(() => state.actionPayloads.transfer && state.actionPayloads.transfer.fields.targetOwnerId).toBe(2)
+  await page.getByRole('button', { name: '链路', exact: true }).click()
+  await expect.poll(() => state.chainRequests).toBe(1)
+})
+
 test('a failed action leaves the business summary and list unchanged', async ({ page }) => {
   const state = await setupBusinessTodoRuntime(page, false, true)
   await page.goto('/todo/runtime/lead')
@@ -61,7 +76,7 @@ test('a failed action leaves the business summary and list unchanged', async ({ 
 })
 
 async function setupBusinessTodoRuntime(page, includeInvalid = false, failComplete = false) {
-  const state = { summaryRequests: [], listRequests: [], detailRequests: 0, completePayload: null }
+  const state = { summaryRequests: [], listRequests: [], detailRequests: 0, completePayload: null, actionPayloads: {}, chainRequests: 0 }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
   await page.addInitScript(() => { document.cookie = 'Admin-Token=e2e-token; path=/' })
   await page.route('**/prod-api/**', async route => {
@@ -75,14 +90,15 @@ async function setupBusinessTodoRuntime(page, includeInvalid = false, failComple
     }
     if (path.startsWith('/todo/business/') && path.endsWith('/list')) {
       state.listRequests.push(path.replace('/todo/business/', '').replace('/list', ''))
-      return json(route, null, { code: 200, rows: [{ todo_id: 901, todo_no: 'TD-901', title: 'Domain TODO', status: 'SUBMITTED', due_at: '2026-08-01' }], total: 1 })
+      return json(route, null, { code: 200, rows: [{ todo_id: 901, todo_no: 'TD-901', title: 'Domain TODO', status: 'SUBMITTED', allowedActions: ['complete', 'return', 'transfer'], due_at: '2026-08-01' }], total: 1 })
     }
     if (path === '/todo/901') {
       state.detailRequests++
       return json(route, { todo: { todo_id: 901, todo_no: 'TD-901', title: 'Domain TODO', status: 'SUBMITTED', business_type: 'LEAD', business_id: 104 }, actions: [], attachments: [], materials: [], relations: [] })
     }
     if (path === '/todo/901/form') return json(route, { todoId: 901, businessType: 'LEAD', businessId: 104, ui: { config: { fields: [] } }, dod: { config: {} }, defaults: {}, materials: [] })
-    if (path === '/todo/901/complete') { state.completePayload = request.postDataJSON(); return json(route, null, failComplete ? { code: 500, msg: 'complete failed', data: null } : undefined) }
+    if (path === '/todo/chain/901') { state.chainRequests++; return json(route, { nodes: [{ todo_id: 901, title: 'Domain TODO' }] }) }
+    if (/^\/todo\/901\/(complete|return|transfer)$/.test(path)) { const action=path.split('/').pop();state.actionPayloads[action]=request.postDataJSON();if(action==='complete')state.completePayload=state.actionPayloads[action];return json(route, null, failComplete&&action==='complete' ? { code: 500, msg: 'complete failed', data: null } : undefined) }
     if (path.startsWith('/system/dict/data/type/') || path === '/system/config/configKey/sys.index.skinName') return json(route, [])
     return json(route, {})
   })
