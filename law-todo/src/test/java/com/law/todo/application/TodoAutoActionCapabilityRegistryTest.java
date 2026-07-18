@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -38,6 +39,15 @@ class TodoAutoActionCapabilityRegistryTest
         assertEquals(List.of("maxAttempts","retryDelayMinutes","claimTimeoutMinutes"),descriptor.retryFields().stream().map(TodoAutoActionCapability.Field::name).toList());
         assertEquals(3,descriptor.retryField("maxAttempts").defaultValue());
         assertEquals(15,descriptor.retryField("claimTimeoutMinutes").defaultValue());
+    }
+
+    @Test void descriptorRejectsMalformedOrDuplicateStandardRetryFields()
+    {
+        TodoAutoActionCapability.Field malformed=new TodoAutoActionCapability.Field("maxAttempts","text",false,1,null,"Bad","TODO_AUTO_ACTION_NUMBER_INVALID");
+        TodoAutoActionCapability.Field duplicate=new TodoAutoActionCapability.Field("maxAttempts","number",false,1,3,"Duplicate","TODO_AUTO_ACTION_NUMBER_INVALID");
+
+        assertThrows(IllegalArgumentException.class,()->new TodoAutoActionCapability.Descriptor("CUSTOM",List.of("DUE"),List.of(malformed),List.of()));
+        assertThrows(IllegalArgumentException.class,()->new TodoAutoActionCapability.Descriptor("CUSTOM",List.of("DUE"),List.of(duplicate,duplicate),List.of()));
     }
 
     @Test void registeredCustomCapabilityDrivesCatalogCompilerAndRuntime()

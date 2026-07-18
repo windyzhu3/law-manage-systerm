@@ -48,11 +48,21 @@ public interface TodoAutoActionCapability
         private static List<Field> normalizeRetryFields(List<Field> supplied)
         {
             Map<String,Field> declared=new java.util.LinkedHashMap<>();
-            for(Field field:supplied==null?List.<Field>of():supplied)declared.put(field.name(),field);
+            for(Field field:supplied==null?List.<Field>of():supplied)
+                if(declared.putIfAbsent(field.name(),field)!=null)throw new IllegalArgumentException("Duplicate retry field: "+field.name());
             List<Field> normalized=new java.util.ArrayList<>();
-            for(Field standard:commonRetryFields())normalized.add(declared.remove(standard.name()));
-            for(int index=0;index<normalized.size();index++)if(normalized.get(index)==null)normalized.set(index,commonRetryFields().get(index));
+            for(Field standard:commonRetryFields())
+            {
+                Field value=declared.remove(standard.name());
+                if(value!=null)validateRetryField(value);
+                normalized.add(value==null?standard:value);
+            }
             normalized.addAll(declared.values());return List.copyOf(normalized);
+        }
+        private static void validateRetryField(Field field)
+        {
+            if(!"number".equals(field.type())||field.min()==null||field.min()<1||field.defaultValue()==null||field.defaultValue()<1)
+                throw new IllegalArgumentException("Retry field must be numeric with a positive minimum and default: "+field.name());
         }
         public Field retryField(String name)
         {

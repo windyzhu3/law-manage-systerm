@@ -64,9 +64,9 @@ public class TodoAutoActionService
         Map<String,Object> config = rule.config();RuntimeRule runtime=validateRuntimeRule(config);
         String actionType=runtime.actionType();String ruleKey=runtime.ruleKey();TodoAutoActionCapability capability=runtime.capability();
         String executionKey = executionKey(todo.getTodoId(), ruleKey);
-        int maxAttempts = positiveInt(config.get("maxAttempts"), runtime.descriptor().retryField("maxAttempts"));
-        int retryMinutes = positiveInt(config.get("retryDelayMinutes"), runtime.descriptor().retryField("retryDelayMinutes"));
-        int claimTimeoutMinutes=positiveInt(config.get("claimTimeoutMinutes"),runtime.descriptor().retryField("claimTimeoutMinutes"));
+        int maxAttempts = positiveInt(config.get("maxAttempts"), retryField(runtime.descriptor(),"maxAttempts"));
+        int retryMinutes = positiveInt(config.get("retryDelayMinutes"), retryField(runtime.descriptor(),"retryDelayMinutes"));
+        int claimTimeoutMinutes=positiveInt(config.get("claimTimeoutMinutes"),retryField(runtime.descriptor(),"claimTimeoutMinutes"));
         Map<String,Object> claim = new HashMap<>();claim.put("executionKey", executionKey);claim.put("todoId", todo.getTodoId());
         claim.put("ruleKey", ruleKey);claim.put("actionType", actionType);claim.put("now", now);
         int inserted=mapper.insertAutoActionExecutionIfAbsent(claim);
@@ -275,7 +275,8 @@ public class TodoAutoActionService
         return key;
     }
     private String executionKey(Long todoId,String ruleKey){return "AUTO:"+todoId+":"+ruleKey;}
-    private int positiveInt(Object raw,TodoAutoActionCapability.Field field){if(raw==null)return field.defaultValue();try{int value=number(raw);if(field.min()!=null&&value<field.min())throw new NumberFormatException();return value;}catch(NumberFormatException invalid){throw new TodoException(field.invalidCode(),field.name()+" is invalid");}}
+    private TodoAutoActionCapability.Field retryField(TodoAutoActionCapability.Descriptor descriptor,String name){try{return descriptor.retryField(name);}catch(RuntimeException invalid){throw new TodoException("TODO_AUTO_ACTION_DESCRIPTOR_INVALID","Retry descriptor is invalid");}}
+    private int positiveInt(Object raw,TodoAutoActionCapability.Field field){if(field==null||field.min()==null||field.min()<1||field.defaultValue()==null||field.defaultValue()<1)throw new TodoException("TODO_AUTO_ACTION_DESCRIPTOR_INVALID","Retry descriptor is invalid");if(raw==null)return field.defaultValue();try{int value=number(raw);if(value<field.min())throw new NumberFormatException();return value;}catch(NumberFormatException invalid){throw new TodoException(field.invalidCode(),field.name()+" is invalid");}}
     private int defaultRetryMinutes(){return TodoAutoActionCapability.Descriptor.commonRetryFields().stream().filter(field->field.name().equals("retryDelayMinutes")).findFirst().orElseThrow().defaultValue();}
     private int number(Object raw){return Integer.parseInt(String.valueOf(raw));}
     private Long longValue(Object raw){return raw==null?null:Long.valueOf(String.valueOf(raw));}
