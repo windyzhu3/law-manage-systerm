@@ -34,8 +34,45 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.17.3", current.getVersion().getVersion());
+        assertEquals("0.20.14", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
+        verifyV02PrdCatalogue(url);
+    }
+
+    private void verifyV02PrdCatalogue(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(25L, count(connection, "select count(*) from todo_prd_definition_catalog"));
+            assertEquals(25L, count(connection,
+                "select count(*) from todo_prd_definition_catalog where definition_package_state='READY'"));
+            assertEquals(25L, count(connection,
+                "select count(*) from todo_prd_definition_catalog where production_state='BLOCKED'"));
+            assertEquals(25L, count(connection,
+                "select count(*) from todo_prd_definition_catalog c join todo_template t on t.template_code=c.template_code "
+                    + "join todo_template_version v on v.template_id=t.template_id "
+                    + "where v.status='DRAFT' and cast(v.definition_json as char)=cast(c.definition_json as char)"));
+            assertEquals(0L, count(connection,
+                "select count(*) from todo_trigger_rule r join todo_template t on t.template_id=r.template_id "
+                    + "where t.template_code between 'TD-001' and 'TD-025' and r.enabled='Y'"));
+            assertEquals(12L, count(connection,
+                "select count(*) from todo_decision where decision_code between 'Q-001' and 'Q-012' "
+                    + "and status='OPEN' and blocking='Y'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("v0.2 PRD catalogue database invariants failed", exception);
+        }
+    }
+
+    private long count(Connection connection, String sql) throws SQLException
+    {
+        try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql))
+        {
+            assertTrue(rows.next());
+            return rows.getLong(1);
+        }
     }
 
     private void verifyDatabaseInvariants(String url)
