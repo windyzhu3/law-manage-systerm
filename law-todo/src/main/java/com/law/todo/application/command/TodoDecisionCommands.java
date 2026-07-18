@@ -1,5 +1,7 @@
 package com.law.todo.application.command;
 
+import java.time.LocalDateTime;
+
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,6 +13,8 @@ public final class TodoDecisionCommands
 {
     private static final String CODE="[A-Z][A-Z0-9_-]{1,63}";
     private static final String STATUS="OPEN|RESOLVED|CLOSED";
+    private static final String ROLE_KEY="[a-z][a-z0-9_]{1,63}";
+    private static final String DELIVERY_PHASE="PHASE_ONE|PHASE_TWO|CROSS_PHASE";
     private TodoDecisionCommands() { }
 
     public record CreateDecisionCommand(
@@ -21,7 +25,11 @@ public final class TodoDecisionCommands
             @NotNull Boolean blocking,
             @NotBlank @Pattern(regexp=STATUS) String status,
             @Size(max=2000) String conclusion,
-            @Size(max=2000) String resolution) { }
+            @Size(max=2000) String resolution,
+            @Positive Long ownerUserId,
+            @Size(max=64) @Pattern(regexp=ROLE_KEY) String ownerRoleKey,
+            LocalDateTime dueAt,
+            @NotBlank @Pattern(regexp=DELIVERY_PHASE) String deliveryPhase) { }
 
     public record UpdateDecisionCommand(
             @NotBlank @Size(max=64) String actionId,
@@ -33,5 +41,9 @@ public final class TodoDecisionCommands
             @NotNull Boolean blocking,
             @NotBlank @Pattern(regexp=STATUS) String status,
             @Size(max=2000) String conclusion,
-            @Size(max=2000) String resolution) { }
+            @Size(max=2000) String resolution,
+            @Positive Long ownerUserId,
+            @Size(max=64) @Pattern(regexp=ROLE_KEY) String ownerRoleKey,
+            LocalDateTime dueAt,
+            @NotBlank @Pattern(regexp=DELIVERY_PHASE) String deliveryPhase) { }
 }

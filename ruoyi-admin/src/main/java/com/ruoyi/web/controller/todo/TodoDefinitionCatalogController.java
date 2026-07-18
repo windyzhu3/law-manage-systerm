@@ -37,6 +37,7 @@ public class TodoDefinitionCatalogController
     @PreAuthorize("@ss.hasPermi('todo:definition:view')") @GetMapping("/validator-catalog") public AjaxResult validators(){return AjaxResult.success(catalogs.validators());}
     @PreAuthorize("@ss.hasPermi('todo:definition:view')") @GetMapping("/auto-action-capabilities") public AjaxResult autoActionCapabilities(){return AjaxResult.success(autoActions.list());}
     @PreAuthorize("@ss.hasPermi('todo:decision:view')") @GetMapping("/decisions") public AjaxResult decisions(){return AjaxResult.success(decisionService.list());}
+    @PreAuthorize("@ss.hasPermi('todo:decision:view')") @GetMapping("/decision-governance-options") public AjaxResult decisionGovernanceOptions(){return AjaxResult.success(decisionService.governanceOptions());}
     @PreAuthorize("@ss.hasPermi('todo:decision:edit')") @PostMapping("/decisions") public AjaxResult createDecision(@Valid @RequestBody CreateDecisionCommand command){return AjaxResult.success(decisionService.create(command,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:decision:edit')") @PutMapping("/decisions/{decisionId}") public AjaxResult updateDecision(@PathVariable Long decisionId,@Valid @RequestBody UpdateDecisionCommand command)
     {if(!decisionId.equals(command.decisionId()))throw new TodoException("TODO_DECISION_ID_MISMATCH","Path and body decision IDs must match");return AjaxResult.success(decisionService.update(command,actor()));}

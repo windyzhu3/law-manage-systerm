@@ -9,6 +9,10 @@ async function choose(page, formItem, label) {
   await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').getByText(label, { exact: true }).click()
 }
 
+function formItem(dialog, label) {
+  return dialog.locator('.el-form-item').filter({ hasText: label }).first()
+}
+
 async function setupConfig(page) {
   const state = { triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0 }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
@@ -21,6 +25,11 @@ async function setupConfig(page) {
     if (path === '/getRouters') return json(route, [{ path: '/', component: 'Layout', children: [{ path: 'todo/config', component: 'todo/config/index', name: 'TodoConfig', meta: { title: '待办配置', icon: 'clipboard' } }] }])
     if (path === '/todo/template' && request.method() === 'GET') return json(route, [{ template_id: 1, template_name: '线索跟进', template_code: 'LEAD_FOLLOWUP' }])
     if (path === '/todo/event-catalog') return json(route, [{ event_type: 'LEAD_ASSIGNED', payload_version: 1, status: 'ACTIVE' }])
+    if (path === '/todo/decision-governance-options') return json(route, {
+      users: [{ user_id: 8, user_name: 'owner', nick_name: 'Owner', dept_name: '产品部' }],
+      roles: [{ role_id: 3, role_key: 'product_owner', role_name: 'Product Owner' }],
+      deliveryPhases: ['PHASE_ONE', 'PHASE_TWO', 'CROSS_PHASE']
+    })
     if (path === '/todo/template/1/versions') return json(route, [{ version_id: 10, version_no: 1, status: 'PUBLISHED' }])
     if (path === '/todo/template/trigger') {
       if (request.method() === 'GET') return json(route, state.triggers)
@@ -140,21 +149,27 @@ test('decision requires a conclusion and displays impacted template codes', asyn
   const state = await setupConfig(page)
   await page.getByRole('tab', { name: '决策登记' }).click()
   await page.getByRole('button', { name: '新增决策' }).click()
-  let dialog = page.getByRole('dialog'); let items = dialog.locator('.el-form-item')
-  await items.nth(0).locator('input').fill('DECISION_01')
-  await items.nth(1).locator('input').fill('确认负责人')
+  let dialog = page.getByRole('dialog')
+  await formItem(dialog, '编码').locator('input').fill('DECISION_01')
+  await formItem(dialog, '标题').locator('input').fill('确认负责人')
+  await choose(page, formItem(dialog, '负责人'), 'Owner（owner）')
+  await choose(page, formItem(dialog, '责任角色'), 'Product Owner（product_owner）')
+  await formItem(dialog, '截止时间').locator('input').fill('2026-07-31 18:00:00')
   await dialog.getByRole('button', { name: '保存' }).click()
   await expect(page.getByText('TD-001, TD-002', { exact: true })).toBeVisible()
+  expect(state.decisions[0].ownerUserId).toBe(8)
+  expect(state.decisions[0].ownerRoleKey).toBe('product_owner')
+  expect(state.decisions[0].deliveryPhase).toBe('PHASE_ONE')
 
   await page.getByRole('button', { name: '编辑' }).click()
-  dialog = page.getByRole('dialog'); items = dialog.locator('.el-form-item')
-  await choose(page, items.nth(4), 'RESOLVED')
+  dialog = page.getByRole('dialog')
+  await choose(page, formItem(dialog, '状态'), 'RESOLVED')
   await dialog.getByRole('button', { name: '保存' }).click()
   await expect(page.getByText('conclusion is required', { exact: true })).toBeVisible()
   expect(state.decisionUpdates).toBe(0)
 
-  await items.nth(5).locator('input').fill('已确认')
-  await items.nth(6).locator('input').fill('通知团队')
+  await formItem(dialog, '结论').locator('input').fill('已确认')
+  await formItem(dialog, '处理方案').locator('input').fill('通知团队')
   await dialog.getByRole('button', { name: '保存' }).click()
   expect(state.decisionUpdates).toBe(1)
   await expect(page.getByText('TD-001, TD-002', { exact: true })).toBeVisible()

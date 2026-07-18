@@ -22,6 +22,12 @@ function validateDecision(form) {
   if (form.status !== 'OPEN' && !String(form.conclusion || '').trim()) throw new Error('conclusion is required')
   if (form.status !== 'OPEN' && !String(form.resolution || '').trim()) throw new Error('resolution is required')
   if (form.status === 'OPEN' && (String(form.conclusion || '').trim() || String(form.resolution || '').trim())) throw new Error('open decisions cannot have results')
+  if (!['PHASE_ONE', 'PHASE_TWO', 'CROSS_PHASE'].includes(form.deliveryPhase)) throw new Error('delivery phase is required')
+  if (form.blocking) {
+    if (!(Number(form.ownerUserId) > 0)) throw new Error('owner is required')
+    if (!/^[a-z][a-z0-9_]{1,63}$/.test(String(form.ownerRoleKey || ''))) throw new Error('owner role is required')
+    if (!String(form.dueAt || '').trim()) throw new Error('due date is required')
+  }
   return { ...form }
 }
 

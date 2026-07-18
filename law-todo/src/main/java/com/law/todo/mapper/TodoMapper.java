@@ -27,6 +27,9 @@ public interface TodoMapper
     Map<String,Object> selectDecisionByCode(String decisionCode);
     Map<String,Object> selectDecisionById(Long decisionId);
     List<Map<String,Object>> selectDecisions();
+    Map<String,Object> selectDecisionGovernanceUser(Long userId);
+    List<Map<String,Object>> selectDecisionGovernanceUsers();
+    List<Map<String,Object>> selectDecisionGovernanceRoles();
     int insertDecision(Map<String,Object> decision);
     int updateDecisionConditionally(Map<String,Object> decision);
     int updateTemplateCurrentVersion(@Param("templateId") Long templateId,@Param("versionNo") int versionNo,@Param("operator") String operator);

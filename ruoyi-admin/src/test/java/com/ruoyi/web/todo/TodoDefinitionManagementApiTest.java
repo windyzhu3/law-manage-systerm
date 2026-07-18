@@ -28,6 +28,7 @@ class TodoDefinitionManagementApiTest
         assertPermission(TodoTemplateController.class,"diff","todo:definition:diff");
         assertPermission(TodoDefinitionCatalogController.class,"events","todo:definition:view");
         assertPermission(TodoDefinitionCatalogController.class,"decisions","todo:decision:view");
+        assertPermission(TodoDefinitionCatalogController.class,"decisionGovernanceOptions","todo:decision:view");
         assertPermission(TodoDefinitionCatalogController.class,"createDecision","todo:decision:edit");
         assertPermission(TodoDefinitionCatalogController.class,"updateDecision","todo:decision:edit");
     }

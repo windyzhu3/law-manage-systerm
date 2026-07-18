@@ -34,9 +34,32 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.14", current.getVersion().getVersion());
+        assertEquals("0.20.15", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
+        verifyDecisionAccountabilitySchema(url);
+    }
+
+    private void verifyDecisionAccountabilitySchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(4L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='todo_decision' and column_name in ('owner_user_id','owner_role_key','due_at','delivery_phase')"));
+            assertEquals(12L, count(connection,
+                "select count(*) from todo_decision where decision_code between 'Q-001' and 'Q-012' "
+                    + "and status='OPEN' and owner_user_id is null and due_at is null"));
+            assertEquals(8L, count(connection,
+                "select count(*) from todo_decision where decision_code between 'Q-001' and 'Q-012' and delivery_phase='PHASE_ONE'"));
+            assertEquals(4L, count(connection,
+                "select count(*) from todo_decision where decision_code between 'Q-001' and 'Q-012' and delivery_phase='PHASE_TWO'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Decision accountability database invariants failed", exception);
+        }
     }
 
     private void verifyV02PrdCatalogue(String url)
