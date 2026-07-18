@@ -3,6 +3,8 @@ const { validateCalendar, validateDecision, triggerPayload } = require('../src/v
 
 assert.throws(() => validateCalendar({ timezone: 'Invalid/Timezone', workDays: [1], workStart: '18:00', workEnd: '09:00', exceptions: { 'not-a-date': true } }), /timezone|time|date/i)
 assert.deepStrictEqual(validateCalendar({ timezone: 'Asia/Shanghai', workDays: [1, 2, 3, 4, 5], workStart: '09:00', workEnd: '18:00', exceptions: { '2026-07-20': false } }).workDays, '1,2,3,4,5')
-assert.throws(() => validateDecision({ status: 'RESOLVED', conclusion: '', resolution: 'approved' }), /conclusion/i)
+assert.throws(() => validateDecision({ code: 'DECISION_1', title: 'decision', status: 'RESOLVED', conclusion: '', resolution: 'approved' }), /conclusion/i)
 assert.deepStrictEqual(triggerPayload({ triggerRuleId: 4, event: { eventType: 'LEAD_ASSIGNED', payloadVersion: 1, condition: { field: 'stage', operator: 'EQ', value: 'READY' } }, templateId: 2, templateVersionId: 3, businessType: 'LEAD', enabled: true }), { triggerRuleId: 4, eventType: 'LEAD_ASSIGNED', payloadVersion: 1, conditionJson: JSON.stringify({ field: 'stage', operator: 'EQ', value: 'READY' }), templateId: 2, templateVersionId: 3, businessType: 'LEAD', enabled: 'Y' })
+assert.deepStrictEqual(triggerPayload({ trigger_rule_id: 4, template_id: 2, template_version_id: 3, business_type: 'LEAD', enabled: 'N', event: { eventType: 'LEAD_ASSIGNED', payloadVersion: 2, condition: {} } }).templateId, 2)
+assert.throws(() => validateCalendar({ timezone: 'Asia/Shanghai', workDays: [1], workStart: '09:00', workEnd: '18:00', exceptions: { '2026-02-31': false } }), /date/i)
 console.log('todo config resource contract ok')

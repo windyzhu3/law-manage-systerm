@@ -9,15 +9,19 @@ function validateCalendar(form) {
   if (!time.test(form.workStart || '') || !time.test(form.workEnd || '') || form.workStart >= form.workEnd) throw new Error('work time is invalid')
   const exceptions = typeof form.exceptions === 'string' ? JSON.parse(form.exceptions || '{}') : (form.exceptions || {})
   Object.entries(exceptions).forEach(([date, working]) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || typeof working !== 'boolean') throw new Error('exception date is invalid')
+    const parsed = new Date(`${date}T00:00:00Z`)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || typeof working !== 'boolean') throw new Error('exception date is invalid')
   })
   return { ...form, workDays: days.join(','), exceptionJson: JSON.stringify(exceptions) }
 }
 
 function validateDecision(form) {
+  if (!/^[A-Z][A-Z0-9_-]{1,63}$/.test(String(form.code || ''))) throw new Error('code is required')
+  if (!String(form.title || '').trim()) throw new Error('title is required')
   if (!['OPEN', 'RESOLVED', 'CLOSED'].includes(form.status)) throw new Error('status is invalid')
   if (form.status !== 'OPEN' && !String(form.conclusion || '').trim()) throw new Error('conclusion is required')
   if (form.status !== 'OPEN' && !String(form.resolution || '').trim()) throw new Error('resolution is required')
+  if (form.status === 'OPEN' && (String(form.conclusion || '').trim() || String(form.resolution || '').trim())) throw new Error('open decisions cannot have results')
   return { ...form }
 }
 
@@ -26,7 +30,7 @@ function triggerPayload(form) {
   return {
     triggerRuleId: field(form, 'trigger_rule_id', 'triggerRuleId'), eventType: event.eventType,
     payloadVersion: Number(event.payloadVersion || 1), conditionJson: JSON.stringify(event.condition || {}),
-    templateId: Number(form.templateId), templateVersionId: Number(form.templateVersionId), businessType: form.businessType,
+    templateId: Number(field(form, 'template_id', 'templateId')), templateVersionId: Number(field(form, 'template_version_id', 'templateVersionId')), businessType: field(form, 'business_type', 'businessType'),
     enabled: form.enabled === false || form.enabled === 'N' ? 'N' : 'Y'
   }
 }

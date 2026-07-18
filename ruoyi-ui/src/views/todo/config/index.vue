@@ -3,9 +3,9 @@
     <el-page-header content="待办流程配置中心" />
     <el-tabs v-model="tab">
       <el-tab-pane label="模板定义" name="templates"><template-list :rows="templates" :loading="loading" @versions="versions" @copy="copyTemplate" /></el-tab-pane>
-      <el-tab-pane label="触发规则" name="triggers"><trigger-rule-table :rows="triggers" :templates="templates" @reload="load" /></el-tab-pane>
-      <el-tab-pane label="工作日历" name="calendars"><work-calendar-table :rows="calendars" @reload="load" /></el-tab-pane>
-      <el-tab-pane label="决策登记" name="decisions"><decision-registry :rows="decisions" @reload="load" /></el-tab-pane>
+      <el-tab-pane label="触发规则" name="triggers"><trigger-rule-table :rows="triggers" :templates="templates" :on-refresh="load" /></el-tab-pane>
+      <el-tab-pane label="工作日历" name="calendars"><work-calendar-table :rows="calendars" :on-refresh="load" /></el-tab-pane>
+      <el-tab-pane label="决策登记" name="decisions"><decision-registry :rows="decisions" :on-refresh="load" /></el-tab-pane>
     </el-tabs>
     <version-drawer :visible.sync="drawer" :versions="versionRows" :template-id="current && current.template_id" @versions-refreshed="versionRows = $event" @publish="publishDraft" @copy-version="copyVersion" />
   </div>
