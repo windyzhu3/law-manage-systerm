@@ -27,6 +27,16 @@ async function setupConfig(page) {
         { resourceId: 3, resourceType: 'ROLE', resourceCode: 'sales', domainCode: 'CROSS_DOMAIN', deliveryPhase: 'PHASE_ONE', sourceStatus: 'CONFIRMED', minimumActiveItems: 1, activeItemCount: 0, expectedItemCount: 0, readinessStatus: 'RUNTIME_MISSING' },
         { resourceId: 4, resourceType: 'DICTIONARY', resourceCode: 'law_followup_progress_type', domainCode: 'LEAD_CUSTOMER', deliveryPhase: 'PHASE_ONE', sourceStatus: 'CONFIRMED', minimumActiveItems: 6, activeItemCount: 4, expectedItemCount: 6, readinessStatus: 'RUNTIME_INCOMPLETE' }
       ]
+    },
+    historicalMigration: {
+      gateCode: 'G-04', total: 4, ready: 1, sourceUnresolved: 2, runtimeMissing: 1, runtimeInvalid: 0, gateReady: false,
+      historicalCaseCount: 12, historicalTodoCount: 7, orphanTodoVersionCount: 0, caseBusinessLineColumnExists: false,
+      requirements: [
+        { requirementId: 1, requirementCode: 'CASE_BUSINESS_LINE_SCHEMA', requirementName: '历史案件业务线字段', sourceStatus: 'CONFIRMED', readinessStatus: 'RUNTIME_MISSING', sourceRef: 'doc/v0.2-prd-readiness-gap-analysis.md:220', remark: '运行态必须真实存在该列' },
+        { requirementId: 2, requirementCode: 'HISTORICAL_CASE_DEFAULT', requirementName: '历史案件默认业务线策略', sourceStatus: 'NEEDS_DECISION', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'doc/v0.2-prd-readiness-gap-analysis.md:326', remark: '研发不得代选' },
+        { requirementId: 3, requirementCode: 'BACKFILL_VALIDATION_SQL', requirementName: '回填校验SQL', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'doc/v0.2-foundation-admission-report.md:105' },
+        { requirementId: 4, requirementCode: 'TODO_VERSION_REFERENCE', requirementName: '历史待办固定版本引用', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'V0_16_1__todo_engine.sql:22' }
+      ]
     }
   }
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
@@ -53,6 +63,7 @@ async function setupConfig(page) {
     })
     if (path === '/todo/admission-evidence' && request.method() === 'GET') return json(route, state.admissionEvidence)
     if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
+    if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
     if (/^\/todo\/admission-evidence\/\d+$/.test(path)) {
       state.admissionUpdates++
       const id = Number(path.split('/').pop())
@@ -253,4 +264,17 @@ test('foundation resources expose repository source and runtime gaps without pro
   await expect(pane.getByText('来源待确认', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('运行态缺失', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('运行态不完整', { exact: true }).first()).toBeVisible()
+})
+
+test('historical migration readiness exposes inventory and blockers without selecting defaults', async ({ page }) => {
+  await setupConfig(page)
+  await page.getByRole('tab', { name: '历史迁移' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('G-04 历史迁移门禁未就绪，不能批准准入证据')).toBeVisible()
+  await expect(pane.getByText('CASE_BUSINESS_LINE_SCHEMA', { exact: true })).toBeVisible()
+  await expect(pane.getByText('HISTORICAL_CASE_DEFAULT', { exact: true })).toBeVisible()
+  await expect(pane.getByText('待业务决策', { exact: true })).toBeVisible()
+  await expect(pane.getByText('待迁移证据', { exact: true })).toBeVisible()
+  await expect(pane.getByText('缺失', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('7', { exact: true }).first()).toBeVisible()
 })

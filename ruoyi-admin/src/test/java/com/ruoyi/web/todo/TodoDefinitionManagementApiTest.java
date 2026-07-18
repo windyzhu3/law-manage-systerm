@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import com.ruoyi.web.controller.todo.TodoDefinitionCatalogController;
 import com.ruoyi.web.controller.todo.TodoAdmissionEvidenceController;
 import com.ruoyi.web.controller.todo.TodoFoundationResourceController;
+import com.ruoyi.web.controller.todo.TodoHistoricalMigrationReadinessController;
 import com.ruoyi.web.controller.todo.TodoTemplateController;
 
 class TodoDefinitionManagementApiTest
@@ -37,6 +38,7 @@ class TodoDefinitionManagementApiTest
         assertPermission(TodoAdmissionEvidenceController.class,"governanceOptions","todo:admission:view");
         assertPermission(TodoAdmissionEvidenceController.class,"update","todo:admission:edit");
         assertPermission(TodoFoundationResourceController.class,"readiness","todo:admission:view");
+        assertPermission(TodoHistoricalMigrationReadinessController.class,"readiness","todo:admission:view");
     }
 
     private void assertPermission(Class<?> type,String methodName,String permission)

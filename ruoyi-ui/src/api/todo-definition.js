@@ -37,3 +37,4 @@ export function listAdmissionEvidence() { return request({ url: '/todo/admission
 export function getAdmissionEvidenceGovernanceOptions() { return request({ url: '/todo/admission-evidence/governance-options', method: 'get' }) }
 export function updateAdmissionEvidence(evidenceId, data) { return request({ url: `/todo/admission-evidence/${evidenceId}`, method: 'put', data }) }
 export function getFoundationResourceReadiness(gateCode = 'G-02') { return request({ url: '/todo/foundation-resources', method: 'get', params: { gateCode } }) }
+export function getHistoricalMigrationReadiness(gateCode = 'G-04') { return request({ url: '/todo/foundation-migration', method: 'get', params: { gateCode } }) }

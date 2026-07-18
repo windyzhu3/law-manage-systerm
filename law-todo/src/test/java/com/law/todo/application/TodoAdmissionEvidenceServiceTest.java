@@ -27,6 +27,7 @@ class TodoAdmissionEvidenceServiceTest
 {
     @Mock TodoAdmissionEvidenceMapper mapper;
     @Mock TodoFoundationResourceService resources;
+    @Mock TodoHistoricalMigrationReadinessService migrations;
     private final Actor owner=new Actor(7L,"owner",3L);
     private final Actor reviewer=new Actor(9L,"reviewer",4L);
     private final LocalDateTime dueAt=LocalDateTime.of(2026,7,31,18,0);
@@ -118,6 +119,21 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).updateEvidenceConditionally(anyMap());
     }
 
+    @Test void g04CannotBeApprovedWhileHistoricalMigrationContractIsNotReady()
+    {
+        UpdateAdmissionEvidenceCommand command=new UpdateAdmissionEvidenceCommand(
+                "approve-g04",1L,0,7L,9L,dueAt,"APPROVED","repo://doc/g04.md","Approved migration plan");
+        when(mapper.selectEvidenceById(1L)).thenReturn(row("G-04","IN_REVIEW",0));
+        when(mapper.selectActiveUser(7L)).thenReturn(Map.of("user_id",7L));
+        when(mapper.selectActiveUser(9L)).thenReturn(Map.of("user_id",9L));
+        when(migrations.gateReady("G-04")).thenReturn(false);
+
+        TodoException error=assertThrows(TodoException.class,()->service().update(command,reviewer));
+
+        assertEquals("TODO_ADMISSION_MIGRATION_NOT_READY",error.getBusinessCode());
+        verify(mapper,never()).insertEvidenceActionClaim(anyMap());
+    }
+
     @Test void listAndOptionsExposeOnlyMapperGovernedRows()
     {
         when(mapper.selectEvidence()).thenReturn(List.of(row("OPEN",0)));
@@ -141,11 +157,15 @@ class TodoAdmissionEvidenceServiceTest
         verify(mapper,never()).insertEvidenceActionClaim(anyMap());
     }
 
-    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources);}
+    private TodoAdmissionEvidenceService service(){return new TodoAdmissionEvidenceService(mapper,resources,migrations);}
     private Map<String,Object> row(String status,int version)
     {
+        return row("G-02",status,version);
+    }
+    private Map<String,Object> row(String gateCode,String status,int version)
+    {
         Map<String,Object> row=new HashMap<>();row.put("evidence_id",1L);row.put("evidence_code","G02-DICTIONARY-ROLE");
-        row.put("gate_code","G-02");row.put("category","DICTIONARY_ROLE");row.put("title","Dictionary and role contract");
+        row.put("gate_code",gateCode);row.put("category","DICTIONARY_ROLE");row.put("title","Dictionary and role contract");
         row.put("delivery_phase","PHASE_ONE");row.put("status",status);row.put("owner_user_id",7L);row.put("reviewer_user_id",9L);
         row.put("due_at",dueAt);row.put("artifact_ref","repo://doc/g02.md");row.put("conclusion","ready");row.put("version",version);return row;
     }

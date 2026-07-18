@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoHistoricalMigrationReadinessMapper">
+  <select id="selectMigrationReadiness" resultType="java.util.Map">
+    select r.*,
+      exists(select 1 from information_schema.columns c where c.table_schema=database()
+        and c.table_name='biz_case' and c.column_name='business_line') case_column_exists,
+      (select count(*) from biz_case c where c.del_flag='0') historical_case_count,
+      (select count(*) from todo_instance) historical_todo_count,
+      (select count(*) from todo_instance i left join todo_template_version v on v.version_id=i.template_version_id
+        where v.version_id is null) orphan_todo_version_count
+    from todo_foundation_migration_requirement r
+    where r.gate_code=#{gateCode}
+    order by r.sort_order,r.requirement_id
+  </select>
+</mapper>

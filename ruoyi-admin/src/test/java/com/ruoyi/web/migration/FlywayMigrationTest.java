@@ -34,12 +34,31 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.17", current.getVersion().getVersion());
+        assertEquals("0.20.18", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
         verifyAdmissionEvidenceSchema(url);
         verifyFoundationResourceReadinessSchema(url);
+        verifyHistoricalMigrationReadinessSchema(url);
+    }
+
+    private void verifyHistoricalMigrationReadinessSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(8L,count(connection,"select count(*) from todo_foundation_migration_requirement where gate_code='G-04'"));
+            assertEquals(3L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='CONFIRMED'"));
+            assertEquals(1L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='NEEDS_DECISION'"));
+            assertEquals(4L,count(connection,"select count(*) from todo_foundation_migration_requirement where source_status='NEEDS_EVIDENCE'"));
+            assertEquals(0L,count(connection,"select count(*) from information_schema.columns where table_schema=database() and table_name='biz_case' and column_name='business_line'"));
+            assertEquals(0L,count(connection,"select count(*) from todo_instance i left join todo_template_version v on v.version_id=i.template_version_id where v.version_id is null"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Historical migration readiness database invariants failed",exception);
+        }
     }
 
     private void verifyFoundationResourceReadinessSchema(String url)

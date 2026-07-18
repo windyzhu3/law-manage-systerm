@@ -24,7 +24,9 @@ public class TodoAdmissionEvidenceService
     private static final List<String> STATUSES=List.of("OPEN","IN_REVIEW","APPROVED","REJECTED");
     private final TodoAdmissionEvidenceMapper mapper;
     private final TodoFoundationResourceService resources;
-    public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper,TodoFoundationResourceService resources){this.mapper=mapper;this.resources=resources;}
+    private final TodoHistoricalMigrationReadinessService migrations;
+    public TodoAdmissionEvidenceService(TodoAdmissionEvidenceMapper mapper,TodoFoundationResourceService resources,
+            TodoHistoricalMigrationReadinessService migrations){this.mapper=mapper;this.resources=resources;this.migrations=migrations;}
 
     @Transactional(readOnly=true)
     public List<TodoAdmissionEvidenceView> list(){return mapper.selectEvidence().stream().map(this::view).toList();}
@@ -75,6 +77,8 @@ public class TodoAdmissionEvidenceService
         if(!valid)fail("TODO_ADMISSION_STATE_INVALID","Admission evidence state transition is invalid");
         if("APPROVED".equals(command.status())&&"G-02".equals(text(value(current,"gate_code","gateCode")))&&!resources.gateReady("G-02"))
             fail("TODO_ADMISSION_RESOURCE_NOT_READY","G-02 cannot be approved while repository resources are unresolved or missing at runtime");
+        if("APPROVED".equals(command.status())&&"G-04".equals(text(value(current,"gate_code","gateCode")))&&!migrations.gateReady("G-04"))
+            fail("TODO_ADMISSION_MIGRATION_NOT_READY","G-04 cannot be approved while the historical migration contract is unresolved or invalid");
     }
 
     private void validateRequiredAccountability(UpdateAdmissionEvidenceCommand command)
