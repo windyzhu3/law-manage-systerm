@@ -39,6 +39,19 @@ export function updateAdmissionEvidence(evidenceId, data) { return request({ url
 export function getFoundationAdmissionReadiness() { return request({ url: '/todo/foundation-admission', method: 'get' }) }
 export function getFoundationResourceReadiness(gateCode = 'G-02') { return request({ url: '/todo/foundation-resources', method: 'get', params: { gateCode } }) }
 export function getHistoricalMigrationReadiness(gateCode = 'G-04') { return request({ url: '/todo/foundation-migration', method: 'get', params: { gateCode } }) }
+export function getHistoricalMigrationPreflight(gateCode = 'G-04') {
+  return request({ url: '/todo/foundation-migration/preflight', method: 'get', params: { gateCode } })
+}
+export function exportHistoricalMigrationExceptions(gateCode = 'G-04') {
+  return request({
+    url: '/todo/foundation-migration/exception-export', method: 'get', params: { gateCode },
+    responseType: 'blob', returnFullResponse: true
+  }).then(response => ({
+    blob: response.data,
+    rowCount: Number(response.headers['x-exception-row-count'] || 0),
+    csvSha256: response.headers['x-exception-csv-sha256'] || ''
+  }))
+}
 export function getFileSecurityReadiness(gateCode = 'G-05') { return request({ url: '/todo/foundation-file-security', method: 'get', params: { gateCode } }) }
 export function getFinanceReadiness(gateCode = 'G-06') { return request({ url: '/todo/foundation-finance', method: 'get', params: { gateCode } }) }
 export function getAcceptanceReadiness(gateCode = 'G-07') { return request({ url: '/todo/foundation-acceptance', method: 'get', params: { gateCode } }) }

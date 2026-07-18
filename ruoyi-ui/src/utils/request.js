@@ -80,7 +80,7 @@ service.interceptors.response.use(res => {
     const msg = errorCode[code] || res.data.msg || errorCode['default']
     // 二进制数据则直接返回
     if (res.request.responseType ===  'blob' || res.request.responseType ===  'arraybuffer') {
-      return res.data
+      return res.config.returnFullResponse ? res : res.data
     }
     if (code === 401) {
       if (!isRelogin.show) {

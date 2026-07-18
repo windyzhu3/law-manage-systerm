@@ -15,7 +15,7 @@ function formItem(dialog, label) {
   return dialog.locator('.el-form-item').filter({ hasText: label }).first()
 }
 
-async function setupConfig(page) {
+async function setupConfig(page, options = {}) {
   const state = {
     triggers: [], calendars: [], decisions: [], failNextTrigger: false, decisionUpdates: 0, admissionUpdates: 0, acceptanceUpdates: 0,
     foundationAdmission: {
@@ -49,6 +49,14 @@ async function setupConfig(page) {
         { requirementId: 2, requirementCode: 'HISTORICAL_CASE_DEFAULT', requirementName: '历史案件默认业务线策略', sourceStatus: 'NEEDS_DECISION', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'doc/v0.2-prd-readiness-gap-analysis.md:326', remark: '研发不得代选' },
         { requirementId: 3, requirementCode: 'BACKFILL_VALIDATION_SQL', requirementName: '回填校验SQL', sourceStatus: 'NEEDS_EVIDENCE', readinessStatus: 'SOURCE_UNRESOLVED', sourceRef: 'doc/v0.2-foundation-admission-report.md:105' },
         { requirementId: 4, requirementCode: 'TODO_VERSION_REFERENCE', requirementName: '历史待办固定版本引用', sourceStatus: 'CONFIRMED', readinessStatus: 'READY', sourceRef: 'V0_16_1__todo_engine.sql:22' }
+      ]
+    },
+    historicalMigrationPreflight: {
+      gateCode: 'G-04', generatedAt: '2026-07-18T08:30:00Z', activeCaseCount: 12, deletedCaseCount: 3,
+      historicalTodoCount: 7, orphanTodoVersionCount: 0, exceptionCandidateCount: 12,
+      groups: [
+        { caseStatus: 'OPEN', caseType: 'LITIGATION', caseCount: 8 },
+        { caseStatus: 'CLOSED', caseType: '<NULL>', caseCount: 4 }
       ]
     },
     fileSecurity: {
@@ -97,7 +105,7 @@ async function setupConfig(page) {
     const request = route.request()
     const path = new URL(request.url()).pathname.replace('/prod-api', '')
     const body = request.postDataJSON ? request.postDataJSON() : {}
-    if (path === '/getInfo') return json(route, null, { code: 200, user: { userId: 1, userName: 'admin', nickName: 'admin', avatar: '' }, roles: ['admin'], permissions: ['*:*:*'] })
+    if (path === '/getInfo') return json(route, null, { code: 200, user: { userId: 1, userName: 'admin', nickName: 'admin', avatar: '' }, roles: options.roles || ['admin'], permissions: options.permissions || ['*:*:*'] })
     if (path === '/getRouters') return json(route, [{ path: '/', component: 'Layout', children: [{ path: 'todo/config', component: 'todo/config/index', name: 'TodoConfig', meta: { title: '待办配置', icon: 'clipboard' } }] }])
     if (path === '/todo/template' && request.method() === 'GET') return json(route, [{ template_id: 1, template_name: '线索跟进', template_code: 'LEAD_FOLLOWUP' }])
     if (path === '/todo/event-catalog') return json(route, [{ event_type: 'LEAD_ASSIGNED', payload_version: 1, status: 'ACTIVE' }])
@@ -117,6 +125,20 @@ async function setupConfig(page) {
     if (path === '/todo/foundation-admission') return json(route, state.foundationAdmission)
     if (path === '/todo/foundation-resources') return json(route, state.foundationResources)
     if (path === '/todo/foundation-migration') return json(route, state.historicalMigration)
+    if (path === '/todo/foundation-migration/preflight') {
+      if (options.preflightFailure) return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ code: 500, msg: 'preflight failed', data: null }) })
+      return json(route, state.historicalMigrationPreflight)
+    }
+    if (path === '/todo/foundation-migration/exception-export') return route.fulfill({
+      status: 200,
+      contentType: 'application/zip',
+      headers: {
+        'Content-Disposition': 'attachment; filename="g04-historical-case-preflight.zip"',
+        'X-Exception-Row-Count': '12',
+        'X-Exception-CSV-SHA256': '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+      },
+      body: Buffer.from('PK\u0003\u0004mock-g04-evidence')
+    })
     if (path === '/todo/foundation-file-security') return json(route, state.fileSecurity)
     if (path === '/todo/foundation-finance') return json(route, state.financeReadiness)
     if (path === '/todo/foundation-acceptance') return json(route, state.acceptanceReadiness)
@@ -383,6 +405,39 @@ test('historical migration readiness exposes inventory and blockers without sele
   await expect(pane.getByText('待迁移证据', { exact: true })).toBeVisible()
   await expect(pane.getByText('缺失', { exact: true }).first()).toBeVisible()
   await expect(pane.getByText('7', { exact: true }).first()).toBeVisible()
+  await expect(pane.getByText('异常候选案件')).toBeVisible()
+  await expect(pane.getByText('12', { exact: true }).last()).toBeVisible()
+  const openGroup = pane.locator('.preflight-groups .el-table__row').filter({ hasText: 'OPEN' })
+  await expect(openGroup.getByText('LITIGATION', { exact: true })).toBeVisible()
+  await expect(openGroup.getByText('8', { exact: true })).toBeVisible()
+  await expect(pane.getByText('清单尚未分类、尚未签字，不会自动改变 G-04')).toBeVisible()
+
+  const downloadPromise = page.waitForEvent('download')
+  await pane.getByRole('button', { name: '导出异常候选清单' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toBe('g04-historical-case-preflight.zip')
+  await expect(pane.getByText('导出行数：12', { exact: true })).toBeVisible()
+  await expect(pane.getByText('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', { exact: true })).toBeVisible()
+  await expect(pane.getByText('UNREVIEWED', { exact: true })).toBeVisible()
+})
+
+test('historical migration preflight failure preserves the existing readiness requirements', async ({ page }) => {
+  await setupConfig(page, { preflightFailure: true })
+  await page.getByRole('tab', { name: '历史迁移' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('历史数据预检加载失败，原准入目录未受影响', { exact: true })).toBeVisible()
+  await expect(pane.getByText('CASE_BUSINESS_LINE_SCHEMA', { exact: true })).toBeVisible()
+  await expect(pane.getByText('HISTORICAL_CASE_DEFAULT', { exact: true })).toBeVisible()
+  await expect(pane.getByText('G-04 历史迁移门禁未就绪，不能批准准入证据', { exact: true })).toBeVisible()
+})
+
+test('historical migration inventory hides evidence export without permission', async ({ page }) => {
+  await setupConfig(page, { roles: ['common'], permissions: ['todo:admission:view'] })
+  await page.getByRole('tab', { name: '历史迁移' }).click()
+  const pane = page.locator('.el-tab-pane:not([aria-hidden="true"])')
+  await expect(pane.getByText('异常候选案件')).toBeVisible()
+  await expect(pane.locator('.preflight-groups').getByText('LITIGATION', { exact: true })).toBeVisible()
+  await expect(pane.getByRole('button', { name: '导出异常候选清单' })).toHaveCount(0)
 })
 
 test('file security readiness separates technical controls from independent review', async ({ page }) => {
