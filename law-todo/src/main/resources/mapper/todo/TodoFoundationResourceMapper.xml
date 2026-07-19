@@ -13,7 +13,10 @@
       case when r.resource_type='ROLE' then 0 else
         (select count(*)
          from json_table(coalesce(r.expected_values_json,json_array()), '$[*]'
-           columns(expected_value varchar(100) path '$.value',expected_label varchar(100) path '$.label')) expected
+           columns(
+             expected_value varchar(100) character set utf8mb4 collate utf8mb4_unicode_ci path '$.value',
+             expected_label varchar(100) character set utf8mb4 collate utf8mb4_unicode_ci path '$.label'
+           )) expected
          where exists(select 1 from sys_dict_data data where data.dict_type=r.resource_code and data.status='0'
            and (expected.expected_value is null or data.dict_value=expected.expected_value)
            and (expected.expected_label is null or data.dict_label=expected.expected_label))) end matched_expected_item_count

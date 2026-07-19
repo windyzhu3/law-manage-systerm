@@ -32,7 +32,9 @@
          from todo_prd_definition_catalog c
          left join json_table(
            case when json_valid(c.acceptance_refs_json)=1 then c.acceptance_refs_json else json_array() end,
-           '$[*]' columns(acceptance_ref varchar(255) path '$')
+           '$[*]' columns(
+             acceptance_ref varchar(255) character set utf8mb4 collate utf8mb4_unicode_ci path '$'
+           )
          ) ref_item on true
          group by c.template_code,c.acceptance_refs_json) refs) prd_acceptance_ref_total,
       (select e.status from todo_admission_evidence e where e.evidence_code='G02-DICTIONARY-ROLE' limit 1) g02_evidence_status,

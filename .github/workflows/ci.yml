@@ -114,7 +114,7 @@ jobs:
           done
       - name: Execute and verify all Flyway migrations
         env:
-          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
         run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,FileMaterialEndToEndTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest -Dsurefire.failIfNoSpecifiedTests=false test
@@ -123,7 +123,7 @@ jobs:
         run: echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - name: Verify isolated Foundation test identities
         env:
-          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017_foundation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017_foundation?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
         run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FoundationGovernanceRoleMigrationContractTest,FoundationTestIdentityEndToEndTest,FoundationTestIdentityRollbackTest -Dsurefire.failIfNoSpecifiedTests=false test

@@ -283,6 +283,7 @@ final class FoundationTestIdentityTestSupport
             .baselineOnMigrate(true)
             .baselineVersion("0.15.0")
             .locations("classpath:db/migration")
+            .outOfOrder(true)
             .load()
             .migrate();
     }

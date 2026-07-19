@@ -2,6 +2,10 @@ const fs = require('fs')
 const path = require('path')
 
 const workflow = fs.readFileSync(path.resolve(__dirname, '../../.github/workflows/ci.yml'), 'utf8')
+const applicationDruid = fs.readFileSync(
+  path.resolve(__dirname, '../../ruoyi-admin/src/main/resources/application-druid.yml'),
+  'utf8'
+)
 
 if (!/^name:\s+V0\.2 Foundation quality gate$/m.test(workflow)) {
   throw new Error('CI workflow name is not scoped to V0.2 Foundation')
@@ -35,6 +39,16 @@ if (!workflow.includes('FoundationTestIdentityEndToEndTest')) {
 }
 if (!workflow.includes('FoundationTestIdentityRollbackTest')) {
   throw new Error('CI does not execute the Foundation identity rollback scenarios')
+}
+const migrationDatabaseUrls = workflow.match(/TODO_MIGRATION_DB_URL:\s+([^\r\n]+)/g) || []
+if (
+  migrationDatabaseUrls.length !== 2 ||
+  migrationDatabaseUrls.some(url => !url.includes('connectionCollation=utf8mb4_unicode_ci'))
+) {
+  throw new Error('Foundation migration databases must use utf8mb4_unicode_ci connection collation')
+}
+if (!/url:\s+\$\{DB_URL:[^}\r\n]*connectionCollation=utf8mb4_unicode_ci[^}\r\n]*\}/.test(applicationDruid)) {
+  throw new Error('Default application database URL must use utf8mb4_unicode_ci connection collation')
 }
 const approvedPasswordAssignment = 'run: echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"'
 const passwordMentions = workflow.split(/\r?\n/)

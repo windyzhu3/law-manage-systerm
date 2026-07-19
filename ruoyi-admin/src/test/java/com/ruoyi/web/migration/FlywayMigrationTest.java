@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.28", current.getVersion().getVersion());
+        assertEquals("0.20.29", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -165,6 +165,7 @@ class FlywayMigrationTest
             .baselineOnMigrate(true)
             .baselineVersion("0.15.0")
             .locations("classpath:db/migration")
+            .outOfOrder(true)
             .load();
         assertTrue(collisionFlyway.migrate().success);
 
