@@ -43,6 +43,7 @@ class FlywayMigrationTest
             .load();
 
         baselineFlyway.migrate();
+        assertNoHistoricalMigrationExportRoleGrant(url);
         RoleSnapshot beforeFoundationGovernanceMigration = snapshotRoleState(url);
         Flyway flyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
@@ -94,7 +95,7 @@ class FlywayMigrationTest
             assertEquals(0L, count(connection,
                 "select count(*) from sys_user where user_name like 'ft\\_%' escape '\\\\'"));
             assertEquals(0L, count(connection,
-                "select count(*) from sys_dept where remark like 'FOUNDATION_TEST_DEPARTMENT%'"));
+                "select count(*) from sys_dept where dept_code like 'FOUNDATION_TEST_%'"));
             assertEquals(0L, count(connection,
                 "select count(*) from sys_user_role ur join sys_user u on u.user_id=ur.user_id "
                     + "where u.user_name like 'ft\\_%' escape '\\\\'"));
@@ -298,6 +299,25 @@ class FlywayMigrationTest
         return permissions;
     }
 
+    private Set<String> roleKeysWithPermission(Connection connection, String permission) throws SQLException
+    {
+        Set<String> roleKeys = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select r.role_key from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "join sys_menu m on m.menu_id=rm.menu_id where m.perms=?"))
+        {
+            statement.setString(1, permission);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                while (rows.next())
+                {
+                    roleKeys.add(rows.getString(1));
+                }
+            }
+        }
+        return roleKeys;
+    }
+
     private long roleMenuGrantCount(Connection connection, String roleKey, String menuType) throws SQLException
     {
         try (PreparedStatement statement = connection.prepareStatement(
@@ -380,12 +400,29 @@ class FlywayMigrationTest
             System.getenv("TODO_MIGRATION_DB_PASSWORD")))
         {
             assertEquals(1L,count(connection,"select count(*) from sys_menu where perms='todo:admission:export'"));
-            assertEquals(0L,count(connection,"select count(*) from sys_role_menu rm join sys_menu m on m.menu_id=rm.menu_id "
-                    + "where m.perms='todo:admission:export'"));
+            assertEquals(1L,count(connection,"select count(*) from sys_role_menu rm join sys_menu m on m.menu_id=rm.menu_id "
+                    + "join sys_role r on r.role_id=rm.role_id where m.perms='todo:admission:export' "
+                    + "and r.role_key='foundation_arch_dba_reviewer' and r.status='0' and r.del_flag='0'"));
+            assertEquals(Set.of("foundation_arch_dba_reviewer"), roleKeysWithPermission(connection,
+                "todo:admission:export"));
         }
         catch (SQLException exception)
         {
             throw new AssertionError("Historical migration export permission invariants failed",exception);
+        }
+    }
+
+    private void assertNoHistoricalMigrationExportRoleGrant(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(0L, count(connection, "select count(*) from sys_role_menu rm join sys_menu m on m.menu_id=rm.menu_id "
+                + "where m.perms='todo:admission:export'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Historical migration export permission boundary invariants failed", exception);
         }
     }
 
