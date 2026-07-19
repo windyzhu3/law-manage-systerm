@@ -162,6 +162,9 @@ export default {
   },
   methods: {
     open(userId) {
+      this.info = {}
+      this.postOptions = []
+      this.roleOptions = []
       this.visible = true
       this.loading = true
       getUser(userId).then(res => {
