@@ -86,6 +86,12 @@ class FoundationGovernanceRoleMigrationContractTest
                 "Migration must not reference Foundation decisions");
             assertFalse(normalizedSql.contains("todo_admission_evidence"),
                 "Migration must not reference admission evidence");
+            for (String protectedTable : Set.of("sys_role", "sys_role_menu"))
+            {
+                Pattern mutation = Pattern.compile("\\b(?:update|delete\\s+from)\\s+`?" + protectedTable + "`?\\b",
+                    Pattern.CASE_INSENSITIVE);
+                assertFalse(mutation.matcher(sql).find(), () -> "Migration must not mutate " + protectedTable);
+            }
         }
     }
 

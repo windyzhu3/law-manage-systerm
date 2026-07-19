@@ -19,6 +19,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -98,11 +99,12 @@ class FlywayMigrationTest
 
             Set<Long> allowedMenuIds = definitionMenuAndAncestorIds(connection);
             RoleSnapshot afterFoundationGovernanceMigration = snapshotRoleState(connection);
-            assertEquals(expectedPermissions.keySet(), difference(afterFoundationGovernanceMigration.roleKeys(),
-                beforeFoundationGovernanceMigration.roleKeys()), "Unexpected governance role delta");
-            assertEquals(expectedRoleMenuGrants(connection, expectedPermissions, allowedMenuIds),
-                difference(afterFoundationGovernanceMigration.roleMenuGrants(), beforeFoundationGovernanceMigration.roleMenuGrants()),
-                "Unexpected governance role-menu grant delta");
+            assertPreExistingRolesUnchanged(beforeFoundationGovernanceMigration, afterFoundationGovernanceMigration);
+            assertEquals(expectedPermissions.keySet(), newRoleKeys(beforeFoundationGovernanceMigration,
+                afterFoundationGovernanceMigration), "Unexpected governance role delta");
+            assertEquals(expectedRoleMenuGrantMultiset(beforeFoundationGovernanceMigration.roleMenuGrants(),
+                expectedRoleMenuGrants(connection, expectedPermissions, allowedMenuIds)),
+                afterFoundationGovernanceMigration.roleMenuGrants(), "Unexpected role-menu grant delta");
             for (Map.Entry<String, Set<String>> expected : expectedPermissions.entrySet())
             {
                 assertEquals(expected.getValue(), buttonPermissions(connection, expected.getKey()),
@@ -136,14 +138,19 @@ class FlywayMigrationTest
 
     private RoleSnapshot snapshotRoleState(Connection connection) throws SQLException
     {
-        Set<String> roleKeys = new HashSet<>();
-        Set<RoleMenuGrant> roleMenuGrants = new HashSet<>();
+        Map<Long, RoleState> roleStates = new HashMap<>();
+        Map<RoleMenuGrant, Integer> roleMenuGrants = new HashMap<>();
         try (Statement statement = connection.createStatement();
-             ResultSet rows = statement.executeQuery("select role_key from sys_role"))
+             ResultSet rows = statement.executeQuery("select role_id,role_key,role_name,role_sort,data_scope,"
+                 + "menu_check_strictly,dept_check_strictly,status,del_flag,create_by,update_by,remark from sys_role"))
         {
             while (rows.next())
             {
-                roleKeys.add(rows.getString(1));
+                RoleState role = new RoleState(rows.getLong("role_id"), nullable(rows, "role_key"),
+                    nullable(rows, "role_name"), nullable(rows, "role_sort"), nullable(rows, "data_scope"),
+                    nullable(rows, "menu_check_strictly"), nullable(rows, "dept_check_strictly"), nullable(rows, "status"),
+                    nullable(rows, "del_flag"), nullable(rows, "create_by"), nullable(rows, "update_by"), nullable(rows, "remark"));
+                roleStates.put(role.roleId(), role);
             }
         }
         try (Statement statement = connection.createStatement();
@@ -152,10 +159,10 @@ class FlywayMigrationTest
         {
             while (rows.next())
             {
-                roleMenuGrants.add(new RoleMenuGrant(rows.getString(1), rows.getLong(2)));
+                roleMenuGrants.merge(new RoleMenuGrant(rows.getString(1), rows.getLong(2)), 1, Integer::sum);
             }
         }
-        return new RoleSnapshot(roleKeys, roleMenuGrants);
+        return new RoleSnapshot(roleStates, roleMenuGrants);
     }
 
     private Set<RoleMenuGrant> expectedRoleMenuGrants(Connection connection, Map<String, Set<String>> expectedPermissions,
@@ -192,14 +199,53 @@ class FlywayMigrationTest
         }
     }
 
-    private <T> Set<T> difference(Set<T> after, Set<T> before)
+    private String nullable(ResultSet rows, String column) throws SQLException
     {
-        Set<T> difference = new HashSet<>(after);
-        difference.removeAll(before);
-        return difference;
+        String value = rows.getString(column);
+        return value == null ? "<SQL-NULL>" : value;
     }
 
-    private record RoleSnapshot(Set<String> roleKeys, Set<RoleMenuGrant> roleMenuGrants)
+    private void assertPreExistingRolesUnchanged(RoleSnapshot before, RoleSnapshot after)
+    {
+        for (Map.Entry<Long, RoleState> entry : before.roleStates().entrySet())
+        {
+            assertEquals(entry.getValue(), after.roleStates().get(entry.getKey()),
+                () -> "Pre-existing role was deleted or mutated: role_id=" + entry.getKey());
+        }
+        assertEquals(before.roleStates().size() + 5, after.roleStates().size(),
+            "Migration must add exactly five roles without replacing existing role IDs");
+    }
+
+    private Set<String> newRoleKeys(RoleSnapshot before, RoleSnapshot after)
+    {
+        Set<Long> newRoleIds = new HashSet<>(after.roleStates().keySet());
+        newRoleIds.removeAll(before.roleStates().keySet());
+        Set<String> newRoleKeys = new HashSet<>();
+        for (Long roleId : newRoleIds)
+        {
+            newRoleKeys.add(after.roleStates().get(roleId).roleKey());
+        }
+        return newRoleKeys;
+    }
+
+    private Map<RoleMenuGrant, Integer> expectedRoleMenuGrantMultiset(Map<RoleMenuGrant, Integer> before,
+        Set<RoleMenuGrant> expectedNewGrants)
+    {
+        Map<RoleMenuGrant, Integer> expected = new HashMap<>(before);
+        for (RoleMenuGrant grant : expectedNewGrants)
+        {
+            expected.merge(grant, 1, Integer::sum);
+        }
+        return expected;
+    }
+
+    private record RoleSnapshot(Map<Long, RoleState> roleStates, Map<RoleMenuGrant, Integer> roleMenuGrants)
+    {
+    }
+
+    private record RoleState(long roleId, String roleKey, String roleName, String roleSort, String dataScope,
+        String menuCheckStrictly, String deptCheckStrictly, String status, String delFlag, String createBy,
+        String updateBy, String remark)
     {
     }
 
