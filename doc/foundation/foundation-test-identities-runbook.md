@@ -80,7 +80,7 @@ Remove-Item Env:FOUNDATION_TEST_USER_PASSWORD -ErrorAction SilentlyContinue
 
 | 门禁 | 结果 |
 |---|---|
-| `mvn --batch-mode --no-transfer-progress clean verify` | `BUILD SUCCESS`；722 tests，0 failure，0 error，12 skip。12 个 skip 中 10 个是未注入外部数据库时的显式 MySQL gate，2 个是 Windows 不具备符号链接能力时的既有 capability assumption；数据库 gate 随后在 disposable MySQL 上以 0 skip 执行 |
+| `mvn --batch-mode --no-transfer-progress clean verify` | 在 fresh disposable MySQL 与运行时注入凭据下 `BUILD SUCCESS`；726 tests，724 pass，0 failure，0 error，2 skip；2 个 skip 均为 Windows 不具备符号链接能力时的既有 capability assumption |
 | CI migration 完整列表 | 4/4 PASS，0 skip；Flyway 终态 `0.20.28`，`flyway_schema_history` 41 条（含 baseline） |
 | 隔离 Foundation 列表 | 8/8 PASS，0 skip；未启用 Seeder 时测试部门、`ft_%` 用户和 `user_type='99'` 用户均为 0；启用后测试断言精确 6/12/12，第二次运行 Hash 字节不变，冲突用例全部回滚 |
 | 治理角色与清理 | 5 个 V0.20.28 正式治理角色及精确最小权限通过；测试结束后 marker 用户和部门均清理为 0 |
