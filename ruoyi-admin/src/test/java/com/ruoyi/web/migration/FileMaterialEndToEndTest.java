@@ -71,7 +71,7 @@ class FileMaterialEndToEndTest
         assumeTrue(url!=null&&!url.isBlank(),"Migration database is provided by the CI quality gate");
         String user=System.getenv("TODO_MIGRATION_DB_USER"),password=System.getenv("TODO_MIGRATION_DB_PASSWORD");
         Flyway.configure().dataSource(url,user,password).baselineOnMigrate(true).baselineVersion("0.15.0")
-            .locations("classpath:db/migration").load().migrate();
+            .locations("classpath:db/migration").target("0.20.27").load().migrate();
 
         DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
         List<MaterialDefinition> materials=prdMaterials(dataSource);

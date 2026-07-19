@@ -1,14 +1,14 @@
 const { test, expect } = require('@playwright/test')
+const { randomBytes } = require('node:crypto')
 
 test('system user UI labels only test identities without exposing credentials', async ({ page }) => {
-  const seedPassword = 'e2e-seed-password'
-  const bcryptHash = '$2a$10$7EqJtq98hPqEX7fNZaFWoOeR6Tq4U6iD5R4L4J1dJqAZfU.U2Wcqe'
+  const sensitive = sensitiveFixture()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
   page.on('console', message => {
     if (message.type() === 'error') errors.push(message.text())
   })
-  await setupSystemUserApp(page, seedPassword, bcryptHash)
+  await setupSystemUserApp(page, sensitive)
 
   await page.goto('/system/user')
   const testUserRow = page.locator('.el-table__body tr').filter({ hasText: 'foundation-test-user' }).first()
@@ -28,20 +28,20 @@ test('system user UI labels only test identities without exposing credentials', 
   const dom = await page.locator('body').textContent()
   const markup = await page.content()
   const controlValues = await page.locator('input, textarea, select').evaluateAll(controls => controls.map(control => control.value))
-  expect(dom).not.toContain(seedPassword)
-  expect(dom).not.toContain(bcryptHash)
+  expect(dom).not.toContain(sensitive.password)
+  expect(dom).not.toContain(sensitive.storedHash)
   expect(dom).not.toMatch(/\$2[aby]\$/)
-  expect(markup).not.toContain(seedPassword)
-  expect(markup).not.toContain(bcryptHash)
+  expect(markup).not.toContain(sensitive.password)
+  expect(markup).not.toContain(sensitive.storedHash)
   expect(markup).not.toMatch(/\$2[aby]\$/)
-  expect(controlValues.join('\n')).not.toContain(seedPassword)
-  expect(controlValues.join('\n')).not.toContain(bcryptHash)
+  expect(controlValues.join('\n')).not.toContain(sensitive.password)
+  expect(controlValues.join('\n')).not.toContain(sensitive.storedHash)
   expect(controlValues.join('\n')).not.toMatch(/\$2[aby]\$/)
   expect(errors).toEqual([])
 })
 
 test('system user drawer clears a prior test identity while an ordinary detail loads', async ({ page }) => {
-  const controller = await setupSystemUserApp(page, 'e2e-seed-password', '$2a$10$7EqJtq98hPqEX7fNZaFWoOeR6Tq4U6iD5R4L4J1dJqAZfU.U2Wcqe')
+  const controller = await setupSystemUserApp(page, sensitiveFixture())
 
   await page.goto('/system/user')
   const testUserRow = page.locator('.el-table__body tr').filter({ hasText: 'foundation-test-user' }).first()
@@ -61,7 +61,7 @@ test('system user drawer clears a prior test identity while an ordinary detail l
   await expect(drawer.getByText('测试身份', { exact: true })).toHaveCount(0)
 })
 
-async function setupSystemUserApp(page, seedPassword, bcryptHash) {
+async function setupSystemUserApp(page, sensitive) {
   let resolveOrdinaryDetail
   const ordinaryDetailRequested = new Promise(resolve => { resolveOrdinaryDetail = resolve })
   await page.context().addCookies([{ name: 'Admin-Token', value: 'e2e-token', url: 'http://127.0.0.1:4173/' }])
@@ -74,9 +74,9 @@ async function setupSystemUserApp(page, seedPassword, bcryptHash) {
     if (path.startsWith('/system/dict/data/type/')) return json(route, dictionaries())
     if (path === '/system/config/configKey/sys.index.skinName') return json(route, '')
     if (path.startsWith('/system/notice/list')) return json(route, null, { code: 200, rows: [], total: 0 })
-    if (path.startsWith('/system/user/list')) return json(route, null, { code: 200, rows: users(), total: 2 })
+    if (path.startsWith('/system/user/list')) return json(route, null, { code: 200, rows: users(sensitive), total: 2 })
     if (path === '/system/user/deptTree') return json(route, [])
-    if (path === '/system/user/99') return json(route, null, { code: 200, data: testUser(seedPassword, bcryptHash), postIds: [], roleIds: [], posts: [], roles: [] })
+    if (path === '/system/user/99') return json(route, null, { code: 200, data: testUser(sensitive), postIds: [], roleIds: [], posts: [], roles: [] })
     if (path === '/system/user/100') {
       await ordinaryDetailRequested
       return json(route, null, { code: 200, data: ordinaryUser(), postIds: [], roleIds: [], posts: [], roles: [] })
@@ -92,8 +92,8 @@ function routes() {
   ] }]
 }
 
-function users() {
-  return [testUser('e2e-seed-password', '$2a$10$7EqJtq98hPqEX7fNZaFWoOeR6Tq4U6iD5R4L4J1dJqAZfU.U2Wcqe'), ordinaryUser()]
+function users(sensitive) {
+  return [testUser(sensitive), ordinaryUser()]
 }
 
 function ordinaryUser() {
@@ -108,7 +108,7 @@ function ordinaryUser() {
   }
 }
 
-function testUser(password, passwordHash) {
+function testUser(sensitive) {
   return {
     userId: 99,
     userName: 'foundation-test-user',
@@ -117,8 +117,15 @@ function testUser(password, passwordHash) {
     status: '0',
     dept: { deptName: 'Foundation' },
     createTime: '2026-07-19 10:00:00',
-    password,
-    passwordHash
+    password: sensitive.password,
+    passwordHash: sensitive.storedHash
+  }
+}
+
+function sensitiveFixture() {
+  return {
+    password: randomBytes(24).toString('base64url'),
+    storedHash: randomBytes(32).toString('base64url')
   }
 }
 
