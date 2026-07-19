@@ -115,6 +115,29 @@ class FoundationGovernanceRoleMigrationContractTest
         }
     }
 
+    @Test
+    void migrationResourceGrantsOnlyRoleIdsProvenNewByThisMigration() throws IOException
+    {
+        try (InputStream resource = getClass().getResourceAsStream(
+            "/db/migration/V0_20_28__foundation_governance_roles.sql"))
+        {
+            assertNotNull(resource);
+            String normalizedSql = normalize(new String(resource.readAllBytes(), StandardCharsets.UTF_8));
+            for (String roleKey : GOVERNANCE_ROLE_KEYS)
+            {
+                assertTrue(normalizedSql.contains("set @" + roleKey + "_existing_role_id="),
+                    () -> "Migration must snapshot pre-existing role ID for " + roleKey);
+                assertTrue(normalizedSql.contains("set @" + roleKey + "_new_role_id=if(@" + roleKey
+                    + "_existing_role_id is null,"),
+                    () -> "Migration must derive a new-only role ID for " + roleKey);
+            }
+            assertTrue(normalizedSql.contains("from ( select @foundation_product_owner_new_role_id role_id,"),
+                "Role-menu grants must be derived from the proven-new role ID table");
+            assertTrue(normalizedSql.contains("where created.role_id is not null"),
+                "Colliding roles must be excluded from role-menu grants");
+        }
+    }
+
     private Pattern forbiddenIdentityTableMutationPattern(String table)
     {
         return Pattern.compile("\\b(?:insert\\s+(?:ignore\\s+)?into|replace\\s+into|update|delete\\s+from|"

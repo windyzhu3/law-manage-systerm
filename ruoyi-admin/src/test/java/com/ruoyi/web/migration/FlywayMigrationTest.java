@@ -69,6 +69,7 @@ class FlywayMigrationTest
         verifyAcceptanceReadinessSchema(url);
         verifyFoundationAdmissionAggregateQuery(url);
         verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
+        verifySameMarkerRoleCollisionReceivesNoGrants(url);
     }
 
     private void verifyFoundationGovernanceRoles(String url, RoleSnapshot beforeFoundationGovernanceMigration)
@@ -81,6 +82,13 @@ class FlywayMigrationTest
             "foundation_qa_acceptor", Set.of("todo:admission:view", "todo:admission:edit"),
             "foundation_independent_reviewer", Set.of("todo:admission:view", "todo:admission:edit")
         );
+        Map<String, GovernanceRoleDefinition> expectedDefinitions = Map.of(
+            "foundation_product_owner", new GovernanceRoleDefinition("Foundation产品负责人", "40"),
+            "foundation_security_reviewer", new GovernanceRoleDefinition("Foundation安全评审人", "41"),
+            "foundation_arch_dba_reviewer", new GovernanceRoleDefinition("Foundation架构DBA评审人", "42"),
+            "foundation_qa_acceptor", new GovernanceRoleDefinition("Foundation QA验收人", "43"),
+            "foundation_independent_reviewer", new GovernanceRoleDefinition("Foundation独立准入评审人", "44")
+        );
         try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
             System.getenv("TODO_MIGRATION_DB_PASSWORD")))
         {
@@ -92,10 +100,15 @@ class FlywayMigrationTest
             assertEquals(5L, count(connection,
                 "select count(*) from sys_role where create_by='flyway-v0.20.28'"));
             assertEquals(expectedPermissions.keySet(), roleKeysCreatedByFoundationMigration(connection));
+            assertEquals(expectedDefinitions, governanceRoleDefinitions(connection));
             assertEquals(0L, count(connection,
                 "select count(*) from sys_user where user_name like 'ft\\_%' escape '\\\\'"));
             assertEquals(0L, count(connection,
-                "select count(*) from sys_dept where dept_code like 'FOUNDATION_TEST_%'"));
+                "select count(*) from sys_dept where dept_code in ('FOUNDATION_TEST_FIRM','FOUNDATION_TEST_SALES',"
+                    + "'FOUNDATION_TEST_CASE_MANAGEMENT','FOUNDATION_TEST_GENERAL_LAW','FOUNDATION_TEST_FINANCE',"
+                    + "'FOUNDATION_TEST_GOVERNANCE')"));
+            assertEquals(0L, count(connection,
+                "select count(*) from sys_dept where create_by='foundation-test-seeder'"));
             assertEquals(0L, count(connection,
                 "select count(*) from sys_user_role ur join sys_user u on u.user_id=ur.user_id "
                     + "where u.user_name like 'ft\\_%' escape '\\\\'"));
@@ -123,6 +136,50 @@ class FlywayMigrationTest
         catch (SQLException exception)
         {
             throw new AssertionError("Foundation governance role invariants failed", exception);
+        }
+    }
+
+    private void verifySameMarkerRoleCollisionReceivesNoGrants(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")); Statement statement = connection.createStatement())
+        {
+            statement.executeUpdate("delete rm from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "where r.role_key in ('foundation_product_owner','foundation_security_reviewer',"
+                + "'foundation_arch_dba_reviewer','foundation_qa_acceptor','foundation_independent_reviewer')");
+            statement.executeUpdate("delete from sys_role where role_key in ('foundation_product_owner',"
+                + "'foundation_security_reviewer','foundation_arch_dba_reviewer','foundation_qa_acceptor',"
+                + "'foundation_independent_reviewer')");
+            statement.executeUpdate("delete from flyway_schema_history where version='0.20.28'");
+            statement.executeUpdate("insert into sys_role(role_name,role_key,role_sort,data_scope,menu_check_strictly,"
+                + "dept_check_strictly,status,del_flag,create_by,create_time) values ('collision',"
+                + "'foundation_product_owner',999,'5',1,1,'0','0','flyway-v0.20.28',sysdate())");
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Collision scenario setup failed", exception);
+        }
+
+        Flyway collisionFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .load();
+        assertTrue(collisionFlyway.migrate().success);
+
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(0L, count(connection, "select count(*) from sys_role_menu rm join sys_role r "
+                + "on r.role_id=rm.role_id where r.role_key='foundation_product_owner' and r.role_name='collision'"));
+            assertEquals(4L, count(connection, "select count(*) from sys_role where role_key in "
+                + "('foundation_security_reviewer','foundation_arch_dba_reviewer','foundation_qa_acceptor',"
+                + "'foundation_independent_reviewer') and create_by='flyway-v0.20.28'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Collision scenario verification failed", exception);
         }
     }
 
@@ -262,6 +319,32 @@ class FlywayMigrationTest
 
     private record RoleMenuGrant(String roleKey, long menuId)
     {
+    }
+
+    private record GovernanceRoleDefinition(String roleName, String roleSort)
+    {
+    }
+
+    private Map<String, GovernanceRoleDefinition> governanceRoleDefinitions(Connection connection) throws SQLException
+    {
+        Map<String, GovernanceRoleDefinition> definitions = new HashMap<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select role_key,role_name,role_sort from sys_role where role_key in ("
+                + "'foundation_product_owner','foundation_security_reviewer','foundation_arch_dba_reviewer',"
+                + "'foundation_qa_acceptor','foundation_independent_reviewer') and data_scope='5' "
+                + "and menu_check_strictly=1 and dept_check_strictly=1 and status='0' and del_flag='0' "
+                + "and create_by='flyway-v0.20.28'"))
+        {
+            try (ResultSet rows = statement.executeQuery())
+            {
+                while (rows.next())
+                {
+                    definitions.put(rows.getString("role_key"), new GovernanceRoleDefinition(
+                        rows.getString("role_name"), rows.getString("role_sort")));
+                }
+            }
+        }
+        return definitions;
     }
 
     private Set<String> roleKeysCreatedByFoundationMigration(Connection connection) throws SQLException
