@@ -31,6 +31,16 @@ class FlywayMigrationTest
     {
         String url = System.getenv("TODO_MIGRATION_DB_URL");
         assumeTrue(url != null && !url.isBlank(), "Migration database is provided by the CI quality gate");
+        Flyway baselineFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.27")
+            .load();
+
+        baselineFlyway.migrate();
+        RoleSnapshot beforeFoundationGovernanceMigration = snapshotRoleState(url);
         Flyway flyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
             .baselineOnMigrate(true)
@@ -54,10 +64,10 @@ class FlywayMigrationTest
         verifyFinanceReadinessSchema(url);
         verifyAcceptanceReadinessSchema(url);
         verifyFoundationAdmissionAggregateQuery(url);
-        verifyFoundationGovernanceRoles(url);
+        verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
     }
 
-    private void verifyFoundationGovernanceRoles(String url)
+    private void verifyFoundationGovernanceRoles(String url, RoleSnapshot beforeFoundationGovernanceMigration)
     {
         Map<String, Set<String>> expectedPermissions = Map.of(
             "foundation_product_owner", Set.of("todo:decision:view", "todo:decision:edit", "todo:admission:view",
@@ -87,6 +97,12 @@ class FlywayMigrationTest
                     + "where u.user_name like 'ft\\_%' escape '\\\\'"));
 
             Set<Long> allowedMenuIds = definitionMenuAndAncestorIds(connection);
+            RoleSnapshot afterFoundationGovernanceMigration = snapshotRoleState(connection);
+            assertEquals(expectedPermissions.keySet(), difference(afterFoundationGovernanceMigration.roleKeys(),
+                beforeFoundationGovernanceMigration.roleKeys()), "Unexpected governance role delta");
+            assertEquals(expectedRoleMenuGrants(connection, expectedPermissions, allowedMenuIds),
+                difference(afterFoundationGovernanceMigration.roleMenuGrants(), beforeFoundationGovernanceMigration.roleMenuGrants()),
+                "Unexpected governance role-menu grant delta");
             for (Map.Entry<String, Set<String>> expected : expectedPermissions.entrySet())
             {
                 assertEquals(expected.getValue(), buttonPermissions(connection, expected.getKey()),
@@ -103,6 +119,92 @@ class FlywayMigrationTest
         {
             throw new AssertionError("Foundation governance role invariants failed", exception);
         }
+    }
+
+    private RoleSnapshot snapshotRoleState(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            return snapshotRoleState(connection);
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Foundation governance role snapshot failed", exception);
+        }
+    }
+
+    private RoleSnapshot snapshotRoleState(Connection connection) throws SQLException
+    {
+        Set<String> roleKeys = new HashSet<>();
+        Set<RoleMenuGrant> roleMenuGrants = new HashSet<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery("select role_key from sys_role"))
+        {
+            while (rows.next())
+            {
+                roleKeys.add(rows.getString(1));
+            }
+        }
+        try (Statement statement = connection.createStatement();
+             ResultSet rows = statement.executeQuery("select r.role_key,rm.menu_id from sys_role_menu rm "
+                 + "join sys_role r on r.role_id=rm.role_id"))
+        {
+            while (rows.next())
+            {
+                roleMenuGrants.add(new RoleMenuGrant(rows.getString(1), rows.getLong(2)));
+            }
+        }
+        return new RoleSnapshot(roleKeys, roleMenuGrants);
+    }
+
+    private Set<RoleMenuGrant> expectedRoleMenuGrants(Connection connection, Map<String, Set<String>> expectedPermissions,
+        Set<Long> allowedMenuIds) throws SQLException
+    {
+        Set<RoleMenuGrant> expectedGrants = new HashSet<>();
+        for (Map.Entry<String, Set<String>> expected : expectedPermissions.entrySet())
+        {
+            for (Long menuId : allowedMenuIds)
+            {
+                expectedGrants.add(new RoleMenuGrant(expected.getKey(), menuId));
+            }
+            for (String permission : expected.getValue())
+            {
+                expectedGrants.add(new RoleMenuGrant(expected.getKey(), buttonMenuId(connection, permission)));
+            }
+        }
+        return expectedGrants;
+    }
+
+    private long buttonMenuId(Connection connection, String permission) throws SQLException
+    {
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select menu_id from sys_menu where perms=? and menu_type='F'"))
+        {
+            statement.setString(1, permission);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                assertTrue(rows.next(), () -> "Required button permission menu must exist: " + permission);
+                long menuId = rows.getLong(1);
+                assertTrue(!rows.next(), () -> "Required button permission menu must be unique: " + permission);
+                return menuId;
+            }
+        }
+    }
+
+    private <T> Set<T> difference(Set<T> after, Set<T> before)
+    {
+        Set<T> difference = new HashSet<>(after);
+        difference.removeAll(before);
+        return difference;
+    }
+
+    private record RoleSnapshot(Set<String> roleKeys, Set<RoleMenuGrant> roleMenuGrants)
+    {
+    }
+
+    private record RoleMenuGrant(String roleKey, long menuId)
+    {
     }
 
     private Set<String> roleKeysCreatedByFoundationMigration(Connection connection) throws SQLException

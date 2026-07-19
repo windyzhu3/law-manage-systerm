@@ -3,6 +3,7 @@ package com.ruoyi.web.migration;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -31,8 +32,8 @@ class FoundationGovernanceRoleMigrationContractTest
     );
 
     private static final String ROLE_CREATOR = "flyway-v0.20.28";
-    private static final Pattern ROLE_INSERT = Pattern.compile("\\binsert\\s+(?:ignore\\s+)?into\\s+sys_role\\b",
-        Pattern.CASE_INSENSITIVE);
+    private static final Pattern ROLE_INSERT_STATEMENT = Pattern.compile(
+        "\\binsert\\s+(?:ignore\\s+)?into\\s+`?sys_role`?\\b.*?;", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     @Test
     void migrationResourceEnforcesGovernanceRoleExclusivityAndWriteBoundary() throws IOException
@@ -42,16 +43,35 @@ class FoundationGovernanceRoleMigrationContractTest
         {
             assertNotNull(resource, "Foundation governance role migration must be available on the runtime classpath");
             String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
-            String normalizedSql = sql.replaceAll("\\s+", " ").toLowerCase();
-
-            assertEquals(5, matchCount(ROLE_INSERT, sql), "Migration must create exactly five formal roles");
-            for (String roleKey : GOVERNANCE_ROLE_KEYS)
+            String normalizedSql = normalize(sql);
+            Set<String> definedRoleKeys = new java.util.HashSet<>();
+            Matcher roleInserts = ROLE_INSERT_STATEMENT.matcher(sql);
+            int roleInsertCount = 0;
+            while (roleInserts.find())
             {
-                assertEquals(1, occurrenceCount(normalizedSql, roleKey),
-                    () -> "Migration must define governance role exactly once: " + roleKey);
+                roleInsertCount++;
+                String statement = normalize(roleInserts.group());
+                assertEquals(1, occurrenceCount(statement, ROLE_CREATOR),
+                    "Each formal role insert must use the Foundation migration creator marker exactly once");
+                assertFalse(Pattern.compile("\\b(values|union|join)\\b").matcher(statement).find(),
+                    "Formal role inserts must be one-row SELECT statements");
+                assertTrue(Pattern.compile("\\bselect\\b.*\\bwhere\\s+not\\s+exists\\b").matcher(statement).find(),
+                    "Formal role inserts must use idempotent SELECT ... WHERE NOT EXISTS");
+                Set<String> statementRoleKeys = new java.util.HashSet<>();
+                for (String roleKey : GOVERNANCE_ROLE_KEYS)
+                {
+                    if (occurrenceCount(statement, roleKey) == 2)
+                    {
+                        statementRoleKeys.add(roleKey);
+                    }
+                }
+                assertEquals(1, statementRoleKeys.size(),
+                    "Each formal role insert must define one expected role in SELECT and WHERE NOT EXISTS");
+                definedRoleKeys.addAll(statementRoleKeys);
             }
-            assertEquals(5, occurrenceCount(normalizedSql, ROLE_CREATOR),
-                "Every formal role must use the Foundation migration creator marker");
+            assertEquals(5, roleInsertCount, "Migration must create exactly five formal roles");
+            assertEquals(GOVERNANCE_ROLE_KEYS, definedRoleKeys,
+                "Formal role inserts must define exactly the five approved governance roles");
             for (String roleKey : FORBIDDEN_Q003_ROLE_KEYS)
             {
                 assertFalse(normalizedSql.contains(roleKey), () -> "Migration must not define Q-003 role " + roleKey);
@@ -69,15 +89,9 @@ class FoundationGovernanceRoleMigrationContractTest
         }
     }
 
-    private int matchCount(Pattern pattern, String value)
+    private String normalize(String value)
     {
-        Matcher matcher = pattern.matcher(value);
-        int matches = 0;
-        while (matcher.find())
-        {
-            matches++;
-        }
-        return matches;
+        return value.replaceAll("\\s+", " ").toLowerCase();
     }
 
     private int occurrenceCount(String value, String expected)
