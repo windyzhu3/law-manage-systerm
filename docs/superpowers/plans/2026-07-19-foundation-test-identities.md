@@ -305,7 +305,7 @@
   SysDept selectDepartmentByCode(String deptCode);
   SysDept selectDepartmentByName(String deptName);
   int insertDepartment(SysDept department);
-  SysUser selectAnyUserByUserName(String userName);
+  List<SysUser> selectUsersByUserName(String userName);
   int insertUser(SysUser user);
   List<Long> selectRoleIdsByUserId(Long userId);
   int deleteRoleLinksByUserId(Long userId);
@@ -313,7 +313,7 @@
   int updateTestUserPlacement(@Param("userId") Long userId, @Param("deptId") Long deptId);
   ```
 
-  `selectAnyUserByUserName` 必须包含逻辑删除用户，以防 Seeder 借删除态绕过真实用户名碰撞。
+  `selectUsersByUserName` 必须返回该用户名的全部逻辑删除状态，不得用 `LIMIT 1`、marker 排序或 SQL `LIKE` 隐藏冲突。服务层只允许至多一个启用的已标记测试用户；真实/无标记、停用、未知删除标志或多个启用测试用户均冲突。`del_flag='2'` 的已标记历史行可以保留；不存在启用测试用户时才可重新创建。
 
 - [ ] **Step 3: Write provisioning-service RED tests**
 
