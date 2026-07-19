@@ -21,11 +21,12 @@ if (!workflow.includes('FoundationTestIdentityEndToEndTest')) {
 if (!workflow.includes('FoundationTestIdentityRollbackTest')) {
   throw new Error('CI does not execute the Foundation identity rollback scenarios')
 }
-if (!workflow.includes('echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"')) {
-  throw new Error('CI does not generate an ephemeral Foundation test password')
-}
-if (/FOUNDATION_TEST_USER_PASSWORD:\s*[^$\s][^\r\n]*/.test(workflow)) {
-  throw new Error('CI must not commit a fixed Foundation test password')
+const approvedPasswordAssignment = 'run: echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"'
+const passwordMentions = workflow.split(/\r?\n/)
+  .filter(line => line.includes('FOUNDATION_TEST_USER_PASSWORD'))
+  .map(line => line.trim())
+if (passwordMentions.length !== 1 || passwordMentions[0] !== approvedPasswordAssignment) {
+  throw new Error('CI must contain only the approved ephemeral Foundation test password assignment')
 }
 
 console.log('Foundation CI contract ok')

@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.ruoyi.common.core.domain.entity.SysDept;
-import com.ruoyi.system.foundation.FoundationTestIdentityCatalog;
 import com.ruoyi.system.foundation.FoundationTestIdentityErrorCode;
 import com.ruoyi.system.foundation.FoundationTestIdentityException;
 import com.ruoyi.system.foundation.FoundationTestIdentityProvisioningService;
@@ -28,7 +27,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class FoundationTestIdentityRollbackTest
 {
-    private FoundationIdentityDatabaseSupport database;
+    private FoundationTestIdentityTestSupport database;
+    private FoundationTestIdentityTestSupport.IdentityCleanup cleanup;
     private ConfigurableApplicationContext context;
     private JdbcTemplate jdbc;
     private FoundationTestIdentityMapper mapper;
@@ -38,7 +38,8 @@ class FoundationTestIdentityRollbackTest
     @BeforeAll
     void startRealMyBatisContext()
     {
-        database = FoundationIdentityDatabaseSupport.migrate();
+        database = FoundationTestIdentityTestSupport.migrate();
+        cleanup = database.identityCleanup();
         // The integration gate models a single startup invocation, not concurrent application starts.
         context = database.startContext("test");
         jdbc = context.getBean(JdbcTemplate.class);
@@ -53,6 +54,10 @@ class FoundationTestIdentityRollbackTest
         if (context != null)
         {
             context.close();
+        }
+        if (cleanup != null)
+        {
+            cleanup.close();
         }
     }
 
@@ -97,13 +102,13 @@ class FoundationTestIdentityRollbackTest
     @Test
     void duplicateDepartmentNameReturnsSentinelAndRollsBackTheWholeScenario()
     {
-        FoundationTestIdentityCatalog.DepartmentSpec target = FoundationTestIdentityCatalog.departments().stream()
-            .filter(spec -> "FOUNDATION_TEST_SALES".equals(spec.code())).findFirst().orElseThrow();
+        String targetName = jdbc.queryForObject(
+            "select dept_name from sys_dept where dept_code='FOUNDATION_TEST_SALES'", String.class);
         assertScenarioRollsBack(FOUNDATION_TEST_IDENTITIES_DEPARTMENT_CONFLICT, arranged -> {
             assertEquals(1, arranged.update("insert into sys_dept(parent_id,ancestors,dept_name,dept_code,order_num,"
                 + "status,del_flag,create_by,create_time) values (0,'0',?,'REAL_FOUNDATION_SENTINEL',999,"
-                + "'0','0','admin',sysdate())", target.name()));
-            SysDept sentinel = mapper.selectDepartmentByName(target.name());
+                + "'0','0','admin',sysdate())", targetName));
+            SysDept sentinel = mapper.selectDepartmentByName(targetName);
             assertNotNull(sentinel, "Duplicate-name aggregate must return the conflict sentinel");
             assertNull(sentinel.getDeptId(), "Duplicate-name sentinel must not masquerade as a real department");
         });
@@ -112,7 +117,7 @@ class FoundationTestIdentityRollbackTest
     private void assertScenarioRollsBack(FoundationTestIdentityErrorCode expectedCode,
         Consumer<JdbcTemplate> arrange)
     {
-        FoundationIdentityDatabaseSupport.DatabaseSnapshot before = database.snapshot(jdbc);
+        FoundationTestIdentityTestSupport.DatabaseSnapshot before = database.snapshot(jdbc);
 
         FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
             () -> transaction.executeWithoutResult(status -> {
