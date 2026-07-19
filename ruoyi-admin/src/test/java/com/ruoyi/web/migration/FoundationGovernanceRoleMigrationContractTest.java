@@ -78,9 +78,8 @@ class FoundationGovernanceRoleMigrationContractTest
             }
             for (String forbiddenTable : Set.of("sys_user", "sys_dept", "sys_user_role"))
             {
-                Pattern insert = Pattern.compile("\\binsert\\s+(?:ignore\\s+)?into\\s+`?" + forbiddenTable + "`?\\b",
-                    Pattern.CASE_INSENSITIVE);
-                assertFalse(insert.matcher(sql).find(), () -> "Migration must not write " + forbiddenTable);
+                assertFalse(forbiddenIdentityTableMutationPattern(forbiddenTable).matcher(sql).find(),
+                    () -> "Migration must not mutate " + forbiddenTable);
             }
             assertFalse(normalizedSql.contains("todo_foundation_decision"),
                 "Migration must not reference Foundation decisions");
@@ -93,6 +92,33 @@ class FoundationGovernanceRoleMigrationContractTest
                 assertFalse(mutation.matcher(sql).find(), () -> "Migration must not mutate " + protectedTable);
             }
         }
+    }
+
+    @Test
+    void forbiddenIdentityTableMutationPatternCoversEveryProhibitedOperation()
+    {
+        for (String table : Set.of("sys_user", "sys_dept", "sys_user_role"))
+        {
+            Pattern mutation = forbiddenIdentityTableMutationPattern(table);
+            for (String sql : Set.of(
+                "INSERT INTO `" + table + "` values (1)",
+                "insert\nignore\tinto `" + table + "` select 1",
+                "REPLACE  INTO `" + table + "` values (1)",
+                "update\n`" + table + "` set status='0'",
+                "DELETE\tFROM `" + table + "`",
+                "truncate\n table\t`" + table + "`",
+                "ALTER\tTABLE `" + table + "` add marker int",
+                "drop\n table `" + table + "`"))
+            {
+                assertTrue(mutation.matcher(sql).find(), () -> "Pattern must reject: " + sql);
+            }
+        }
+    }
+
+    private Pattern forbiddenIdentityTableMutationPattern(String table)
+    {
+        return Pattern.compile("\\b(?:insert\\s+(?:ignore\\s+)?into|replace\\s+into|update|delete\\s+from|"
+            + "truncate(?:\\s+table)?|alter\\s+table|drop\\s+table)\\s+`?" + table + "`?\\b", Pattern.CASE_INSENSITIVE);
     }
 
     private String normalize(String value)
