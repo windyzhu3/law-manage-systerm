@@ -27,6 +27,8 @@ import java.util.regex.Pattern;
 
 class FlywayMigrationTest
 {
+    private static final String SQL_NULL = "<SQL-NULL>";
+
     @Test
     void migratesV015BaselineToTodoPhaseOneSchema()
     {
@@ -142,14 +144,16 @@ class FlywayMigrationTest
         Map<RoleMenuGrant, Integer> roleMenuGrants = new HashMap<>();
         try (Statement statement = connection.createStatement();
              ResultSet rows = statement.executeQuery("select role_id,role_key,role_name,role_sort,data_scope,"
-                 + "menu_check_strictly,dept_check_strictly,status,del_flag,create_by,update_by,remark from sys_role"))
+                 + "menu_check_strictly,dept_check_strictly,status,del_flag,create_by,update_by,create_time,update_time,remark "
+                 + "from sys_role"))
         {
             while (rows.next())
             {
                 RoleState role = new RoleState(rows.getLong("role_id"), nullable(rows, "role_key"),
                     nullable(rows, "role_name"), nullable(rows, "role_sort"), nullable(rows, "data_scope"),
                     nullable(rows, "menu_check_strictly"), nullable(rows, "dept_check_strictly"), nullable(rows, "status"),
-                    nullable(rows, "del_flag"), nullable(rows, "create_by"), nullable(rows, "update_by"), nullable(rows, "remark"));
+                    nullable(rows, "del_flag"), nullable(rows, "create_by"), nullable(rows, "update_by"),
+                    nullableObject(rows, "create_time"), nullableObject(rows, "update_time"), nullable(rows, "remark"));
                 roleStates.put(role.roleId(), role);
             }
         }
@@ -202,7 +206,13 @@ class FlywayMigrationTest
     private String nullable(ResultSet rows, String column) throws SQLException
     {
         String value = rows.getString(column);
-        return value == null ? "<SQL-NULL>" : value;
+        return value == null ? SQL_NULL : value;
+    }
+
+    private Object nullableObject(ResultSet rows, String column) throws SQLException
+    {
+        Object value = rows.getObject(column);
+        return value == null ? SQL_NULL : value;
     }
 
     private void assertPreExistingRolesUnchanged(RoleSnapshot before, RoleSnapshot after)
@@ -245,7 +255,7 @@ class FlywayMigrationTest
 
     private record RoleState(long roleId, String roleKey, String roleName, String roleSort, String dataScope,
         String menuCheckStrictly, String deptCheckStrictly, String status, String delFlag, String createBy,
-        String updateBy, String remark)
+        String updateBy, Object createTime, Object updateTime, String remark)
     {
     }
 
