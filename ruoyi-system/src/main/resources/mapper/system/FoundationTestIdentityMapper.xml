@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.FoundationTestIdentityMapper">
+
+    <resultMap type="SysRole" id="FoundationRoleResult">
+        <id property="roleId" column="role_id" />
+        <result property="roleKey" column="role_key" />
+        <result property="status" column="status" />
+        <result property="delFlag" column="del_flag" />
+    </resultMap>
+
+    <resultMap type="SysDept" id="FoundationDepartmentResult">
+        <id property="deptId" column="dept_id" />
+        <result property="parentId" column="parent_id" />
+        <result property="ancestors" column="ancestors" />
+        <result property="deptName" column="dept_name" />
+        <result property="deptCode" column="dept_code" />
+        <result property="orderNum" column="order_num" />
+        <result property="status" column="status" />
+        <result property="delFlag" column="del_flag" />
+        <result property="createBy" column="create_by" />
+    </resultMap>
+
+    <resultMap type="SysUser" id="FoundationUserResult">
+        <id property="userId" column="user_id" />
+        <result property="deptId" column="dept_id" />
+        <result property="userName" column="user_name" />
+        <result property="nickName" column="nick_name" />
+        <result property="userType" column="user_type" />
+        <result property="status" column="status" />
+        <result property="delFlag" column="del_flag" />
+        <result property="createBy" column="create_by" />
+        <result property="remark" column="remark" />
+    </resultMap>
+
+    <sql id="selectFoundationDepartment">
+        select d.dept_id, d.parent_id, d.ancestors, d.dept_name, d.dept_code, d.order_num,
+               d.status, d.del_flag, d.create_by
+        from sys_dept d
+    </sql>
+
+    <select id="selectRoleByKey" parameterType="String" resultMap="FoundationRoleResult">
+        select r.role_id, r.role_key, r.status, r.del_flag
+        from sys_role r
+        where r.role_key = #{roleKey}
+        order by r.role_id
+        limit 1
+    </select>
+
+    <select id="selectPermissionKeysByRoleId" parameterType="Long" resultType="String">
+        select m.perms
+        from sys_role_menu rm
+        inner join sys_menu m on m.menu_id = rm.menu_id
+        where rm.role_id = #{roleId}
+          and m.menu_type = 'F'
+          and m.perms is not null
+          and m.perms != ''
+    </select>
+
+    <select id="selectDepartmentByCode" parameterType="String" resultMap="FoundationDepartmentResult">
+        <include refid="selectFoundationDepartment" />
+        where d.dept_code = #{deptCode}
+        order by d.dept_id
+        limit 1
+    </select>
+
+    <select id="selectDepartmentByName" parameterType="String" resultMap="FoundationDepartmentResult">
+        select
+            case when count(*) = 1 then max(d.dept_id) else null end as dept_id,
+            case when count(*) = 1 then max(d.parent_id) else null end as parent_id,
+            case when count(*) = 1 then max(d.ancestors) else null end as ancestors,
+            max(d.dept_name) as dept_name,
+            case when count(*) = 1 then max(d.dept_code) else null end as dept_code,
+            case when count(*) = 1 then max(d.order_num) else null end as order_num,
+            case when count(*) = 1 then max(d.status) else null end as status,
+            case when count(*) = 1 then max(d.del_flag) else null end as del_flag,
+            case when count(*) = 1 then max(d.create_by) else null end as create_by
+        from sys_dept d
+        where d.dept_name = #{deptName}
+        having count(*) > 0
+    </select>
+
+    <insert id="insertDepartment" parameterType="SysDept" useGeneratedKeys="true" keyProperty="deptId">
+        insert into sys_dept
+            (parent_id, ancestors, dept_name, dept_code, order_num, status, del_flag, create_by, create_time)
+        values
+            (#{parentId}, #{ancestors}, #{deptName}, #{deptCode}, #{orderNum}, #{status}, #{delFlag},
+             #{createBy}, sysdate())
+    </insert>
+
+    <select id="selectAnyUserByUserName" parameterType="String" resultMap="FoundationUserResult">
+        <bind name="testUserType"
+              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@TEST_USER_TYPE" />
+        <bind name="createdBy"
+              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@CREATED_BY" />
+        <bind name="userMarker"
+              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@USER_MARKER" />
+        select u.user_id, u.dept_id, u.user_name, u.nick_name, u.user_type, u.status, u.del_flag,
+               u.create_by, u.remark
+        from sys_user u
+        where u.user_name = #{userName}
+        order by case when u.user_type = #{testUserType}
+                           and u.create_by = #{createdBy}
+                           and u.remark like concat(#{userMarker}, '%')
+                      then 1 else 0 end,
+                 case when u.del_flag = '0' then 0 else 1 end,
+                 u.user_id desc
+        limit 1
+    </select>
+
+    <insert id="insertUser" parameterType="SysUser" useGeneratedKeys="true" keyProperty="userId">
+        insert into sys_user
+            (dept_id, user_name, nick_name, user_type, email, phonenumber, sex, avatar, password,
+             status, del_flag, create_by, create_time, remark)
+        values
+            (#{deptId}, #{userName}, #{nickName}, #{userType}, #{email}, #{phonenumber}, #{sex}, #{avatar},
+             #{password}, #{status}, #{delFlag}, #{createBy}, sysdate(), #{remark})
+    </insert>
+
+    <select id="selectRoleIdsByUserId" parameterType="Long" resultType="Long">
+        select role_id from sys_user_role where user_id = #{userId} order by role_id
+    </select>
+
+    <delete id="deleteRoleLinksByUserId" parameterType="Long">
+        delete from sys_user_role where user_id = #{userId}
+    </delete>
+
+    <insert id="insertUserRole">
+        insert into sys_user_role (user_id, role_id) values (#{userId}, #{roleId})
+    </insert>
+
+    <update id="updateTestUserPlacement">
+        update sys_user set dept_id = #{deptId}, update_time = sysdate() where user_id = #{userId}
+    </update>
+
+</mapper>

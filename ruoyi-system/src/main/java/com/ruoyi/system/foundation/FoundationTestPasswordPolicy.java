@@ -2,7 +2,9 @@ package com.ruoyi.system.foundation;
 
 import java.util.Locale;
 import java.util.Set;
+import org.springframework.stereotype.Component;
 
+@Component
 public class FoundationTestPasswordPolicy
 {
     private static final Set<String> WEAK_PASSWORDS = Set.of("123456", "admin123", "password", "12345678");

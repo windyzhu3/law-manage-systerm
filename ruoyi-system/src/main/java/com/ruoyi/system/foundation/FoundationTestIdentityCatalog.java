@@ -1,6 +1,7 @@
 package com.ruoyi.system.foundation;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class FoundationTestIdentityCatalog
@@ -40,6 +41,15 @@ public final class FoundationTestIdentityCatalog
         "enforcement_primary_assistant", "enforcement_secondary_assistant", "execution_manager",
         "execution_assistant_l1", "execution_assistant_l2");
 
+    private static final Map<String, Set<String>> GOVERNANCE_ROLE_PERMISSIONS = Map.of(
+        "foundation_product_owner", Set.of(
+            "todo:decision:view", "todo:decision:edit", "todo:admission:view", "todo:admission:edit"),
+        "foundation_security_reviewer", Set.of("todo:admission:view", "todo:admission:edit"),
+        "foundation_arch_dba_reviewer", Set.of(
+            "todo:admission:view", "todo:admission:edit", "todo:admission:export"),
+        "foundation_qa_acceptor", Set.of("todo:admission:view", "todo:admission:edit"),
+        "foundation_independent_reviewer", Set.of("todo:admission:view", "todo:admission:edit"));
+
     private FoundationTestIdentityCatalog()
     {
     }
@@ -62,6 +72,11 @@ public final class FoundationTestIdentityCatalog
     public static Set<String> forbiddenQ003RoleKeys()
     {
         return FORBIDDEN_Q003_ROLE_KEYS;
+    }
+
+    public static Map<String, Set<String>> governanceRolePermissions()
+    {
+        return GOVERNANCE_ROLE_PERMISSIONS;
     }
 
     public record DepartmentSpec(String code, String name, String parentCode, int orderNum) {}
