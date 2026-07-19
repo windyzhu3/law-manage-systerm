@@ -40,6 +40,8 @@ jobs:
         run: npm run test:todo-schema
       - name: Verify Foundation CI scope
         run: npm run test:foundation-ci
+      - name: Verify Foundation documentation contract
+        run: npm run test:foundation-docs
       - name: Verify Foundation test identity UI
         run: npm run test:foundation-identities
       - name: Verify frontend source encoding

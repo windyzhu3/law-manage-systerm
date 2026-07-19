@@ -11,6 +11,21 @@ if (branchMentions < 2) throw new Error('CI must trigger for v0.2-Foundation pus
 if (/branches:\s*\[[^\]]*V0\.17/i.test(workflow)) throw new Error('stale V0.17 branch trigger remains')
 if (!workflow.includes('npm run test:todo-schema')) throw new Error('CI does not execute Todo schema contracts')
 if (!workflow.includes('npm run test:foundation-identities')) throw new Error('CI does not execute Foundation test identity UI contract')
+const workflowLines = workflow.replace(/\r\n/g, '\n').split('\n')
+const documentationStepName = '      - name: Verify Foundation documentation contract'
+const documentationStepCommand = '        run: npm run test:foundation-docs'
+const documentationStepIndices = workflowLines
+  .map((line, index) => line === documentationStepName ? index : -1)
+  .filter((index) => index >= 0)
+const documentationCommandMentions = workflowLines.filter((line) => line.includes('test:foundation-docs'))
+if (
+  documentationStepIndices.length !== 1 ||
+  workflowLines[documentationStepIndices[0] + 1] !== documentationStepCommand ||
+  documentationCommandMentions.length !== 1 ||
+  documentationCommandMentions[0] !== documentationStepCommand
+) {
+  throw new Error('CI must execute the exact Foundation documentation contract step')
+}
 if (!workflow.includes('FileMaterialEndToEndTest')) throw new Error('CI does not execute the real PRD material E2E')
 if (!workflow.includes('FoundationGovernanceRoleMigrationContractTest')) {
   throw new Error('CI does not execute the Foundation governance migration contract')
