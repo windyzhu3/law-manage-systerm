@@ -282,7 +282,7 @@
 
 **Files:**
 
-- Create: `ruoyi-system/src/main/java/com/ruoyi/system/foundation/FoundationTestIdentityMapper.java`
+- Create: `ruoyi-system/src/main/java/com/ruoyi/system/mapper/FoundationTestIdentityMapper.java`
 - Create: `ruoyi-system/src/main/resources/mapper/system/FoundationTestIdentityMapper.xml`
 - Create: `ruoyi-system/src/main/java/com/ruoyi/system/foundation/FoundationTestIdentityProvisioningResult.java`
 - Create: `ruoyi-system/src/main/java/com/ruoyi/system/foundation/FoundationTestIdentityProvisioningService.java`
