@@ -20,6 +20,13 @@
 * 高效率开发，使用代码生成器可以一键生成前后端代码。
 * 阿里云折扣场：[点我进入](http://aly.ruoyi.vip)，腾讯云秒杀场：[点我进入](http://txy.ruoyi.vip)&nbsp;&nbsp;
 
+## Foundation 治理角色与测试身份
+
+V0.20.28 提供五个正式治理角色及精确最小权限；另有 12 个隔离测试身份只允许在 `local`/`test` Profile 下通过显式开关和运行时环境变量创建，默认关闭，任何包含 `prod` 的 Profile 都会拒绝装载。仓库不保存可用的测试密码或固定 BCrypt Hash，系统也不提供密码/Hash 显示或导出能力。
+
+- [测试身份操作手册](doc/foundation/foundation-test-identities-runbook.md)：本地启用/关闭、账号角色、幂等行为、冲突错误码、marker 清理与验证记录。
+- [v0.2 Foundation 准入报告](doc/reviews/v0.2-foundation-admission-report.md)：测试身份不能替代真实 Owner/Reviewer 或签字；当前 Foundation 与 Todo Engine 总体结论仍为 `NOT_ADMITTED`。
+
 # 版本分支
 
 RuoYi-Vue 后端项目提供 Spring Boot 2.x / 3.x / 4.x 多版本分支的并行维护。
