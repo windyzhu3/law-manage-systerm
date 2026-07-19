@@ -1,13 +1,15 @@
 package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class FoundationGovernanceRoleMigrationContractTest
@@ -28,28 +30,65 @@ class FoundationGovernanceRoleMigrationContractTest
         "execution_assistant_l2"
     );
 
+    private static final String ROLE_CREATOR = "flyway-v0.20.28";
+    private static final Pattern ROLE_INSERT = Pattern.compile("\\binsert\\s+(?:ignore\\s+)?into\\s+sys_role\\b",
+        Pattern.CASE_INSENSITIVE);
+
     @Test
-    void migrationDefinesOnlyFormalGovernanceRolesWithoutTestIdentityOrAdmissionWrites() throws IOException
+    void migrationResourceEnforcesGovernanceRoleExclusivityAndWriteBoundary() throws IOException
     {
         try (InputStream resource = getClass().getResourceAsStream(
             "/db/migration/V0_20_28__foundation_governance_roles.sql"))
         {
             assertNotNull(resource, "Foundation governance role migration must be available on the runtime classpath");
-            String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8).toLowerCase();
+            String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            String normalizedSql = sql.replaceAll("\\s+", " ").toLowerCase();
 
+            assertEquals(5, matchCount(ROLE_INSERT, sql), "Migration must create exactly five formal roles");
             for (String roleKey : GOVERNANCE_ROLE_KEYS)
             {
-                assertTrue(sql.contains(roleKey), () -> "Migration must define governance role " + roleKey);
+                assertEquals(1, occurrenceCount(normalizedSql, roleKey),
+                    () -> "Migration must define governance role exactly once: " + roleKey);
             }
+            assertEquals(5, occurrenceCount(normalizedSql, ROLE_CREATOR),
+                "Every formal role must use the Foundation migration creator marker");
             for (String roleKey : FORBIDDEN_Q003_ROLE_KEYS)
             {
-                assertFalse(sql.contains(roleKey), () -> "Migration must not define Q-003 role " + roleKey);
+                assertFalse(normalizedSql.contains(roleKey), () -> "Migration must not define Q-003 role " + roleKey);
             }
-            for (String forbiddenSql : Set.of("insert into sys_user", "insert into sys_dept", "insert into sys_user_role",
-                "todo_foundation_decision", "todo_admission_evidence"))
+            for (String forbiddenTable : Set.of("sys_user", "sys_dept", "sys_user_role"))
             {
-                assertFalse(sql.contains(forbiddenSql), () -> "Migration must not write " + forbiddenSql);
+                Pattern insert = Pattern.compile("\\binsert\\s+(?:ignore\\s+)?into\\s+`?" + forbiddenTable + "`?\\b",
+                    Pattern.CASE_INSENSITIVE);
+                assertFalse(insert.matcher(sql).find(), () -> "Migration must not write " + forbiddenTable);
             }
+            assertFalse(normalizedSql.contains("todo_foundation_decision"),
+                "Migration must not reference Foundation decisions");
+            assertFalse(normalizedSql.contains("todo_admission_evidence"),
+                "Migration must not reference admission evidence");
         }
+    }
+
+    private int matchCount(Pattern pattern, String value)
+    {
+        Matcher matcher = pattern.matcher(value);
+        int matches = 0;
+        while (matcher.find())
+        {
+            matches++;
+        }
+        return matches;
+    }
+
+    private int occurrenceCount(String value, String expected)
+    {
+        int occurrences = 0;
+        int start = 0;
+        while ((start = value.indexOf(expected, start)) >= 0)
+        {
+            occurrences++;
+            start += expected.length();
+        }
+        return occurrences;
     }
 }

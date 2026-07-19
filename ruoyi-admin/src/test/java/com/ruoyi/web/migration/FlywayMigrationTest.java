@@ -75,6 +75,9 @@ class FlywayMigrationTest
                     + "'foundation_product_owner','foundation_security_reviewer',"
                     + "'foundation_arch_dba_reviewer','foundation_qa_acceptor',"
                     + "'foundation_independent_reviewer') and status='0' and del_flag='0'"));
+            assertEquals(5L, count(connection,
+                "select count(*) from sys_role where create_by='flyway-v0.20.28'"));
+            assertEquals(expectedPermissions.keySet(), roleKeysCreatedByFoundationMigration(connection));
             assertEquals(0L, count(connection,
                 "select count(*) from sys_user where user_name like 'ft\\_%' escape '\\\\'"));
             assertEquals(0L, count(connection,
@@ -88,14 +91,33 @@ class FlywayMigrationTest
             {
                 assertEquals(expected.getValue(), buttonPermissions(connection, expected.getKey()),
                     () -> "Unexpected button permissions for " + expected.getKey());
+                assertEquals((long) expected.getValue().size(), roleMenuGrantCount(connection, expected.getKey(), "F"),
+                    () -> "Unexpected button permission grant count for " + expected.getKey());
                 assertEquals(allowedMenuIds, nonButtonMenuIds(connection, expected.getKey()),
                     () -> "Unexpected non-button menus for " + expected.getKey());
+                assertEquals((long) allowedMenuIds.size(), nonButtonMenuGrantCount(connection, expected.getKey()),
+                    () -> "Unexpected non-button menu grant count for " + expected.getKey());
             }
         }
         catch (SQLException exception)
         {
             throw new AssertionError("Foundation governance role invariants failed", exception);
         }
+    }
+
+    private Set<String> roleKeysCreatedByFoundationMigration(Connection connection) throws SQLException
+    {
+        Set<String> roleKeys = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select role_key from sys_role where create_by='flyway-v0.20.28'");
+             ResultSet rows = statement.executeQuery())
+        {
+            while (rows.next())
+            {
+                roleKeys.add(rows.getString(1));
+            }
+        }
+        return roleKeys;
     }
 
     private Set<String> buttonPermissions(Connection connection, String roleKey) throws SQLException
@@ -116,6 +138,37 @@ class FlywayMigrationTest
             }
         }
         return permissions;
+    }
+
+    private long roleMenuGrantCount(Connection connection, String roleKey, String menuType) throws SQLException
+    {
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select count(*) from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "join sys_menu m on m.menu_id=rm.menu_id where r.role_key=? and m.menu_type=?"))
+        {
+            statement.setString(1, roleKey);
+            statement.setString(2, menuType);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                assertTrue(rows.next());
+                return rows.getLong(1);
+            }
+        }
+    }
+
+    private long nonButtonMenuGrantCount(Connection connection, String roleKey) throws SQLException
+    {
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select count(*) from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "join sys_menu m on m.menu_id=rm.menu_id where r.role_key=? and m.menu_type<>'F'"))
+        {
+            statement.setString(1, roleKey);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                assertTrue(rows.next());
+                return rows.getLong(1);
+            }
+        }
     }
 
     private Set<Long> nonButtonMenuIds(Connection connection, String roleKey) throws SQLException
