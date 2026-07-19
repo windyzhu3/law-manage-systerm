@@ -6,6 +6,7 @@ import static com.ruoyi.system.foundation.FoundationTestIdentityErrorCode.FOUNDA
 import static com.ruoyi.system.foundation.FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_USER_CONFLICT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,6 +26,7 @@ import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.mapper.FoundationTestIdentityMapper;
 import java.lang.reflect.RecordComponent;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,7 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 class FoundationTestIdentityProvisioningServiceTest
 {
     private static final String RAW_PASSWORD = "Foundation!234";
-    private static final String HASH = "$2a$10$unit-test-hash";
     private static final Map<String, Set<String>> GOVERNANCE_PERMISSIONS = Map.of(
         "foundation_product_owner", Set.of(
             "todo:decision:view", "todo:decision:edit", "todo:admission:view", "todo:admission:edit"),
@@ -53,6 +57,7 @@ class FoundationTestIdentityProvisioningServiceTest
     private FoundationTestIdentityMapper mapper;
     private FoundationTestPasswordPolicy passwordPolicy;
     private BCryptPasswordEncoder passwordEncoder;
+    private BCryptPasswordEncoder realPasswordEncoder;
     private FoundationTestIdentityProvisioningService service;
     private Map<String, SysRole> roles;
 
@@ -62,9 +67,11 @@ class FoundationTestIdentityProvisioningServiceTest
         mapper = mock(FoundationTestIdentityMapper.class);
         passwordPolicy = mock(FoundationTestPasswordPolicy.class);
         passwordEncoder = mock(BCryptPasswordEncoder.class);
+        realPasswordEncoder = new BCryptPasswordEncoder();
         service = new FoundationTestIdentityProvisioningService(mapper, passwordPolicy, passwordEncoder);
         roles = stubValidRoles();
-        when(passwordEncoder.encode(RAW_PASSWORD)).thenReturn(HASH);
+        when(passwordEncoder.encode(RAW_PASSWORD)).thenAnswer(
+            invocation -> realPasswordEncoder.encode(invocation.getArgument(0)));
         when(mapper.insertUserRole(anyLong(), anyLong())).thenReturn(1);
         when(mapper.updateTestUserPlacement(anyLong(), anyLong())).thenReturn(1);
     }
@@ -72,7 +79,14 @@ class FoundationTestIdentityProvisioningServiceTest
     @Test
     void createsSixDepartmentsTwelveUsersAndTwelveExactRoleLinksOnFirstRun()
     {
-        stubGeneratedKeys();
+        List<SysDept> insertedDepartments = new ArrayList<>();
+        List<SysUser> insertedUsers = new ArrayList<>();
+        List<UserRoleLink> insertedRoleLinks = new ArrayList<>();
+        stubGeneratedKeys(insertedDepartments, insertedUsers);
+        doAnswer(invocation -> {
+            insertedRoleLinks.add(new UserRoleLink(invocation.getArgument(0), invocation.getArgument(1)));
+            return 1;
+        }).when(mapper).insertUserRole(anyLong(), anyLong());
 
         FoundationTestIdentityProvisioningResult result = service.provision(RAW_PASSWORD);
 
@@ -86,6 +100,8 @@ class FoundationTestIdentityProvisioningServiceTest
         verify(mapper, times(12)).insertUser(any(SysUser.class));
         verify(passwordEncoder, times(12)).encode(RAW_PASSWORD);
         verify(mapper, times(12)).insertUserRole(anyLong(), anyLong());
+        assertExactDepartmentPayloads(insertedDepartments);
+        assertExactUserAndRolePayloads(insertedDepartments, insertedUsers, insertedRoleLinks);
         assertEquals(30, result.created());
         assertEquals(0, result.reused());
         assertEquals(0, result.repaired());
@@ -117,8 +133,9 @@ class FoundationTestIdentityProvisioningServiceTest
         stubExistingUsers(departments);
         FoundationTestIdentityCatalog.UserSpec target = FoundationTestIdentityCatalog.users().get(1);
         SysUser misplaced = markedUser(800L, target, 999L, "0");
-        when(mapper.selectAnyUserByUserName(target.userName())).thenReturn(misplaced);
+        when(mapper.selectUsersByUserName(target.userName())).thenReturn(List.of(misplaced));
         when(mapper.selectRoleIdsByUserId(misplaced.getUserId())).thenReturn(List.of(998L, 999L));
+        when(mapper.deleteRoleLinksByUserId(misplaced.getUserId())).thenReturn(2);
         Long expectedDept = departments.get(target.departmentCode()).getDeptId();
         Long expectedRole = roles.get(target.roleKey()).getRoleId();
 
@@ -132,13 +149,33 @@ class FoundationTestIdentityProvisioningServiceTest
     }
 
     @Test
+    void abortsRoleRepairWhenDeleteCountDoesNotMatchPersistedLinks()
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        stubExistingUsers(departments);
+        FoundationTestIdentityCatalog.UserSpec target = FoundationTestIdentityCatalog.users().get(0);
+        SysUser user = markedUser(801L, target, departments.get(target.departmentCode()).getDeptId(), "0");
+        when(mapper.selectUsersByUserName(target.userName())).thenReturn(List.of(user));
+        when(mapper.selectRoleIdsByUserId(user.getUserId())).thenReturn(List.of(998L, 999L));
+        when(mapper.deleteRoleLinksByUserId(user.getUserId())).thenReturn(1);
+
+        FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
+            () -> service.provision(RAW_PASSWORD));
+
+        assertEquals(FOUNDATION_TEST_IDENTITIES_USER_CONFLICT, failure.getCode());
+        verify(mapper).deleteRoleLinksByUserId(user.getUserId());
+        verify(mapper, never()).insertUserRole(user.getUserId(), roles.get(target.roleKey()).getRoleId());
+        verify(passwordEncoder, never()).encode(anyString());
+    }
+
+    @Test
     void recreatesDeletedMarkedTestUserWithoutOverwritingItsRow()
     {
         Map<String, SysDept> departments = stubExistingDepartments();
         stubExistingUsers(departments);
         FoundationTestIdentityCatalog.UserSpec target = FoundationTestIdentityCatalog.users().get(0);
         SysUser deleted = markedUser(700L, target, departments.get(target.departmentCode()).getDeptId(), "2");
-        when(mapper.selectAnyUserByUserName(target.userName())).thenReturn(deleted);
+        when(mapper.selectUsersByUserName(target.userName())).thenReturn(List.of(deleted));
         doAnswer(invocation -> {
             SysUser inserted = invocation.getArgument(0);
             inserted.setUserId(1700L);
@@ -155,13 +192,68 @@ class FoundationTestIdentityProvisioningServiceTest
     }
 
     @Test
+    void reusesOneActiveMarkedUserWhileAllowingDeletedMarkedHistory()
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        stubExistingUsers(departments);
+        FoundationTestIdentityCatalog.UserSpec target = FoundationTestIdentityCatalog.users().get(0);
+        SysUser active = markedUser(1701L, target, departments.get(target.departmentCode()).getDeptId(), "0");
+        SysUser history = markedUser(701L, target, departments.get(target.departmentCode()).getDeptId(), "2");
+        when(mapper.selectUsersByUserName(target.userName())).thenReturn(List.of(history, active));
+        when(mapper.selectRoleIdsByUserId(active.getUserId()))
+            .thenReturn(List.of(roles.get(target.roleKey()).getRoleId()));
+
+        FoundationTestIdentityProvisioningResult result = service.provision(RAW_PASSWORD);
+
+        verify(passwordEncoder, never()).encode(anyString());
+        verify(mapper, never()).insertUser(any());
+        assertEquals(30, result.reused());
+    }
+
+    @Test
     void rejectsRealUsernameBeforeAnyWrite()
     {
         SysUser real = new SysUser();
         real.setUserName(FoundationTestIdentityCatalog.users().get(0).userName());
         real.setUserType("00");
         real.setDelFlag("2");
-        when(mapper.selectAnyUserByUserName(real.getUserName())).thenReturn(real);
+        when(mapper.selectUsersByUserName(real.getUserName())).thenReturn(List.of(real));
+
+        FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
+            () -> service.provision(RAW_PASSWORD));
+
+        assertEquals(FOUNDATION_TEST_IDENTITIES_USER_CONFLICT, failure.getCode());
+        verifyNoWrites();
+    }
+
+    @Test
+    void rejectsRealDuplicateEvenWhenAnActiveMarkedUserAlsoExists()
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        FoundationTestIdentityCatalog.UserSpec spec = FoundationTestIdentityCatalog.users().get(0);
+        SysUser active = markedUser(703L, spec, departments.get(spec.departmentCode()).getDeptId(), "0");
+        SysUser deletedReal = new SysUser();
+        deletedReal.setUserId(704L);
+        deletedReal.setUserName(spec.userName());
+        deletedReal.setUserType("00");
+        deletedReal.setDelFlag("2");
+        when(mapper.selectUsersByUserName(spec.userName())).thenReturn(List.of(active, deletedReal));
+
+        FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
+            () -> service.provision(RAW_PASSWORD));
+
+        assertEquals(FOUNDATION_TEST_IDENTITIES_USER_CONFLICT, failure.getCode());
+        verifyNoWrites();
+    }
+
+    @Test
+    void rejectsMultipleActiveMarkedRowsBeforeAnyWrite()
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        FoundationTestIdentityCatalog.UserSpec spec = FoundationTestIdentityCatalog.users().get(0);
+        SysUser first = markedUser(705L, spec, departments.get(spec.departmentCode()).getDeptId(), "0");
+        SysUser second = markedUser(706L, spec, departments.get(spec.departmentCode()).getDeptId(), "0");
+        when(mapper.selectUsersByUserName(spec.userName())).thenReturn(List.of(first, second));
 
         FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
             () -> service.provision(RAW_PASSWORD));
@@ -177,7 +269,24 @@ class FoundationTestIdentityProvisioningServiceTest
         FoundationTestIdentityCatalog.UserSpec spec = FoundationTestIdentityCatalog.users().get(0);
         SysUser disabled = markedUser(702L, spec, departments.get(spec.departmentCode()).getDeptId(), "0");
         disabled.setStatus("1");
-        when(mapper.selectAnyUserByUserName(spec.userName())).thenReturn(disabled);
+        when(mapper.selectUsersByUserName(spec.userName())).thenReturn(List.of(disabled));
+
+        FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
+            () -> service.provision(RAW_PASSWORD));
+
+        assertEquals(FOUNDATION_TEST_IDENTITIES_USER_CONFLICT, failure.getCode());
+        verifyNoWrites();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"1", "3"})
+    void rejectsMarkedUserWithUnknownDeleteFlagBeforeAnyWrite(String delFlag)
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        FoundationTestIdentityCatalog.UserSpec spec = FoundationTestIdentityCatalog.users().get(0);
+        SysUser invalid = markedUser(707L, spec, departments.get(spec.departmentCode()).getDeptId(), delFlag);
+        when(mapper.selectUsersByUserName(spec.userName())).thenReturn(List.of(invalid));
 
         FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
             () -> service.provision(RAW_PASSWORD));
@@ -192,6 +301,22 @@ class FoundationTestIdentityProvisioningServiceTest
         FoundationTestIdentityCatalog.DepartmentSpec spec = FoundationTestIdentityCatalog.departments().get(0);
         SysDept real = department(44L, "REAL_FIRM", spec.name(), 0L, "0", "admin", "0");
         when(mapper.selectDepartmentByName(spec.name())).thenReturn(real);
+
+        FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
+            () -> service.provision(RAW_PASSWORD));
+
+        assertEquals(FOUNDATION_TEST_IDENTITIES_DEPARTMENT_CONFLICT, failure.getCode());
+        verifyNoWrites();
+    }
+
+    @Test
+    void rejectsReservedDepartmentCodeReturnedWithDifferentCase()
+    {
+        FoundationTestIdentityCatalog.DepartmentSpec spec = FoundationTestIdentityCatalog.departments().get(0);
+        SysDept colliding = department(46L, spec.code().toLowerCase(java.util.Locale.ROOT), spec.name(),
+            0L, "0", FoundationTestIdentityCatalog.CREATED_BY, "0");
+        when(mapper.selectDepartmentByCode(spec.code())).thenReturn(colliding);
+        when(mapper.selectDepartmentByName(spec.name())).thenReturn(colliding);
 
         FoundationTestIdentityException failure = assertThrows(FoundationTestIdentityException.class,
             () -> service.provision(RAW_PASSWORD));
@@ -308,17 +433,68 @@ class FoundationTestIdentityProvisioningServiceTest
         return valid;
     }
 
-    private void stubGeneratedKeys()
+    private void assertExactDepartmentPayloads(List<SysDept> insertedDepartments)
+    {
+        assertEquals(FoundationTestIdentityCatalog.departments().size(), insertedDepartments.size());
+        Map<String, SysDept> departmentsByCode = insertedDepartments.stream()
+            .collect(Collectors.toMap(SysDept::getDeptCode, department -> department));
+        for (int index = 0; index < FoundationTestIdentityCatalog.departments().size(); index++)
+        {
+            FoundationTestIdentityCatalog.DepartmentSpec spec = FoundationTestIdentityCatalog.departments().get(index);
+            SysDept actual = insertedDepartments.get(index);
+            SysDept parent = spec.parentCode() == null ? null : departmentsByCode.get(spec.parentCode());
+            assertEquals(spec.code(), actual.getDeptCode());
+            assertEquals(spec.name(), actual.getDeptName());
+            assertEquals(spec.orderNum(), actual.getOrderNum());
+            assertEquals(parent == null ? 0L : parent.getDeptId(), actual.getParentId());
+            assertEquals(parent == null ? "0" : parent.getAncestors() + "," + parent.getDeptId(),
+                actual.getAncestors());
+            assertEquals(FoundationTestIdentityCatalog.CREATED_BY, actual.getCreateBy());
+            assertEquals("0", actual.getStatus());
+            assertEquals("0", actual.getDelFlag());
+        }
+    }
+
+    private void assertExactUserAndRolePayloads(List<SysDept> insertedDepartments, List<SysUser> insertedUsers,
+        List<UserRoleLink> insertedRoleLinks)
+    {
+        assertEquals(FoundationTestIdentityCatalog.users().size(), insertedUsers.size());
+        assertEquals(FoundationTestIdentityCatalog.users().size(), insertedRoleLinks.size());
+        Map<String, SysDept> departmentsByCode = insertedDepartments.stream()
+            .collect(Collectors.toMap(SysDept::getDeptCode, department -> department));
+        for (int index = 0; index < FoundationTestIdentityCatalog.users().size(); index++)
+        {
+            FoundationTestIdentityCatalog.UserSpec spec = FoundationTestIdentityCatalog.users().get(index);
+            SysUser actual = insertedUsers.get(index);
+            UserRoleLink link = insertedRoleLinks.get(index);
+            assertEquals(spec.userName(), actual.getUserName());
+            assertEquals(spec.nickName(), actual.getNickName());
+            assertEquals(departmentsByCode.get(spec.departmentCode()).getDeptId(), actual.getDeptId());
+            assertEquals(FoundationTestIdentityCatalog.TEST_USER_TYPE, actual.getUserType());
+            assertEquals(FoundationTestIdentityCatalog.USER_MARKER + "|" + spec.roleKey(), actual.getRemark());
+            assertEquals(FoundationTestIdentityCatalog.CREATED_BY, actual.getCreateBy());
+            assertEquals("0", actual.getStatus());
+            assertEquals("0", actual.getDelFlag());
+            assertNotEquals(RAW_PASSWORD, actual.getPassword());
+            assertTrue(realPasswordEncoder.matches(RAW_PASSWORD, actual.getPassword()));
+            assertEquals(actual.getUserId(), link.userId());
+            assertEquals(roles.get(spec.roleKey()).getRoleId(), link.roleId());
+        }
+    }
+
+    private void stubGeneratedKeys(List<SysDept> insertedDepartments, List<SysUser> insertedUsers)
     {
         AtomicLong departmentIds = new AtomicLong(200L);
         doAnswer(invocation -> {
             SysDept department = invocation.getArgument(0);
+            insertedDepartments.add(department);
             department.setDeptId(departmentIds.incrementAndGet());
             return 1;
         }).when(mapper).insertDepartment(any(SysDept.class));
         AtomicLong userIds = new AtomicLong(1000L);
         doAnswer(invocation -> {
             SysUser user = invocation.getArgument(0);
+            insertedUsers.add(user);
             user.setUserId(userIds.incrementAndGet());
             return 1;
         }).when(mapper).insertUser(any(SysUser.class));
@@ -347,7 +523,7 @@ class FoundationTestIdentityProvisioningServiceTest
         for (FoundationTestIdentityCatalog.UserSpec spec : FoundationTestIdentityCatalog.users())
         {
             SysUser user = markedUser(++id, spec, departments.get(spec.departmentCode()).getDeptId(), "0");
-            when(mapper.selectAnyUserByUserName(spec.userName())).thenReturn(user);
+            when(mapper.selectUsersByUserName(spec.userName())).thenReturn(List.of(user));
             when(mapper.selectRoleIdsByUserId(user.getUserId())).thenReturn(List.of(roles.get(spec.roleKey()).getRoleId()));
         }
     }
@@ -382,4 +558,6 @@ class FoundationTestIdentityProvisioningServiceTest
         department.setCreateBy(createBy);
         return department;
     }
+
+    private record UserRoleLink(Long userId, Long roleId) {}
 }

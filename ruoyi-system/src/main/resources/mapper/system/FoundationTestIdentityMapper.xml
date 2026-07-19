@@ -90,24 +90,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
              #{createBy}, sysdate())
     </insert>
 
-    <select id="selectAnyUserByUserName" parameterType="String" resultMap="FoundationUserResult">
-        <bind name="testUserType"
-              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@TEST_USER_TYPE" />
-        <bind name="createdBy"
-              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@CREATED_BY" />
-        <bind name="userMarker"
-              value="@com.ruoyi.system.foundation.FoundationTestIdentityCatalog@USER_MARKER" />
+    <select id="selectUsersByUserName" parameterType="String" resultMap="FoundationUserResult">
         select u.user_id, u.dept_id, u.user_name, u.nick_name, u.user_type, u.status, u.del_flag,
                u.create_by, u.remark
         from sys_user u
         where u.user_name = #{userName}
-        order by case when u.user_type = #{testUserType}
-                           and u.create_by = #{createdBy}
-                           and u.remark like concat(#{userMarker}, '%')
-                      then 1 else 0 end,
-                 case when u.del_flag = '0' then 0 else 1 end,
-                 u.user_id desc
-        limit 1
     </select>
 
     <insert id="insertUser" parameterType="SysUser" useGeneratedKeys="true" keyProperty="userId">

@@ -19,7 +19,7 @@ public interface FoundationTestIdentityMapper
 
     int insertDepartment(SysDept department);
 
-    SysUser selectAnyUserByUserName(String userName);
+    List<SysUser> selectUsersByUserName(String userName);
 
     int insertUser(SysUser user);
 

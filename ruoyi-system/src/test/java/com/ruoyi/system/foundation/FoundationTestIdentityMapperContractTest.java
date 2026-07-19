@@ -53,7 +53,7 @@ class FoundationTestIdentityMapperContractTest
         assertMethod(mapper, "selectDepartmentByCode", SysDept.class, String.class);
         assertMethod(mapper, "selectDepartmentByName", SysDept.class, String.class);
         assertMethod(mapper, "insertDepartment", int.class, SysDept.class);
-        assertMethod(mapper, "selectAnyUserByUserName", SysUser.class, String.class);
+        assertMethod(mapper, "selectUsersByUserName", List.class, String.class);
         assertMethod(mapper, "insertUser", int.class, SysUser.class);
         assertMethod(mapper, "selectRoleIdsByUserId", List.class, Long.class);
         assertMethod(mapper, "deleteRoleLinksByUserId", int.class, Long.class);
@@ -69,18 +69,17 @@ class FoundationTestIdentityMapperContractTest
         String xml = resource("/mapper/system/FoundationTestIdentityMapper.xml");
 
         assertFalse(xml.contains("${"), "Provisioning SQL must use bound parameters only");
-        String anyUser = normalize(element(xml, "select", "selectAnyUserByUserName"));
-        assertTrue(anyUser.contains("where u.user_name = #{username}"));
-        assertFalse(anyUser.matches("(?s).*where u\\.user_name = #\\{username}.*and u\\.del_flag = '0'.*"),
+        String allUsers = normalize(element(xml, "select", "selectUsersByUserName"));
+        assertTrue(allUsers.contains("where u.user_name = #{username}"));
+        assertFalse(allUsers.matches("(?s).*where u\\.user_name = #\\{username}.*and u\\.del_flag = '0'.*"),
             "Deleted real and test usernames must remain visible to conflict handling");
-        assertTrue(anyUser.contains("u.user_type"));
-        assertTrue(anyUser.contains("u.create_by"));
-        assertTrue(anyUser.contains("u.remark"));
-        assertTrue(anyUser.contains("then 1 else 0 end"),
-            "A real duplicate must sort before reusable marked rows instead of being hidden by LIMIT 1");
-        assertTrue(anyUser.contains("foundationtestidentitycatalog@test_user_type"));
-        assertTrue(anyUser.contains("foundationtestidentitycatalog@created_by"));
-        assertTrue(anyUser.contains("foundationtestidentitycatalog@user_marker"));
+        assertTrue(allUsers.contains("u.user_type"));
+        assertTrue(allUsers.contains("u.create_by"));
+        assertTrue(allUsers.contains("u.remark"));
+        assertFalse(allUsers.contains("limit"));
+        assertFalse(allUsers.contains("order by"));
+        assertFalse(allUsers.matches("(?s).*\\slike\\s.*"),
+            "Marker classification must use exact Java prefix semantics, not SQL wildcard semantics");
 
         String byCode = normalize(element(xml, "select", "selectDepartmentByCode"));
         String byName = normalize(element(xml, "select", "selectDepartmentByName"));

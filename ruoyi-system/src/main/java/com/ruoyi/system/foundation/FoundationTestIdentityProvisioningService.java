@@ -100,7 +100,8 @@ public class FoundationTestIdentityProvisioningService
             if (byCode != null)
             {
                 boolean sameNamedRow = byName == null || Objects.equals(byCode.getDeptId(), byName.getDeptId());
-                if (!sameNamedRow || !spec.name().equals(byCode.getDeptName())
+                if (!sameNamedRow || !spec.code().equals(byCode.getDeptCode())
+                    || !spec.name().equals(byCode.getDeptName())
                     || !FoundationTestIdentityCatalog.CREATED_BY.equals(byCode.getCreateBy())
                     || !ACTIVE.equals(byCode.getStatus()) || !NOT_DELETED.equals(byCode.getDelFlag()))
                 {
@@ -142,19 +143,33 @@ public class FoundationTestIdentityProvisioningService
         Map<String, SysUser> usersByName = new HashMap<>();
         for (FoundationTestIdentityCatalog.UserSpec spec : FoundationTestIdentityCatalog.users())
         {
-            SysUser existing = mapper.selectAnyUserByUserName(spec.userName());
-            if (existing != null)
+            List<SysUser> matchingUsers = mapper.selectUsersByUserName(spec.userName());
+            SysUser activeMarkedUser = null;
+            for (SysUser existing : matchingUsers == null ? List.<SysUser>of() : matchingUsers)
             {
                 if (!FoundationTestIdentityCatalog.TEST_USER_TYPE.equals(existing.getUserType())
                     || existing.getRemark() == null
                     || !existing.getRemark().startsWith(FoundationTestIdentityCatalog.USER_MARKER)
-                    || !FoundationTestIdentityCatalog.CREATED_BY.equals(existing.getCreateBy())
-                    || (NOT_DELETED.equals(existing.getDelFlag()) && !ACTIVE.equals(existing.getStatus())))
+                    || !FoundationTestIdentityCatalog.CREATED_BY.equals(existing.getCreateBy()))
                 {
                     throw failure(FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_USER_CONFLICT,
                         spec.userName());
                 }
-                usersByName.put(spec.userName(), existing);
+                if ("2".equals(existing.getDelFlag()))
+                {
+                    continue;
+                }
+                if (!NOT_DELETED.equals(existing.getDelFlag()) || !ACTIVE.equals(existing.getStatus())
+                    || activeMarkedUser != null)
+                {
+                    throw failure(FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_USER_CONFLICT,
+                        spec.userName());
+                }
+                activeMarkedUser = existing;
+            }
+            if (activeMarkedUser != null)
+            {
+                usersByName.put(spec.userName(), activeMarkedUser);
             }
         }
         return usersByName;
@@ -226,7 +241,12 @@ public class FoundationTestIdentityProvisioningService
             }
             else
             {
-                mapper.deleteRoleLinksByUserId(existing.getUserId());
+                int deletedLinks = mapper.deleteRoleLinksByUserId(existing.getUserId());
+                if (roleIds != null && !roleIds.isEmpty() && deletedLinks != roleIds.size())
+                {
+                    throw failure(FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_USER_CONFLICT,
+                        spec.userName());
+                }
                 requireSingleWrite(mapper.insertUserRole(existing.getUserId(), role.getRoleId()), "user-role");
                 counts.repaired++;
             }
