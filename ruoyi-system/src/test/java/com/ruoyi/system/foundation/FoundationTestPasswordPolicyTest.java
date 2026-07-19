@@ -30,6 +30,16 @@ class FoundationTestPasswordPolicyTest
     }
 
     @Test
+    void rejectsAPaddedShortPasswordUsingItsTrimmedLength()
+    {
+        String password = "  Abcdefghi  ";
+        FoundationTestIdentityException exception = assertThrows(FoundationTestIdentityException.class,
+            () -> policy.validate(password));
+        assertEquals(FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_PASSWORD_WEAK, exception.getCode());
+        assertFalse(exception.getMessage().contains(password));
+    }
+
+    @Test
     void acceptsAStrongPasswordOfAtLeastTwelveCharacters()
     {
         assertDoesNotThrow(() -> policy.validate("Strong-test-passphrase-42!"));

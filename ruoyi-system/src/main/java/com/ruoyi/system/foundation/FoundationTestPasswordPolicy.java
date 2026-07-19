@@ -16,7 +16,7 @@ public class FoundationTestPasswordPolicy
         }
 
         String normalizedPassword = password.trim().toLowerCase(Locale.ROOT);
-        if (password.length() < 12 || WEAK_PASSWORDS.contains(normalizedPassword))
+        if (normalizedPassword.length() < 12 || WEAK_PASSWORDS.contains(normalizedPassword))
         {
             throw new FoundationTestIdentityException(
                 FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_PASSWORD_WEAK, "credential");
