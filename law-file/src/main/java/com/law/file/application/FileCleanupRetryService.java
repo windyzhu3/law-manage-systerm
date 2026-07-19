@@ -9,6 +9,7 @@ import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.repository.FileObjectRepository;
 import com.law.file.spi.FileStoragePort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ public class FileCleanupRetryService
     private final FileStoragePort storage;
     private final Clock clock;
 
+    @Autowired
     public FileCleanupRetryService(FileObjectRepository repository,FileStoragePort storage)
     {this(repository,storage,Clock.systemUTC());}
 

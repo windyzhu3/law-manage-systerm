@@ -34,6 +34,7 @@ import com.law.file.security.FileAccessPolicy;
 import com.law.file.security.FileContentPolicy;
 import com.law.file.spi.FileCleanupAuditPort;
 import com.law.file.spi.FileStoragePort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -58,6 +59,7 @@ public class FileObjectService
     private final Clock clock;
     private final TokenGenerator tokens;
 
+    @Autowired
     public FileObjectService(FileObjectRepository repository,FileStoragePort storage,FileAccessPolicy access,
         FileCleanupAuditPort cleanupAudit,FileContentPolicy contentPolicy)
     {this(repository,storage,access,cleanupAudit,contentPolicy,Clock.systemUTC(),FileObjectService::randomToken);}

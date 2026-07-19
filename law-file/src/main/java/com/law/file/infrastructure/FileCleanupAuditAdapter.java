@@ -8,6 +8,7 @@ import com.law.file.domain.FileException;
 import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.repository.FileObjectRepository;
 import com.law.file.spi.FileCleanupAuditPort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +20,7 @@ public class FileCleanupAuditAdapter implements FileCleanupAuditPort
     private static final long RETRY_DELAY_SECONDS=300L;
     private final FileObjectRepository repository;
     private final Clock clock;
+    @Autowired
     public FileCleanupAuditAdapter(FileObjectRepository repository){this(repository,Clock.systemUTC());}
     FileCleanupAuditAdapter(FileObjectRepository repository,Clock clock){this.repository=repository;this.clock=clock;}
     @Override @Transactional(propagation=Propagation.REQUIRES_NEW)

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ public class TodoHistoricalMigrationPreflightService
     private final TodoHistoricalMigrationReadinessMapper mapper;
     private final Clock clock;
 
+    @Autowired
     public TodoHistoricalMigrationPreflightService(TodoHistoricalMigrationReadinessMapper mapper)
     {
         this(mapper,Clock.systemUTC());

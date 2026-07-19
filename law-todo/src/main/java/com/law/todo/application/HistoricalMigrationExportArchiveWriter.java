@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -48,6 +49,7 @@ public class HistoricalMigrationExportArchiveWriter
     private final HistoricalMigrationExportArchiveCleanup cleanup;
     private volatile Path canonicalRoot;
 
+    @Autowired
     public HistoricalMigrationExportArchiveWriter(
             @Value("${todo.migration-export.temp-dir:${java.io.tmpdir}/law-todo-migration-export}") String root)
     { this(Path.of(root),Clock.systemUTC()); }

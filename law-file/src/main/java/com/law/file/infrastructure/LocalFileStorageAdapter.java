@@ -12,6 +12,7 @@ import java.util.UUID;
 import com.law.file.domain.FileException;
 import com.law.file.security.DetectedContentType;
 import com.law.file.spi.FileStoragePort;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
 public class LocalFileStorageAdapter implements FileStoragePort
 {
     private final Path root;
+    @Autowired
     public LocalFileStorageAdapter(@Value("${law.file.storage.local.root:${ruoyi.profile}/file-center}") String root){this(Path.of(root));}
     public LocalFileStorageAdapter(Path root){this.root=root.toAbsolutePath().normalize();}
 

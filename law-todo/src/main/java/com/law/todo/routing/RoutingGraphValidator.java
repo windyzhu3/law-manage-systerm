@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
@@ -22,6 +23,7 @@ public final class RoutingGraphValidator
     private static final Set<String> TYPES = Set.of("TASK", "DECISION", "FORK", "JOIN", "LOOP", "END");
     private final ConditionValidator conditions;
 
+    @Autowired
     public RoutingGraphValidator() { this(new ConditionValidator()); }
     public RoutingGraphValidator(ConditionValidator conditions) { this.conditions = conditions; }
 

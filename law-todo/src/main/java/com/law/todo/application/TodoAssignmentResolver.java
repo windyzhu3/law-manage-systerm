@@ -2,6 +2,7 @@ package com.law.todo.application;
 
 import java.util.Map;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.law.todo.assignment.CompositeOwnerResolver;
@@ -18,6 +19,7 @@ public class TodoAssignmentResolver
     public record Assignment(Long ownerId, String candidateType, Long candidateValue) { }
 
     /** Preserves direct construction used by existing event and routing callers. */
+    @Autowired
     public TodoAssignmentResolver()
     {
         this(TodoOrganizationPort.legacyCompatible());
