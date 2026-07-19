@@ -35,7 +35,10 @@
         <el-col :span="12">
           <div class="info-item">
             <label class="info-label">登录账号：</label>
-            <span class="info-value plaintext">{{ info.userName }}</span>
+            <span class="info-value plaintext">
+              {{ info.userName }}
+              <test-identity-tag :user-type="info.userType" />
+            </span>
           </div>
         </el-col>
         <el-col :span="12">
@@ -127,10 +130,12 @@
 
 <script>
 import { getUser } from '@/api/system/user'
+import TestIdentityTag from '@/components/TestIdentityTag'
 
 export default {
   name: 'UserViewDrawer',
   dicts: ['sys_user_sex'],
+  components: { TestIdentityTag },
   data() {
     return {
       visible: false,

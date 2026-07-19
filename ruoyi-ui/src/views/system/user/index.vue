@@ -49,6 +49,7 @@
           <el-table-column label="用户名称" align="center" key="userName" v-if="columns.userName.visible" :show-overflow-tooltip="true">
             <template slot-scope="scope">
               <a class="link-type" style="cursor:pointer" @click="handleViewData(scope.row)">{{ scope.row.userName }}</a>
+              <test-identity-tag :user-type="scope.row.userType" />
             </template>
           </el-table-column>
           <el-table-column label="用户昵称" align="center" key="nickName" prop="nickName" v-if="columns.nickName.visible" :show-overflow-tooltip="true" />
@@ -181,13 +182,14 @@ import "@riophae/vue-treeselect/dist/vue-treeselect.css"
 import TreePanel from "@/components/TreePanel"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import UserViewDrawer from "./view"
+import TestIdentityTag from "@/components/TestIdentityTag"
 import passwordRule from "@/utils/passwordRule"
 
 export default {
   name: "User",
   mixins: [passwordRule],
   dicts: ['sys_normal_disable', 'sys_user_sex'],
-  components: { Treeselect, TreePanel, ExcelImportDialog, UserViewDrawer },
+  components: { Treeselect, TreePanel, ExcelImportDialog, UserViewDrawer, TestIdentityTag },
   data() {
     return {
       // 遮罩层
