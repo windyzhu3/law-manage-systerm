@@ -71,7 +71,7 @@
   assertEquals(0L, count(connection,
       "select count(*) from sys_user where user_name like 'ft\\_%' escape '\\\\'"));
   assertEquals(0L, count(connection,
-      "select count(*) from sys_dept where remark like 'FOUNDATION_TEST_DEPARTMENT%'"));
+      "select count(*) from sys_dept where dept_code like 'FOUNDATION_TEST_%'"));
   assertEquals(0L, count(connection,
       "select count(*) from sys_user_role ur join sys_user u on u.user_id=ur.user_id "
           + "where u.user_name like 'ft\\_%' escape '\\\\'"));
@@ -230,8 +230,6 @@
   public record DepartmentSpec(String code, String name, String parentCode, int orderNum) {}
   public record UserSpec(String userName, String nickName, String departmentCode, String roleKey) {}
 
-  public static final String DEPARTMENT_MARKER =
-      "FOUNDATION_TEST_DEPARTMENT|DO_NOT_USE_FOR_PRODUCTION_EVIDENCE";
   public static final String USER_MARKER =
       "FOUNDATION_TEST_IDENTITY|DO_NOT_USE_FOR_PRODUCTION_EVIDENCE";
   public static final String CREATED_BY = "foundation-test-seeder";
@@ -344,7 +342,7 @@
 
 - [ ] **Step 6: Implement the dedicated mapper**
 
-  XML 使用参数绑定，禁止 `${}`。部门按稳定 `dept_code` 查询，同时按名称检查冲突；用户查询不带 `del_flag='0'`。插入部门/用户均使用数据库生成主键，并保留 marker、`create_by`、时间和状态字段。
+  XML 使用参数绑定，禁止 `${}`。部门按六个预留 `dept_code` 查询，同时按名称检查冲突，并要求 `create_by='foundation-test-seeder'`；`sys_dept` 没有 `remark` 列，不得为本切片新增该列。用户查询不带 `del_flag='0'`。插入部门/用户均使用数据库生成主键，并保留 `create_by`、时间和状态字段；用户继续保留 USER_MARKER。
 
 - [ ] **Step 7: Implement the provisioning transaction**
 
@@ -538,7 +536,7 @@
   在与 `MigrationTestDatabase` 相同的环境变量门禁下启动 Spring 测试上下文，Profile=`test`、开关=true，密码由 CI secret-like env `FOUNDATION_TEST_USER_PASSWORD` 提供。首次运行后断言：
 
   ```text
-  6 marked departments
+  6 departments with the exact reserved `FOUNDATION_TEST_*` codes and `create_by='foundation-test-seeder'`
   12 active, non-deleted user_type=99 users
   12 exact user-role links
   0 extra role links for those users
@@ -567,7 +565,7 @@
 
   ```sql
   select count(*) from sys_user where user_name like 'ft\_%' escape '\\'; -- 0
-  select count(*) from sys_dept where remark like 'FOUNDATION_TEST_DEPARTMENT%'; -- 0
+  select count(*) from sys_dept where dept_code like 'FOUNDATION_TEST_%'; -- 0
   select count(*) from sys_user where user_type='99'; -- 0
   ```
 

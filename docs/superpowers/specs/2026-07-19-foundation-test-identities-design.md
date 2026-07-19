@@ -77,7 +77,7 @@ Foundation测试律所
 └── Foundation测试治理组
 ```
 
-六条部门记录统一使用备注 `FOUNDATION_TEST_DEPARTMENT|DO_NOT_USE_FOR_PRODUCTION_EVIDENCE`，作为幂等复用、冲突拒绝和环境清理的稳定标记。
+v0.15 基线的 `sys_dept` 没有 `remark` 列，因此六条部门记录不新增备注字段。测试部门使用设计中列出的六个唯一 `dept_code`，并同时要求 `create_by='foundation-test-seeder'`，作为幂等复用、冲突拒绝和环境清理的双重稳定标记。该取舍由用户于 2026-07-19 选择方案 1 确认，不新增 `V0_20_29` 或 `sys_dept.remark`。
 
 十二个账号如下：
 
@@ -146,7 +146,7 @@ Seeder 通过现有 `BCryptPasswordEncoder` 生成 Hash，禁止打印原始密�
 
 - 相同用户名已存在且 `user_type='99'`、备注含测试标记时，复用该用户；
 - 相同用户名属于真实用户时返回稳定冲突，绝不改名、删除或覆盖；
-- 测试部门同名但缺少测试标记时返回冲突；
+- 测试部门同名但 `dept_code` 不属于六个预留代码，或者预留 `dept_code` 已被非 `foundation-test-seeder` 数据占用时返回冲突；
 - 测试用户存在多余角色时，只移除该测试用户的多余关系，不修改任何真实用户；
 - 正式角色缺失、停用、删除或权限不符时失败，不在 Seeder 中创建或扩权；
 - 重复运行的最终部门、用户和关系快照必须完全相同；
