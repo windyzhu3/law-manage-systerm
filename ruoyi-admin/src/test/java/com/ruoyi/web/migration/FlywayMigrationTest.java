@@ -18,6 +18,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,7 +42,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.27", current.getVersion().getVersion());
+        assertEquals("0.20.28", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -51,6 +54,113 @@ class FlywayMigrationTest
         verifyFinanceReadinessSchema(url);
         verifyAcceptanceReadinessSchema(url);
         verifyFoundationAdmissionAggregateQuery(url);
+        verifyFoundationGovernanceRoles(url);
+    }
+
+    private void verifyFoundationGovernanceRoles(String url)
+    {
+        Map<String, Set<String>> expectedPermissions = Map.of(
+            "foundation_product_owner", Set.of("todo:decision:view", "todo:decision:edit", "todo:admission:view",
+                "todo:admission:edit"),
+            "foundation_security_reviewer", Set.of("todo:admission:view", "todo:admission:edit"),
+            "foundation_arch_dba_reviewer", Set.of("todo:admission:view", "todo:admission:edit", "todo:admission:export"),
+            "foundation_qa_acceptor", Set.of("todo:admission:view", "todo:admission:edit"),
+            "foundation_independent_reviewer", Set.of("todo:admission:view", "todo:admission:edit")
+        );
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(5L, count(connection,
+                "select count(*) from sys_role where role_key in ("
+                    + "'foundation_product_owner','foundation_security_reviewer',"
+                    + "'foundation_arch_dba_reviewer','foundation_qa_acceptor',"
+                    + "'foundation_independent_reviewer') and status='0' and del_flag='0'"));
+            assertEquals(0L, count(connection,
+                "select count(*) from sys_user where user_name like 'ft\\_%' escape '\\\\'"));
+            assertEquals(0L, count(connection,
+                "select count(*) from sys_dept where remark like 'FOUNDATION_TEST_DEPARTMENT%'"));
+            assertEquals(0L, count(connection,
+                "select count(*) from sys_user_role ur join sys_user u on u.user_id=ur.user_id "
+                    + "where u.user_name like 'ft\\_%' escape '\\\\'"));
+
+            Set<Long> allowedMenuIds = definitionMenuAndAncestorIds(connection);
+            for (Map.Entry<String, Set<String>> expected : expectedPermissions.entrySet())
+            {
+                assertEquals(expected.getValue(), buttonPermissions(connection, expected.getKey()),
+                    () -> "Unexpected button permissions for " + expected.getKey());
+                assertEquals(allowedMenuIds, nonButtonMenuIds(connection, expected.getKey()),
+                    () -> "Unexpected non-button menus for " + expected.getKey());
+            }
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Foundation governance role invariants failed", exception);
+        }
+    }
+
+    private Set<String> buttonPermissions(Connection connection, String roleKey) throws SQLException
+    {
+        Set<String> permissions = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select m.perms from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "join sys_menu m on m.menu_id=rm.menu_id where r.role_key=? and m.menu_type='F' "
+                + "and m.perms is not null and m.perms<>''"))
+        {
+            statement.setString(1, roleKey);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                while (rows.next())
+                {
+                    permissions.add(rows.getString(1));
+                }
+            }
+        }
+        return permissions;
+    }
+
+    private Set<Long> nonButtonMenuIds(Connection connection, String roleKey) throws SQLException
+    {
+        Set<Long> menuIds = new HashSet<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select m.menu_id from sys_role_menu rm join sys_role r on r.role_id=rm.role_id "
+                + "join sys_menu m on m.menu_id=rm.menu_id where r.role_key=? and m.menu_type<>'F'"))
+        {
+            statement.setString(1, roleKey);
+            try (ResultSet rows = statement.executeQuery())
+            {
+                while (rows.next())
+                {
+                    menuIds.add(rows.getLong(1));
+                }
+            }
+        }
+        return menuIds;
+    }
+
+    private Set<Long> definitionMenuAndAncestorIds(Connection connection) throws SQLException
+    {
+        Set<Long> menuIds = new HashSet<>();
+        long menuId;
+        try (PreparedStatement statement = connection.prepareStatement(
+            "select menu_id from sys_menu where component='todo/config/index' order by menu_id limit 1");
+             ResultSet rows = statement.executeQuery())
+        {
+            assertTrue(rows.next(), "Foundation configuration menu must exist");
+            menuId = rows.getLong(1);
+        }
+        while (menuId != 0 && menuIds.add(menuId))
+        {
+            try (PreparedStatement statement = connection.prepareStatement("select parent_id from sys_menu where menu_id=?"))
+            {
+                statement.setLong(1, menuId);
+                try (ResultSet rows = statement.executeQuery())
+                {
+                    assertTrue(rows.next(), "Foundation configuration menu ancestor must exist");
+                    menuId = rows.getLong(1);
+                }
+            }
+        }
+        return menuIds;
     }
 
     private void verifyHistoricalMigrationExportPermission(String url)
