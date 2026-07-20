@@ -85,7 +85,7 @@ public final class TodoConfigurationCommands
         public ConfigurationSimulationCommand
         {
             payload=immutableMap(payload);
-            taskCompletions=taskCompletions==null?List.of():List.copyOf(taskCompletions);
+            taskCompletions=immutableTaskCompletions(taskCompletions);
         }
 
         public TodoDefinitionCommands.SimulateDefinitionCommand toDefinitionCommand()
@@ -106,6 +106,20 @@ public final class TodoConfigurationCommands
         Map<String,Object> copy=new java.util.LinkedHashMap<>();
         source.forEach((key,value)->copy.put(key,immutableValue(value)));
         return java.util.Collections.unmodifiableMap(copy);
+    }
+
+    private static List<TodoDefinitionCommands.VirtualTaskCompletionSample> immutableTaskCompletions(
+            List<TodoDefinitionCommands.VirtualTaskCompletionSample> source)
+    {
+        if(source==null)return List.of();
+        List<TodoDefinitionCommands.VirtualTaskCompletionSample> copy=new java.util.ArrayList<>();
+        for (TodoDefinitionCommands.VirtualTaskCompletionSample completion : source)
+        {
+            if(completion==null)copy.add(null);
+            else copy.add(new TodoDefinitionCommands.VirtualTaskCompletionSample(completion.nodeKey(),completion.occurrence(),
+                    immutableMap(completion.payload()),completion.completedAt()));
+        }
+        return List.copyOf(copy);
     }
 
     private static Object immutableValue(Object value)

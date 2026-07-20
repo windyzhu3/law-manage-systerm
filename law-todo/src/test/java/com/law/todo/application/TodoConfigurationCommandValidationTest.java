@@ -19,6 +19,7 @@ import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand
 import com.law.todo.application.command.TodoConfigurationCommands.RuleReference;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.TemplateDraftRuleCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 
 import jakarta.validation.Validation;
@@ -82,6 +83,25 @@ class TodoConfigurationCommandValidationTest
         payload.put("other","after");
 
         List<?> stored=(List<?>)command.payload().get("values");
+        assertEquals(1,stored.size());
+        assertEquals("before",((Map<?,?>)stored.get(0)).get("value"));
+        assertThrows(UnsupportedOperationException.class,()->((Map<Object,Object>)stored.get(0)).put("x","y"));
+    }
+
+    @Test void simulationTaskCompletionPayloadsAreDeeplyImmutable()
+    {
+        Map<String,Object> nested=new LinkedHashMap<>(Map.of("value","before"));
+        List<Object> values=new ArrayList<>(List.of(nested));
+        Map<String,Object> payload=new LinkedHashMap<>(Map.of("values",values));
+        VirtualTaskCompletionSample completion=new VirtualTaskCompletionSample("task",0,payload,
+                LocalDateTime.of(2026,7,20,9,0));
+        ConfigurationSimulationCommand command=new ConfigurationSimulationCommand("request",1L,"TODO_CREATED","LEAD",1L,
+                Map.of("event","created"),LocalDateTime.of(2026,7,20,9,0),List.of(completion));
+
+        nested.put("value","after");
+        values.add("new");
+
+        List<?> stored=(List<?>)command.taskCompletions().get(0).payload().get("values");
         assertEquals(1,stored.size());
         assertEquals("before",((Map<?,?>)stored.get(0)).get("value"));
         assertThrows(UnsupportedOperationException.class,()->((Map<Object,Object>)stored.get(0)).put("x","y"));

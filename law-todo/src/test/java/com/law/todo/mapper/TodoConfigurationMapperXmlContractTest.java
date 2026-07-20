@@ -1,11 +1,13 @@
 package com.law.todo.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -19,15 +21,30 @@ class TodoConfigurationMapperXmlContractTest
     {
         String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
 
+        assertMapperStatements(xml);
+        assertFalse(xml.contains("replaceDraftRuleRefs"));
+        assertFalse(xml.contains("${"));
+    }
+
+    @Test void duplicateStatementMutationFailsTheContract() throws Exception
+    {
+        String duplicated=resource("mapper/todo/TodoConfigurationMapper.xml")
+                +"<select id=\"selectSlaRules\"></select>";
+
+        assertThrows(AssertionError.class,()->assertMapperStatements(duplicated));
+    }
+
+    private void assertMapperStatements(String xml)
+    {
+
         Set<String> methodIds=Arrays.stream(TodoConfigurationMapper.class.getDeclaredMethods()).map(method -> method.getName())
                 .collect(java.util.stream.Collectors.toSet());
         methodIds.forEach(id ->
                 assertTrue(xml.contains("id=\""+id+"\""),id));
-        Set<String> xmlIds=Pattern.compile("<(?:select|insert|update|delete) id=\"([^\"]+)\"").matcher(xml)
-                .results().map(match -> match.group(1)).collect(java.util.stream.Collectors.toSet());
-        assertEquals(methodIds,xmlIds);
-        assertFalse(xml.contains("replaceDraftRuleRefs"));
-        assertFalse(xml.contains("${"));
+        Map<String,Long> xmlIdCounts=Pattern.compile("<(?:select|insert|update|delete) id=\"([^\"]+)\"").matcher(xml)
+                .results().collect(java.util.stream.Collectors.groupingBy(match -> match.group(1),java.util.stream.Collectors.counting()));
+        assertEquals(methodIds,xmlIdCounts.keySet());
+        methodIds.forEach(id -> assertEquals(1L,xmlIdCounts.get(id),id));
     }
 
     @Test void ruleListsUseExactFiltersAndStableOrder() throws Exception
