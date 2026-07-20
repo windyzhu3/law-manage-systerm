@@ -2,9 +2,11 @@ package com.law.todo.mapper;
 
 import java.util.List;
 import java.util.Map;
+import org.apache.ibatis.annotations.Param;
 
 public interface TodoConfigurationMapper
 {
+    int countEnabledDictionaryValue(@Param("dictType") String dictType,@Param("dictValue") String dictValue);
     List<Map<String,Object>> selectSlaRules(Map<String,Object> query);
     Map<String,Object> selectSlaRule(Long id);
     int insertSlaRule(Map<String,Object> row);

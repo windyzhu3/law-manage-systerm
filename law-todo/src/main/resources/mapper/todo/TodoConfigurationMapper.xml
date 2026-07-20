@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.law.todo.mapper.TodoConfigurationMapper">
+  <select id="countEnabledDictionaryValue" resultType="int">
+    select count(*) from sys_dict_type type join sys_dict_data data on data.dict_type=type.dict_type
+    where type.dict_type=#{dictType} and data.dict_value=#{dictValue} and type.status='0' and data.status='0'
+  </select>
   <select id="selectSlaRules" resultType="java.util.Map">
     select r.*,
       (select count(*) from todo_template_draft_rule_ref ref
@@ -30,11 +34,17 @@
       cast(#{escalationPolicyJson} as json),cast(#{autoActionJson} as json),coalesce(#{status},'0'),#{createBy})
   </insert>
   <update id="updateSlaRuleConditionally">
-    update todo_sla_rule set rule_code=#{ruleCode},rule_name=#{ruleName},sla_type=#{slaType},
-      duration_value=#{durationValue},duration_unit=#{durationUnit},calendar_code=#{calendarCode},start_strategy=#{startStrategy},
-      soft_remind_percent=#{softRemindPercent},hard_remind_percent=#{hardRemindPercent},escalate_percent=#{escalatePercent},
-      pause_policy_json=cast(#{pausePolicyJson} as json),escalation_policy_json=cast(#{escalationPolicyJson} as json),
-      auto_action_json=cast(#{autoActionJson} as json),status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    update todo_sla_rule
+    <set>
+      <choose><when test="updateAllFields">
+        rule_code=#{ruleCode},rule_name=#{ruleName},sla_type=#{slaType},duration_value=#{durationValue},
+        duration_unit=#{durationUnit},calendar_code=#{calendarCode},start_strategy=#{startStrategy},
+        soft_remind_percent=#{softRemindPercent},hard_remind_percent=#{hardRemindPercent},escalate_percent=#{escalatePercent},
+        pause_policy_json=cast(#{pausePolicyJson} as json),escalation_policy_json=cast(#{escalationPolicyJson} as json),
+        auto_action_json=cast(#{autoActionJson} as json),status=#{status},
+      </when><otherwise><if test="status != null">status=#{status},</if></otherwise></choose>
+      update_by=#{updateBy},update_time=sysdate(),version=version+1
+    </set>
     where sla_rule_id=#{slaRuleId} and version=#{expectedVersion}
   </update>
   <select id="countSlaRuleReferences" resultType="int">

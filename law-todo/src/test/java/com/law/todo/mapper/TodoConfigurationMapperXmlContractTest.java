@@ -98,6 +98,14 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(release.contains("order by coalesce(v.published_time,v.create_time) desc,v.version_id desc"));
     }
 
+    @Test void dictionaryLookupIsParameterizedAndFiltersDisabledTypesAndValues() throws Exception
+    {
+        String lookup=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","countEnabledDictionaryValue");
+
+        assertTrue(lookup.contains("type.dict_type=#{dictType}") && lookup.contains("data.dict_value=#{dictValue}"));
+        assertTrue(lookup.contains("type.status='0'") && lookup.contains("data.status='0'"));
+    }
+
     private String statement(String xml,String tag,String id)
     {
         int start=xml.indexOf("<"+tag+" id=\""+id+"\"");

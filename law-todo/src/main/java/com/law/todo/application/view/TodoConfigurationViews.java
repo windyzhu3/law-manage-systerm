@@ -21,6 +21,9 @@ public final class TodoConfigurationViews
             String autoActionJson,String status,Integer version,long referenceCount,String createBy,
             LocalDateTime createTime,String updateBy,LocalDateTime updateTime) { }
 
+    public record SlaCalculationResult(LocalDateTime createdAt,LocalDateTime remind80At,LocalDateTime overdue100At,
+            LocalDateTime escalate150At) { }
+
     public record DodRuleListItem(long dodRuleId,String ruleCode,String ruleName,String ruleType,String status,
             Integer version,long referenceCount,LocalDateTime updateTime) { }
 
