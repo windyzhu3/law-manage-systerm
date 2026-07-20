@@ -94,6 +94,7 @@ function check() {
   }
 
   checkRuleLibraryPages()
+  checkTriggerRulePage()
 }
 
 function source(file) {
@@ -138,6 +139,28 @@ function assertPersistedStatusContract(file, content) {
 function runMutationNegativeFixtures() {
   assert.throws(() => assertDirectToggleContract('fixture', '<el-button @click.stop="openDetail(row)" />', 'toggleSlaRule'), /row toggle must stop propagation/)
   assert.throws(() => assertPersistedStatusContract('fixture', 'payload() { return { status: this.form.status } }'), /missing source contract/)
+}
+
+function assertTriggerToggleContract(file, content) {
+  if (!content.includes('@click.stop="toggleRow(row)"')) throw new Error(`${file} row toggle must stop propagation and call toggleRow`)
+  const body = methodWindow(content, 'toggleRow')
+  for (const token of ['rowToggleLoading', '$set(this.rowToggleLoading', '$confirm', 'toggleTriggerRule', 'enabled: targetEnabled', 'actionId:', 'expectedVersion:', 'this.load()']) {
+    if (!body.includes(token)) throw new Error(`${file} toggleRow missing mutation contract ${token}`)
+  }
+  if (body.indexOf('$set(this.rowToggleLoading') > body.indexOf('$confirm')) throw new Error(`${file} toggle guard must be set before confirmation`)
+  if (/toggleTriggerRule\([^,]+,\s*this\.(form|selected)/.test(body)) throw new Error(`${file} toggle must send a status-only command`)
+}
+
+function assertTriggerSortContract(file, content) {
+  const body = methodWindow(content, 'saveSort')
+  for (const token of ['sortTriggerRules', 'actionId:', 'items:', 'triggerRuleId:', 'sortOrder:', 'expectedVersion:', 'sorting', 'this.load()']) {
+    if (!body.includes(token)) throw new Error(`${file} saveSort missing mutation contract ${token}`)
+  }
+}
+
+function runTriggerNegativeFixtures() {
+  assert.throws(() => assertTriggerToggleContract('fixture', '<el-button @click.stop="toggleRow(row)" />\nasync toggleRow(row) { await this.$confirm(); await toggleTriggerRule(row.id, this.form) }'), /missing mutation contract|status-only/)
+  assert.throws(() => assertTriggerSortContract('fixture', 'async saveSort() { await sortTriggerRules({ items: this.rows }) }'), /missing mutation contract/)
 }
 
 function checkRuleLibraryPages() {
@@ -194,8 +217,50 @@ function checkRuleLibraryPages() {
   })
 }
 
+function checkTriggerRulePage() {
+  const page = 'src/views/todo/config/trigger/index.vue'
+  const drawer = 'src/views/todo/config/trigger/TriggerRuleDrawer.vue'
+  const builder = 'src/views/todo/config/trigger/TriggerConditionBuilder.vue'
+  const contents = Object.fromEntries([page, drawer, builder].map(file => [file, source(file)]))
+  const workflow = `${contents[page]}\n${contents[drawer]}\n${contents[builder]}`
+
+  requireTokens(page, contents[page], [
+    'ConfigPageShell', 'ConfigMetricCard', 'TriggerRuleDrawer', 'pagination',
+    'law_todo_trigger_mode', 'law_todo_condition_operator', 'law_todo_rule_status',
+    'listTriggerRules', 'toggleTriggerRule', 'sortTriggerRules',
+    'todo:trigger:list', 'todo:trigger:create', 'todo:trigger:edit', 'todo:trigger:toggle',
+    'sourceEventLabel', 'conditionSummary', 'targetActionLabel', 'triggerModeLabel',
+    '@row-click="openDetail"', '@click.stop="moveUp(row)"', '@click.stop="moveDown(row)"'
+  ])
+  requireTokens(drawer, contents[drawer], [
+    'ConfigDetailDrawer', 'TriggerConditionBuilder', 'listTodoEventCatalog', 'listDefinitions',
+    'listDefinitionVersions', 'payloadSchemaJson', 'PUBLISHED', 'publishedVersions',
+    'businessObjectType', 'business_object_type',
+    'createTriggerRule', 'updateTriggerRule', 'serverEnabled', 'enabled: this.persisted ? this.form.serverEnabled : this.form.enabled',
+    'actionId', 'expectedVersion', 'conditionJson', '@dirty-change="conditionDraftDirty = $event"'
+  ])
+  requireTokens(builder, contents[builder], [
+    'law_todo_condition_operator', 'payloadSchemaJson', 'schemaFields', 'operatorOptions',
+    '$expression', 'version: 1', 'rawJson', 'malformed', 'repairRawJson',
+    'fieldPath', 'conditions', 'valueJson', 'unsupportedOperatorOptions', '@input="rawInput"', "this.$emit('dirty-change'"
+  ])
+  requireTokens('trigger workflow', workflow, ['eventType', 'payloadVersion', 'businessType', 'templateId', 'templateVersionId', 'sortOrder', 'version'])
+  assertTriggerToggleContract(page, contents[page])
+  assertTriggerSortContract(page, contents[page])
+  requireTokens(page, contents[page], ['normalizeSortOrders', '(this.query.pageNum - 1) * this.query.pageSize'])
+  assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'actionId', 'expectedVersion'])
+  const saveBody = methodWindow(contents[drawer], 'save')
+  if (saveBody.includes('sortOrder:')) throw new Error('trigger save command must not send unsupported sortOrder; use sortTriggerRules')
+  if (workflow.includes('simulateTriggerRule(')) throw new Error('Task 10 must not send an invented trigger simulation command')
+  assertMethodTokens(page, contents[page], 'handoffSimulation', ["name: 'TodoConfigSimulation'", 'triggerRuleId', 'eventType', 'payloadVersion'])
+  for (const marker of ['eventOptions', 'operatorOptions: [', 'templateOptions']) {
+    if (workflow.includes(marker)) throw new Error(`trigger workflow must use catalog/dictionary sources instead of ${marker}`)
+  }
+}
+
 runNegativeFixture()
 runMutationNegativeFixtures()
+runTriggerNegativeFixtures()
 check()
 console.log('todo configuration center contract ok')
 
