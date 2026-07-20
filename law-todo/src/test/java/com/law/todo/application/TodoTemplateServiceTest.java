@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -30,6 +31,7 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoDictionaryValidationPort;
+import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness=Strictness.LENIENT)
@@ -41,6 +43,16 @@ class TodoTemplateServiceTest
     @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(new java.util.HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,"templateVersionId",2L,"businessType","LEAD")));verify(mapper).insertTriggerRule(anyMap());}
     @Test void rejectsInvalidTemplateJson(){TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).publish(1L,1,"OWNER","{}","{}",null,"{}","admin"));assertEquals("TODO_TEMPLATE_JSON_INVALID",error.getBusinessCode());}
     @Test void publishesUiSchemaInImmutableVersion(){when(mapper.selectTemplateVersion(1L,1)).thenReturn(null);doAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",8L);return 1;}).when(mapper).insertTemplateVersion(anyMap());new TodoTemplateService(mapper).publish(1L,1,"\"OWNER\"","{}","{}",null,"{\"type\":\"form\"}","admin");verify(mapper).insertTemplateVersion(org.mockito.ArgumentMatchers.argThat(value->"{\"type\":\"form\"}".equals(value.get("uiSchemaJson"))));}
+
+    @Test void triggerVersionCatalogReturnsOnlyPublishedMinimalProjection()
+    {
+        when(mapper.selectPublishedTemplateVersionCatalog(1L)).thenReturn(List.of(Map.of(
+                "version_id",2L,"version_no",7,"status","PUBLISHED")));
+        assertEquals(List.of(new TriggerTemplateVersionCatalogView(2L,7,"PUBLISHED")),
+                new TodoTemplateService(mapper).listPublishedVersionCatalog(1L));
+        verify(mapper).selectPublishedTemplateVersionCatalog(1L);
+        verify(mapper,never()).selectTemplateVersions(1L);
+    }
 
     @Test void springConstructorExplicitlyInjectsConditionValidationDependencies() throws Exception
     {
@@ -199,6 +211,92 @@ class TodoTemplateServiceTest
         verify(mapper,never()).insertTriggerRule(anyMap());
     }
 
+    @Test void triggerSaveRejectsBusinessTypeThatDoesNotMatchActiveEventCatalog()
+    {
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog("CONTRACT"));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).saveTrigger(trigger(null)));
+        assertEquals("TODO_TRIGGER_BUSINESS_TYPE_MISMATCH",error.getBusinessCode());verify(mapper,never()).insertTriggerRule(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsInactiveEventCatalog()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED",null,3));
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(null);
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-inactive-event",3),actor()));
+        assertEquals("TODO_EVENT_CATALOG_REQUIRED",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsDisabledBusinessType()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED",null,3));
+        TodoDictionaryValidationPort dictionaries=org.mockito.Mockito.mock(TodoDictionaryValidationPort.class);
+        when(dictionaries.isEnabled("law_todo_business_type","LEAD")).thenReturn(false);
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper,
+                new TodoEventCatalogService(mapper),new ConditionValidator(),dictionaries)
+                .toggleTrigger(41L,toggle("enable-disabled-business",3),actor()));
+        assertEquals("TODO_TEMPLATE_BUSINESS_TYPE_INVALID",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsBusinessTypeThatDoesNotMatchActiveEventCatalog()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED",null,3));
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog("CONTRACT"));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-business-mismatch",3),actor()));
+        assertEquals("TODO_TRIGGER_BUSINESS_TYPE_MISMATCH",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsInactiveTemplate()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("1",1L,"PUBLISHED",null,3));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-inactive-template",3),actor()));
+        assertEquals("TODO_TRIGGER_TEMPLATE_INACTIVE",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsNonPublishedVersion()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"DRAFT",null,3));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-draft-version",3),actor()));
+        assertEquals("TODO_TRIGGER_VERSION_INVALID",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsVersionBelongingToAnotherTemplate()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",9L,"PUBLISHED",null,3));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-mismatched-version",3),actor()));
+        assertEquals("TODO_TRIGGER_VERSION_INVALID",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingTriggerRejectsConditionInvalidForCurrentEventSchema()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED","{\"unknown\":true}",3));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-invalid-condition",3),actor()));
+        assertEquals("TODO_CONDITION_FIELD_UNKNOWN",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void enablingEligibleTriggerUsesStatusOnlyConditionalMutation()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED","{\"stage\":\"READY\"}",3));
+        when(mapper.updateTriggerRuleEnabledConditionally(anyMap())).thenReturn(1);
+        new TodoTemplateService(mapper).toggleTrigger(41L,toggle("enable-valid",3),actor());
+        verify(mapper).updateTriggerRuleEnabledConditionally(org.mockito.ArgumentMatchers.argThat(row ->
+                row.size()==4&&Long.valueOf(41L).equals(row.get("triggerRuleId"))&&"Y".equals(row.get("enabled"))
+                        &&Integer.valueOf(3).equals(row.get("expectedVersion"))&&"alice".equals(row.get("updateBy"))));
+    }
+
+    @Test void enablingTriggerPreservesOptimisticConcurrency()
+    {
+        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED",null,4));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("enable-stale",3),actor()));
+        assertEquals("TODO_TRIGGER_VERSION_CONFLICT",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
     private Map<String,Object> trigger(String conditionJson)
     {
         Map<String,Object> trigger=new HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,
@@ -209,11 +307,21 @@ class TodoTemplateServiceTest
 
     private Map<String,Object> catalog()
     {
-        return Map.of("status","ACTIVE","payload_schema_json","{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"},\"amount\":{\"type\":\"number\"}}}");
+        return catalog("LEAD");
     }
+    private Map<String,Object> catalog(String businessType)
+    {return Map.of("status","ACTIVE","business_object_type",businessType,"payload_schema_json","{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"},\"amount\":{\"type\":\"number\"}}}");}
 
     private TriggerCommand command(Long id,String businessType,String actionId,int version)
     {return new TriggerCommand(id,"LEAD_ASSIGNED",1L,2L,businessType,"Y",null,1,actionId,version);}
+    private com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand toggle(String actionId,int version)
+    {return new com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand("Y",actionId,version);}
+    private Map<String,Object> binding(String templateStatus,Long versionTemplateId,String versionStatus,String condition,int version)
+    {
+        Map<String,Object> row=new HashMap<>();row.put("trigger_rule_id",41L);row.put("event_type","LEAD_ASSIGNED");row.put("payload_version",1);
+        row.put("template_id",1L);row.put("template_version_id",2L);row.put("business_type","LEAD");row.put("condition_json",condition);
+        row.put("trigger_version",version);row.put("template_status",templateStatus);row.put("version_template_id",versionTemplateId);row.put("version_status",versionStatus);return row;
+    }
     private Actor actor(){return new Actor(7L,"alice",2L);}
 
     private Ledger ledger(boolean insertFirst)

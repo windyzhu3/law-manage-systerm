@@ -19,11 +19,19 @@ public class TodoEventCatalogService
 
     public String payloadSchema(String eventType, int payloadVersion)
     {
+        ActiveEventCatalog entry=activeEntry(eventType,payloadVersion);
+        return entry==null?null:entry.payloadSchemaJson();
+    }
+
+    public ActiveEventCatalog activeEntry(String eventType,int payloadVersion)
+    {
         Map<String, Object> entry = mapper.selectEventCatalog(eventType, payloadVersion);
         if (entry == null || entry.isEmpty()
                 || !"ACTIVE".equals(text(value(entry, "status", "status"))))
             return null;
-        return text(value(entry, "payload_schema_json", "payloadSchemaJson"));
+        String schema=text(value(entry,"payload_schema_json","payloadSchemaJson"));
+        if(schema==null||schema.isBlank())return null;
+        return new ActiveEventCatalog(text(value(entry,"business_object_type","businessObjectType")),schema);
     }
 
     /** Read-only managed catalogue used by configuration surfaces. */
@@ -42,4 +50,6 @@ public class TodoEventCatalogService
     {
         return value == null ? null : String.valueOf(value);
     }
+
+    public record ActiveEventCatalog(String businessObjectType,String payloadSchemaJson) { }
 }

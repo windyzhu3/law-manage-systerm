@@ -121,7 +121,7 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
     @GetMapping("/trigger-catalog/templates") public AjaxResult triggerTemplateCatalog(){return success(templates.listTemplates());}
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
-    @GetMapping("/trigger-catalog/templates/{id}/versions") public AjaxResult triggerTemplateVersions(@PathVariable Long id){return success(definitions.versions(id));}
+    @GetMapping("/trigger-catalog/templates/{id}/versions") public AjaxResult triggerTemplateVersions(@PathVariable Long id){return success(templates.listPublishedVersionCatalog(id));}
     @PreAuthorize("@ss.hasPermi('todo:trigger:create')")
     @PostMapping("/trigger-rules") public AjaxResult createTrigger(@Valid @RequestBody TriggerCommand value){requireNew(value.triggerRuleId());return success(templates.saveTrigger(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:trigger:edit')")

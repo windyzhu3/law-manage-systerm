@@ -1,6 +1,7 @@
 package com.law.todo.mapper;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -204,6 +205,25 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test void triggerCatalogAndEnableReadsUseMinimalAuthoritativeProjections() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            String catalog=statement(xml,"select","selectPublishedTemplateVersionCatalog");
+            assertTrue(catalog.contains("select v.version_id,v.version_no,v.status from todo_template_version v"));
+            assertTrue(catalog.contains("v.template_id=#{templateId} and v.status='PUBLISHED'"));
+            for(String forbidden:new String[]{"v.*","definition_json","compiled_json","owner_rule_json","dod_rule_json","sla_rule_json","next_rule_json","ui_schema_json","validation_report_json","change_summary","impact_scope"})
+                assertFalse(catalog.contains(forbidden),forbidden);
+
+            String binding=statement(xml,"select","selectTriggerBindingForUpdate");
+            for(String required:new String[]{"r.trigger_rule_id","r.event_type","r.payload_version","r.template_id","r.template_version_id","r.business_type","r.condition_json","r.version trigger_version","t.status template_status","v.template_id version_template_id","v.status version_status","for update"})
+                assertTrue(binding.contains(required),required);
+            for(String forbidden:new String[]{"r.*","v.*","definition_json","compiled_json","owner_rule_json","dod_rule_json","sla_rule_json","next_rule_json","ui_schema_json"})
+                assertFalse(binding.contains(forbidden),forbidden);
+        }
+    }
+
     @Test void publishingCanLockTheAuthoritativeDefinitionVersion() throws Exception
     {
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
@@ -214,5 +234,12 @@ class TodoMapperXmlContractTest
             assertTrue(start>=0 && end>start);
             assertTrue(xml.substring(start,end).contains("where v.version_id=#{versionId} for update"));
         }
+    }
+
+    private String statement(String xml,String tag,String id)
+    {
+        int start=xml.indexOf("<"+tag+" id=\""+id+"\"");
+        int end=xml.indexOf("</"+tag+">",start);
+        assertTrue(start>=0&&end>start,id);return xml.substring(start,end);
     }
 }

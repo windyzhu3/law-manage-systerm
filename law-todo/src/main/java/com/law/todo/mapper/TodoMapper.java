@@ -60,6 +60,7 @@ public interface TodoMapper
     Long selectRoleIdByKey(String roleKey);
     Long selectDepartmentIdByCode(String departmentCode);
     List<Map<String,Object>> selectTemplates();
+    List<Map<String,Object>> selectPublishedTemplateVersionCatalog(Long templateId);
     int insertTemplate(Map<String,Object> value);
     int updateTemplate(Map<String,Object> value);
     List<Map<String,Object>> selectAllTriggerRules();
@@ -67,6 +68,7 @@ public interface TodoMapper
     int updateTriggerRule(Map<String,Object> value);
     int updateTriggerRuleSortConditionally(Map<String,Object> value);
     int updateTriggerRuleEnabledConditionally(Map<String,Object> value);
+    Map<String,Object> selectTriggerBindingForUpdate(Long triggerRuleId);
     List<Map<String,Object>> selectActionTimeline(Long todoId);
     List<Map<String,Object>> selectAttachments(Long todoId);
     List<Map<String,Object>> selectCc(Long todoId);

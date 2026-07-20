@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.hamcrest.Matchers.aMapWithSize;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -31,6 +33,7 @@ import com.law.todo.application.TodoDefinitionService;
 import com.law.todo.application.TodoDodRuleManagementService;
 import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
+import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -91,6 +94,25 @@ class TodoConfigurationControllerValidationTest
         assertPermission("triggerEventCatalog","todo:trigger:list");
         assertPermission("triggerTemplateCatalog","todo:trigger:list");
         assertPermission("triggerTemplateVersions","todo:trigger:list");
+    }
+
+    @Test
+    void triggerVersionCatalogResponseContainsOnlyPublishedIdentityFields() throws Exception
+    {
+        TodoTemplateService templates=org.mockito.Mockito.mock(TodoTemplateService.class);
+        org.mockito.Mockito.when(templates.listPublishedVersionCatalog(7L)).thenReturn(List.of(
+                new TriggerTemplateVersionCatalogView(91L,3,"PUBLISHED")));
+        TodoConfigurationController controller=new TodoConfigurationController(org.mockito.Mockito.mock(TodoConfigurationQueryService.class),
+                org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),org.mockito.Mockito.mock(TodoDodRuleManagementService.class),templates,
+                org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),
+                org.mockito.Mockito.mock(TodoConfigurationSimulationService.class));
+        MockMvcBuilders.standaloneSetup(controller).build().perform(get("/todo/config/trigger-catalog/templates/7/versions"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0]",aMapWithSize(3)))
+                .andExpect(jsonPath("$.data[0].versionId").value(91))
+                .andExpect(jsonPath("$.data[0].versionNo").value(3))
+                .andExpect(jsonPath("$.data[0].status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data[0].definitionJson").doesNotExist());
+        org.mockito.Mockito.verify(templates).listPublishedVersionCatalog(7L);
     }
 
     @Test
