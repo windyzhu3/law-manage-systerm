@@ -1,0 +1,90 @@
+package com.law.todo.application.command;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+
+import com.alibaba.fastjson2.JSON;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+
+public final class TodoConfigurationCommands
+{
+    private TodoConfigurationCommands() { }
+
+    public record SlaRuleCommand(Long slaRuleId,@NotBlank String ruleCode,@NotBlank String ruleName,
+            @NotBlank String slaType,@NotNull @Positive Integer durationValue,@NotBlank String durationUnit,
+            @NotBlank String calendarCode,@NotBlank String startStrategy,
+            @NotNull @Positive Integer softRemindPercent,@NotNull @Positive Integer hardRemindPercent,
+            @NotNull @Positive Integer escalatePercent,String pausePolicyJson,String escalationPolicyJson,
+            String autoActionJson,@Pattern(regexp="0|1") String status,@NotBlank String actionId,
+            @NotNull @PositiveOrZero Integer expectedVersion)
+    {
+        @AssertTrue(message="SLA thresholds must be ordered")
+        public boolean isThresholdsOrdered()
+        {
+            return softRemindPercent != null && hardRemindPercent != null && escalatePercent != null
+                    && softRemindPercent <= hardRemindPercent && hardRemindPercent <= escalatePercent;
+        }
+    }
+
+    public record DodRuleCommand(Long dodRuleId,@NotBlank String ruleCode,@NotBlank String ruleName,
+            @NotBlank String ruleType,@NotBlank String requiredFieldsJson,
+            @NotBlank String requiredAttachmentsJson,@NotBlank String conditionalRulesJson,
+            @NotBlank String validatorRefsJson,@NotBlank String errorMessagesJson,
+            @Pattern(regexp="0|1") String status,@NotBlank String actionId,
+            @NotNull @PositiveOrZero Integer expectedVersion)
+    {
+        @AssertTrue(message="DoD rule JSON is invalid")
+        public boolean isRuleJsonValid()
+        {
+            return JSON.isValidArray(requiredFieldsJson) && JSON.isValidArray(requiredAttachmentsJson)
+                    && JSON.isValidArray(conditionalRulesJson) && JSON.isValidArray(validatorRefsJson)
+                    && JSON.isValidObject(errorMessagesJson);
+        }
+    }
+
+    public record TemplateDraftRuleCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
+            @NotNull @PositiveOrZero Integer expectedVersion,@NotNull List<@Valid RuleReference> ruleReferences)
+    {
+        public TemplateDraftRuleCommand
+        {
+            ruleReferences=ruleReferences==null?null:List.copyOf(ruleReferences);
+        }
+    }
+
+    public record RuleReference(@NotBlank String type,@NotNull @Positive Long id,
+            @NotNull @PositiveOrZero Integer order,String configJson)
+    {
+        @AssertTrue(message="Rule reference configuration must be a JSON object")
+        public boolean isConfigJsonValid()
+        {
+            return configJson==null || configJson.isBlank() || JSON.isValidObject(configJson);
+        }
+    }
+
+    public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
+            @NotBlank String eventType,@NotBlank String businessType,@NotNull @Positive Long businessId,
+            @NotEmpty Map<String,Object> payload,@NotNull LocalDateTime effectiveAt,
+            @Valid List<TodoDefinitionCommands.VirtualTaskCompletionSample> taskCompletions)
+    {
+        public ConfigurationSimulationCommand
+        {
+            payload=payload==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+            taskCompletions=taskCompletions==null?List.of():List.copyOf(taskCompletions);
+        }
+
+        public TodoDefinitionCommands.SimulateDefinitionCommand toDefinitionCommand()
+        {
+            return new TodoDefinitionCommands.SimulateDefinitionCommand(payload,businessType,businessId,effectiveAt,
+                    taskCompletions);
+        }
+    }
+}

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.law.todo.mapper.TodoConfigurationMapper">
+  <select id="selectSlaRules" resultType="java.util.Map">
+    select r.*,
+      (select count(*) from todo_template_draft_rule_ref ref
+       where ref.ref_type='SLA' and ref.ref_id_value=r.sla_rule_id) reference_count
+    from todo_sla_rule r
+    <where>
+      <if test="status != null and status != ''">r.status=#{status}</if>
+      <if test="slaType != null and slaType != ''">and r.sla_type=#{slaType}</if>
+      <if test="keyword != null and keyword != ''">and (r.rule_code like concat('%',#{keyword},'%') or r.rule_name like concat('%',#{keyword},'%'))</if>
+      <if test="beginTime != null">and r.update_time &gt;= #{beginTime}</if>
+      <if test="endTime != null">and r.update_time &lt;= #{endTime}</if>
+    </where>
+    order by r.update_time desc,r.sla_rule_id desc
+  </select>
+  <select id="selectSlaRule" resultType="java.util.Map">
+    select r.*,
+      (select count(*) from todo_template_draft_rule_ref ref
+       where ref.ref_type='SLA' and ref.ref_id_value=r.sla_rule_id) reference_count
+    from todo_sla_rule r where r.sla_rule_id=#{id}
+  </select>
+  <insert id="insertSlaRule" useGeneratedKeys="true" keyProperty="slaRuleId">
+    insert into todo_sla_rule(rule_code,rule_name,sla_type,duration_value,duration_unit,calendar_code,start_strategy,
+      soft_remind_percent,hard_remind_percent,escalate_percent,pause_policy_json,escalation_policy_json,auto_action_json,
+      status,create_by)
+    values(#{ruleCode},#{ruleName},#{slaType},#{durationValue},#{durationUnit},#{calendarCode},#{startStrategy},
+      #{softRemindPercent},#{hardRemindPercent},#{escalatePercent},cast(#{pausePolicyJson} as json),
+      cast(#{escalationPolicyJson} as json),cast(#{autoActionJson} as json),coalesce(#{status},'0'),#{createBy})
+  </insert>
+  <update id="updateSlaRuleConditionally">
+    update todo_sla_rule set rule_code=#{ruleCode},rule_name=#{ruleName},sla_type=#{slaType},
+      duration_value=#{durationValue},duration_unit=#{durationUnit},calendar_code=#{calendarCode},start_strategy=#{startStrategy},
+      soft_remind_percent=#{softRemindPercent},hard_remind_percent=#{hardRemindPercent},escalate_percent=#{escalatePercent},
+      pause_policy_json=cast(#{pausePolicyJson} as json),escalation_policy_json=cast(#{escalationPolicyJson} as json),
+      auto_action_json=cast(#{autoActionJson} as json),status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where sla_rule_id=#{slaRuleId} and version=#{expectedVersion}
+  </update>
+  <select id="countSlaRuleReferences" resultType="int">
+    select count(*) from todo_template_draft_rule_ref where ref_type='SLA' and ref_id_value=#{id}
+  </select>
+
+  <select id="selectDodRules" resultType="java.util.Map">
+    select r.*,
+      (select count(*) from todo_template_draft_rule_ref ref
+       where ref.ref_type='DOD' and ref.ref_id_value=r.dod_rule_id) reference_count
+    from todo_dod_rule r
+    <where>
+      <if test="status != null and status != ''">r.status=#{status}</if>
+      <if test="ruleType != null and ruleType != ''">and r.rule_type=#{ruleType}</if>
+      <if test="keyword != null and keyword != ''">and (r.rule_code like concat('%',#{keyword},'%') or r.rule_name like concat('%',#{keyword},'%'))</if>
+      <if test="beginTime != null">and r.update_time &gt;= #{beginTime}</if>
+      <if test="endTime != null">and r.update_time &lt;= #{endTime}</if>
+    </where>
+    order by r.update_time desc,r.dod_rule_id desc
+  </select>
+  <select id="selectDodRule" resultType="java.util.Map">
+    select r.*,
+      (select count(*) from todo_template_draft_rule_ref ref
+       where ref.ref_type='DOD' and ref.ref_id_value=r.dod_rule_id) reference_count
+    from todo_dod_rule r where r.dod_rule_id=#{id}
+  </select>
+  <insert id="insertDodRule" useGeneratedKeys="true" keyProperty="dodRuleId">
+    insert into todo_dod_rule(rule_code,rule_name,rule_type,required_fields_json,required_attachments_json,
+      conditional_rules_json,validator_refs_json,error_messages_json,status,create_by)
+    values(#{ruleCode},#{ruleName},#{ruleType},cast(#{requiredFieldsJson} as json),cast(#{requiredAttachmentsJson} as json),
+      cast(#{conditionalRulesJson} as json),cast(#{validatorRefsJson} as json),cast(#{errorMessagesJson} as json),
+      coalesce(#{status},'0'),#{createBy})
+  </insert>
+  <update id="updateDodRuleConditionally">
+    update todo_dod_rule set rule_code=#{ruleCode},rule_name=#{ruleName},rule_type=#{ruleType},
+      required_fields_json=cast(#{requiredFieldsJson} as json),required_attachments_json=cast(#{requiredAttachmentsJson} as json),
+      conditional_rules_json=cast(#{conditionalRulesJson} as json),validator_refs_json=cast(#{validatorRefsJson} as json),
+      error_messages_json=cast(#{errorMessagesJson} as json),status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}
+  </update>
+  <select id="countDodRuleReferences" resultType="int">
+    select count(*) from todo_template_draft_rule_ref where ref_type='DOD' and ref_id_value=#{id}
+  </select>
+
+  <delete id="deleteDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
+  <delete id="replaceDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
+  <insert id="insertDraftRuleRef" useGeneratedKeys="true" keyProperty="refId">
+    insert into todo_template_draft_rule_ref(version_id,ref_type,ref_id_value,sort_order,config_json)
+    values(#{versionId},#{refType},#{refIdValue},#{sortOrder},cast(#{configJson} as json))
+  </insert>
+  <select id="selectDraftRuleRefs" resultType="java.util.Map">
+    select ref.*,
+      case when ref.ref_type='SLA' then sla.rule_code when ref.ref_type='DOD' then dod.rule_code else null end rule_code,
+      case when ref.ref_type='SLA' then sla.rule_name when ref.ref_type='DOD' then dod.rule_name else null end rule_name,
+      case when ref.ref_type='SLA' then sla.status when ref.ref_type='DOD' then dod.status else null end rule_status
+    from todo_template_draft_rule_ref ref
+    left join todo_sla_rule sla on ref.ref_type='SLA' and sla.sla_rule_id=ref.ref_id_value
+    left join todo_dod_rule dod on ref.ref_type='DOD' and dod.dod_rule_id=ref.ref_id_value
+    where ref.version_id=#{versionId}
+    order by ref.ref_type,ref.sort_order,ref.ref_id
+  </select>
+
+  <select id="selectTemplateConfiguration" resultType="java.util.Map">
+    select t.*,draft.version_id draft_version_id,draft.status draft_status,draft.version_no draft_version_no,
+      published.version_id published_version_id,published.version_no published_version_no,published.published_time
+    from todo_template t
+    left join todo_template_version draft on draft.version_id=(
+      select candidate.version_id from todo_template_version candidate
+      where candidate.template_id=t.template_id and candidate.status in ('DRAFT','BLOCKED')
+      order by candidate.version_no desc,candidate.version_id desc limit 1)
+    left join todo_template_version published on published.version_id=(
+      select candidate.version_id from todo_template_version candidate
+      where candidate.template_id=t.template_id and candidate.status='PUBLISHED'
+      order by candidate.version_no desc,candidate.version_id desc limit 1)
+    where t.template_id=#{templateId}
+  </select>
+  <select id="selectReleaseRecords" resultType="java.util.Map">
+    select v.*,t.template_code,t.template_name,t.business_type,
+      action.action_id,action.action_type,action.operator_id,action.operator_name,action.create_time action_create_time
+    from todo_template_version v join todo_template t on t.template_id=v.template_id
+    left join todo_definition_action action on action.definition_action_id=(
+      select candidate.definition_action_id from todo_definition_action candidate
+      where candidate.entity_id=v.version_id and candidate.entity_type='TEMPLATE_VERSION'
+      order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
+    <where>
+      v.status='PUBLISHED'
+      <if test="templateId != null">and v.template_id=#{templateId}</if>
+      <if test="templateCode != null and templateCode != ''">and t.template_code=#{templateCode}</if>
+      <if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if>
+      <if test="beginTime != null">and coalesce(v.published_time,v.create_time) &gt;= #{beginTime}</if>
+      <if test="endTime != null">and coalesce(v.published_time,v.create_time) &lt;= #{endTime}</if>
+    </where>
+    order by coalesce(v.published_time,v.create_time) desc,v.version_id desc
+  </select>
+  <insert id="insertSimulationRecord" useGeneratedKeys="true" keyProperty="simulationId">
+    insert into todo_simulation_record(request_id,template_version_id,event_type,business_type,business_id,input_summary_json,
+      result_json,duration_ms,operator_id)
+    values(#{requestId},#{templateVersionId},#{eventType},#{businessType},#{businessId},cast(#{inputSummaryJson} as json),
+      cast(#{resultJson} as json),#{durationMs},#{operatorId})
+  </insert>
+</mapper>
