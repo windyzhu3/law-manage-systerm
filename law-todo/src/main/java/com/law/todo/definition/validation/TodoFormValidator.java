@@ -62,6 +62,17 @@ public class TodoFormValidator
         validateMaterials(objects(rules.get("materials")), ids, resolver);
     }
 
+    /** Aggregates the same required/conditional field semantics used by submission validation. */
+    public List<ValidationIssue> validateRequiredFields(Map<String,Object> rules,Map<String,Object> fields)
+    {
+        Map<String,Object> values=fields==null?Map.of():fields;Map<String,Object> effective=rules==null?Map.of():rules;
+        List<ValidationIssue> issues=new ArrayList<>();
+        for(String field:strings(effective.get("requiredFields")))addFieldIssue(issues,values,field);
+        for(Map<String,Object> conditional:objects(effective.get("conditionalRequired")))
+            if(matches(object(conditional.get("when")),values))addFieldIssue(issues,values,text(conditional.get("field")));
+        return List.copyOf(issues);
+    }
+
     private void validateMaterials(List<Map<String,Object>> rules, List<Long> ids,
             MaterialResolver resolver)
     {
@@ -95,13 +106,18 @@ public class TodoFormValidator
 
     private void requireField(Map<String,Object> fields, String field)
     {
-        if (field == null || !fields.containsKey(field))
-            throw new TodoException("TODO_DOD_FIELD_MISSING", "Required field is missing: " + field);
-        Object value = fields.get(field);
-        if (value == null)
-            throw new TodoException("TODO_DOD_FIELD_NULL", "Required field is null: " + field);
-        if (value instanceof String text && text.isBlank())
-            throw new TodoException("TODO_DOD_FIELD_BLANK", "Required field is blank: " + field);
+        ValidationIssue issue=fieldIssue(fields,field);if(issue!=null)throw new TodoException(issue.code(),issue.message());
+    }
+
+    private void addFieldIssue(List<ValidationIssue> issues,Map<String,Object> fields,String field)
+    {ValidationIssue issue=fieldIssue(fields,field);if(issue!=null)issues.add(issue);}
+    private ValidationIssue fieldIssue(Map<String,Object> fields,String field)
+    {
+        String path="fields."+field;
+        if(field==null||!fields.containsKey(field))return new ValidationIssue("TODO_DOD_FIELD_MISSING",path,"Required field is missing: "+field);
+        Object value=fields.get(field);if(value==null)return new ValidationIssue("TODO_DOD_FIELD_NULL",path,"Required field is null: "+field);
+        if(value instanceof String text&&text.isBlank())return new ValidationIssue("TODO_DOD_FIELD_BLANK",path,"Required field is blank: "+field);
+        return null;
     }
 
     private boolean matches(Map<String,Object> when, Map<String,Object> values)

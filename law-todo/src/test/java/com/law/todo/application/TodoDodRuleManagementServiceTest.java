@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.clearInvocations;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,12 +25,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.law.todo.application.TodoDodRuleManagementService.DodTestResult;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleDetail;
+import com.law.todo.definition.validation.TodoFormValidator;
 import com.law.todo.domain.TodoException;
+import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoBusinessValidator;
@@ -52,7 +56,7 @@ class TodoDodRuleManagementServiceTest
 
     @Test void rejectsUnknownExternalValidator()
     {
-        ledger(true);enabledDictionaries();when(validator.catalogCode()).thenReturn("BUSINESS_STATE");
+        ledger(true);enabledDictionaries();
 
         TodoException error=assertThrows(TodoException.class,()->service.save(command("[\"MISSING\"]"),actor));
 
@@ -116,6 +120,7 @@ class TodoDodRuleManagementServiceTest
     @Test void createReplayReturnsStoredIdAfterDictionaryAndValidatorCatalogueChange()
     {
         ledger(true);enabledDictionaries();when(validator.catalogCode()).thenReturn("BUSINESS_STATE");
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator));
         DodRuleCommand command=command("[\"BUSINESS_STATE\"]");
         when(mapper.insertDodRule(anyMap())).thenAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("dodRuleId",10L);return 1;});
         assertEquals(10L,service.save(command,actor));
@@ -152,12 +157,13 @@ class TodoDodRuleManagementServiceTest
 
     @Test void disabledReferencedRuleKeepsPublishedSnapshotsUntouched()
     {
-        ledger(true);when(mapper.updateDodRuleConditionally(anyMap())).thenReturn(1);
+        ledger(true);when(dictionaries.isEnabled("law_todo_rule_status","1")).thenReturn(true);when(mapper.updateDodRuleStatusConditionally(anyMap())).thenReturn(1);
 
         service.toggle(9L,"1","toggle-9",2,actor);
 
-        verify(mapper).updateDodRuleConditionally(argThat(row->"1".equals(row.get("status"))
+        verify(mapper).updateDodRuleStatusConditionally(argThat(row->"1".equals(row.get("status"))
                 &&Long.valueOf(9L).equals(row.get("dodRuleId"))&&Integer.valueOf(2).equals(row.get("expectedVersion"))));
+        verify(mapper,never()).updateDodRuleConditionally(anyMap());
         verify(mapper,never()).countDodRuleReferences(9L);
     }
 
@@ -175,14 +181,128 @@ class TodoDodRuleManagementServiceTest
 
     @Test void toggleReplaysRecordedActionWithoutDuplicateWrite()
     {
-        Ledger ledger=ledger(true);when(mapper.updateDodRuleConditionally(anyMap())).thenReturn(1);
+        Ledger ledger=ledger(true);when(dictionaries.isEnabled("law_todo_rule_status","1")).thenReturn(true);when(mapper.updateDodRuleStatusConditionally(anyMap())).thenReturn(1);
 
         service.toggle(9L,"1","toggle-9",2,actor);
         service.toggle(9L,"1","toggle-9",2,actor);
 
-        verify(mapper,times(1)).updateDodRuleConditionally(anyMap());
+        verify(mapper,times(1)).updateDodRuleStatusConditionally(anyMap());
         verify(todoMapper,times(1)).completeDefinitionAction(anyString(),anyString(),anyLong());
         assertEquals(9L,ledger.entityId.get());
+    }
+
+    @Test void toggleRejectsDisabledStatusAfterClaimAndBeforeWrite()
+    {
+        ledger(true);when(dictionaries.isEnabled("law_todo_rule_status","1")).thenReturn(false);
+
+        TodoException error=assertThrows(TodoException.class,()->service.toggle(9L,"1","toggle-9",2,actor));
+
+        assertEquals("TODO_DOD_RULE_DICTIONARY_INVALID",error.getBusinessCode());
+        verify(mapper,never()).updateDodRuleStatusConditionally(anyMap());
+    }
+
+    @Test void toggleReplayRemainsAvailableAfterStatusIsDisabled()
+    {
+        ledger(true);when(dictionaries.isEnabled("law_todo_rule_status","1")).thenReturn(true);when(mapper.updateDodRuleStatusConditionally(anyMap())).thenReturn(1);
+        service.toggle(9L,"1","toggle-9",2,actor);
+        lenient().when(dictionaries.isEnabled("law_todo_rule_status","1")).thenReturn(false);
+
+        service.toggle(9L,"1","toggle-9",2,actor);
+
+        verify(mapper,times(1)).updateDodRuleStatusConditionally(anyMap());
+    }
+
+    @Test void rejectsMalformedRuleJsonSemantics()
+    {
+        List<DodRuleCommand> invalid=List.of(
+                commandJson("[\"field\",1]","[]","[]","[]","{}"),
+                commandJson("[null]","[]","[]","[]","{}"),
+                commandJson("[]","[{}]","[]","[]","{}"),
+                commandJson("[\"field\",\"field\"]","[]","[]","[]","{}"),
+                commandJson("[]","[]","[]","[1]","{}"),
+                commandJson("[]","[]","[{\"field\":\"reason\",\"when\":{\"field\":\"result\",\"unknown\":true}}]","[]","{}"),
+                commandJson("[]","[]","[]","[]","{\"\":\"message\"}"));
+
+        for(DodRuleCommand command:invalid)
+        {
+            ledger(true);
+            assertEquals("TODO_DOD_RULE_JSON_INVALID",assertThrows(TodoException.class,()->service.save(command,actor)).getBusinessCode());
+        }
+    }
+
+    @Test void sampleAggregatesConditionalMissingFields()
+    {
+        when(mapper.selectDodRule(7L)).thenReturn(rule(7L,"DOD-7","0",2,"[\"result\"]","[]","[]").entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey,Map.Entry::getValue)));
+        when(mapper.selectDodRule(7L)).thenAnswer(invocation->{Map<String,Object> row=new HashMap<>(rule(7L,"DOD-7","0",2,"[\"result\"]","[]","[]"));
+            row.put("conditional_rules_json","[{\"field\":\"reason\",\"when\":{\"field\":\"result\",\"equals\":\"REJECT\"}}]");return row;});
+
+        DodTestResult result=service.test(7L,Map.of("result","REJECT"),List.of(),actor);
+
+        assertEquals(List.of("reason"),result.missingFields());
+    }
+
+    @Test void sampleRequiresContextWhenExternalValidatorsAreConfigured()
+    {
+        when(mapper.selectDodRule(7L)).thenReturn(rule(7L,"DOD-7","0",2,"[]","[]","[\"BUSINESS_STATE\"]"));
+
+        DodTestResult result=service.test(7L,Map.of(),List.of(),actor);
+
+        assertFalse(result.passed());
+        assertEquals("TODO_DOD_SAMPLE_CONTEXT_REQUIRED",result.validatorIssues().get(0).code());
+    }
+
+    @Test void sampleAggregatesConfiguredValidatorFailuresWithContext()
+    {
+        TodoBusinessValidator second=org.mockito.Mockito.mock(TodoBusinessValidator.class);
+        when(mapper.selectDodRule(7L)).thenReturn(rule(7L,"DOD-7","0",2,"[]","[]","[\"FIRST\",\"SECOND\"]"));
+        when(validator.catalogCode()).thenReturn("FIRST");when(second.catalogCode()).thenReturn("SECOND");
+        when(validator.supports("LEAD")).thenReturn(true);when(second.supports("LEAD")).thenReturn(true);
+        org.mockito.Mockito.doThrow(new TodoException("FIRST_FAILURE","first failed")).when(validator).validate(org.mockito.ArgumentMatchers.any(),anyMap());
+        org.mockito.Mockito.doThrow(new TodoException("SECOND_FAILURE","second failed")).when(second).validate(org.mockito.ArgumentMatchers.any(),anyMap());
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator,second));
+
+        DodTestResult result=service.test(7L,Map.of(),List.of(),todo("LEAD"),actor);
+
+        assertFalse(result.passed());
+        assertEquals(List.of("FIRST_FAILURE","SECOND_FAILURE"),result.validatorIssues().stream().map(TodoFormValidator.ValidationIssue::code).toList());
+    }
+
+    @Test void sampleSkipsConfiguredValidatorThatDoesNotSupportBusinessType()
+    {
+        when(mapper.selectDodRule(7L)).thenReturn(rule(7L,"DOD-7","0",2,"[]","[]","[\"BUSINESS_STATE\"]"));
+        when(validator.catalogCode()).thenReturn("BUSINESS_STATE");when(validator.supports("LEAD")).thenReturn(false);
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator));
+
+        DodTestResult result=service.test(7L,Map.of(),List.of(),todo("LEAD"),actor);
+
+        assertEquals(List.of(),result.validatorIssues());
+        verify(validator,never()).validate(org.mockito.ArgumentMatchers.any(),anyMap());
+    }
+
+    @Test void reportsReferenceCount()
+    {
+        when(mapper.countDodRuleReferences(9L)).thenReturn(4);
+        assertEquals(4,service.referenceCount(9L));
+    }
+
+    @Test void readsEachRuntimeValidatorCodeOnlyOnceWhenBuildingCatalogue()
+    {
+        clearInvocations(validator);when(validator.catalogCode()).thenReturn("BUSINESS_STATE");
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator));
+        when(mapper.selectDodRule(7L)).thenReturn(rule(7L,"DOD-7","0",2,"[]","[]","[\"BUSINESS_STATE\"]"));
+
+        service.test(7L,Map.of(),List.of(),todo("LEAD"),actor);
+
+        verify(validator,times(1)).catalogCode();
+    }
+
+    @Test void translatesDuplicateCreateAndCopyCodes()
+    {
+        ledger(true);enabledDictionaries();when(mapper.insertDodRule(anyMap())).thenThrow(new DuplicateKeyException("duplicate"));
+        assertEquals("TODO_DOD_RULE_CODE_CONFLICT",assertThrows(TodoException.class,()->service.save(command("[]"),actor)).getBusinessCode());
+        Ledger copyLedger=ledger(true);when(mapper.selectDodRule(9L)).thenReturn(rule(9L,"DOD-9","0",2,"[]","[]","[]"));
+        assertEquals("TODO_DOD_RULE_CODE_CONFLICT",assertThrows(TodoException.class,()->service.copy(9L,"DOD-COPY","copy-9",actor)).getBusinessCode());
     }
 
     @Test void listsAndReadsTypedRuleViews()
@@ -210,6 +330,9 @@ class TodoDodRuleManagementServiceTest
             Map.entry("required_fields_json",fields),Map.entry("required_attachments_json",attachments),Map.entry("conditional_rules_json","[]"),
             Map.entry("validator_refs_json",validators),Map.entry("error_messages_json","{}"),Map.entry("status",status),Map.entry("version",version),
             Map.entry("reference_count",4L),Map.entry("create_by","alice"));}
+    private DodRuleCommand commandJson(String fields,String attachments,String conditional,String validators,String messages)
+    {return new DodRuleCommand(null,"DOD-JSON","Done","TASK",fields,attachments,conditional,validators,messages,"0","json-"+fields.hashCode()+attachments.hashCode()+conditional.hashCode()+messages.hashCode(),0);}
+    private TodoInstance todo(String businessType){TodoInstance todo=new TodoInstance();todo.setBusinessType(businessType);todo.setBusinessId(7L);return todo;}
 
     private Ledger ledger(boolean insertFirst)
     {

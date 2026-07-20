@@ -16,6 +16,7 @@ public interface TodoConfigurationMapper
     Map<String,Object> selectDodRule(Long id);
     int insertDodRule(Map<String,Object> row);
     int updateDodRuleConditionally(Map<String,Object> row);
+    int updateDodRuleStatusConditionally(Map<String,Object> row);
     int countDodRuleReferences(Long id);
     int deleteDraftRuleRefs(Long versionId);
     int insertDraftRuleRef(Map<String,Object> row);

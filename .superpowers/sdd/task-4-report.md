@@ -67,3 +67,43 @@ The compile output contains existing repository deprecation/unchecked notes in u
 - The current generic sample API has only `(payload, attachments, actor)`. `TodoBusinessValidator` needs a concrete `TodoInstance`, so the sample can validate configured validator references against the real runtime catalogue but cannot execute business-specific validators without a future explicit sample business context. Its `validatorIssues` list is therefore correctly empty for this generic sample contract.
 - The required field/attachment capabilities have no separate runtime catalogue or dictionary type in the approved schema; this task preserves the permitted JSON values and validates the two seeded DoD dictionaries plus runtime validator codes. Adding a new field/attachment registry would be scope expansion.
 - Real-MySQL transaction/concurrency verification remains a later integration concern; focused unit tests prove mapper interaction and replay behavior.
+
+## Review-fix evidence
+
+### Review-fix RED
+
+```powershell
+mvn -pl law-todo -am '-Dtest=TodoDodRuleManagementServiceTest,TodoFormValidatorTest,TodoConfigurationMapperXmlContractTest' '-Dsurefire.failIfNoSpecifiedTests=false' test
+```
+
+Result: `BUILD FAILURE`, exit code 1 at `law-todo:testCompile`. The expected missing contracts were `updateDodRuleStatusConditionally`, the explicit-context sample overload, `referenceCount(long)`, and `TodoFormValidator.validateRequiredFields(...)`. This confirmed the review fixes were absent before implementation.
+
+### Review-fix implementation
+
+- Added the dedicated `updateDodRuleStatusConditionally` mapper method and XML statement. It writes only status/audit/version fields under the DoD ID + expected-version predicate; toggle no longer invokes the full-rule update.
+- Toggle claims/replays first, then validates the requested rule status dictionary before a new status-only write. Completed retries therefore remain replayable after later dictionary disablement.
+- Added strict JSON semantic validation with `TODO_DOD_RULE_JSON_INVALID`: string-only unique nonblank arrays, strict conditional-required shape using `equals` or boolean `present`, and string-key/string-message error objects.
+- Added `TodoFormValidator.validateRequiredFields(...)` and made both throw-based submission validation and aggregate sample validation share its required/conditional field semantics.
+- Added the explicit `TodoInstance` sample overload. Configured validators without context now yield `TODO_DOD_SAMPLE_CONTEXT_REQUIRED`; contextual execution runs only configured, supporting runtime validators and aggregates each `TodoException`.
+- Added reference-count access and translated create/copy `DuplicateKeyException` only to `TODO_DOD_RULE_CODE_CONFLICT`. Since the service write methods are transactional and `TodoException` is a runtime exception, the prior action claim rolls back with the failed write.
+- Runtime validator codes are read once during construction into a code-to-validator map.
+
+### Review-fix GREEN
+
+```powershell
+mvn -pl law-todo -am '-Dtest=TodoDodRuleManagementServiceTest,TodoFormValidatorTest,TodoConfigurationMapperXmlContractTest,TodoCommandServiceTest,TodoTemplateAndRoutingTest' '-Dsurefire.failIfNoSpecifiedTests=false' test
+```
+
+Result: `BUILD SUCCESS`, 67 tests with 0 failures/errors/skips:
+
+- `TodoDodRuleManagementServiceTest`: 23
+- `TodoFormValidatorTest`: 10
+- `TodoConfigurationMapperXmlContractTest`: 7
+- Existing DoD regressions: `TodoCommandServiceTest` 19 and `TodoTemplateAndRoutingTest` 8
+
+### Review-fix self-review
+
+- `git diff --check` passed.
+- Mapper contract assertions prove the status-only statement has the optimistic-lock predicate and cannot contain full-rule columns.
+- Tests cover disabled toggle status, post-disable exact replay, malformed numeric/null/object/duplicate elements and invalid conditional/error-message structures, conditional aggregation, no-context validator failure, two validator failures, supports-false skip, reference count, duplicate create/copy translation, and one-time catalogue reads.
+- No unrelated UI/log changes were included.

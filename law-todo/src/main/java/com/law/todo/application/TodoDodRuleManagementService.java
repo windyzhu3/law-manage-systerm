@@ -4,7 +4,7 @@ import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,12 +19,15 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleDetail;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleListItem;
+import com.law.todo.definition.validation.TodoFormValidator;
 import com.law.todo.definition.validation.TodoFormValidator.ValidationIssue;
 import com.law.todo.domain.TodoException;
+import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoBusinessValidator;
 import com.law.todo.spi.TodoDictionaryValidationPort;
+import org.springframework.dao.DuplicateKeyException;
 
 /** Manages reusable completion-condition rules; published definition snapshots are never mutated here. */
 @Service
@@ -33,11 +36,16 @@ public class TodoDodRuleManagementService
     private final TodoConfigurationMapper mapper;
     private final TodoMapper todoMapper;
     private final TodoDictionaryValidationPort dictionaries;
-    private final List<TodoBusinessValidator> validators;
+    private final Map<String,TodoBusinessValidator> validators;
+    private final TodoFormValidator formValidator=new TodoFormValidator();
 
     public TodoDodRuleManagementService(TodoConfigurationMapper mapper,TodoMapper todoMapper,
             TodoDictionaryValidationPort dictionaries,List<TodoBusinessValidator> validators)
-    {this.mapper=mapper;this.todoMapper=todoMapper;this.dictionaries=dictionaries;this.validators=validators==null?List.of():List.copyOf(validators);}
+    {
+        this.mapper=mapper;this.todoMapper=todoMapper;this.dictionaries=dictionaries;Map<String,TodoBusinessValidator> catalogue=new LinkedHashMap<>();
+        for(TodoBusinessValidator validator:validators==null?List.<TodoBusinessValidator>of():validators)
+        {String code=validator.catalogCode();if(code!=null&&!code.isBlank())catalogue.putIfAbsent(code,validator);}this.validators=Map.copyOf(catalogue);
+    }
 
     @Transactional(readOnly=true)
     public List<DodRuleListItem> list(Map<String,Object> query)
@@ -55,7 +63,9 @@ public class TodoDodRuleManagementService
         Long replay=claim(command.actionId(),type,command.dodRuleId(),fingerprint,actor,command);if(replay!=null)return replay;
         validate(command);
         Map<String,Object> row=row(command,actor);
-        int changed=command.dodRuleId()==null?mapper.insertDodRule(row):mapper.updateDodRuleConditionally(row);
+        int changed;
+        try{changed=command.dodRuleId()==null?mapper.insertDodRule(row):mapper.updateDodRuleConditionally(row);}
+        catch(DuplicateKeyException duplicate){throw new TodoException("TODO_DOD_RULE_CODE_CONFLICT","DoD rule code already exists");}
         if(changed<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule changed; refresh before retrying");
         Long id=command.dodRuleId()==null?number(row.get("dodRuleId")):command.dodRuleId();
         if(id==null)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule identifier was not generated");
@@ -75,7 +85,8 @@ public class TodoDodRuleManagementService
                 text(source,"conditional_rules_json","conditionalRulesJson"),text(source,"validator_refs_json","validatorRefsJson"),
                 text(source,"error_messages_json","errorMessagesJson"),text(source,"status","status"),actionId,0);
         validate(copy);Map<String,Object> row=row(copy,actor);
-        if(mapper.insertDodRule(row)<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule copy could not be saved");
+        int changed;try{changed=mapper.insertDodRule(row);}catch(DuplicateKeyException duplicate){throw new TodoException("TODO_DOD_RULE_CODE_CONFLICT","DoD rule code already exists");}
+        if(changed<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule copy could not be saved");
         Long id=number(row.get("dodRuleId"));if(id==null)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule identifier was not generated");
         complete(actionId,fingerprint,id);return id;
     }
@@ -87,34 +98,67 @@ public class TodoDodRuleManagementService
         Map<String,Object> request=new TreeMap<>();request.put("status",status);request.put("expectedVersion",expectedVersion);
         String fingerprint=fingerprint("TOGGLE_DOD_RULE",dodRuleId,expectedVersion,request,actor);
         if(claim(actionId,"TOGGLE_DOD_RULE",dodRuleId,fingerprint,actor,request)!=null)return;
+        if(!dictionaries.isEnabled("law_todo_rule_status",status))throw new TodoException("TODO_DOD_RULE_DICTIONARY_INVALID","DoD rule dictionary value is unknown or disabled");
         Map<String,Object> row=new HashMap<>();row.put("dodRuleId",dodRuleId);row.put("status",status);row.put("actionId",actionId);
         row.put("expectedVersion",expectedVersion);row.put("updateBy",actor.userName());
-        if(mapper.updateDodRuleConditionally(row)<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule changed; refresh before retrying");
+        if(mapper.updateDodRuleStatusConditionally(row)<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule changed; refresh before retrying");
         complete(actionId,fingerprint,dodRuleId);
     }
 
     /** Sample validation deliberately aggregates missing fields and attachments instead of failing at the first violation. */
     @Transactional(readOnly=true)
     public DodTestResult test(long dodRuleId,Map<String,Object> payload,List<String> attachments,Actor actor)
+    {return test(dodRuleId,payload,attachments,null,actor);}
+
+    /** Executes only configured runtime validators when a concrete business context is supplied. */
+    @Transactional(readOnly=true)
+    public DodTestResult test(long dodRuleId,Map<String,Object> payload,List<String> attachments,TodoInstance context,Actor actor)
     {
         Map<String,Object> rule=require(dodRuleId);Map<String,Object> values=payload==null?Map.of():payload;
         List<String> supplied=attachments==null?List.of():attachments;
-        List<String> missingFields=required(rule,"required_fields_json","requiredFieldsJson").stream()
-                .filter(field->!present(values.get(field))).toList();
+        Map<String,Object> fieldRules=new HashMap<>();fieldRules.put("requiredFields",required(rule,"required_fields_json","requiredFieldsJson"));
+        fieldRules.put("conditionalRequired",conditional(value(rule,"conditional_rules_json","conditionalRulesJson")));
+        List<ValidationIssue> fieldIssues=formValidator.validateRequiredFields(fieldRules,values);
+        List<String> missingFields=fieldIssues.stream().map(ValidationIssue::path).map(path->path.substring("fields.".length())).toList();
         List<String> missingAttachments=required(rule,"required_attachments_json","requiredAttachmentsJson").stream()
                 .filter(type->!supplied.contains(type)).toList();
-        return new DodTestResult(missingFields.isEmpty()&&missingAttachments.isEmpty(),missingFields,missingAttachments,List.of());
+        List<ValidationIssue> validatorIssues=new ArrayList<>();List<String> refs=required(rule,"validator_refs_json","validatorRefsJson");
+        if(!refs.isEmpty()&&(context==null||context.getBusinessType()==null||context.getBusinessType().isBlank()))
+            validatorIssues.add(new ValidationIssue("TODO_DOD_SAMPLE_CONTEXT_REQUIRED","validators","A business context is required to run configured validators"));
+        else for(String ref:refs)
+        {
+            TodoBusinessValidator validator=validators.get(ref);if(validator!=null&&validator.supports(context.getBusinessType()))try{validator.validate(context,values);}
+            catch(TodoException failure){validatorIssues.add(new ValidationIssue(failure.getBusinessCode(),"validators."+ref,failure.getMessage()));}
+        }
+        return new DodTestResult(missingFields.isEmpty()&&missingAttachments.isEmpty()&&validatorIssues.isEmpty(),missingFields,missingAttachments,validatorIssues);
     }
+
+    @Transactional(readOnly=true)
+    public long referenceCount(long dodRuleId){return mapper.countDodRuleReferences(dodRuleId);}
 
     private void validate(DodRuleCommand command)
     {
-        if(command==null||!dictionaries.isEnabled("law_todo_dod_rule_type",command.ruleType())
+        if(command==null)throw new TodoException("TODO_DOD_RULE_JSON_INVALID","DoD rule command is required");
+        validateJson(command);
+        if(!dictionaries.isEnabled("law_todo_dod_rule_type",command.ruleType())
                 ||!dictionaries.isEnabled("law_todo_rule_status",command.status()))
             throw new TodoException("TODO_DOD_RULE_DICTIONARY_INVALID","DoD rule dictionary value is unknown or disabled");
-        Set<String> available=new LinkedHashSet<>();for(TodoBusinessValidator validator:validators)
-            if(validator.catalogCode()!=null&&!validator.catalogCode().isBlank())available.add(validator.catalogCode());
-        for(String ref:strings(command.validatorRefsJson()))if(!available.contains(ref))
+        for(String ref:strictStrings(command.validatorRefsJson()))if(!validators.containsKey(ref))
             throw new TodoException("TODO_DOD_VALIDATOR_NOT_FOUND","DoD validator is unavailable: "+ref);
+    }
+
+    private void validateJson(DodRuleCommand command)
+    {
+        strictStrings(command.requiredFieldsJson());strictStrings(command.requiredAttachmentsJson());strictStrings(command.validatorRefsJson());
+        Object raw=parse(command.conditionalRulesJson());if(!(raw instanceof List<?> entries))throw invalidJson();
+        for(Object entry:entries)
+        {
+            if(!(entry instanceof Map<?,?> map)||map.size()!=2||!(map.get("field") instanceof String field)||field.isBlank()||!(map.get("when") instanceof Map<?,?> when))throw invalidJson();
+            if(when.size()!=2||!(when.get("field") instanceof String source)||source.isBlank()||when.containsKey("equals")==when.containsKey("present"))throw invalidJson();
+            if(when.containsKey("present")&&!(when.get("present") instanceof Boolean))throw invalidJson();
+        }
+        Object messages=parse(command.errorMessagesJson());if(!(messages instanceof Map<?,?> map))throw invalidJson();
+        for(Map.Entry<?,?> entry:map.entrySet())if(!(entry.getKey() instanceof String key)||key.isBlank()||!(entry.getValue() instanceof String))throw invalidJson();
     }
 
     private Map<String,Object> require(long id)
@@ -169,7 +213,19 @@ public class TodoDodRuleManagementService
         else {String json=String.valueOf(raw);if(json.isBlank())return List.of();values=JSON.parseArray(json);}
         List<String> result=new ArrayList<>();for(Object item:values)if(item!=null)result.add(String.valueOf(item));return List.copyOf(result);
     }
-    private boolean present(Object value){return value!=null&&(!(value instanceof String text)||!text.isBlank());}
+    private List<String> strictStrings(String json)
+    {
+        Object raw=parse(json);if(!(raw instanceof List<?> values))throw invalidJson();Set<String> seen=new java.util.HashSet<>();List<String> result=new ArrayList<>();
+        for(Object value:values){if(!(value instanceof String text)||text.isBlank()||!seen.add(text))throw invalidJson();result.add(text);}return List.copyOf(result);
+    }
+    private List<Map<String,Object>> conditional(Object raw)
+    {
+        if(raw instanceof String json)raw=parse(json);
+        List<Map<String,Object>> result=new ArrayList<>();if(raw instanceof List<?> values)for(Object value:values)if(value instanceof Map<?,?> map)
+        {Map<String,Object> copied=new HashMap<>();map.forEach((key,item)->copied.put(String.valueOf(key),item));result.add(Map.copyOf(copied));}return List.copyOf(result);
+    }
+    private Object parse(String json){try{return JSON.parse(json);}catch(RuntimeException invalid){throw invalidJson();}}
+    private TodoException invalidJson(){return new TodoException("TODO_DOD_RULE_JSON_INVALID","DoD rule JSON is invalid");}
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private String text(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value==null?null:String.valueOf(value);}
     private Long number(Object value){return value==null?null:Long.valueOf(String.valueOf(value));}

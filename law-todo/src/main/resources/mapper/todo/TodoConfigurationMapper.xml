@@ -85,6 +85,10 @@
       error_messages_json=cast(#{errorMessagesJson} as json),status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
     where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}
   </update>
+  <update id="updateDodRuleStatusConditionally">
+    update todo_dod_rule set status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}
+  </update>
   <select id="countDodRuleReferences" resultType="int">
     select count(*) from todo_template_draft_rule_ref where ref_type='DOD' and ref_id_value=#{id}
   </select>

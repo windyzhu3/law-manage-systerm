@@ -70,6 +70,7 @@ class TodoConfigurationMapperXmlContractTest
         String slaUpdate=statement(xml,"update","updateSlaRuleConditionally");
         String dodInsert=statement(xml,"insert","insertDodRule");
         String dodUpdate=statement(xml,"update","updateDodRuleConditionally");
+        String dodStatusUpdate=statement(xml,"update","updateDodRuleStatusConditionally");
 
         assertTrue(slaInsert.contains("pause_policy_json") && slaInsert.contains("escalation_policy_json")
                 && slaInsert.contains("auto_action_json") && slaInsert.contains("cast(#{pausePolicyJson} as json)"));
@@ -77,6 +78,11 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(dodInsert.contains("required_fields_json") && dodInsert.contains("validator_refs_json")
                 && dodInsert.contains("error_messages_json") && dodInsert.contains("cast(#{requiredFieldsJson} as json)"));
         assertTrue(dodUpdate.contains("where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}"));
+        assertTrue(dodStatusUpdate.contains("status=#{status}") && dodStatusUpdate.contains("update_by=#{updateBy}")
+                && dodStatusUpdate.contains("update_time=sysdate()") && dodStatusUpdate.contains("version=version+1"));
+        assertTrue(dodStatusUpdate.contains("where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}"));
+        assertFalse(dodStatusUpdate.contains("rule_code") || dodStatusUpdate.contains("required_fields_json")
+                || dodStatusUpdate.contains("validator_refs_json"),"status-only update must not write full rule columns");
     }
 
     @Test void draftRulePersistenceMatchesTypedMapperContract() throws Exception

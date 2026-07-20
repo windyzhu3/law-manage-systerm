@@ -80,6 +80,17 @@ class TodoFormValidatorTest
         validator.validateSubmission(definition, "COMPLETE", Map.of("result", "APPROVE"));
     }
 
+    @Test void aggregateRequiredValidationReturnsEveryRequiredAndConditionalFailure()
+    {
+        List<TodoFormValidator.ValidationIssue> issues=validator.validateRequiredFields(Map.of(
+                "requiredFields",List.of("result"),"conditionalRequired",List.of(
+                        Map.of("field","reason","when",Map.of("field","result","equals","REJECT")),
+                        Map.of("field","owner","when",Map.of("field","submitted","present",true)))),
+                Map.of("result","REJECT","submitted",true));
+
+        assertEquals(List.of("fields.reason","fields.owner"),issues.stream().map(TodoFormValidator.ValidationIssue::path).toList());
+    }
+
     @Test void conditionalSourceFieldAlsoParticipatesInDefinitionParity()
     {
         TodoDefinitionDocument definition = definition(
