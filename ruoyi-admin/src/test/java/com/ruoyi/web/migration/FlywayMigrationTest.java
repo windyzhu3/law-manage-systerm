@@ -92,6 +92,37 @@ class FlywayMigrationTest
                     + "'law_todo_owner_rule_type','law_todo_sla_type','law_todo_sla_unit',"
                     + "'law_todo_sla_start_strategy','law_todo_timeout_strategy',"
                     + "'law_todo_dod_rule_type','law_todo_rule_status','law_todo_version_status')"));
+            assertEquals(3L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='todo_template_version' and column_name in "
+                    + "('change_summary','impact_scope','rollback_source_version_id')"));
+            assertEquals(1L, count(connection,
+                "select count(*) from sys_menu where component='todo/config/index' and visible='1' and status='1'"));
+            assertEquals(6L, count(connection,
+                "select count(*) from sys_menu page join sys_menu parent on parent.menu_id=page.parent_id "
+                    + "where parent.menu_name='Todo Engine' and parent.path='todo-engine' and parent.menu_type='M' "
+                    + "and page.menu_type='C' and page.component in ('todo/config/template/index',"
+                    + "'todo/config/trigger/index','todo/config/sla/index','todo/config/dod/index',"
+                    + "'todo/config/simulation/index','todo/config/release/index')"));
+            assertEquals(24L, count(connection,
+                "select count(distinct perms) from sys_menu where perms in ('todo:template:list','todo:template:create',"
+                    + "'todo:template:edit','todo:template:copy','todo:trigger:list','todo:trigger:create',"
+                    + "'todo:trigger:edit','todo:trigger:toggle','todo:sla-rule:list','todo:sla-rule:create',"
+                    + "'todo:sla-rule:edit','todo:sla-rule:copy','todo:sla-rule:toggle','todo:dod-rule:list',"
+                    + "'todo:dod-rule:create','todo:dod-rule:edit','todo:dod-rule:copy','todo:dod-rule:toggle',"
+                    + "'todo:simulation:list','todo:simulation:simulate','todo:release:list','todo:release:publish',"
+                    + "'todo:release:diff','todo:release:rollback')"));
+            assertEquals(2L, count(connection,
+                "select count(*) from sys_dict_data where dict_type='law_todo_rule_status' and dict_value in ('0','1')"));
+            assertEquals(1L, count(connection,
+                "select count(*) from sys_dict_data where dict_type='law_todo_sla_type' and dict_value='RESPONSE'"));
+            assertEquals(1L, count(connection,
+                "select count(*) from sys_dict_data where dict_type='law_todo_sla_start_strategy' and dict_value='TODO_CREATED'"));
+            assertEquals(1L, count(connection,
+                "select count(*) from sys_dict_data where dict_type='law_todo_dod_rule_type' and dict_value='TASK'"));
+            assertEquals(9L, count(connection,
+                "select count(*) from sys_dict_data where dict_type='law_todo_owner_rule_type' and dict_value in "
+                    + "('USER','ROLE','DEPT','POST','PAYLOAD','BUSINESS_OWNER','SUPERVISOR','ROUND_ROBIN','ASSIGNMENT_LEVEL')"));
         }
         catch (SQLException exception)
         {

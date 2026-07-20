@@ -181,24 +181,23 @@ from (
   select 1,'User','USER','law_todo_owner_rule_type','primary' union all
   select 2,'Role','ROLE','law_todo_owner_rule_type','primary' union all
   select 3,'Department','DEPT','law_todo_owner_rule_type','warning' union all
-  select 4,'Payload field','PAYLOAD_FIELD','law_todo_owner_rule_type','success' union all
-  select 1,'Working time','WORKING_TIME','law_todo_sla_type','primary' union all
-  select 2,'Calendar time','CALENDAR_TIME','law_todo_sla_type','warning' union all
+  select 4,'Post','POST','law_todo_owner_rule_type','warning' union all
+  select 5,'Payload','PAYLOAD','law_todo_owner_rule_type','success' union all
+  select 6,'Business owner','BUSINESS_OWNER','law_todo_owner_rule_type','success' union all
+  select 7,'Supervisor','SUPERVISOR','law_todo_owner_rule_type','primary' union all
+  select 8,'Round robin','ROUND_ROBIN','law_todo_owner_rule_type','warning' union all
+  select 9,'Assignment level','ASSIGNMENT_LEVEL','law_todo_owner_rule_type','primary' union all
+  select 1,'Response','RESPONSE','law_todo_sla_type','primary' union all
   select 1,'Minute','MINUTE','law_todo_sla_unit','primary' union all
   select 2,'Hour','HOUR','law_todo_sla_unit','primary' union all
   select 3,'Day','DAY','law_todo_sla_unit','warning' union all
-  select 1,'Event time','EVENT_TIME','law_todo_sla_start_strategy','primary' union all
-  select 2,'Creation time','CREATE_TIME','law_todo_sla_start_strategy','primary' union all
-  select 3,'Assignment time','ASSIGN_TIME','law_todo_sla_start_strategy','warning' union all
+  select 1,'Todo created','TODO_CREATED','law_todo_sla_start_strategy','primary' union all
   select 1,'Remind','REMIND','law_todo_timeout_strategy','warning' union all
   select 2,'Escalate','ESCALATE','law_todo_timeout_strategy','danger' union all
   select 3,'Auto action','AUTO_ACTION','law_todo_timeout_strategy','danger' union all
-  select 1,'Required fields','REQUIRED_FIELDS','law_todo_dod_rule_type','primary' union all
-  select 2,'Required attachments','REQUIRED_ATTACHMENTS','law_todo_dod_rule_type','primary' union all
-  select 3,'Conditional','CONDITIONAL','law_todo_dod_rule_type','warning' union all
-  select 4,'Validator','VALIDATOR','law_todo_dod_rule_type','success' union all
-  select 1,'Enabled','ENABLED','law_todo_rule_status','success' union all
-  select 2,'Disabled','DISABLED','law_todo_rule_status','info' union all
+  select 1,'Task','TASK','law_todo_dod_rule_type','primary' union all
+  select 1,'Enabled','0','law_todo_rule_status','success' union all
+  select 2,'Disabled','1','law_todo_rule_status','info' union all
   select 1,'Draft','DRAFT','law_todo_version_status','info' union all
   select 2,'Published','PUBLISHED','law_todo_version_status','success' union all
   select 3,'Rolled back','ROLLED_BACK','law_todo_version_status','danger'
