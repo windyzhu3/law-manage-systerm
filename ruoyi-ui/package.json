@@ -10,6 +10,7 @@
     "build:stage": "vue-cli-service build --mode staging",
     "preview": "node build/index.js --preview",
     "test:todo": "node scripts/check-todo-ui.js && node scripts/check-historical-migration-export-response.js",
+    "test:todo-config": "node scripts/check-todo-config-center.js",
     "test:todo-schema": "node scripts/check-todo-schema-runtime.js",
     "test:encoding": "node scripts/check-source-encoding.js",
     "test:foundation-ci": "node scripts/check-foundation-ci.js",
