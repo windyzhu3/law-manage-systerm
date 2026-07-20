@@ -2,6 +2,8 @@ package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -11,6 +13,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationDashboard;
@@ -41,14 +44,14 @@ class TodoConfigurationQueryServiceTest
         when(mapper.selectTemplateConfiguration(7L)).thenReturn(Map.of("template_id",7L,"template_code","T-7",
                 "template_name","Template 7","business_type","LEAD","current_version",4,
                 "draft_version_id",9L,"draft_status","DRAFT"));
-        when(mapper.selectDraftRuleRefs(9L)).thenReturn(List.of(Map.of("ref_type","SLA","sort_order",0),
-                Map.of("ref_type","DOD","sort_order",1)));
+        when(mapper.selectDraftRuleRefs(9L)).thenReturn(List.of(Map.of("ref_type","DOD","sort_order",0),
+                Map.of("ref_type","SLA","sort_order",1),Map.of("ref_type","DOD","sort_order",2)));
 
         TemplateConfigurationDetail detail=service().template(7L);
 
         assertEquals(7L,detail.templateId());
         assertEquals(9L,detail.draftVersionId());
-        assertEquals(List.of("SLA","DOD"),detail.ruleReferences().stream().map(ref->ref.get("ref_type")).toList());
+        assertEquals(List.of("DOD","SLA","DOD"),detail.ruleReferences().stream().map(ref->ref.get("ref_type")).toList());
     }
 
     @Test void missingTemplateHasTheStableNotFoundError()
@@ -89,6 +92,18 @@ class TodoConfigurationQueryServiceTest
 
         assertEquals(timestamp.toLocalDateTime(),release.publishedTime());
         assertEquals(timestamp.toLocalDateTime(),release.updateTime());
+    }
+
+    @Test void releaseProjectionSuppliesADeterministicLimitWhenOffsetIsRequested()
+    {
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
+
+        service().releases(Map.of("offset",20));
+
+        ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).selectReleaseRecords(query.capture());
+        assertEquals(20,query.getValue().get("offset"));
+        assertEquals(100,query.getValue().get("limit"));
     }
 
     private TodoConfigurationQueryService service(){return new TodoConfigurationQueryService(mapper);}

@@ -17,6 +17,7 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 @Service
 public class TodoConfigurationQueryService
 {
+    private static final int DEFAULT_RELEASE_LIMIT=100;
     private final TodoConfigurationMapper mapper;
 
     public TodoConfigurationQueryService(TodoConfigurationMapper mapper){this.mapper=mapper;}
@@ -36,7 +37,11 @@ public class TodoConfigurationQueryService
     }
 
     public List<ReleaseRecord> releases(Map<String,Object> query)
-    {return mapper.selectReleaseRecords(query==null?Map.of():query).stream().map(this::release).toList();}
+    {
+        Map<String,Object> normalized=new LinkedHashMap<>(query==null?Map.of():query);
+        if(normalized.containsKey("offset")&&!normalized.containsKey("limit"))normalized.put("limit",DEFAULT_RELEASE_LIMIT);
+        return mapper.selectReleaseRecords(normalized).stream().map(this::release).toList();
+    }
 
     private ReleaseRecord release(Map<String,Object> row)
     {

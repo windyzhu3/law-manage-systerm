@@ -113,7 +113,7 @@ class TodoConfigurationMapperXmlContractTest
 
         assertTrue(today.contains("created_at &gt;= current_date()") && today.contains("created_at &lt; date_add(current_date(),interval 1 day)"));
         assertFalse(today.toLowerCase().contains("date(created_at)"));
-        assertTrue(refs.contains("order by ref.ref_type,ref.sort_order,ref.ref_id"));
+        assertTrue(refs.contains("order by ref.sort_order,ref.ref_id_value,ref.ref_type"));
         assertTrue(release.contains("candidate.action_type='PUBLISH_VERSION'") && release.contains("#{limit}") && release.contains("#{offset}"));
     }
 

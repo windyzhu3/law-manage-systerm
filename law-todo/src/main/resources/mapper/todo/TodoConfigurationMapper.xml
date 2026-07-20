@@ -111,7 +111,7 @@
     left join todo_sla_rule sla on ref.ref_type='SLA' and sla.sla_rule_id=ref.ref_id_value
     left join todo_dod_rule dod on ref.ref_type='DOD' and dod.dod_rule_id=ref.ref_id_value
     where ref.version_id=#{versionId}
-    order by ref.ref_type,ref.sort_order,ref.ref_id
+    order by ref.sort_order,ref.ref_id_value,ref.ref_type
   </select>
 
   <select id="selectTemplateConfiguration" resultType="java.util.Map">
