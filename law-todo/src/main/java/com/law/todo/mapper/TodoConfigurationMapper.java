@@ -27,5 +27,6 @@ public interface TodoConfigurationMapper
     List<Map<String,Object>> selectDraftRuleRefs(Long versionId);
     Map<String,Object> selectTemplateConfiguration(Long templateId);
     List<Map<String,Object>> selectReleaseRecords(Map<String,Object> query);
+    Map<String,Object> selectReleaseRecord(Long versionId);
     int insertSimulationRecord(Map<String,Object> row);
 }

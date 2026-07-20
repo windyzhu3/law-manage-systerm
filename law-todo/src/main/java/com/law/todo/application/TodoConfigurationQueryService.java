@@ -55,6 +55,9 @@ public class TodoConfigurationQueryService
         return mapper.selectReleaseRecords(normalized).stream().map(this::release).toList();
     }
 
+    public ReleaseRecord release(long versionId)
+    {return release(require(mapper.selectReleaseRecord(versionId)));}
+
     private Integer paginationInteger(Object value,String field)
     {
         if(value==null)return null;

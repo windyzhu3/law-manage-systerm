@@ -6,6 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import java.util.List;
 
 public final class TodoManagementCommands
 {
@@ -36,6 +39,14 @@ public final class TodoManagementCommands
         @AssertTrue(message = "expectedVersion is required for trigger updates")
         public boolean isExpectedVersionPresentForUpdate(){return triggerRuleId==null||expectedVersion!=null;}
     }
+
+    public record TriggerSortCommand(@NotBlank String actionId,@NotEmpty List<@Valid TriggerSortItem> items)
+    {
+        public TriggerSortCommand {items=items==null?null:List.copyOf(items);}
+    }
+
+    public record TriggerSortItem(@NotNull @Positive Long triggerRuleId,@NotNull @Min(0) Integer sortOrder,
+            @NotNull @Min(0) Integer expectedVersion) { }
 
     public record PublishCommand(
         @NotNull @Min(1) Integer versionNo,
