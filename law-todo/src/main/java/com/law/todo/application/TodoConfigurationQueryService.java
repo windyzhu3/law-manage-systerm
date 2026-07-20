@@ -62,7 +62,7 @@ public class TodoConfigurationQueryService
     private String text(Map<String,Object> row,String snake,String camel)
     {Object value=value(row,snake,camel);return value==null?null:String.valueOf(value);}
     private LocalDateTime time(Map<String,Object> row,String snake,String camel)
-    {Object value=value(row,snake,camel);return value instanceof LocalDateTime time?time:null;}
+    {Object value=value(row,snake,camel);if(value instanceof LocalDateTime time)return time;if(value instanceof java.sql.Timestamp timestamp)return timestamp.toLocalDateTime();return null;}
     private Object value(Map<String,Object> row,String snake,String camel)
     {return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private void copy(Map<String,Object> row,Map<String,Object> target,String snake,String camel)

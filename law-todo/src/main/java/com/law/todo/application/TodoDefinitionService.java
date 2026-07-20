@@ -237,7 +237,8 @@ public class TodoDefinitionService
         update.put("definitionJson",canonical);update.put("expectedDefinitionJson",storedDefinitionJson);
         update.put("compiledJson",null);update.put("definitionHash",null);update.put("validationReportJson",null);
         projectLegacyRules(definition,update);
-        update.put("changeSummary",command.changeSummary());update.put("impactScope",command.impactScope());
+        update.put("changeSummary",command.changeSummary()==null?value(current,"change_summary","changeSummary"):command.changeSummary());
+        update.put("impactScope",command.impactScope()==null?value(current,"impact_scope","impactScope"):command.impactScope());
         if (mapper.updateTemplateVersionDraft(update) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Draft version changed");
         replaceDraftRuleReferences(command.versionId(),command.ruleReferences());
@@ -328,8 +329,9 @@ public class TodoDefinitionService
         if(references==null)return;
         if(configurationMapper==null)
             throw new TodoException("TODO_CONFIGURATION_BINDING_UNAVAILABLE","Rule binding persistence is unavailable");
+        List<RuleReference> ordered=validateRuleReferences(references);
         configurationMapper.deleteDraftRuleRefs(versionId);
-        references.stream().sorted(java.util.Comparator.comparing(RuleReference::order)).forEach(reference->{
+        ordered.forEach(reference->{
             Map<String,Object> row=new HashMap<>();row.put("versionId",versionId);row.put("refType",reference.type());
             row.put("refIdValue",reference.id());row.put("sortOrder",reference.order());row.put("configJson",null);
             if(configurationMapper.insertDraftRuleRef(row)<=0)
@@ -343,7 +345,7 @@ public class TodoDefinitionService
         Long repeated = repeatedEntity(command.actionId());
         if (repeated != null)
             return repeated;
-        Map<String, Object> current = requireVersion(command.versionId());
+        Map<String, Object> current = requireLockedVersion(command.versionId());
         requireDraft(current);
         RuleBinding binding=bindReferencedRules(command.versionId(),definition(current));
         TodoDefinitionDocument definition=binding.definition();
@@ -437,20 +439,22 @@ public class TodoDefinitionService
     private RuleBinding bindReferencedRules(Long versionId,TodoDefinitionDocument definition)
     {
         if(configurationMapper==null)return new RuleBinding(definition,false);
-        List<Map<String,Object>> references=configurationMapper.selectDraftRuleRefs(versionId);
-        if(references==null||references.isEmpty())return new RuleBinding(definition,false);
+        List<Map<String,Object>> rows=configurationMapper.selectDraftRuleRefs(versionId);
+        if(rows==null||rows.isEmpty())return new RuleBinding(definition,false);
+        List<RuleReference> references=validateRuleReferences(rows.stream().map(row->new RuleReference(
+                text(value(row,"ref_type","refType")),longValue(value(row,"ref_id_value","refIdValue")),
+                integerValue(value(row,"sort_order","sortOrder")))).toList());
         Map<String,Object> sla=new java.util.LinkedHashMap<>(definition.sla().config());
         Map<String,Object> dod=new java.util.LinkedHashMap<>(definition.dod().config());
         List<Map<String,Object>> slaSnapshots=new java.util.ArrayList<>();
         List<Map<String,Object>> dodSnapshots=new java.util.ArrayList<>();
-        for(Map<String,Object> reference:references)
+        for(RuleReference reference:references)
         {
-            String type=text(value(reference,"ref_type","refType"));Long id=longValue(value(reference,"ref_id_value","refIdValue"));
+            String type=reference.type();Long id=reference.id();
             if("SLA".equals(type))
             {
                 Map<String,Object> rule=requiredActiveRule(configurationMapper.selectSlaRule(id),"SLA",id);
-                Map<String,Object> snapshot=slaSnapshot(rule);slaSnapshots.add(snapshot);sla.put("calendarCode",snapshot.get("calendarCode"));
-                sla.put("minutes",snapshot.get("minutes"));
+                Map<String,Object> snapshot=slaSnapshot(rule);slaSnapshots.add(snapshot);applySlaSnapshot(sla,snapshot);
             }
             else if("DOD".equals(type))
             {
@@ -468,9 +472,38 @@ public class TodoDefinitionService
 
     private record RuleBinding(TodoDefinitionDocument definition,boolean bound) { }
 
+    private List<RuleReference> validateRuleReferences(List<RuleReference> references)
+    {
+        java.util.Set<Long> ids=new java.util.HashSet<>();java.util.Set<Integer> orders=new java.util.HashSet<>();int slaCount=0;
+        List<RuleReference> ordered=new java.util.ArrayList<>(references);
+        for(RuleReference reference:ordered)
+        {
+            if(reference==null||reference.id()==null||reference.id()<=0||reference.order()==null||reference.order()<0)
+                throw bindingInvalid("Rule reference id and order must be positive");
+            if(!"SLA".equals(reference.type())&&!"DOD".equals(reference.type()))
+                throw new TodoException("TODO_TEMPLATE_RULE_TYPE_INVALID","Unsupported draft rule reference type: "+reference.type());
+            if(!ids.add(reference.id())||!orders.add(reference.order()))
+                throw bindingInvalid("Duplicate draft rule reference id or order");
+            if("SLA".equals(reference.type()))
+            {
+                if(++slaCount>1)throw bindingInvalid("Only one SLA rule may be bound to a template draft");
+                requiredActiveRule(configurationMapper.selectSlaRule(reference.id()),"SLA",reference.id());
+            }
+            else requiredActiveRule(configurationMapper.selectDodRule(reference.id()),"DOD",reference.id());
+        }
+        ordered.sort(java.util.Comparator.comparing(RuleReference::order));
+        return List.copyOf(ordered);
+    }
+
+    private TodoException bindingInvalid(String message)
+    {return new TodoException("TODO_TEMPLATE_RULE_BINDING_INVALID",message);}
+
     private Map<String,Object> requiredActiveRule(Map<String,Object> rule,String type,Long id)
     {
         if(rule==null||rule.isEmpty())throw new TodoException("TODO_TEMPLATE_RULE_NOT_FOUND",type+" rule not found: "+id);
+        Long actualId="SLA".equals(type)?longValue(value(rule,"sla_rule_id","slaRuleId"))
+                : longValue(value(rule,"dod_rule_id","dodRuleId"));
+        if(!id.equals(actualId))throw new TodoException("TODO_TEMPLATE_RULE_NOT_FOUND",type+" rule not found: "+id);
         if(!"0".equals(text(value(rule,"status","status"))))
             throw new TodoException("TODO_TEMPLATE_RULE_DISABLED",type+" rule is disabled: "+id);
         return rule;
@@ -480,13 +513,16 @@ public class TodoDefinitionService
     {
         Map<String,Object> snapshot=new java.util.LinkedHashMap<>();snapshot.put("ruleId",longValue(value(rule,"sla_rule_id","slaRuleId")));
         snapshot.put("ruleCode",text(value(rule,"rule_code","ruleCode")));snapshot.put("ruleName",text(value(rule,"rule_name","ruleName")));
-        snapshot.put("slaType",text(value(rule,"sla_type","slaType")));snapshot.put("calendarCode",text(value(rule,"calendar_code","calendarCode")));
+        snapshot.put("slaType",text(value(rule,"sla_type","slaType")));snapshot.put("durationValue",value(rule,"duration_value","durationValue"));snapshot.put("durationUnit",text(value(rule,"duration_unit","durationUnit")));snapshot.put("calendarCode",text(value(rule,"calendar_code","calendarCode")));
         snapshot.put("startStrategy",text(value(rule,"start_strategy","startStrategy")));snapshot.put("minutes",slaMinutes(rule));
         snapshot.put("softRemindPercent",value(rule,"soft_remind_percent","softRemindPercent"));snapshot.put("hardRemindPercent",value(rule,"hard_remind_percent","hardRemindPercent"));
-        snapshot.put("escalatePercent",value(rule,"escalate_percent","escalatePercent"));snapshot.put("pausePolicyJson",text(value(rule,"pause_policy_json","pausePolicyJson")));
-        snapshot.put("escalationPolicyJson",text(value(rule,"escalation_policy_json","escalationPolicyJson")));snapshot.put("autoActionJson",text(value(rule,"auto_action_json","autoActionJson")));
+        snapshot.put("escalatePercent",value(rule,"escalate_percent","escalatePercent"));snapshot.put("pausePolicy",jsonValue(rule,"pause_policy_json","pausePolicyJson"));
+        snapshot.put("escalationPolicy",jsonValue(rule,"escalation_policy_json","escalationPolicyJson"));snapshot.put("autoAction",jsonValue(rule,"auto_action_json","autoActionJson"));snapshot.put("status",text(value(rule,"status","status")));snapshot.put("version",value(rule,"version","version"));
         return snapshot;
     }
+
+    private void applySlaSnapshot(Map<String,Object> target,Map<String,Object> snapshot)
+    {for(String key:List.of("slaType","calendarCode","startStrategy","minutes","softRemindPercent","hardRemindPercent","escalatePercent","pausePolicy","escalationPolicy","autoAction"))target.put(key,snapshot.get(key));}
 
     private long slaMinutes(Map<String,Object> rule)
     {
@@ -500,16 +536,25 @@ public class TodoDefinitionService
         snapshot.put("ruleCode",text(value(rule,"rule_code","ruleCode")));snapshot.put("ruleName",text(value(rule,"rule_name","ruleName")));
         snapshot.put("ruleType",text(value(rule,"rule_type","ruleType")));snapshot.put("requiredFields",jsonArray(rule,"required_fields_json","requiredFieldsJson"));
         snapshot.put("requiredAttachments",jsonArray(rule,"required_attachments_json","requiredAttachmentsJson"));snapshot.put("conditionalRules",jsonArray(rule,"conditional_rules_json","conditionalRulesJson"));
-        snapshot.put("validatorRefs",jsonArray(rule,"validator_refs_json","validatorRefsJson"));snapshot.put("errorMessages",jsonObject(rule,"error_messages_json","errorMessagesJson"));return snapshot;
+        snapshot.put("validatorRefs",jsonArray(rule,"validator_refs_json","validatorRefsJson"));snapshot.put("errorMessages",jsonObject(rule,"error_messages_json","errorMessagesJson"));snapshot.put("status",text(value(rule,"status","status")));snapshot.put("version",value(rule,"version","version"));return snapshot;
     }
 
     private List<Object> jsonArray(Map<String,Object> rule,String snake,String camel)
     {String json=text(value(rule,snake,camel));return json==null||json.isBlank()?List.of():JSON.parseArray(json,Object.class);}
     private Map<String,Object> jsonObject(Map<String,Object> rule,String snake,String camel)
     {String json=text(value(rule,snake,camel));if(json==null||json.isBlank())return Map.of();Map<String,Object> result=new java.util.LinkedHashMap<>();JSON.parseObject(json).forEach((key,value)->result.put(key,value));return result;}
+    private Object jsonValue(Map<String,Object> rule,String snake,String camel)
+    {String json=text(value(rule,snake,camel));return json==null||json.isBlank()?Map.of():JSON.parse(json);}
     private void mergeDodSnapshot(Map<String,Object> target,Map<String,Object> snapshot)
-    {for(String field:List.of("requiredFields","requiredAttachments","conditionalRules","validatorRefs"))
-        {List<Object> values=new java.util.ArrayList<>();Object current=target.get(field);if(current instanceof List<?> list)values.addAll(list);Object referenced=snapshot.get(field);if(referenced instanceof List<?> list)values.addAll(list);target.put(field,values);} }
+    {
+        for(String field:List.of("requiredFields","requiredAttachments","conditionalRules","validatorRefs"))
+        {List<Object> values=new java.util.ArrayList<>();Object current=target.get(field);if(current instanceof List<?> list)values.addAll(list);Object referenced=snapshot.get(field);if(referenced instanceof List<?> list)values.addAll(list);target.put(field,deduplicate(values));}
+        Map<String,Object> errors=new java.util.LinkedHashMap<>();Object currentErrors=target.get("errorMessages");if(currentErrors instanceof Map<?,?> map)map.forEach((key,value)->errors.put(String.valueOf(key),value));Object referencedErrors=snapshot.get("errorMessages");if(referencedErrors instanceof Map<?,?> map)map.forEach((key,value)->errors.put(String.valueOf(key),value));target.put("errorMessages",errors);
+        List<Object> types=new java.util.ArrayList<>();Object currentTypes=target.get("ruleTypes");if(currentTypes instanceof List<?> list)types.addAll(list);types.add(snapshot.get("ruleType"));types=deduplicate(types);target.put("ruleTypes",types);if(types.size()==1)target.put("ruleType",types.get(0));else target.remove("ruleType");
+    }
+
+    private List<Object> deduplicate(List<Object> values)
+    {return new java.util.ArrayList<>(new java.util.LinkedHashSet<>(values));}
 
     private DefinitionValidationReport applyPrdCatalogueGate(DefinitionValidationReport report,
             Map<String, Object> current, boolean blocked)
@@ -616,6 +661,14 @@ public class TodoDefinitionService
         return result;
     }
 
+    private Map<String,Object> requireLockedVersion(Long id)
+    {
+        Map<String,Object> result=mapper.selectTemplateVersionForUpdate(id);
+        if(result==null||result.isEmpty())
+            throw new TodoException("TODO_TEMPLATE_VERSION_NOT_FOUND","Template version not found");
+        return result;
+    }
+
     private void requireDraft(Map<String, Object> version)
     {
         if (!DRAFT.equals(text(value(version, "status", "status"))))
@@ -663,6 +716,11 @@ public class TodoDefinitionService
     private Long longValue(Object value)
     {
         return value == null ? null : Long.valueOf(String.valueOf(value));
+    }
+
+    private Integer integerValue(Object value)
+    {
+        return value == null ? null : Integer.valueOf(String.valueOf(value));
     }
 
     private String text(Object value)

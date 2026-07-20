@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,10 @@ class TodoDefinitionServiceTest
 {
     @Mock TodoMapper mapper;
     private final Actor actor=new Actor(7L,"alice",3L);
+
+    @BeforeEach void lockedVersionUsesTheExistingVersionStub()
+    {org.mockito.Mockito.lenient().when(mapper.selectTemplateVersionForUpdate(org.mockito.ArgumentMatchers.anyLong()))
+            .thenAnswer(invocation->mapper.selectTemplateVersionById(invocation.getArgument(0)));}
 
     @Test void publishedVersionIsImmutable()
     {

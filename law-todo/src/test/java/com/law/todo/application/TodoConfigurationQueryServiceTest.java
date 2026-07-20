@@ -77,5 +77,19 @@ class TodoConfigurationQueryServiceTest
         assertEquals("publish-9",release.action().get("actionId"));
     }
 
+    @Test void releaseProjectionConvertsSqlTimestampToLocalDateTime()
+    {
+        java.sql.Timestamp timestamp=java.sql.Timestamp.valueOf(LocalDateTime.of(2026,7,21,10,15));
+        when(mapper.selectReleaseRecords(Map.of())).thenReturn(List.of(Map.ofEntries(
+                Map.entry("version_id",9L),Map.entry("template_id",7L),Map.entry("template_code","T-7"),
+                Map.entry("template_name","Template 7"),Map.entry("status","PUBLISHED"),Map.entry("published_time",timestamp),
+                Map.entry("update_time",timestamp))));
+
+        ReleaseRecord release=service().releases(Map.of()).get(0);
+
+        assertEquals(timestamp.toLocalDateTime(),release.publishedTime());
+        assertEquals(timestamp.toLocalDateTime(),release.updateTime());
+    }
+
     private TodoConfigurationQueryService service(){return new TodoConfigurationQueryService(mapper);}
 }

@@ -95,7 +95,7 @@
   <select id="countPublishedTemplates" resultType="long">select count(distinct template_id) from todo_template_version where status='PUBLISHED'</select>
   <select id="countDraftTemplates" resultType="long">select count(distinct template_id) from todo_template_version where status in ('DRAFT','BLOCKED')</select>
   <select id="countEnabledSlaRules" resultType="long">select count(*) from todo_sla_rule where status='0'</select>
-  <select id="countTodayTriggeredTodos" resultType="long">select count(*) from todo_instance where date(created_at)=curdate()</select>
+  <select id="countTodayTriggeredTodos" resultType="long">select count(*) from todo_instance where created_at &gt;= current_date() and created_at &lt; date_add(current_date(),interval 1 day)</select>
 
   <delete id="deleteDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
   <insert id="insertDraftRuleRef" useGeneratedKeys="true" keyProperty="refId">
@@ -135,6 +135,7 @@
     left join todo_definition_action action on action.definition_action_id=(
       select candidate.definition_action_id from todo_definition_action candidate
       where candidate.source_entity_id=v.version_id and candidate.entity_type='VERSION'
+        and candidate.action_type='PUBLISH_VERSION'
       order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
     <where>
       v.status='PUBLISHED'
@@ -145,6 +146,7 @@
       <if test="endTime != null">and coalesce(v.published_time,v.create_time) &lt;= #{endTime}</if>
     </where>
     order by coalesce(v.published_time,v.create_time) desc,v.version_id desc
+    <if test="limit != null">limit #{limit}<if test="offset != null"> offset #{offset}</if></if>
   </select>
   <insert id="insertSimulationRecord" useGeneratedKeys="true" keyProperty="simulationId">
     insert into todo_simulation_record(request_id,template_version_id,event_type,business_type,business_id,input_summary_json,

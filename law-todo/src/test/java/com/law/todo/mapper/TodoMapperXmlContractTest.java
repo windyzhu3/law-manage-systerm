@@ -190,4 +190,16 @@ class TodoMapperXmlContractTest
             assertTrue(xml.contains("request_fingerprint=#{requestFingerprint} and action_status='CLAIMED' and entity_id is null"));
         }
     }
+
+    @Test void publishingCanLockTheAuthoritativeDefinitionVersion() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8);
+            int start=xml.indexOf("<select id=\"selectTemplateVersionForUpdate\"");
+            int end=xml.indexOf("</select>",start);
+            assertTrue(start>=0 && end>start);
+            assertTrue(xml.substring(start,end).contains("where v.version_id=#{versionId} for update"));
+        }
+    }
 }

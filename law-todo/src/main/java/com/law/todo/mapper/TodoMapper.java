@@ -41,6 +41,7 @@ public interface TodoMapper
     Map<String,Object> selectDashboard(@Param("userId") Long userId,@Param("deptId") Long deptId);
     List<Map<String,Object>> selectTodoList(Map<String,Object> query);
     Map<String,Object> selectTemplateVersionById(Long versionId);
+    Map<String,Object> selectTemplateVersionForUpdate(Long versionId);
     List<String> selectAttachmentTypes(Long todoId);
     int insertAttachment(Map<String,Object> attachment);
     int insertCc(@Param("todoId") Long todoId,@Param("userId") Long userId,@Param("ccType") String ccType);

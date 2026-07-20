@@ -104,6 +104,19 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(release.contains("order by coalesce(v.published_time,v.create_time) desc,v.version_id desc"));
     }
 
+    @Test void counterAndProjectionQueriesRemainSargableAndStable() throws Exception
+    {
+        String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
+        String today=statement(xml,"select","countTodayTriggeredTodos");
+        String refs=statement(xml,"select","selectDraftRuleRefs");
+        String release=statement(xml,"select","selectReleaseRecords");
+
+        assertTrue(today.contains("created_at &gt;= current_date()") && today.contains("created_at &lt; date_add(current_date(),interval 1 day)"));
+        assertFalse(today.toLowerCase().contains("date(created_at)"));
+        assertTrue(refs.contains("order by ref.ref_type,ref.sort_order,ref.ref_id"));
+        assertTrue(release.contains("candidate.action_type='PUBLISH_VERSION'") && release.contains("#{limit}") && release.contains("#{offset}"));
+    }
+
     @Test void dictionaryLookupIsParameterizedAndFiltersDisabledTypesAndValues() throws Exception
     {
         String lookup=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","countEnabledDictionaryValue");
