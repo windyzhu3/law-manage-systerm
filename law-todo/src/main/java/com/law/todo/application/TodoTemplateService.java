@@ -58,7 +58,17 @@ public class TodoTemplateService
     @Transactional int saveTrigger(Map<String,Object> value){required(value,"eventType");required(value,"templateId");required(value,"templateVersionId");required(value,"businessType");value.putIfAbsent("expectedVersion",0);validateTriggerBinding(value);validateTriggerCondition(value);int saved=value.get("triggerRuleId")==null?mapper.insertTriggerRule(value):mapper.updateTriggerRule(value);if(saved<=0&&value.get("triggerRuleId")!=null)throw new TodoException("TODO_TRIGGER_VERSION_CONFLICT","Trigger changed; refresh before retrying");return saved;}
     private void requireExpectedVersion(Long id,Integer version){if(id!=null&&version==null)throw new TodoException("TODO_TRIGGER_VERSION_REQUIRED","expectedVersion is required for trigger updates");}
     private void validateBusinessType(String businessType){if(!dictionaries.isEnabled("law_todo_business_type",businessType))throw new TodoException("TODO_TEMPLATE_BUSINESS_TYPE_INVALID","Business type is unknown or disabled");}
-    private void validateTriggerBinding(Map<String,Object> value){Map<String,Object> version=mapper.selectTemplateVersionById(Long.valueOf(String.valueOf(value.get("templateVersionId"))));if(version==null||version.isEmpty()||!String.valueOf(value.get("templateId")).equals(String.valueOf(version.get("template_id")))||!"PUBLISHED".equals(String.valueOf(version.get("status"))))throw new TodoException("TODO_TRIGGER_VERSION_INVALID","Trigger template version must belong to the template and be published");}
+    private void validateTriggerBinding(Map<String,Object> value)
+    {
+        Map<String,Object> binding=mapper.selectTriggerTemplateBinding(Long.valueOf(String.valueOf(value.get("templateVersionId"))));
+        Long templateId=number(value.get("templateId"));
+        if(binding==null||binding.isEmpty()||!Objects.equals(templateId,number(value(binding,"version_template_id","versionTemplateId")))
+                ||!"PUBLISHED".equals(text(value(binding,"version_status","versionStatus"))))
+            throw new TodoException("TODO_TRIGGER_VERSION_INVALID","Trigger template version must belong to the template and be published");
+        String enabled=text(value.get("enabled"));
+        if((enabled==null||enabled.isBlank()||"Y".equals(enabled))&&!"0".equals(text(value(binding,"template_status","templateStatus"))))
+            throw new TodoException("TODO_TRIGGER_TEMPLATE_INACTIVE","Enabled trigger must bind an active template");
+    }
     private void validateTriggerCondition(Map<String,Object> value)
     {
         String eventType=String.valueOf(value.get("eventType"));

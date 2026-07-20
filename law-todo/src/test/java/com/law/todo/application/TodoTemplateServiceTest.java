@@ -38,7 +38,7 @@ import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
 class TodoTemplateServiceTest
 {
     @Mock TodoMapper mapper;
-    @BeforeEach void publishedVersion(){when(mapper.selectTemplateVersionById(2L)).thenReturn(Map.of("template_id",1L,"status","PUBLISHED"));when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());}
+    @BeforeEach void publishedVersion(){when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","0"));when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());}
     @Test void createsTemplate(){when(mapper.insertTemplate(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTemplate(new java.util.HashMap<>(Map.of("templateCode","T1","templateName","测试","businessType","LEAD")));verify(mapper).insertTemplate(anyMap());}
     @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(new java.util.HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,"templateVersionId",2L,"businessType","LEAD")));verify(mapper).insertTriggerRule(anyMap());}
     @Test void rejectsInvalidTemplateJson(){TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).publish(1L,1,"OWNER","{}","{}",null,"{}","admin"));assertEquals("TODO_TEMPLATE_JSON_INVALID",error.getBusinessCode());}
@@ -199,16 +199,44 @@ class TodoTemplateServiceTest
 
     @Test void triggerRequiresPublishedVersionBelongingToSelectedTemplate()
     {
-        when(mapper.selectTemplateVersionById(2L)).thenReturn(Map.of("template_id",9L,"status","PUBLISHED"));
+        when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(9L,"PUBLISHED","0"));
         TodoException otherTemplate=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(trigger(null)));
         assertEquals("TODO_TRIGGER_VERSION_INVALID",otherTemplate.getBusinessCode());
 
-        when(mapper.selectTemplateVersionById(2L)).thenReturn(Map.of("template_id",1L,"status","DRAFT"));
+        when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"DRAFT","0"));
         TodoException draft=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(trigger(null)));
         assertEquals("TODO_TRIGGER_VERSION_INVALID",draft.getBusinessCode());
         verify(mapper,never()).insertTriggerRule(anyMap());
+    }
+
+    @Test void enabledTriggerCreateRejectsInactiveTemplate()
+    {
+        when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","1"));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).saveTrigger(trigger(null)));
+        assertEquals("TODO_TRIGGER_TEMPLATE_INACTIVE",error.getBusinessCode());verify(mapper,never()).insertTriggerRule(anyMap());
+    }
+
+    @Test void enabledTriggerUpdateRejectsInactiveTemplate()
+    {
+        when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","1"));
+        Map<String,Object> value=trigger(null);value.put("triggerRuleId",41L);value.put("expectedVersion",3);value.put("enabled","Y");
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).saveTrigger(value));
+        assertEquals("TODO_TRIGGER_TEMPLATE_INACTIVE",error.getBusinessCode());verify(mapper,never()).updateTriggerRule(anyMap());
+    }
+
+    @Test void disabledDraftRuleMayRetainInactiveTemplate()
+    {
+        when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","1"));when(mapper.insertTriggerRule(anyMap())).thenReturn(1);
+        Map<String,Object> value=trigger(null);value.put("enabled","N");
+        assertEquals(1,new TodoTemplateService(mapper).saveTrigger(value));verify(mapper).insertTriggerRule(anyMap());
+    }
+
+    @Test void enabledTriggerCreateAcceptsActiveTemplate()
+    {
+        when(mapper.insertTriggerRule(anyMap())).thenReturn(1);
+        assertEquals(1,new TodoTemplateService(mapper).saveTrigger(trigger(null)));verify(mapper).insertTriggerRule(anyMap());
     }
 
     @Test void triggerSaveRejectsBusinessTypeThatDoesNotMatchActiveEventCatalog()
@@ -322,6 +350,8 @@ class TodoTemplateServiceTest
         row.put("template_id",1L);row.put("template_version_id",2L);row.put("business_type","LEAD");row.put("condition_json",condition);
         row.put("trigger_version",version);row.put("template_status",templateStatus);row.put("version_template_id",versionTemplateId);row.put("version_status",versionStatus);return row;
     }
+    private Map<String,Object> templateBinding(Long templateId,String versionStatus,String templateStatus)
+    {return Map.of("version_template_id",templateId,"version_status",versionStatus,"template_status",templateStatus);}
     private Actor actor(){return new Actor(7L,"alice",2L);}
 
     private Ledger ledger(boolean insertFirst)

@@ -240,6 +240,8 @@ function checkTriggerRulePage() {
     'ConfigDetailDrawer', 'TriggerConditionBuilder',
     'listTriggerEventCatalog', 'listTriggerTemplateCatalog', 'listTriggerTemplateVersions', 'payloadSchemaJson', 'PUBLISHED', 'publishedVersions',
     'selectableEventCatalog', 'selectedEventActive', '历史停用',
+    'selectableTemplateCatalog', 'selectedTemplateActive', 'effectiveEnabled', 'templateActive',
+    `:disabled="effectiveEnabled === 'Y' && !templateActive(item)"`, '启用触发规则必须选择启用状态的待办模板',
     'businessObjectType', 'business_object_type',
     'createTriggerRule', 'updateTriggerRule', 'serverEnabled', 'enabled: this.persisted ? this.form.serverEnabled : this.form.enabled',
     'actionId', 'expectedVersion', 'conditionJson', '@dirty-change="conditionDraftDirty = $event"'
@@ -254,6 +256,7 @@ function checkTriggerRulePage() {
   assertTriggerSortContract(page, contents[page])
   requireTokens(page, contents[page], ['loadGlobalSortSnapshot', 'pageSize: 500', 'globalRows', 'handlePagination', 'moveTriggerRows', 'changedTriggerSortItems', 'sortPreparing: false'])
   assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'actionId', 'expectedVersion'])
+  assertMethodTokens(drawer, contents[drawer], 'validate', ['effectiveEnabled', 'selectedTemplateActive'])
   const saveBody = methodWindow(contents[drawer], 'save')
   if (saveBody.includes('sortOrder:')) throw new Error('trigger save command must not send unsupported sortOrder; use sortTriggerRules')
   if (workflow.includes('simulateTriggerRule(')) throw new Error('Task 10 must not send an invented trigger simulation command')

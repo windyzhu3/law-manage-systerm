@@ -42,8 +42,9 @@
           <el-form-item label="目标动作"><el-input value="创建待办" disabled /></el-form-item>
           <el-form-item label="待办模板" prop="templateId">
             <el-select v-model="form.templateId" filterable :disabled="readonly" class="full-width" @change="templateChanged">
-              <el-option v-for="item in templateCatalog" :key="templateId(item)" :label="templateLabel(item)" :value="templateId(item)" />
+              <el-option v-for="item in selectableTemplateCatalog" :key="templateId(item)" :label="templateLabel(item)" :value="templateId(item)" :disabled="effectiveEnabled === 'Y' && !templateActive(item)" />
             </el-select>
+            <el-alert v-if="selectedTemplate && !selectedTemplateActive" title="当前规则引用的是已停用历史模板；启用规则保存前必须改选启用模板。停用草稿可以保留该绑定。" type="warning" :closable="false" show-icon />
           </el-form-item>
           <el-form-item label="已发布版本" prop="templateVersionId">
             <el-select v-model="form.templateVersionId" :disabled="readonly || !form.templateId" class="full-width" placeholder="请选择已发布版本">
@@ -84,7 +85,7 @@
         v-hasPermi="[persisted ? 'todo:trigger:edit' : 'todo:trigger:create']"
         type="primary"
         :loading="saving"
-        :disabled="!conditionValid || versionLoading || !publishedVersions.length"
+        :disabled="!conditionValid || versionLoading || !publishedVersions.length || (effectiveEnabled === 'Y' && !selectedTemplateActive)"
         @click="save"
       >保存</el-button>
     </template>
@@ -133,6 +134,11 @@ export default {
     selectedEvent() { return this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey) || null },
     selectedEventActive() { return this.eventActive(this.selectedEvent) },
     selectedPayloadSchemaJson() { return valueOf(this.selectedEvent, 'payloadSchemaJson', 'payload_schema_json') || '' },
+    effectiveEnabled() { return this.persisted ? this.form.serverEnabled : this.form.enabled },
+    activeTemplateCatalog() { return this.templateCatalog.filter(item => this.templateActive(item)) },
+    selectableTemplateCatalog() { if (this.effectiveEnabled !== 'Y') return this.templateCatalog; const active = this.activeTemplateCatalog.slice(); const selected = this.templateCatalog.find(item => this.templateId(item) === Number(this.form.templateId)); if (selected && !active.some(item => this.templateId(item) === Number(this.form.templateId))) active.push(selected); return active },
+    selectedTemplate() { return this.templateCatalog.find(item => this.templateId(item) === Number(this.form.templateId)) || null },
+    selectedTemplateActive() { return this.templateActive(this.selectedTemplate) },
     publishedVersions() { return this.versions.filter(item => valueOf(item, 'status', 'status') === 'PUBLISHED') },
     enabledOptions() {
       return (this.dict.type.law_todo_rule_status || []).map(item => ({ label: item.label, value: item.value === '0' ? 'Y' : 'N' }))
@@ -199,8 +205,9 @@ export default {
       this.form.conditionJson = ''
     },
     templateId(item) { return Number(valueOf(item, 'templateId', 'template_id')) },
+    templateActive(item) { return Boolean(item) && String(valueOf(item, 'status', 'status')) === '0' },
     catalogBusinessType(item) { return valueOf(item, 'businessObjectType', 'business_object_type') || valueOf(item, 'businessType', 'business_type') || '' },
-    templateLabel(item) { const code = valueOf(item, 'templateCode', 'template_code'); const name = valueOf(item, 'templateName', 'template_name'); return code ? `${name || code} (${code})` : (name || '-') },
+    templateLabel(item) { const code = valueOf(item, 'templateCode', 'template_code'); const name = valueOf(item, 'templateName', 'template_name'); const base = code ? `${name || code} (${code})` : (name || '-'); return `${base}${this.templateActive(item) ? '' : '（历史停用）'}` },
     versionId(item) { return Number(valueOf(item, 'versionId', 'version_id')) },
     versionLabel(item) { const versionNo = valueOf(item, 'versionNo', 'version_no'); return `v${versionNo || '-'} · ID ${this.versionId(item)}` },
     templateChanged(id) { this.form.templateVersionId = null; this.loadPublishedVersions(id, false) },
@@ -226,6 +233,7 @@ export default {
       await this.$refs.form.validate()
       if (!this.selectedEventActive) throw new Error('当前事件版本已停用，请选择启用的事件版本后再保存')
       if (!this.form.businessType) throw new Error('事件目录未提供业务对象，无法保存规则')
+      if (this.effectiveEnabled === 'Y' && !this.selectedTemplateActive) throw new Error('启用触发规则必须选择启用状态的待办模板')
       if (!this.publishedVersions.some(item => this.versionId(item) === Number(this.form.templateVersionId))) throw new Error('触发规则必须绑定当前模板的已发布版本')
       return this.$refs.conditionBuilder.validate()
     },

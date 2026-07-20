@@ -221,6 +221,12 @@ class TodoMapperXmlContractTest
                 assertTrue(binding.contains(required),required);
             for(String forbidden:new String[]{"r.*","v.*","definition_json","compiled_json","owner_rule_json","dod_rule_json","sla_rule_json","next_rule_json","ui_schema_json"})
                 assertFalse(binding.contains(forbidden),forbidden);
+
+            String saveBinding=statement(xml,"select","selectTriggerTemplateBinding");
+            for(String required:new String[]{"v.template_id version_template_id","v.status version_status","t.status template_status","where v.version_id=#{versionId}"})
+                assertTrue(saveBinding.contains(required),required);
+            for(String forbidden:new String[]{"v.*","t.*","definition_json","compiled_json","owner_rule_json","dod_rule_json","sla_rule_json","next_rule_json","ui_schema_json"})
+                assertFalse(saveBinding.contains(forbidden),forbidden);
         }
     }
 
