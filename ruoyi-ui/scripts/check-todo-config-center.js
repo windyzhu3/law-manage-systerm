@@ -110,6 +110,36 @@ function requireTokens(file, content, tokens) {
   })
 }
 
+function methodWindow(content, name) {
+  const candidates = [`async ${name}(`, `${name}(`]
+  const start = candidates.map(candidate => content.indexOf(candidate)).find(index => index >= 0)
+  if (start < 0) throw new Error(`missing method ${name}`)
+  return content.slice(start, start + 2400)
+}
+
+function assertMethodTokens(file, content, name, tokens) {
+  const body = methodWindow(content, name)
+  tokens.forEach(token => {
+    if (!body.includes(token)) throw new Error(`${file} ${name} missing mutation contract ${token}`)
+  })
+}
+
+function assertDirectToggleContract(file, content, api) {
+  if (!content.includes('@click.stop="toggleRow(row)"')) throw new Error(`${file} row toggle must stop propagation and call toggleRow`)
+  assertMethodTokens(file, content, 'toggleRow', [api, 'status: targetStatus', 'actionId:', 'expectedVersion:', 'rowToggleLoading', 'this.load()'])
+  const body = methodWindow(content, 'toggleRow')
+  if (body.includes('openDetail(row)')) throw new Error(`${file} row toggle may not open detail instead of mutating`)
+}
+
+function assertPersistedStatusContract(file, content) {
+  requireTokens(file, content, ['v-if="persisted && !copyMode"', 'serverStatus', 'status: this.persisted && !this.copyMode ? this.form.serverStatus : this.form.status'])
+}
+
+function runMutationNegativeFixtures() {
+  assert.throws(() => assertDirectToggleContract('fixture', '<el-button @click.stop="openDetail(row)" />', 'toggleSlaRule'), /row toggle must stop propagation/)
+  assert.throws(() => assertPersistedStatusContract('fixture', 'payload() { return { status: this.form.status } }'), /missing source contract/)
+}
+
 function checkRuleLibraryPages() {
   const slaPage = 'src/views/todo/config/sla/index.vue'
   const slaDrawer = 'src/views/todo/config/sla/SlaRuleDrawer.vue'
@@ -135,6 +165,8 @@ function checkRuleLibraryPages() {
     'pausePolicyJson', 'escalationPolicyJson', 'autoActionJson', 'actionId', 'expectedVersion'
   ])
   requireTokens(slaTimeline, contents[slaTimeline], ['80%', '100%', '150%', 'remind80At', 'overdue100At', 'escalate150At'])
+  assertDirectToggleContract(slaPage, contents[slaPage], 'toggleSlaRule')
+  assertPersistedStatusContract(slaDrawer, contents[slaDrawer])
 
   requireTokens(dodPage, contents[dodPage], [
     'ConfigPageShell', 'ConfigMetricCard', 'DodRuleDrawer', 'pagination',
@@ -150,6 +182,9 @@ function checkRuleLibraryPages() {
     'missingFields', 'missingAttachments', 'validatorIssues', 'payload', 'attachments',
     'actionId', 'expectedVersion'
   ])
+  assertDirectToggleContract(dodPage, contents[dodPage], 'toggleDodRule')
+  assertMethodTokens(dodPage, contents[dodPage], 'toggleRow', ['getDodRuleReferenceCount', '$confirm'])
+  assertPersistedStatusContract(dodDrawer, contents[dodDrawer])
 
   const fixedOptionMarkers = ['slaTypeOptions', 'durationUnitOptions', 'startStrategyOptions', 'ruleTypeOptions', 'validatorOptions']
   Object.entries(contents).forEach(([file, content]) => {
@@ -160,6 +195,7 @@ function checkRuleLibraryPages() {
 }
 
 runNegativeFixture()
+runMutationNegativeFixtures()
 check()
 console.log('todo configuration center contract ok')
 

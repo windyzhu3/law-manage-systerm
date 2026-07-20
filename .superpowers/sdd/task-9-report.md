@@ -42,3 +42,32 @@ npm run build:prod         PASS
 - DoD rule JSON is never silently normalized when stored JSON is malformed: the raw content is shown, preserved, and must be explicitly repaired before save.
 - Files are UTF-8 and are covered by the source-contract checker.
 - Excluded pre-existing `.superpowers/sdd/task-7-report.md`, `ruoyi-ui/vue.config.js`, and `.runtime-logs/` from this task.
+
+## Reviewer remediation
+
+The reviewer found that list-level status controls opened the detail drawer rather than executing the permitted status-only mutation, and that persisted edit forms still exposed mutable status.
+
+### RED
+
+The configuration checker was extended with localized method assertions and negative fixtures. It then failed as intended with:
+
+```text
+src/views/todo/config/sla/index.vue row toggle must stop propagation and call toggleRow
+```
+
+### GREEN
+
+- SLA and DoD list rows now call direct `toggleRow` handlers with per-row loading guards set before confirmation, unique action IDs, row versions, status-only payloads, and list reload after success.
+- DoD row disable fetches the live reference count and displays it in the explicit confirmation before mutating.
+- Persisted-rule drawers render status read-only; update payloads preserve `serverStatus` regardless of any client-side form mutation. Only the toggle path changes status.
+- The checker now inspects the local toggle handler and persisted drawer payload contracts rather than relying on aggregate token matches; negative mutation fixtures prove those assertions reject old-style handlers.
+
+The full verification set was re-run after these changes:
+
+```text
+npm run test:todo-config  PASS
+npm run test:todo          PASS
+npm run test:todo-schema   PASS
+npm run build:prod         PASS (existing bundle-size warnings only)
+git diff --check           PASS
+```
