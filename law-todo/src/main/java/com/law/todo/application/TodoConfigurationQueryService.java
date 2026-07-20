@@ -39,9 +39,30 @@ public class TodoConfigurationQueryService
     public List<ReleaseRecord> releases(Map<String,Object> query)
     {
         Map<String,Object> normalized=new LinkedHashMap<>(query==null?Map.of():query);
-        if(normalized.containsKey("offset")&&!normalized.containsKey("limit"))normalized.put("limit",DEFAULT_RELEASE_LIMIT);
+        Integer offset=paginationInteger(normalized.get("offset"),"offset");
+        Integer limit=paginationInteger(normalized.get("limit"),"limit");
+        if(offset!=null)
+        {
+            if(offset<0)throw invalidPagination("offset must be zero or greater");
+            normalized.put("offset",offset);
+        }
+        if(limit!=null)
+        {
+            if(limit<=0)throw invalidPagination("limit must be greater than zero");
+            normalized.put("limit",limit);
+        }
+        else if(offset!=null)normalized.put("limit",DEFAULT_RELEASE_LIMIT);
         return mapper.selectReleaseRecords(normalized).stream().map(this::release).toList();
     }
+
+    private Integer paginationInteger(Object value,String field)
+    {
+        if(value==null)return null;
+        try{return Integer.valueOf(String.valueOf(value));}
+        catch(NumberFormatException invalid){throw invalidPagination(field+" must be an integer");}
+    }
+    private TodoException invalidPagination(String detail)
+    {return new TodoException("TODO_CONFIGURATION_QUERY_INVALID","Release pagination "+detail);}
 
     private ReleaseRecord release(Map<String,Object> row)
     {

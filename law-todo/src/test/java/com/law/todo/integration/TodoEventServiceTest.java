@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verifyNoInteractions;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,6 +29,7 @@ import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.mapper.TodoConfigurationMapper;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
@@ -40,6 +42,7 @@ import com.law.todo.spi.TodoOrganizationPort;
 class TodoEventServiceTest
 {
     @Mock TodoMapper mapper;
+    @Mock TodoConfigurationMapper configurationMapper;
     @BeforeEach void activeCatalog(){when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(Map.of("status","ACTIVE","payload_schema_json","{\"type\":\"object\",\"properties\":{\"ownerId\":{\"type\":\"integer\"}}}"));}
 
     @Test void eventCarriesAnExplicitPayloadVersion()
@@ -275,6 +278,30 @@ class TodoEventServiceTest
         when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(version));
         TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
         assertEquals("{\"requiredFields\":[\"contactResult\"]}",created.getDodSnapshotJson());
+    }
+
+    @Test void publishedSnapshotDrivesRuntimeAfterLibraryMutationWithoutLibraryReads()
+    {
+        String slaSnapshot="{\"calendarCode\":\"DEFAULT\",\"minutes\":45,\"softRemindPercent\":80,\"hardRemindPercent\":100,\"escalatePercent\":150,\"pausePolicy\":{\"pause\":true},\"ruleSnapshots\":[{\"ruleCode\":\"SLA-PUBLISHED\",\"minutes\":45}]}";
+        String dodSnapshot="{\"requiredFields\":[\"publishedField\"],\"errorMessages\":{\"publishedField\":\"required\"},\"ruleType\":\"TASK\",\"ruleTypes\":[\"TASK\"],\"ruleSnapshots\":[{\"ruleCode\":\"DOD-PUBLISHED\",\"requiredFields\":[\"publishedField\"]}]}";
+        Map<String,Object> version=new java.util.HashMap<>(rule());version.put("status","PUBLISHED");version.put("template_code","PUBLISHED");version.put("payload_version",1);
+        version.put("sla_rule_json",slaSnapshot);version.put("dod_rule_json",dodSnapshot);
+        version.put("definition_json","""
+                {"schemaVersion":1,"templateCode":"PUBLISHED","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},"dod":{"config":%s},"sla":{"config":%s},"ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """.formatted(dodSnapshot,slaSnapshot));
+        Map<String,Object> changedSlaLibrary=new java.util.HashMap<>(Map.of("sla_rule_id",8L,"duration_value",999,"rule_code","SLA-CHANGED"));
+        Map<String,Object> changedDodLibrary=new java.util.HashMap<>(Map.of("dod_rule_id",11L,"required_fields_json","[\"changed\"]","rule_code","DOD-CHANGED"));
+        when(configurationMapper.selectSlaRule(8L)).thenReturn(changedSlaLibrary);when(configurationMapper.selectDodRule(11L)).thenReturn(changedDodLibrary);
+        changedSlaLibrary.put("duration_value",1440);changedDodLibrary.put("required_fields_json","[\"changed-again\"]");
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(version));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00","work_end","23:59:00","exception_json","{}"));
+
+        TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
+
+        assertEquals(dodSnapshot,created.getDodSnapshotJson());
+        assertEquals(45L,java.time.Duration.between(created.getCreatedAt(),created.getDueAt()).toMinutes());
+        verifyNoInteractions(configurationMapper);
     }
 
     @Test void snapshotsGraphPositionOnTriggeredRootTodo()

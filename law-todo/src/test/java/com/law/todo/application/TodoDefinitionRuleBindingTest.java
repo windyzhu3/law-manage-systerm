@@ -207,8 +207,8 @@ class TodoDefinitionRuleBindingTest
         assertEquals("RESPONSE",saved.sla().config().get("slaType"));assertEquals(Map.of("pause",true),saved.sla().config().get("pausePolicy"));
         assertEquals(List.of("base","a","b"),saved.dod().config().get("requiredFields"));assertEquals(List.of("TASK"),saved.dod().config().get("ruleTypes"));
         assertEquals("second",((Map<?,?>)saved.dod().config().get("errorMessages")).get("a"));
-        assertEquals(saved.sla().config().get("slaType"),JSON.parseObject(String.valueOf(snapshot.getValue().get("slaRuleJson"))).getString("slaType"));
-        assertEquals(saved.dod().config().get("requiredFields"),JSON.parseObject(String.valueOf(snapshot.getValue().get("dodRuleJson"))).getList("requiredFields",String.class));
+        assertEquals(JSON.parseObject(JSON.toJSONString(saved.sla().config())),JSON.parseObject(String.valueOf(snapshot.getValue().get("slaRuleJson"))));
+        assertEquals(JSON.parseObject(JSON.toJSONString(saved.dod().config())),JSON.parseObject(String.valueOf(snapshot.getValue().get("dodRuleJson"))));
         Map<String,Object> persistedVersion=new HashMap<>(current);persistedVersion.put("definition_json",persisted);persistedVersion.put("definitionJson",persisted);
         persistedVersion.put("sla_rule_json",snapshot.getValue().get("slaRuleJson"));persistedVersion.put("dod_rule_json",snapshot.getValue().get("dodRuleJson"));
         sla.put("rule_code","CHANGED");sla.put("duration_value",999);first.put("required_fields_json","[\"changed\"]");

@@ -106,5 +106,49 @@ class TodoConfigurationQueryServiceTest
         assertEquals(100,query.getValue().get("limit"));
     }
 
+    @Test void releasePaginationPreservesAnAbsentOrNullOffsetWithoutAddingALimit()
+    {
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
+
+        service().releases(Map.of());
+        Map<String,Object> nullOffset=new java.util.HashMap<>();nullOffset.put("offset",null);service().releases(nullOffset);
+
+        ArgumentCaptor<Map<String,Object>> queries=ArgumentCaptor.forClass(Map.class);
+        verify(mapper,org.mockito.Mockito.times(2)).selectReleaseRecords(queries.capture());
+        assertEquals(false,queries.getAllValues().get(0).containsKey("limit"));
+        assertEquals(false,queries.getAllValues().get(1).containsKey("limit"));
+    }
+
+    @Test void releasePaginationDefaultsAPresentNullLimitWhenOffsetIsProvided()
+    {
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
+        Map<String,Object> query=new java.util.HashMap<>();query.put("offset",20);query.put("limit",null);
+
+        service().releases(query);
+
+        ArgumentCaptor<Map<String,Object>> normalized=ArgumentCaptor.forClass(Map.class);verify(mapper).selectReleaseRecords(normalized.capture());
+        assertEquals(100,normalized.getValue().get("limit"));
+    }
+
+    @Test void releasePaginationAcceptsZeroOffsetAndAddsTheDefaultLimit()
+    {
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
+
+        service().releases(Map.of("offset",0));
+
+        ArgumentCaptor<Map<String,Object>> normalized=ArgumentCaptor.forClass(Map.class);verify(mapper).selectReleaseRecords(normalized.capture());
+        assertEquals(0,normalized.getValue().get("offset"));
+        assertEquals(100,normalized.getValue().get("limit"));
+    }
+
+    @Test void releasePaginationRejectsZeroLimitAndNegativeOffset()
+    {
+        TodoException zero=assertThrows(TodoException.class,()->service().releases(Map.of("limit",0)));
+        TodoException negative=assertThrows(TodoException.class,()->service().releases(Map.of("offset",-1)));
+
+        assertEquals("TODO_CONFIGURATION_QUERY_INVALID",zero.getBusinessCode());
+        assertEquals("TODO_CONFIGURATION_QUERY_INVALID",negative.getBusinessCode());
+    }
+
     private TodoConfigurationQueryService service(){return new TodoConfigurationQueryService(mapper);}
 }
