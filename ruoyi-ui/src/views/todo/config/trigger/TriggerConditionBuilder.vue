@@ -7,13 +7,6 @@
       :closable="false"
       show-icon
     />
-    <el-alert
-      v-if="unsupportedOperatorOptions.length"
-      :title="`字典中的 ${unsupportedOperatorOptions.map(item => item.value).join('、')} 暂不受运行时条件表达式支持，已从可选项中隐藏`"
-      type="warning"
-      :closable="false"
-      show-icon
-    />
 
     <template v-if="!rawMode">
       <div class="condition-builder__toolbar">
@@ -79,7 +72,6 @@
 <script>
 const emptyCondition = () => ({ key: `condition-${Date.now()}-${Math.random()}`, fieldPath: '', operator: 'EQ', valueJson: '' })
 const fieldValue = (row, camel, snake) => row && (row[camel] !== undefined ? row[camel] : row[snake])
-const runtimeUnsupportedOperators = { NOT_EXISTS: true }
 
 export default {
   name: 'TriggerConditionBuilder',
@@ -102,10 +94,7 @@ export default {
   },
   computed: {
     operatorOptions() {
-      return (this.dict.type.law_todo_condition_operator || []).filter(item => !runtimeUnsupportedOperators[item.value]).map(item => ({ label: item.label, value: item.value }))
-    },
-    unsupportedOperatorOptions() {
-      return (this.dict.type.law_todo_condition_operator || []).filter(item => runtimeUnsupportedOperators[item.value])
+      return (this.dict.type.law_todo_condition_operator || []).map(item => ({ label: item.label, value: item.value }))
     },
     schemaDescriptor() {
       if (!this.payloadSchemaJson) return { fields: [], error: '' }
@@ -182,7 +171,7 @@ export default {
     },
     addCondition() { this.conditions.push(emptyCondition()); this.emitBuilderValue() },
     removeCondition(index) { this.conditions.splice(index, 1); this.emitBuilderValue() },
-    requiresValue(operator) { return !['EXISTS', 'EMPTY', 'NOT_EMPTY'].includes(operator) },
+    requiresValue(operator) { return !['EXISTS', 'NOT_EXISTS', 'EMPTY', 'NOT_EMPTY'].includes(operator) },
     operatorChanged(condition) { if (!this.requiresValue(condition.operator)) condition.valueJson = ''; this.emitBuilderValue() },
     parseValue(text, operator) {
       if (!this.requiresValue(operator)) return null

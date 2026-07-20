@@ -9,6 +9,7 @@ import static com.law.todo.expression.ConditionExpression.ConditionOperator.LT;
 import static com.law.todo.expression.ConditionExpression.ConditionOperator.LTE;
 import static com.law.todo.expression.ConditionExpression.ConditionOperator.NE;
 import static com.law.todo.expression.ConditionExpression.ConditionOperator.NOT_EMPTY;
+import static com.law.todo.expression.ConditionExpression.ConditionOperator.NOT_EXISTS;
 import static com.law.todo.expression.ConditionExpression.ConditionOperator.NOT_IN;
 import static com.law.todo.expression.ConditionExpression.and;
 import static com.law.todo.expression.ConditionExpression.eq;
@@ -70,6 +71,20 @@ class ConditionEvaluatorTest
         assertTrue(evaluator.evaluate(predicate("name", NOT_EMPTY, null), value));
         assertFalse(evaluator.evaluate(predicate("missing", EXISTS, null), value));
         assertFalse(evaluator.evaluate(predicate("missing", NE, "x"), value));
+    }
+
+    @Test
+    void notExistsMatchesOnlyAPathThatIsAbsentAndAcceptsNoValue()
+    {
+        Map<String,Object> presentNull=new java.util.HashMap<>();presentNull.put("field",null);
+
+        assertTrue(evaluator.evaluate(predicate("missing",NOT_EXISTS,null),Map.of("field","value")));
+        assertFalse(evaluator.evaluate(predicate("field",NOT_EXISTS,null),Map.of("field","value")));
+        assertFalse(evaluator.evaluate(predicate("field",NOT_EXISTS,null),presentNull));
+        assertTrue(checker.check(predicate("type",NOT_EXISTS,null),schema()).isEmpty());
+        assertEquals("TODO_CONDITION_VALUE_NOT_ALLOWED",
+                checker.check(predicate("type",NOT_EXISTS,"unexpected"),schema()).get(0).code());
+        assertTrue(evaluator.evaluate(ConditionExpression.fromJson("{\"$expression\":{\"version\":1,\"root\":{\"field\":\"missing\",\"operator\":\"NOT_EXISTS\",\"value\":null}}}"),Map.of()));
     }
 
     @Test

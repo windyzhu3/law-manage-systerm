@@ -39,6 +39,9 @@ const routes = [
   ['toggleTriggerRule', '/todo/config/trigger-rules/${id}/toggle', 'post'],
   ['sortTriggerRules', '/todo/config/trigger-rules/sort', 'post'],
   ['simulateTriggerRule', '/todo/config/trigger-rules/simulate', 'post'],
+  ['listTriggerEventCatalog', '/todo/config/trigger-catalog/events', 'get'],
+  ['listTriggerTemplateCatalog', '/todo/config/trigger-catalog/templates', 'get'],
+  ['listTriggerTemplateVersions', '/todo/config/trigger-catalog/templates/${id}/versions', 'get'],
   ['simulateConfiguration', '/todo/config/simulations', 'post'],
   ['listReleaseRecords', '/todo/config/release-records', 'get'],
   ['getReleaseRecord', '/todo/config/release-records/${id}', 'get'],
@@ -144,7 +147,7 @@ function runMutationNegativeFixtures() {
 function assertTriggerToggleContract(file, content) {
   if (!content.includes('@click.stop="toggleRow(row)"')) throw new Error(`${file} row toggle must stop propagation and call toggleRow`)
   const body = methodWindow(content, 'toggleRow')
-  for (const token of ['rowToggleLoading', '$set(this.rowToggleLoading', '$confirm', 'toggleTriggerRule', 'enabled: targetEnabled', 'actionId:', 'expectedVersion:', 'this.load()']) {
+  for (const token of ['rowToggleLoading', '$set(this.rowToggleLoading', '$confirm', 'toggleTriggerRule', 'buildTriggerToggleCommand', 'this.actionId(', 'version', 'this.load()']) {
     if (!body.includes(token)) throw new Error(`${file} toggleRow missing mutation contract ${token}`)
   }
   if (body.indexOf('$set(this.rowToggleLoading') > body.indexOf('$confirm')) throw new Error(`${file} toggle guard must be set before confirmation`)
@@ -153,7 +156,7 @@ function assertTriggerToggleContract(file, content) {
 
 function assertTriggerSortContract(file, content) {
   const body = methodWindow(content, 'saveSort')
-  for (const token of ['sortTriggerRules', 'actionId:', 'items:', 'triggerRuleId:', 'sortOrder:', 'expectedVersion:', 'sorting', 'this.load()']) {
+  for (const token of ['sortTriggerRules', 'actionId:', 'items:', 'changedTriggerSortItems', 'sorting', 'this.load()']) {
     if (!body.includes(token)) throw new Error(`${file} saveSort missing mutation contract ${token}`)
   }
 }
@@ -221,7 +224,8 @@ function checkTriggerRulePage() {
   const page = 'src/views/todo/config/trigger/index.vue'
   const drawer = 'src/views/todo/config/trigger/TriggerRuleDrawer.vue'
   const builder = 'src/views/todo/config/trigger/TriggerConditionBuilder.vue'
-  const contents = Object.fromEntries([page, drawer, builder].map(file => [file, source(file)]))
+  const sortModel = 'src/views/todo/config/trigger/trigger-sort-model.js'
+  const contents = Object.fromEntries([page, drawer, builder, sortModel].map(file => [file, source(file)]))
   const workflow = `${contents[page]}\n${contents[drawer]}\n${contents[builder]}`
 
   requireTokens(page, contents[page], [
@@ -233,8 +237,9 @@ function checkTriggerRulePage() {
     '@row-click="openDetail"', '@click.stop="moveUp(row)"', '@click.stop="moveDown(row)"'
   ])
   requireTokens(drawer, contents[drawer], [
-    'ConfigDetailDrawer', 'TriggerConditionBuilder', 'listTodoEventCatalog', 'listDefinitions',
-    'listDefinitionVersions', 'payloadSchemaJson', 'PUBLISHED', 'publishedVersions',
+    'ConfigDetailDrawer', 'TriggerConditionBuilder',
+    'listTriggerEventCatalog', 'listTriggerTemplateCatalog', 'listTriggerTemplateVersions', 'payloadSchemaJson', 'PUBLISHED', 'publishedVersions',
+    'selectableEventCatalog', 'selectedEventActive', '历史停用',
     'businessObjectType', 'business_object_type',
     'createTriggerRule', 'updateTriggerRule', 'serverEnabled', 'enabled: this.persisted ? this.form.serverEnabled : this.form.enabled',
     'actionId', 'expectedVersion', 'conditionJson', '@dirty-change="conditionDraftDirty = $event"'
@@ -242,20 +247,30 @@ function checkTriggerRulePage() {
   requireTokens(builder, contents[builder], [
     'law_todo_condition_operator', 'payloadSchemaJson', 'schemaFields', 'operatorOptions',
     '$expression', 'version: 1', 'rawJson', 'malformed', 'repairRawJson',
-    'fieldPath', 'conditions', 'valueJson', 'unsupportedOperatorOptions', '@input="rawInput"', "this.$emit('dirty-change'"
+    'fieldPath', 'conditions', 'valueJson', 'NOT_EXISTS', '@input="rawInput"', "this.$emit('dirty-change'"
   ])
   requireTokens('trigger workflow', workflow, ['eventType', 'payloadVersion', 'businessType', 'templateId', 'templateVersionId', 'sortOrder', 'version'])
   assertTriggerToggleContract(page, contents[page])
   assertTriggerSortContract(page, contents[page])
-  requireTokens(page, contents[page], ['normalizeSortOrders', '(this.query.pageNum - 1) * this.query.pageSize'])
+  requireTokens(page, contents[page], ['loadGlobalSortSnapshot', 'pageSize: 500', 'globalRows', 'handlePagination', 'moveTriggerRows', 'changedTriggerSortItems', 'sortPreparing: false'])
   assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'actionId', 'expectedVersion'])
   const saveBody = methodWindow(contents[drawer], 'save')
   if (saveBody.includes('sortOrder:')) throw new Error('trigger save command must not send unsupported sortOrder; use sortTriggerRules')
   if (workflow.includes('simulateTriggerRule(')) throw new Error('Task 10 must not send an invented trigger simulation command')
   assertMethodTokens(page, contents[page], 'handoffSimulation', ["name: 'TodoConfigSimulation'", 'triggerRuleId', 'eventType', 'payloadVersion'])
-  for (const marker of ['eventOptions', 'operatorOptions: [', 'templateOptions']) {
+  for (const marker of ['eventOptions', 'operatorOptions: [', 'templateOptions', 'runtimeUnsupportedOperators', 'normalizeSortOrders']) {
     if (workflow.includes(marker)) throw new Error(`trigger workflow must use catalog/dictionary sources instead of ${marker}`)
   }
+  const model = require('../src/views/todo/config/trigger/trigger-sort-model')
+  const sourceRows = Array.from({ length: 501 }, (_, index) => ({ triggerRuleId: index + 1, sortOrder: 0, version: index }))
+  const baseline = Object.fromEntries(sourceRows.map(row => [row.triggerRuleId, row.sortOrder]))
+  const moved = model.moveTriggerRows(sourceRows, 501, -1)
+  assert.strictEqual(moved.rows[499].triggerRuleId, 501, 'global sort must cross the 500-row page boundary')
+  assert.strictEqual(moved.rows[500].triggerRuleId, 500, 'global sort must retain the swapped boundary row')
+  assert.strictEqual(new Set(moved.rows.map(row => row.sortOrder)).size, 501, 'global sort must canonicalize unique orders')
+  assert.strictEqual(model.pageTriggerRows(moved.rows, 2, 500)[0].triggerRuleId, 500, 'dirty pagination must slice the global snapshot')
+  assert.strictEqual(model.changedTriggerSortItems(moved.rows, baseline).length, 501, 'sort payload must include every globally changed row')
+  assert.deepStrictEqual(Object.keys(model.buildTriggerToggleCommand('N', 7, 'toggle-1')).sort(), ['actionId', 'enabled', 'expectedVersion'])
 }
 
 runNegativeFixture()

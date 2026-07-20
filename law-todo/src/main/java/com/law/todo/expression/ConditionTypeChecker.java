@@ -62,7 +62,7 @@ public final class ConditionTypeChecker
         }
         switch (predicate.operator())
         {
-            case EXISTS, EMPTY, NOT_EMPTY -> {
+            case EXISTS, NOT_EXISTS, EMPTY, NOT_EMPTY -> {
                 if (predicate.value() != null)
                     issues.add(issue("TODO_CONDITION_VALUE_NOT_ALLOWED", path,
                             "This condition operator does not accept a value"));

@@ -36,6 +36,14 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
     @Test void deniesMissingPermissionWith403() throws Exception {authenticate("other");mvc().perform(get("/todo/config/dashboard")).andExpect(status().isForbidden());}
     @Test void allowsMatchingPermission() throws Exception {authenticate("todo:template:list");mvc().perform(get("/todo/config/dashboard")).andExpect(status().isOk());}
+    @Test void triggerCatalogsRequireOnlyTriggerListPermission() throws Exception {
+      authenticate("todo:trigger:list");
+      mvc().perform(get("/todo/config/trigger-catalog/events")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/trigger-catalog/templates")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/trigger-catalog/templates/7/versions")).andExpect(status().isOk());
+      authenticate("todo:template:list");
+      mvc().perform(get("/todo/config/trigger-catalog/events")).andExpect(status().isForbidden());
+    }
     @Test void registersEveryConfigurationEndpointAsOneUniqueHandler(){long count=handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).count();org.junit.jupiter.api.Assertions.assertTrue(count>=20);org.junit.jupiter.api.Assertions.assertEquals(count,handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).map(entry->entry.getKey().toString()).distinct().count());}
     private MockMvc mvc(){return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new Denied()).build();}
     private void authenticate(String permission){SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("tester","x",Set.of(new SimpleGrantedAuthority(permission))));}

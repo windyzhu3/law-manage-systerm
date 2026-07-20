@@ -15,8 +15,8 @@
         v-hasPermi="['todo:trigger:edit']"
         size="small"
         icon="el-icon-sort"
-        :loading="sorting"
-        :disabled="!sortDirty || sorting"
+        :loading="sorting || sortPreparing"
+        :disabled="!sortDirty || sorting || sortPreparing"
         @click="saveSort"
       >保存排序</el-button>
     </template>
@@ -52,6 +52,7 @@
           <el-button
             v-hasPermi="['todo:trigger:toggle']"
             type="text"
+            :disabled="sortDirty"
             :loading="Boolean(rowToggleLoading[field(row, 'triggerRuleId', 'trigger_rule_id')])"
             @click.stop="toggleRow(row)"
           >{{ field(row, 'enabled', 'enabled') === 'Y' ? '停用' : '启用' }}</el-button>
@@ -61,7 +62,7 @@
         </template>
       </el-table-column>
     </el-table>
-    <pagination v-show="total > 0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="load" />
+    <pagination v-show="total > 0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="handlePagination" />
 
     <trigger-rule-drawer :visible.sync="drawerOpen" :rule="selected" :mode="drawerMode" @edit="openEdit" @saved="afterSaved" />
   </config-page-shell>
@@ -72,6 +73,7 @@ import ConfigPageShell from '../shared/ConfigPageShell'
 import ConfigMetricCard from '../shared/ConfigMetricCard'
 import TriggerRuleDrawer from './TriggerRuleDrawer'
 import { listTriggerRules, toggleTriggerRule, sortTriggerRules } from '@/api/todo-config'
+const { moveTriggerRows, pageTriggerRows, changedTriggerSortItems, buildTriggerToggleCommand } = require('./trigger-sort-model')
 
 export default {
   name: 'TodoTriggerRuleConfig',
@@ -81,6 +83,7 @@ export default {
     return {
       loading: false,
       sorting: false,
+      sortPreparing: false,
       rows: [],
       total: 0,
       query: { pageNum: 1, pageSize: 20 },
@@ -88,13 +91,14 @@ export default {
       drawerMode: 'view',
       selected: null,
       rowToggleLoading: {},
-      initialSort: {}
+      globalRows: null,
+      initialGlobalSort: {}
     }
   },
   computed: {
     enabledCount() { return this.rows.filter(row => this.field(row, 'enabled', 'enabled') === 'Y').length },
     conditionalCount() { return this.rows.filter(row => Boolean(this.field(row, 'conditionJson', 'condition_json'))).length },
-    changedSortRows() { return this.rows.filter(row => Number(this.initialSort[this.rowId(row)]) !== Number(this.field(row, 'sortOrder', 'sort_order'))) },
+    changedSortRows() { return this.globalRows ? changedTriggerSortItems(this.globalRows, this.initialGlobalSort) : [] },
     changedSortCount() { return this.changedSortRows.length },
     sortDirty() { return this.changedSortCount > 0 }
   },
@@ -109,11 +113,13 @@ export default {
         const response = await listTriggerRules({ pageNum: this.query.pageNum, pageSize: this.query.pageSize })
         this.rows = (response.rows || []).map(row => ({ ...row }))
         this.total = Number(response.total || 0)
-        this.initialSort = this.rows.reduce((result, row) => { result[this.rowId(row)] = Number(this.field(row, 'sortOrder', 'sort_order') || 0); return result }, {})
+        this.globalRows = null
+        this.initialGlobalSort = {}
       } catch (error) {
         this.rows = []
         this.total = 0
-        this.initialSort = {}
+        this.globalRows = null
+        this.initialGlobalSort = {}
         this.showError(error, '加载触发规则失败')
       } finally { this.loading = false }
     },
@@ -148,54 +154,68 @@ export default {
     async toggleRow(row) {
       const id = this.rowId(row)
       if (!id || this.rowToggleLoading[id]) return
+      if (this.sortDirty) return this.$modal.msgWarning('请先保存触发规则排序，再变更规则状态')
       const targetEnabled = this.field(row, 'enabled', 'enabled') === 'Y' ? 'N' : 'Y'
       const actionLabel = targetEnabled === 'Y' ? '启用' : '停用'
       this.$set(this.rowToggleLoading, id, true)
       try {
         await this.$confirm(`确认${actionLabel}该触发规则吗？`, `${actionLabel}触发规则`, { type: 'warning' })
-        await toggleTriggerRule(id, {
-          enabled: targetEnabled,
-          actionId: this.actionId('row-toggle'),
-          expectedVersion: Number(this.field(row, 'version', 'version') || 0)
-        })
+        await toggleTriggerRule(id, buildTriggerToggleCommand(targetEnabled, Number(this.field(row, 'version', 'version') || 0), this.actionId('row-toggle')))
         this.$modal.msgSuccess(`触发规则已${actionLabel}`)
         await this.load()
       } catch (error) {
         if (error !== 'cancel' && error !== 'close') this.showError(error, `${actionLabel}触发规则失败，请刷新后重试`)
       } finally { this.$set(this.rowToggleLoading, id, false) }
     },
-    isFirst(row) { return this.rows.indexOf(row) <= 0 },
-    isLast(row) { return this.rows.indexOf(row) === this.rows.length - 1 },
+    globalIndex(row) { return this.globalRows ? this.globalRows.findIndex(item => this.rowId(item) === this.rowId(row)) : ((this.query.pageNum - 1) * this.query.pageSize) + this.rows.indexOf(row) },
+    isFirst(row) { return this.globalIndex(row) <= 0 },
+    isLast(row) { return this.globalIndex(row) >= this.total - 1 },
     moveUp(row) { this.move(row, -1) },
     moveDown(row) { this.move(row, 1) },
-    move(row, offset) {
-      const index = this.rows.indexOf(row)
-      const targetIndex = index + offset
-      if (index < 0 || targetIndex < 0 || targetIndex >= this.rows.length) return
-      const target = this.rows[targetIndex]
-      const rowOrder = Number(this.field(row, 'sortOrder', 'sort_order') || 0)
-      const targetOrder = Number(this.field(target, 'sortOrder', 'sort_order') || 0)
-      this.$set(row, 'sortOrder', targetOrder)
-      this.$set(target, 'sortOrder', rowOrder)
-      const copy = this.rows.slice()
-      copy.splice(index, 1)
-      copy.splice(targetIndex, 0, row)
-      this.rows = copy
-      this.normalizeSortOrders()
+    async move(row, offset) {
+      if (this.sortPreparing || this.sorting) return
+      try {
+        await this.loadGlobalSortSnapshot()
+        const moved = moveTriggerRows(this.globalRows, this.rowId(row), offset)
+        if (moved.movedIndex < 0) return
+        this.globalRows = moved.rows
+        this.query.pageNum = Math.floor(moved.movedIndex / this.query.pageSize) + 1
+        this.renderGlobalPage()
+      } catch (error) { this.showError(error, '加载完整排序快照失败') }
     },
-    normalizeSortOrders() {
-      const firstOrder = (this.query.pageNum - 1) * this.query.pageSize
-      this.rows.forEach((row, index) => this.$set(row, 'sortOrder', firstOrder + index + 1))
+    async loadGlobalSortSnapshot() {
+      if (this.globalRows) return
+      this.sortPreparing = true
+      try {
+        const all = []
+        const seen = new Set()
+        let pageNum = 1
+        let expectedTotal = Number(this.total || 0)
+        while (!expectedTotal || all.length < expectedTotal) {
+          const response = await listTriggerRules({ pageNum, pageSize: 500 })
+          const batch = response.rows || []
+          expectedTotal = Number(response.total || 0)
+          batch.forEach(row => { const id = this.rowId(row); if (id && !seen.has(id)) { seen.add(id); all.push({ ...row }) } })
+          if (!batch.length || batch.length < 500) break
+          pageNum += 1
+        }
+        if (all.length !== expectedTotal) throw new Error(`完整排序快照应有 ${expectedTotal} 条，实际读取 ${all.length} 条`)
+        this.globalRows = all
+        this.total = expectedTotal
+        this.initialGlobalSort = Object.fromEntries(all.map(row => [this.rowId(row), Number(this.field(row, 'sortOrder', 'sort_order') || 0)]))
+        this.renderGlobalPage()
+      } finally { this.sortPreparing = false }
+    },
+    renderGlobalPage() { this.rows = pageTriggerRows(this.globalRows || [], this.query.pageNum, this.query.pageSize) },
+    handlePagination() {
+      if (this.globalRows) this.renderGlobalPage()
+      else this.load()
     },
     async saveSort() {
       if (!this.sortDirty || this.sorting) return
       this.sorting = true
       try {
-        const items = this.changedSortRows.map(row => ({
-          triggerRuleId: this.rowId(row),
-          sortOrder: Number(this.field(row, 'sortOrder', 'sort_order')),
-          expectedVersion: Number(this.field(row, 'version', 'version') || 0)
-        }))
+        const items = changedTriggerSortItems(this.globalRows, this.initialGlobalSort)
         await sortTriggerRules({ actionId: this.actionId('sort'), items: items })
         this.$modal.msgSuccess('触发规则排序已保存')
         await this.load()

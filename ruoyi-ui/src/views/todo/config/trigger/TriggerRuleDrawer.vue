@@ -17,8 +17,9 @@
           </el-form-item>
           <el-form-item label="事件与版本" prop="eventKey">
             <el-select v-model="form.eventKey" filterable :disabled="readonly" class="full-width" @change="eventChanged">
-              <el-option v-for="item in activeEventCatalog" :key="catalogKey(item)" :label="eventLabel(item)" :value="catalogKey(item)" />
+              <el-option v-for="item in selectableEventCatalog" :key="catalogKey(item)" :label="eventLabel(item)" :value="catalogKey(item)" :disabled="!eventActive(item)" />
             </el-select>
+            <el-alert v-if="selectedEvent && !selectedEventActive" title="当前规则引用的是已停用历史事件，仅供查看；保存前请选择启用的事件版本。" type="warning" :closable="false" show-icon />
           </el-form-item>
           <el-row :gutter="16">
             <el-col :span="12"><el-form-item label="Payload 版本"><el-input :value="form.payloadVersion" disabled /></el-form-item></el-col>
@@ -93,8 +94,7 @@
 <script>
 import ConfigDetailDrawer from '../shared/ConfigDetailDrawer'
 import TriggerConditionBuilder from './TriggerConditionBuilder'
-import { listTodoEventCatalog, listDefinitions, listDefinitionVersions } from '@/api/todo-definition'
-import { createTriggerRule, updateTriggerRule } from '@/api/todo-config'
+import { createTriggerRule, updateTriggerRule, listTriggerEventCatalog, listTriggerTemplateCatalog, listTriggerTemplateVersions } from '@/api/todo-config'
 
 const valueOf = (row, camel, snake) => row && (row[camel] !== undefined ? row[camel] : row[snake])
 const emptyForm = () => ({ triggerRuleId: null, eventKey: '', eventType: '', payloadVersion: 1, businessType: '', templateId: null, templateVersionId: null, enabled: 'Y', serverEnabled: 'Y', conditionJson: '', sortOrder: 0, version: 0, updateTime: '' })
@@ -129,7 +129,9 @@ export default {
     readonly() { return this.mode === 'view' },
     drawerTitle() { return ({ create: '新增触发规则', edit: '编辑触发规则', view: '触发规则详情' })[this.mode] || '触发规则详情' },
     activeEventCatalog() { return this.eventCatalog.filter(item => valueOf(item, 'status', 'status') === 'ACTIVE') },
-    selectedEvent() { return this.activeEventCatalog.find(item => this.catalogKey(item) === this.form.eventKey) || null },
+    selectableEventCatalog() { const active = this.activeEventCatalog.slice(); const selected = this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey); if (selected && !active.some(item => this.catalogKey(item) === this.form.eventKey)) active.push(selected); return active },
+    selectedEvent() { return this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey) || null },
+    selectedEventActive() { return this.eventActive(this.selectedEvent) },
     selectedPayloadSchemaJson() { return valueOf(this.selectedEvent, 'payloadSchemaJson', 'payload_schema_json') || '' },
     publishedVersions() { return this.versions.filter(item => valueOf(item, 'status', 'status') === 'PUBLISHED') },
     enabledOptions() {
@@ -149,7 +151,7 @@ export default {
   methods: {
     async loadCatalogs() {
       try {
-        const [events, templates] = await Promise.all([listTodoEventCatalog(), listDefinitions()])
+        const [events, templates] = await Promise.all([listTriggerEventCatalog(), listTriggerTemplateCatalog()])
         this.eventCatalog = events.data || []
         this.templateCatalog = templates.data || []
         if (this.visible) this.hydrate()
@@ -187,9 +189,10 @@ export default {
     reset() { this.form = emptyForm(); this.versions = []; this.initialSnapshot = ''; this.conditionValid = true; this.conditionDraftDirty = false; this.$emit('reset') },
     snapshot() { return JSON.stringify(this.form) },
     catalogKey(item) { return `${valueOf(item, 'eventType', 'event_type')}@@${Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)}` },
-    eventLabel(item) { return `${valueOf(item, 'eventType', 'event_type')} · v${Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)}` },
+    eventActive(item) { return Boolean(item) && valueOf(item, 'status', 'status') === 'ACTIVE' },
+    eventLabel(item) { return `${valueOf(item, 'eventType', 'event_type')} · v${Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)}${this.eventActive(item) ? '' : '（历史停用）'}` },
     eventChanged(key) {
-      const item = this.activeEventCatalog.find(entry => this.catalogKey(entry) === key)
+      const item = this.eventCatalog.find(entry => this.catalogKey(entry) === key)
       this.form.eventType = valueOf(item, 'eventType', 'event_type') || ''
       this.form.payloadVersion = Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)
       this.form.businessType = this.catalogBusinessType(item)
@@ -204,7 +207,7 @@ export default {
     async loadPublishedVersions(templateId, retain) {
       this.versionLoading = true
       try {
-        const response = await listDefinitionVersions(templateId)
+        const response = await listTriggerTemplateVersions(templateId)
         this.versions = response.data || []
         if (!retain || !this.publishedVersions.some(item => this.versionId(item) === Number(this.form.templateVersionId))) this.form.templateVersionId = null
       } catch (error) {
@@ -221,7 +224,7 @@ export default {
     actionId(action) { return `trigger-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}` },
     async validate() {
       await this.$refs.form.validate()
-      if (!this.selectedEvent) throw new Error('所选事件版本不在启用的事件目录中')
+      if (!this.selectedEventActive) throw new Error('当前事件版本已停用，请选择启用的事件版本后再保存')
       if (!this.form.businessType) throw new Error('事件目录未提供业务对象，无法保存规则')
       if (!this.publishedVersions.some(item => this.versionId(item) === Number(this.form.templateVersionId))) throw new Error('触发规则必须绑定当前模板的已发布版本')
       return this.$refs.conditionBuilder.validate()

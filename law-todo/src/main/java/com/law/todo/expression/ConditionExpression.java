@@ -27,7 +27,7 @@ public sealed interface ConditionExpression permits ConditionExpression.GroupCon
 
     enum ConditionOperator
     {
-        EQ, NE, IN, NOT_IN, GT, GTE, LT, LTE, EXISTS, EMPTY, NOT_EMPTY
+        EQ, NE, IN, NOT_IN, GT, GTE, LT, LTE, EXISTS, NOT_EXISTS, EMPTY, NOT_EMPTY
     }
 
     record GroupCondition(GroupOperator operator, List<ConditionExpression> conditions)

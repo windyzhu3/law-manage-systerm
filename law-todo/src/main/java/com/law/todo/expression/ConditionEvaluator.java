@@ -41,6 +41,7 @@ public final class ConditionEvaluator
         return switch (predicate.operator())
         {
             case EXISTS -> path.present();
+            case NOT_EXISTS -> !path.present();
             case EMPTY -> path.present() && empty(path.value());
             case NOT_EMPTY -> path.present() && !empty(path.value());
             case EQ -> path.present() && equal(path.value(), predicate.value());

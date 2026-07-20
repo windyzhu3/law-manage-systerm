@@ -33,6 +33,9 @@ export function updateTriggerRule(id, data) { return request({ url: `/todo/confi
 export function toggleTriggerRule(id, data) { return request({ url: `/todo/config/trigger-rules/${id}/toggle`, method: 'post', data }) }
 export function sortTriggerRules(data) { return request({ url: '/todo/config/trigger-rules/sort', method: 'post', data }) }
 export function simulateTriggerRule(data) { return request({ url: '/todo/config/trigger-rules/simulate', method: 'post', data }) }
+export function listTriggerEventCatalog() { return request({ url: '/todo/config/trigger-catalog/events', method: 'get' }) }
+export function listTriggerTemplateCatalog() { return request({ url: '/todo/config/trigger-catalog/templates', method: 'get' }) }
+export function listTriggerTemplateVersions(id) { return request({ url: `/todo/config/trigger-catalog/templates/${id}/versions`, method: 'get' }) }
 
 export function simulateConfiguration(data) { return request({ url: '/todo/config/simulations', method: 'post', data }) }
 

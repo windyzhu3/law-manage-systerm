@@ -31,6 +31,7 @@ public class TodoTemplateService
     public TodoTemplateService(TodoMapper mapper){this(mapper,new TodoEventCatalogService(mapper),new ConditionValidator(),(type,value)->true);}
     @Autowired public TodoTemplateService(TodoMapper mapper,TodoEventCatalogService eventCatalog,ConditionValidator conditionValidator,TodoDictionaryValidationPort dictionaries){this.mapper=mapper;this.eventCatalog=eventCatalog;this.conditionValidator=conditionValidator;this.dictionaries=dictionaries;}
     public List<Map<String,Object>> listTemplates(){return mapper.selectTemplates();}
+    public List<Map<String,Object>> listEventCatalogs(){return eventCatalog.entries();}
     @Transactional public int saveTemplate(TemplateCommand command,String operator){validateBusinessType(command.businessType());Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());value.put("templateName",command.templateName());value.put("businessType",command.businessType());value.put("status",command.status()==null?"0":command.status());value.put("createBy",operator);value.put("updateBy",operator);return saveTemplate(value);}
     @Transactional public int saveTemplate(Map<String,Object> value){required(value,"templateCode");required(value,"templateName");required(value,"businessType");return value.get("templateId")==null?mapper.insertTemplate(value):mapper.updateTemplate(value);}
     public List<Map<String,Object>> listTriggers(){return mapper.selectAllTriggerRules();}

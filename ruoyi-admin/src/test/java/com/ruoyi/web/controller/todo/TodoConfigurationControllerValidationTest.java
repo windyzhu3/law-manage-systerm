@@ -88,6 +88,9 @@ class TodoConfigurationControllerValidationTest
         assertPermission("createSlaRule","todo:sla-rule:create");
         assertPermission("simulate","todo:simulation:simulate");
         assertPermission("publish","todo:release:publish");
+        assertPermission("triggerEventCatalog","todo:trigger:list");
+        assertPermission("triggerTemplateCatalog","todo:trigger:list");
+        assertPermission("triggerTemplateVersions","todo:trigger:list");
     }
 
     @Test
