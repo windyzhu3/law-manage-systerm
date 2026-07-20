@@ -92,6 +92,71 @@ function check() {
     if (!component.includes('config-center.scss')) throw new Error(`missing shared style contract ${file}`)
     if (component.includes('<el-dialog')) throw new Error(`shared configuration component must not use el-dialog: ${file}`)
   }
+
+  checkRuleLibraryPages()
+}
+
+function source(file) {
+  if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
+  const content = fs.readFileSync(file, 'utf8')
+  if (content.includes('\uFFFD')) throw new Error(`invalid UTF-8 content ${file}`)
+  if (content.includes('<el-dialog')) throw new Error(`configuration actions may not use el-dialog: ${file}`)
+  return content
+}
+
+function requireTokens(file, content, tokens) {
+  tokens.forEach(token => {
+    if (!content.includes(token)) throw new Error(`${file} missing source contract ${token}`)
+  })
+}
+
+function checkRuleLibraryPages() {
+  const slaPage = 'src/views/todo/config/sla/index.vue'
+  const slaDrawer = 'src/views/todo/config/sla/SlaRuleDrawer.vue'
+  const slaTimeline = 'src/views/todo/config/sla/SlaTimeline.vue'
+  const dodPage = 'src/views/todo/config/dod/index.vue'
+  const dodDrawer = 'src/views/todo/config/dod/DodRuleDrawer.vue'
+  const files = [slaPage, slaDrawer, slaTimeline, dodPage, dodDrawer]
+  const contents = Object.fromEntries(files.map(file => [file, source(file)]))
+  const sla = `${contents[slaPage]}\n${contents[slaDrawer]}\n${contents[slaTimeline]}`
+  const dod = `${contents[dodPage]}\n${contents[dodDrawer]}`
+
+  requireTokens(slaPage, contents[slaPage], [
+    'ConfigPageShell', 'ConfigMetricCard', 'SlaRuleDrawer', 'pagination',
+    'law_todo_sla_type', 'law_todo_sla_unit', 'law_todo_sla_start_strategy',
+    'law_todo_timeout_strategy', 'law_todo_rule_status', 'listSlaRules', 'getSlaRule'
+  ])
+  requireTokens('SLA workflow', sla, ['todo:sla-rule:create', 'todo:sla-rule:edit', 'todo:sla-rule:copy',
+    'todo:sla-rule:toggle', 'createSlaRule', 'updateSlaRule', 'copySlaRule', 'toggleSlaRule', 'testSlaRule',
+    'actionId', 'expectedVersion'])
+  requireTokens(slaDrawer, contents[slaDrawer], [
+    'ConfigDetailDrawer', 'listWorkCalendars', 'SlaTimeline', 'softRemindPercent',
+    'hardRemindPercent', 'escalatePercent', '80%', '100%', '150%', 'createdAt',
+    'pausePolicyJson', 'escalationPolicyJson', 'autoActionJson', 'actionId', 'expectedVersion'
+  ])
+  requireTokens(slaTimeline, contents[slaTimeline], ['80%', '100%', '150%', 'remind80At', 'overdue100At', 'escalate150At'])
+
+  requireTokens(dodPage, contents[dodPage], [
+    'ConfigPageShell', 'ConfigMetricCard', 'DodRuleDrawer', 'pagination',
+    'law_todo_dod_rule_type', 'law_todo_rule_status',
+    'listDodRules', 'getDodRule'
+  ])
+  requireTokens('DoD workflow', dod, ['todo:dod-rule:create', 'todo:dod-rule:edit', 'todo:dod-rule:copy',
+    'todo:dod-rule:toggle', 'createDodRule', 'updateDodRule', 'copyDodRule', 'toggleDodRule',
+    'getDodRuleReferenceCount', 'testDodRule', 'actionId', 'expectedVersion'])
+  requireTokens(dodDrawer, contents[dodDrawer], [
+    'ConfigDetailDrawer', 'listTodoValidatorCatalog', 'requiredFieldsJson',
+    'requiredAttachmentsJson', 'conditionalRulesJson', 'validatorRefsJson', 'errorMessagesJson',
+    'missingFields', 'missingAttachments', 'validatorIssues', 'payload', 'attachments',
+    'actionId', 'expectedVersion'
+  ])
+
+  const fixedOptionMarkers = ['slaTypeOptions', 'durationUnitOptions', 'startStrategyOptions', 'ruleTypeOptions', 'validatorOptions']
+  Object.entries(contents).forEach(([file, content]) => {
+    fixedOptionMarkers.forEach(marker => {
+      if (content.includes(marker)) throw new Error(`${file} must use dictionary/catalog sources instead of ${marker}`)
+    })
+  })
 }
 
 runNegativeFixture()
