@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.29", current.getVersion().getVersion());
+        assertEquals("0.20.30", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -70,6 +70,33 @@ class FlywayMigrationTest
         verifyFoundationAdmissionAggregateQuery(url);
         verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
+        verifyTodoConfigurationCenterSchema(url);
+    }
+
+    private void verifyTodoConfigurationCenterSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(4L, count(connection,
+                "select count(*) from information_schema.tables where table_schema=database() "
+                    + "and table_name in ('todo_sla_rule','todo_dod_rule','todo_template_draft_rule_ref','todo_simulation_record')"));
+            assertEquals(6L, count(connection,
+                "select count(*) from sys_menu where component in "
+                    + "('todo/config/template/index','todo/config/trigger/index','todo/config/sla/index',"
+                    + "'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index')"));
+            assertEquals(14L, count(connection,
+                "select count(*) from sys_dict_type where dict_type like 'law_todo_%' and dict_type in "
+                    + "('law_todo_business_stage','law_todo_business_type','law_todo_template_type',"
+                    + "'law_todo_publish_status','law_todo_trigger_mode','law_todo_condition_operator',"
+                    + "'law_todo_owner_rule_type','law_todo_sla_type','law_todo_sla_unit',"
+                    + "'law_todo_sla_start_strategy','law_todo_timeout_strategy',"
+                    + "'law_todo_dod_rule_type','law_todo_rule_status','law_todo_version_status')"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Todo configuration center database invariants failed", exception);
+        }
     }
 
     private void verifyFoundationGovernanceRoles(String url, RoleSnapshot beforeFoundationGovernanceMigration)
