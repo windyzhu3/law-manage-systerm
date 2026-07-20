@@ -92,6 +92,10 @@
   <select id="countDodRuleReferences" resultType="int">
     select count(*) from todo_template_draft_rule_ref where ref_type='DOD' and ref_id_value=#{id}
   </select>
+  <select id="countPublishedTemplates" resultType="long">select count(distinct template_id) from todo_template_version where status='PUBLISHED'</select>
+  <select id="countDraftTemplates" resultType="long">select count(distinct template_id) from todo_template_version where status in ('DRAFT','BLOCKED')</select>
+  <select id="countEnabledSlaRules" resultType="long">select count(*) from todo_sla_rule where status='0'</select>
+  <select id="countTodayTriggeredTodos" resultType="long">select count(*) from todo_instance where date(created_at)=curdate()</select>
 
   <delete id="deleteDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
   <insert id="insertDraftRuleRef" useGeneratedKeys="true" keyProperty="refId">

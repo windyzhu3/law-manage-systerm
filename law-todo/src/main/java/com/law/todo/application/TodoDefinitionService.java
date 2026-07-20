@@ -16,6 +16,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateComma
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.RuleReference;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.definition.catalog.TodoDecisionService;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
@@ -29,6 +30,7 @@ import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 
 @Service
@@ -39,15 +41,21 @@ public class TodoDefinitionService
 
     private final TodoMapper mapper;
     private final TodoDefinitionCompiler compiler;
+    private final TodoConfigurationMapper configurationMapper;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
     @Autowired
-    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
+            TodoConfigurationMapper configurationMapper)
     {
         this.mapper = mapper;
         this.compiler = compiler;
+        this.configurationMapper=configurationMapper;
     }
+
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
+    {this(mapper,compiler,null);}
 
     public TodoDefinitionService(TodoMapper mapper)
     {
@@ -138,7 +146,7 @@ public class TodoDefinitionService
         if(repeated!=null)return repeated;
         TodoDefinitionDocument copied=definition(source);Map<String,Object> target=new HashMap<>();
         target.put("templateId",templateId);target.put("versionNo",command.newVersionNo());target.put("status",DRAFT);
-        target.put("sourceVersionId",sourceVersionId);target.put("definitionSchemaVersion",copied.schemaVersion());
+        target.put("sourceVersionId",sourceVersionId);target.put("rollbackSourceVersionId",sourceVersionId);target.put("definitionSchemaVersion",copied.schemaVersion());
         target.put("definitionJson",codec.canonicalJson(copied));target.put("compiledJson",null);target.put("definitionHash",null);target.put("validationReportJson",null);
         projectLegacyRules(copied,target);
         try
@@ -229,8 +237,10 @@ public class TodoDefinitionService
         update.put("definitionJson",canonical);update.put("expectedDefinitionJson",storedDefinitionJson);
         update.put("compiledJson",null);update.put("definitionHash",null);update.put("validationReportJson",null);
         projectLegacyRules(definition,update);
+        update.put("changeSummary",command.changeSummary());update.put("impactScope",command.impactScope());
         if (mapper.updateTemplateVersionDraft(update) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Draft version changed");
+        replaceDraftRuleReferences(command.versionId(),command.ruleReferences());
         if(mapper.completeDefinitionAction(command.actionId(),fingerprint,command.versionId())<=0)
             throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Draft action claim could not be completed");
         return command.versionId();
@@ -282,6 +292,7 @@ public class TodoDefinitionService
         Map<String,Object> value=new java.util.TreeMap<>();value.put("actionType","UPDATE_DRAFT");
         value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());value.put("actorName",actor.userName());
         value.put("versionId",command.versionId());value.put("definitionJson",canonical);value.put("expectedDefinitionJson",expectedDefinitionJson);
+        value.put("ruleReferences",command.ruleReferences());value.put("changeSummary",command.changeSummary());value.put("impactScope",command.impactScope());
         return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));
     }
 
@@ -311,6 +322,21 @@ public class TodoDefinitionService
         return null;
     }
 
+    /** A null reference list preserves compatibility; an explicit empty list clears the editable bindings. */
+    private void replaceDraftRuleReferences(Long versionId,List<RuleReference> references)
+    {
+        if(references==null)return;
+        if(configurationMapper==null)
+            throw new TodoException("TODO_CONFIGURATION_BINDING_UNAVAILABLE","Rule binding persistence is unavailable");
+        configurationMapper.deleteDraftRuleRefs(versionId);
+        references.stream().sorted(java.util.Comparator.comparing(RuleReference::order)).forEach(reference->{
+            Map<String,Object> row=new HashMap<>();row.put("versionId",versionId);row.put("refType",reference.type());
+            row.put("refIdValue",reference.id());row.put("sortOrder",reference.order());row.put("configJson",null);
+            if(configurationMapper.insertDraftRuleRef(row)<=0)
+                throw new TodoException("TODO_TEMPLATE_RULE_BINDING_FAILED","Draft rule reference could not be saved");
+        });
+    }
+
     @Transactional(noRollbackFor = PreflightFailedException.class)
     public Long publish(PublishDraftCommand command, Actor actor)
     {
@@ -319,10 +345,23 @@ public class TodoDefinitionService
             return repeated;
         Map<String, Object> current = requireVersion(command.versionId());
         requireDraft(current);
+        RuleBinding binding=bindReferencedRules(command.versionId(),definition(current));
+        TodoDefinitionDocument definition=binding.definition();
+        if(binding.bound())
+        {
+            Map<String,Object> snapshot=snapshotRow(command.versionId(),definition);
+            if(mapper.updateDefinitionDocument(snapshot)<=0)
+                throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Draft version changed before rule snapshot compilation");
+            current=new HashMap<>(current);
+            current.put("definition_json",snapshot.get("definitionJson"));current.put("definitionJson",snapshot.get("definitionJson"));
+            current.put("owner_rule_json",snapshot.get("ownerRuleJson"));current.put("dod_rule_json",snapshot.get("dodRuleJson"));
+            current.put("sla_rule_json",snapshot.get("slaRuleJson"));current.put("next_rule_json",snapshot.get("nextRuleJson"));
+            current.put("ui_schema_json",snapshot.get("uiSchemaJson"));
+        }
         PreflightResult preflight = null;
         if (isPrdBlocked(current))
         {
-            preflight = preflight(command.versionId(), true);
+            preflight = preflight(command.versionId(), true,current,definition);
             if (!preflight.publishable())
                 throw new PreflightFailedException();
         }
@@ -332,7 +371,7 @@ public class TodoDefinitionService
                 text(value(current, "next_rule_json", "nextRuleJson")),
                 text(value(current, "ui_schema_json", "uiSchemaJson")));
         if (preflight == null)
-            preflight = preflight(command.versionId(), true);
+            preflight = preflight(command.versionId(), true,current,definition);
         if (!preflight.publishable())
             throw new PreflightFailedException();
         claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,
@@ -353,7 +392,12 @@ public class TodoDefinitionService
     private PreflightResult preflight(long versionId, boolean guardedPublishPreflight)
     {
         Map<String, Object> current = requireVersion(versionId);
-        TodoDefinitionDocument definition = definition(current);
+        return preflight(versionId,guardedPublishPreflight,current,definition(current));
+    }
+
+    private PreflightResult preflight(long versionId,boolean guardedPublishPreflight,Map<String,Object> current,
+            TodoDefinitionDocument definition)
+    {
         validateDefinitionStructure(definition);
         boolean prdBlocked = isPrdBlocked(current);
         if (!prdBlocked)
@@ -382,6 +426,90 @@ public class TodoDefinitionService
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Definition changed during preflight");
         return new PreflightResult(versionId, report);
     }
+
+    private Map<String,Object> snapshotRow(Long versionId,TodoDefinitionDocument definition)
+    {
+        Map<String,Object> row=new HashMap<>();row.put("versionId",versionId);row.put("definitionSchemaVersion",definition.schemaVersion());
+        row.put("definitionJson",codec.canonicalJson(definition));row.put("compiledJson",null);row.put("definitionHash",null);
+        row.put("validationReportJson",null);projectLegacyRules(definition,row);return row;
+    }
+
+    private RuleBinding bindReferencedRules(Long versionId,TodoDefinitionDocument definition)
+    {
+        if(configurationMapper==null)return new RuleBinding(definition,false);
+        List<Map<String,Object>> references=configurationMapper.selectDraftRuleRefs(versionId);
+        if(references==null||references.isEmpty())return new RuleBinding(definition,false);
+        Map<String,Object> sla=new java.util.LinkedHashMap<>(definition.sla().config());
+        Map<String,Object> dod=new java.util.LinkedHashMap<>(definition.dod().config());
+        List<Map<String,Object>> slaSnapshots=new java.util.ArrayList<>();
+        List<Map<String,Object>> dodSnapshots=new java.util.ArrayList<>();
+        for(Map<String,Object> reference:references)
+        {
+            String type=text(value(reference,"ref_type","refType"));Long id=longValue(value(reference,"ref_id_value","refIdValue"));
+            if("SLA".equals(type))
+            {
+                Map<String,Object> rule=requiredActiveRule(configurationMapper.selectSlaRule(id),"SLA",id);
+                Map<String,Object> snapshot=slaSnapshot(rule);slaSnapshots.add(snapshot);sla.put("calendarCode",snapshot.get("calendarCode"));
+                sla.put("minutes",snapshot.get("minutes"));
+            }
+            else if("DOD".equals(type))
+            {
+                Map<String,Object> snapshot=dodSnapshot(requiredActiveRule(configurationMapper.selectDodRule(id),"DOD",id));
+                dodSnapshots.add(snapshot);mergeDodSnapshot(dod,snapshot);
+            }
+            else throw new TodoException("TODO_TEMPLATE_RULE_TYPE_INVALID","Unsupported draft rule reference type: "+type);
+        }
+        if(!slaSnapshots.isEmpty())sla.put("ruleSnapshots",slaSnapshots);
+        if(!dodSnapshots.isEmpty())dod.put("ruleSnapshots",dodSnapshots);
+        return new RuleBinding(new TodoDefinitionDocument(definition.schemaVersion(),definition.templateCode(),definition.event(),definition.owner(),
+                new TodoDefinitionDocument.DodRule(dod),new TodoDefinitionDocument.SlaRule(sla),definition.ui(),definition.routing(),
+                definition.autoActions(),definition.decisionRefs(),definition.acceptanceRefs()),true);
+    }
+
+    private record RuleBinding(TodoDefinitionDocument definition,boolean bound) { }
+
+    private Map<String,Object> requiredActiveRule(Map<String,Object> rule,String type,Long id)
+    {
+        if(rule==null||rule.isEmpty())throw new TodoException("TODO_TEMPLATE_RULE_NOT_FOUND",type+" rule not found: "+id);
+        if(!"0".equals(text(value(rule,"status","status"))))
+            throw new TodoException("TODO_TEMPLATE_RULE_DISABLED",type+" rule is disabled: "+id);
+        return rule;
+    }
+
+    private Map<String,Object> slaSnapshot(Map<String,Object> rule)
+    {
+        Map<String,Object> snapshot=new java.util.LinkedHashMap<>();snapshot.put("ruleId",longValue(value(rule,"sla_rule_id","slaRuleId")));
+        snapshot.put("ruleCode",text(value(rule,"rule_code","ruleCode")));snapshot.put("ruleName",text(value(rule,"rule_name","ruleName")));
+        snapshot.put("slaType",text(value(rule,"sla_type","slaType")));snapshot.put("calendarCode",text(value(rule,"calendar_code","calendarCode")));
+        snapshot.put("startStrategy",text(value(rule,"start_strategy","startStrategy")));snapshot.put("minutes",slaMinutes(rule));
+        snapshot.put("softRemindPercent",value(rule,"soft_remind_percent","softRemindPercent"));snapshot.put("hardRemindPercent",value(rule,"hard_remind_percent","hardRemindPercent"));
+        snapshot.put("escalatePercent",value(rule,"escalate_percent","escalatePercent"));snapshot.put("pausePolicyJson",text(value(rule,"pause_policy_json","pausePolicyJson")));
+        snapshot.put("escalationPolicyJson",text(value(rule,"escalation_policy_json","escalationPolicyJson")));snapshot.put("autoActionJson",text(value(rule,"auto_action_json","autoActionJson")));
+        return snapshot;
+    }
+
+    private long slaMinutes(Map<String,Object> rule)
+    {
+        long duration=Long.parseLong(String.valueOf(value(rule,"duration_value","durationValue")));String unit=text(value(rule,"duration_unit","durationUnit"));
+        return switch(unit){case "DAY" -> duration*24*60;case "HOUR" -> duration*60;default -> duration;};
+    }
+
+    private Map<String,Object> dodSnapshot(Map<String,Object> rule)
+    {
+        Map<String,Object> snapshot=new java.util.LinkedHashMap<>();snapshot.put("ruleId",longValue(value(rule,"dod_rule_id","dodRuleId")));
+        snapshot.put("ruleCode",text(value(rule,"rule_code","ruleCode")));snapshot.put("ruleName",text(value(rule,"rule_name","ruleName")));
+        snapshot.put("ruleType",text(value(rule,"rule_type","ruleType")));snapshot.put("requiredFields",jsonArray(rule,"required_fields_json","requiredFieldsJson"));
+        snapshot.put("requiredAttachments",jsonArray(rule,"required_attachments_json","requiredAttachmentsJson"));snapshot.put("conditionalRules",jsonArray(rule,"conditional_rules_json","conditionalRulesJson"));
+        snapshot.put("validatorRefs",jsonArray(rule,"validator_refs_json","validatorRefsJson"));snapshot.put("errorMessages",jsonObject(rule,"error_messages_json","errorMessagesJson"));return snapshot;
+    }
+
+    private List<Object> jsonArray(Map<String,Object> rule,String snake,String camel)
+    {String json=text(value(rule,snake,camel));return json==null||json.isBlank()?List.of():JSON.parseArray(json,Object.class);}
+    private Map<String,Object> jsonObject(Map<String,Object> rule,String snake,String camel)
+    {String json=text(value(rule,snake,camel));if(json==null||json.isBlank())return Map.of();Map<String,Object> result=new java.util.LinkedHashMap<>();JSON.parseObject(json).forEach((key,value)->result.put(key,value));return result;}
+    private void mergeDodSnapshot(Map<String,Object> target,Map<String,Object> snapshot)
+    {for(String field:List.of("requiredFields","requiredAttachments","conditionalRules","validatorRefs"))
+        {List<Object> values=new java.util.ArrayList<>();Object current=target.get(field);if(current instanceof List<?> list)values.addAll(list);Object referenced=snapshot.get(field);if(referenced instanceof List<?> list)values.addAll(list);target.put(field,values);} }
 
     private DefinitionValidationReport applyPrdCatalogueGate(DefinitionValidationReport report,
             Map<String, Object> current, boolean blocked)

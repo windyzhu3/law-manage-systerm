@@ -20,14 +20,24 @@ public final class TodoDefinitionCommands
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
     public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
             String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson,
-            String definitionJson,String expectedDefinitionJson)
+            String definitionJson,String expectedDefinitionJson,List<@Valid RuleReference> ruleReferences,
+            String changeSummary,String impactScope)
     {
+        public UpdateDraftCommand
+        { ruleReferences=ruleReferences==null?null:List.copyOf(ruleReferences); }
         public UpdateDraftCommand(String actionId,Long versionId,String definitionJson)
-        { this(actionId,versionId,null,null,null,null,null,definitionJson,null); }
+        { this(actionId,versionId,null,null,null,null,null,definitionJson,null,null,null,null); }
         /** Compatibility constructor for callers that still send the legacy projections. */
         public UpdateDraftCommand(String actionId,Long versionId,String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson)
-        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,null,null); }
+        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,null,null,null,null,null); }
+        /** Compatibility constructor for canonical drafts without rule-library bindings. */
+        public UpdateDraftCommand(String actionId,Long versionId,String ownerRuleJson,String dodRuleJson,String slaRuleJson,
+                String nextRuleJson,String uiSchemaJson,String definitionJson,String expectedDefinitionJson)
+        { this(actionId,versionId,ownerRuleJson,dodRuleJson,slaRuleJson,nextRuleJson,uiSchemaJson,definitionJson,
+                expectedDefinitionJson,null,null,null); }
     }
+    public record RuleReference(@NotBlank String type,@NotNull @Positive Long id,
+            @NotNull @PositiveOrZero Integer order) { }
     public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId) { }
     public record SimulateDefinitionCommand(
             @NotEmpty Map<String,Object> payload,

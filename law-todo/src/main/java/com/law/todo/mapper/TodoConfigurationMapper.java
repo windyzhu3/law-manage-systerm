@@ -18,6 +18,10 @@ public interface TodoConfigurationMapper
     int updateDodRuleConditionally(Map<String,Object> row);
     int updateDodRuleStatusConditionally(Map<String,Object> row);
     int countDodRuleReferences(Long id);
+    long countPublishedTemplates();
+    long countDraftTemplates();
+    long countEnabledSlaRules();
+    long countTodayTriggeredTodos();
     int deleteDraftRuleRefs(Long versionId);
     int insertDraftRuleRef(Map<String,Object> row);
     List<Map<String,Object>> selectDraftRuleRefs(Long versionId);
