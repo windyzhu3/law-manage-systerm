@@ -76,6 +76,11 @@ public class TodoDefinitionSimulationService
 
     @Transactional(readOnly=true)
     public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command)
+    {return simulate(versionId,command,null);}
+
+    /** Executes and validates one immutable version snapshot in the same read-only transaction. */
+    @Transactional(readOnly=true)
+    public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command,String expectedEventType)
     {
         Map<String,Object> row=requireVersion(versionId);
         List<SimulationIssue> issues=new ArrayList<>();
@@ -99,6 +104,8 @@ public class TodoDefinitionSimulationService
             issues.add(new SimulationIssue("TODO_COMPILED_DEFINITION_INVALID","version.compiledJson","ERROR",safeMessage(invalid)));
             return halted(versionId,expectedHash,null,command,issues);
         }
+        if(expectedEventType!=null&&(definition.event()==null||!expectedEventType.equals(definition.event().eventType())))
+            throw new TodoException("TODO_SIMULATION_EVENT_TYPE_MISMATCH","Simulation event type does not match the target definition snapshot");
         String canonical=codec.canonicalJson(definition),actualHash=sha256(canonical);
         if(!expectedHash.equals(actualHash))
         {

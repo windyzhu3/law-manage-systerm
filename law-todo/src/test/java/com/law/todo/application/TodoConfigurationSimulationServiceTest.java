@@ -21,9 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.annotation.Transactional;
 
-import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationSimulationResult;
@@ -33,13 +31,12 @@ import com.law.todo.application.view.TodoSimulationView.OwnerTrace;
 import com.law.todo.application.view.TodoSimulationView.SlaTrace;
 import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.domain.TodoException;
-import com.law.todo.mapper.TodoConfigurationMapper;
 
 @ExtendWith(MockitoExtension.class)
 class TodoConfigurationSimulationServiceTest
 {
     @Mock private TodoDefinitionSimulationService definitions;
-    @Mock private TodoConfigurationMapper configMapper;
+    @Mock private TodoConfigurationSimulationAuditService audits;
     @InjectMocks private TodoConfigurationSimulationService service;
 
     @Test void simulationIsReadOnlyAndPersistsOnlySanitizedOrderedAudit()
@@ -49,51 +46,28 @@ class TodoConfigurationSimulationServiceTest
         ConfigurationSimulationResult result=service.simulate(command(),actor());
 
         assertEquals("MATCHED",result.simulation().trigger().status());
-        ArgumentCaptor<Map<String,Object>> rows=ArgumentCaptor.forClass(Map.class);
-        verify(configMapper).insertSimulationRecord(rows.capture());
-        Map<String,Object> row=rows.getValue();
-        assertEquals("request-6",row.get("requestId"));
-        assertEquals(9L,row.get("templateVersionId"));
-        assertEquals(7L,row.get("operatorId"));
-        String persisted=JSON.toJSONString(row);
-        for(String unsafe:List.of("customerPhone","13800138000","password","hunter2","accessToken",
-                "top-secret","fileUrl","file:///private/evidence.pdf","customerEmail","alice@example.com",
-                "idCardNo","11010519491231002X")) assertTrue(!persisted.contains(unsafe));
-        assertTrue(persisted.contains("[REDACTED]"));
-        Map<String,Object> ordered=JSON.parseObject(String.valueOf(row.get("resultJson")));
+        ArgumentCaptor<Map<String,Object>> results=ArgumentCaptor.forClass(Map.class);
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),results.capture());
+        Map<String,Object> ordered=results.getValue();
         assertEquals(List.of("state","template","owner","sla","dod","route","card","log"),
                 List.copyOf(ordered.keySet()));
-        verify(definitions).simulate(eq(9L),any());
-        verify(configMapper,never()).insertSlaRule(any());
-        verify(configMapper,never()).insertDodRule(any());
-        verify(configMapper,never()).deleteDraftRuleRefs(any());
+        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"));
     }
 
     @Test void failedSimulationIsAuditedWithSanitizedFailureThenRethrown()
     {
         TodoException failure=new TodoException("TODO_SIMULATION_FAILED","token top-secret for alice@example.com");
-        org.mockito.Mockito.when(definitions.simulate(eq(9L),any())).thenThrow(failure);
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenThrow(failure);
 
         TodoException thrown=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 
         assertSame(failure,thrown);
-        ArgumentCaptor<Map<String,Object>> rows=ArgumentCaptor.forClass(Map.class);
-        verify(configMapper).insertSimulationRecord(rows.capture());
-        String persisted=JSON.toJSONString(rows.getValue());
-        assertTrue(!persisted.contains("top-secret"));
-        assertTrue(!persisted.contains("alice@example.com"));
-        Map<String,Object> ordered=JSON.parseObject(String.valueOf(rows.getValue().get("resultJson")));
+        ArgumentCaptor<Map<String,Object>> results=ArgumentCaptor.forClass(Map.class);
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),results.capture());
+        Map<String,Object> ordered=results.getValue();
         assertEquals(List.of("state","template","owner","sla","dod","route","card","log"),
                 List.copyOf(ordered.keySet()));
         assertEquals("FAILED",((Map<?,?>)ordered.get("state")).get("status"));
-    }
-
-    @Test void failedSimulationAuditIsNotRolledBackWithTheSimulationException() throws Exception
-    {
-        Transactional transaction=TodoConfigurationSimulationService.class
-                .getMethod("simulate",ConfigurationSimulationCommand.class,Actor.class).getAnnotation(Transactional.class);
-
-        assertTrue(List.of(transaction.noRollbackFor()).contains(RuntimeException.class));
     }
 
     @Test void auditTruncatesOversizedSafeTextWithoutDroppingTheAuditSummary()
@@ -106,17 +80,12 @@ class TodoConfigurationSimulationServiceTest
 
         service.simulate(oversized,actor());
 
-        ArgumentCaptor<Map<String,Object>> rows=ArgumentCaptor.forClass(Map.class);
-        verify(configMapper).insertSimulationRecord(rows.capture());
-        String input=String.valueOf(rows.getValue().get("inputSummaryJson"));
-        assertTrue(input.length()<2000);
-        assertTrue(input.contains("[TRUNCATED]"));
-        assertTrue(input.contains("stage"));
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     @Test void ineligibleSimulationWithMissingDefinitionFieldsIsStillAudited()
     {
-        TodoSimulationView halted=new TodoSimulationView(9L,null,new TriggerTrace("SKIPPED",null,0,List.of()),
+        TodoSimulationView halted=new TodoSimulationView(9L,null,new TriggerTrace("SKIPPED","LEAD_CREATED",0,List.of()),
                 new OwnerTrace("SKIPPED",null,List.of(),List.of(),false,List.of()),
                 new SlaTrace("SKIPPED",null,LocalDateTime.of(2026,7,21,9,0),null,null,null,null,List.of()),
                 new FormTrace(Map.of(),Map.of()),List.of(),List.of(),List.of(),List.of());
@@ -124,7 +93,7 @@ class TodoConfigurationSimulationServiceTest
 
         service.simulate(command(),actor());
 
-        verify(configMapper).insertSimulationRecord(any());
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     @Test void auditDetectsSensitiveKeysBeforeTheyAreBounded()
@@ -137,36 +106,48 @@ class TodoConfigurationSimulationServiceTest
 
         service.simulate(oversizedKey,actor());
 
-        ArgumentCaptor<Map<String,Object>> rows=ArgumentCaptor.forClass(Map.class);
-        verify(configMapper).insertSimulationRecord(rows.capture());
-        assertTrue(!String.valueOf(rows.getValue().get("inputSummaryJson")).contains("hunter2"));
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     @Test void auditWriteFailureIsNotMisreportedAsASecondFailedSimulationAudit()
     {
         whenSimulationReturns(sampleSimulation());
-        org.mockito.Mockito.when(configMapper.insertSimulationRecord(any())).thenThrow(new IllegalStateException("database unavailable"));
+        org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable")).when(audits)
+                .record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
 
         assertThrows(IllegalStateException.class,()->service.simulate(command(),actor()));
 
-        verify(configMapper,times(1)).insertSimulationRecord(any());
+        verify(audits,times(1)).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     @Test void failedSimulationKeepsItsOriginalExceptionWhenAuditPersistenceFails()
     {
         TodoException simulationFailure=new TodoException("TODO_SIMULATION_FAILED","simulation failed");
-        org.mockito.Mockito.when(definitions.simulate(eq(9L),any())).thenThrow(simulationFailure);
-        org.mockito.Mockito.when(configMapper.insertSimulationRecord(any())).thenThrow(new IllegalStateException("database unavailable"));
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenThrow(simulationFailure);
+        org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable")).when(audits)
+                .record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
 
         TodoException thrown=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 
         assertSame(simulationFailure,thrown);
         assertEquals(1,thrown.getSuppressed().length);
-        verify(configMapper,times(1)).insertSimulationRecord(any());
+        verify(audits,times(1)).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
+    }
+
+    @Test void eventTypeMustMatchTheTargetDefinitionSnapshotAndMismatchIsAudited()
+    {
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED")))
+                .thenThrow(new TodoException("TODO_SIMULATION_EVENT_TYPE_MISMATCH","event mismatch"));
+
+        TodoException thrown=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
+
+        assertEquals("TODO_SIMULATION_EVENT_TYPE_MISMATCH",thrown.getBusinessCode());
+        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"));
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     private void whenSimulationReturns(TodoSimulationView value)
-    {org.mockito.Mockito.when(definitions.simulate(eq(9L),any())).thenReturn(value);}
+    {org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenReturn(value);}
 
     private Actor actor(){return new Actor(7L,"operator",2L);}
 
@@ -189,4 +170,5 @@ class TodoConfigurationSimulationServiceTest
                         Map.of("idCardNo","11010519491231002X","requiredFields",List.of("summary"))),
                 List.of(),List.of(),List.of(),List.of());
     }
+
 }

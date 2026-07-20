@@ -64,6 +64,19 @@ class TodoDefinitionSimulationServiceTest
         verify(mapper,never()).insertActionIfAbsent(org.mockito.ArgumentMatchers.anyMap());
     }
 
+    @Test void expectedEventTypeIsCheckedAgainstTheSameCompiledSnapshotAsSimulation()
+    {
+        String compiled=new TodoDefinitionCodec().canonicalJson(definition(Map.of("type","USER","value",7L)));
+        Map<String,Object> row=version(compiled);row.put("status","BLOCKED");when(mapper.selectTemplateVersionById(9L)).thenReturn(row);
+
+        com.law.todo.domain.TodoException error=org.junit.jupiter.api.Assertions.assertThrows(com.law.todo.domain.TodoException.class,
+                ()->new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                        new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)),"CONTRACT_CREATED"));
+
+        assertEquals("TODO_SIMULATION_EVENT_TYPE_MISMATCH",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(org.mockito.ArgumentMatchers.any());
+    }
+
     @Test void unknown_owner_context_and_handlers_are_explicit_and_deterministic()
     {
         TodoDefinitionDocument definition=definition(Map.of("type","PAYLOAD","field","missingOwner"));
