@@ -80,7 +80,6 @@
   </select>
 
   <delete id="deleteDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
-  <delete id="replaceDraftRuleRefs">delete from todo_template_draft_rule_ref where version_id=#{versionId}</delete>
   <insert id="insertDraftRuleRef" useGeneratedKeys="true" keyProperty="refId">
     insert into todo_template_draft_rule_ref(version_id,ref_type,ref_id_value,sort_order,config_json)
     values(#{versionId},#{refType},#{refIdValue},#{sortOrder},cast(#{configJson} as json))
@@ -112,12 +111,12 @@
     where t.template_id=#{templateId}
   </select>
   <select id="selectReleaseRecords" resultType="java.util.Map">
-    select v.*,t.template_code,t.template_name,t.business_type,
+    select v.*,coalesce(v.published_time,v.create_time) update_time,t.template_code,t.template_name,t.business_type,
       action.action_id,action.action_type,action.operator_id,action.operator_name,action.create_time action_create_time
     from todo_template_version v join todo_template t on t.template_id=v.template_id
     left join todo_definition_action action on action.definition_action_id=(
       select candidate.definition_action_id from todo_definition_action candidate
-      where candidate.entity_id=v.version_id and candidate.entity_type='TEMPLATE_VERSION'
+      where candidate.source_entity_id=v.version_id and candidate.entity_type='VERSION'
       order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
     <where>
       v.status='PUBLISHED'

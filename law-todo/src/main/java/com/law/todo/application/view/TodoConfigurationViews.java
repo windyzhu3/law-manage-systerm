@@ -34,7 +34,8 @@ public final class TodoConfigurationViews
     {
         public TemplateConfigurationDetail
         {
-            ruleReferences=ruleReferences==null?List.of():List.copyOf(ruleReferences);
+            ruleReferences=ruleReferences==null?List.of():ruleReferences.stream()
+                    .map(TodoConfigurationViews::immutableMap).toList();
         }
     }
 
@@ -44,9 +45,30 @@ public final class TodoConfigurationViews
     {
         public ReleaseRecord
         {
-            action=action==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(action));
+            action=immutableMap(action);
         }
     }
 
     public record ConfigurationSimulationResult(TodoSimulationView simulation,long durationMs) { }
+
+    private static Map<String,Object> immutableMap(Map<String,Object> source)
+    {
+        if(source==null)return Map.of();
+        Map<String,Object> copy=new java.util.LinkedHashMap<>();
+        source.forEach((key,value)->copy.put(key,immutableValue(value)));
+        return java.util.Collections.unmodifiableMap(copy);
+    }
+
+    private static Object immutableValue(Object value)
+    {
+        if(value instanceof Map<?,?> map)
+        {
+            Map<Object,Object> copy=new java.util.LinkedHashMap<>();
+            map.forEach((key,nested)->copy.put(key,immutableValue(nested)));
+            return java.util.Collections.unmodifiableMap(copy);
+        }
+        if(value instanceof List<?> list)
+            return java.util.Collections.unmodifiableList(list.stream().map(TodoConfigurationViews::immutableValue).toList());
+        return value;
+    }
 }

@@ -24,7 +24,7 @@ public final class TodoConfigurationCommands
             @NotBlank String calendarCode,@NotBlank String startStrategy,
             @NotNull @Positive Integer softRemindPercent,@NotNull @Positive Integer hardRemindPercent,
             @NotNull @Positive Integer escalatePercent,String pausePolicyJson,String escalationPolicyJson,
-            String autoActionJson,@Pattern(regexp="0|1") String status,@NotBlank String actionId,
+            String autoActionJson,@NotBlank @Pattern(regexp="0|1") String status,@NotBlank String actionId,
             @NotNull @PositiveOrZero Integer expectedVersion)
     {
         @AssertTrue(message="SLA thresholds must be ordered")
@@ -33,13 +33,20 @@ public final class TodoConfigurationCommands
             return softRemindPercent != null && hardRemindPercent != null && escalatePercent != null
                     && softRemindPercent <= hardRemindPercent && hardRemindPercent <= escalatePercent;
         }
+
+        @AssertTrue(message="SLA policy JSON is invalid")
+        public boolean isPolicyJsonValid()
+        {
+            return validOptionalJson(pausePolicyJson) && validOptionalJson(escalationPolicyJson)
+                    && validOptionalJson(autoActionJson);
+        }
     }
 
     public record DodRuleCommand(Long dodRuleId,@NotBlank String ruleCode,@NotBlank String ruleName,
             @NotBlank String ruleType,@NotBlank String requiredFieldsJson,
             @NotBlank String requiredAttachmentsJson,@NotBlank String conditionalRulesJson,
             @NotBlank String validatorRefsJson,@NotBlank String errorMessagesJson,
-            @Pattern(regexp="0|1") String status,@NotBlank String actionId,
+            @NotBlank @Pattern(regexp="0|1") String status,@NotBlank String actionId,
             @NotNull @PositiveOrZero Integer expectedVersion)
     {
         @AssertTrue(message="DoD rule JSON is invalid")
@@ -66,7 +73,7 @@ public final class TodoConfigurationCommands
         @AssertTrue(message="Rule reference configuration must be a JSON object")
         public boolean isConfigJsonValid()
         {
-            return configJson==null || configJson.isBlank() || JSON.isValidObject(configJson);
+            return configJson==null || JSON.isValidObject(configJson);
         }
     }
 
@@ -77,7 +84,7 @@ public final class TodoConfigurationCommands
     {
         public ConfigurationSimulationCommand
         {
-            payload=payload==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+            payload=immutableMap(payload);
             taskCompletions=taskCompletions==null?List.of():List.copyOf(taskCompletions);
         }
 
@@ -86,5 +93,31 @@ public final class TodoConfigurationCommands
             return new TodoDefinitionCommands.SimulateDefinitionCommand(payload,businessType,businessId,effectiveAt,
                     taskCompletions);
         }
+    }
+
+    private static boolean validOptionalJson(String json)
+    {
+        return json==null || JSON.isValidObject(json) || JSON.isValidArray(json);
+    }
+
+    private static Map<String,Object> immutableMap(Map<String,Object> source)
+    {
+        if(source==null)return Map.of();
+        Map<String,Object> copy=new java.util.LinkedHashMap<>();
+        source.forEach((key,value)->copy.put(key,immutableValue(value)));
+        return java.util.Collections.unmodifiableMap(copy);
+    }
+
+    private static Object immutableValue(Object value)
+    {
+        if(value instanceof Map<?,?> map)
+        {
+            Map<Object,Object> copy=new java.util.LinkedHashMap<>();
+            map.forEach((key,nested)->copy.put(key,immutableValue(nested)));
+            return java.util.Collections.unmodifiableMap(copy);
+        }
+        if(value instanceof List<?> list)
+            return java.util.Collections.unmodifiableList(list.stream().map(TodoConfigurationCommands::immutableValue).toList());
+        return value;
     }
 }
