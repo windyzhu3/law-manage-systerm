@@ -117,7 +117,7 @@ public final class TodoConfigurationCommands
         {
             if(completion==null)copy.add(null);
             else copy.add(new TodoDefinitionCommands.VirtualTaskCompletionSample(completion.nodeKey(),completion.occurrence(),
-                    immutableMap(completion.payload()),completion.completedAt()));
+                    completion.payload()==null?null:immutableMap(completion.payload()),completion.completedAt()));
         }
         return List.copyOf(copy);
     }

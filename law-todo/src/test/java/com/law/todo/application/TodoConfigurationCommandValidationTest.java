@@ -107,6 +107,16 @@ class TodoConfigurationCommandValidationTest
         assertThrows(UnsupportedOperationException.class,()->((Map<Object,Object>)stored.get(0)).put("x","y"));
     }
 
+    @Test void simulationTaskCompletionNullPayloadRemainsCascadingValidationFailure()
+    {
+        VirtualTaskCompletionSample completion=new VirtualTaskCompletionSample("task",0,null,
+                LocalDateTime.of(2026,7,20,9,0));
+        ConfigurationSimulationCommand command=new ConfigurationSimulationCommand("request",1L,"TODO_CREATED","LEAD",1L,
+                Map.of("event","created"),LocalDateTime.of(2026,7,20,9,0),List.of(completion));
+
+        assertTrue(violations(command).contains("taskCompletions[0].payload"));
+    }
+
     @Test void templateDetailRuleReferencesAreDeeplyImmutable()
     {
         Map<String,Object> nested=new LinkedHashMap<>(Map.of("value","before"));
