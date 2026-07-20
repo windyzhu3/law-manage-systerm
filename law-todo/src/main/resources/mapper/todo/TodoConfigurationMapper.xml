@@ -159,6 +159,10 @@
       order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
     where v.status='PUBLISHED' and v.version_id=#{versionId}
   </select>
+  <select id="countReleaseRecords" resultType="long">
+    select count(*) from todo_template_version v join todo_template t on t.template_id=v.template_id
+    <where>v.status='PUBLISHED'<if test="templateId != null">and v.template_id=#{templateId}</if><if test="templateCode != null and templateCode != ''">and t.template_code=#{templateCode}</if><if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if><if test="beginTime != null">and coalesce(v.published_time,v.create_time) &gt;= #{beginTime}</if><if test="endTime != null">and coalesce(v.published_time,v.create_time) &lt;= #{endTime}</if></where>
+  </select>
   <insert id="insertSimulationRecord" useGeneratedKeys="true" keyProperty="simulationId">
     insert into todo_simulation_record(request_id,template_version_id,event_type,business_type,business_id,input_summary_json,
       result_json,duration_ms,operator_id)

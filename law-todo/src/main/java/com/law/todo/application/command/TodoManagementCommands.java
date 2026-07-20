@@ -47,6 +47,7 @@ public final class TodoManagementCommands
 
     public record TriggerSortItem(@NotNull @Positive Long triggerRuleId,@NotNull @Min(0) Integer sortOrder,
             @NotNull @Min(0) Integer expectedVersion) { }
+    public record TriggerToggleCommand(@NotBlank @Pattern(regexp="Y|N") String enabled,@NotBlank String actionId,@NotNull @Min(0) Integer expectedVersion) { }
 
     public record PublishCommand(
         @NotNull @Min(1) Integer versionNo,

@@ -57,6 +57,8 @@ public class TodoConfigurationQueryService
 
     public ReleaseRecord release(long versionId)
     {return release(require(mapper.selectReleaseRecord(versionId)));}
+    public ReleasePage releasePage(Map<String,Object> query){return new ReleasePage(releases(query),mapper.countReleaseRecords(query==null?Map.of():query));}
+    public record ReleasePage(List<ReleaseRecord> rows,long total) { }
 
     private Integer paginationInteger(Object value,String field)
     {

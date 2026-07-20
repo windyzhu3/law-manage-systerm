@@ -191,6 +191,19 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test void triggerWritesAuditTheServerActorAndKeepOptimisticVersionGuards() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            assertTrue(xml.contains("condition_json,create_by,update_by,update_time"));
+            assertTrue(xml.contains("#{createBy},#{updateBy},sysdate()"));
+            assertTrue(xml.contains("condition_json=#{conditionJson},update_by=#{updateBy},update_time=sysdate(),version=version+1 where trigger_rule_id=#{triggerRuleId} and version=#{expectedVersion}"));
+            assertTrue(xml.contains("sort_order=#{sortOrder},update_by=#{updateBy},update_time=sysdate(),version=version+1 where trigger_rule_id=#{triggerRuleId} and version=#{expectedVersion}"));
+            assertTrue(xml.contains("enabled=#{enabled},update_by=#{updateBy},update_time=sysdate(),version=version+1 where trigger_rule_id=#{triggerRuleId} and version=#{expectedVersion}"));
+        }
+    }
+
     @Test void publishingCanLockTheAuthoritativeDefinitionVersion() throws Exception
     {
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))

@@ -27,12 +27,14 @@ import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationS
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerSortCommand;
+import com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand;
 import com.law.todo.domain.TodoException;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -104,11 +106,11 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/templates/{id}") public AjaxResult template(@PathVariable Long id){return success(query.template(id));}
     @PreAuthorize("@ss.hasPermi('todo:template:create')")
-    @PostMapping("/templates") public AjaxResult createTemplate(@Valid @RequestBody TemplateCommand value){requireNew(value.templateId());return success(templates.saveTemplate(value,SecurityUtils.getUsername()));}
+    @PostMapping("/templates") public AjaxResult createTemplate(@Valid @RequestBody CreateTemplateCommand value){return success(definitions.createTemplateDraft(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:template:edit')")
     @PutMapping("/templates/{id}") public AjaxResult updateTemplate(@PathVariable Long id,@Valid @RequestBody TemplateCommand value){requireSame(id,value.templateId());return success(templates.saveTemplate(value,SecurityUtils.getUsername()));}
     @PreAuthorize("@ss.hasPermi('todo:template:copy')")
-    @PostMapping("/templates/{id}/copy") public AjaxResult copyTemplate(@PathVariable Long id,@Valid @RequestBody CopyTemplateCommand value){return success(definitions.copyTemplate(id,value,actor()));}
+    @PostMapping("/templates/{id}/copy") public AjaxResult copyTemplate(@PathVariable Long id,@Valid @RequestBody CopyTemplateCommand value){return success(definitions.copyTemplateDraft(id,value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:template:edit')")
     @PutMapping("/template-versions/{id}") public AjaxResult updateTemplateDraft(@PathVariable Long id,@Valid @RequestBody UpdateDraftCommand value){requireSame(id,value.versionId());return success(definitions.updateDraft(value,actor()));}
 
@@ -119,7 +121,7 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:trigger:edit')")
     @PutMapping("/trigger-rules/{id}") public AjaxResult updateTrigger(@PathVariable Long id,@Valid @RequestBody TriggerCommand value){requireSame(id,value.triggerRuleId());return success(templates.saveTrigger(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:trigger:toggle')")
-    @PostMapping("/trigger-rules/{id}/toggle") public AjaxResult toggleTrigger(@PathVariable Long id,@Valid @RequestBody TriggerCommand value){requireSame(id,value.triggerRuleId());return success(templates.saveTrigger(value,actor()));}
+    @PostMapping("/trigger-rules/{id}/toggle") public AjaxResult toggleTrigger(@PathVariable Long id,@Valid @RequestBody TriggerToggleCommand value){templates.toggleTrigger(id,value,actor());return success();}
     @PreAuthorize("@ss.hasPermi('todo:trigger:edit')")
     @PostMapping("/trigger-rules/sort") public AjaxResult sortTriggers(@Valid @RequestBody TriggerSortCommand value){templates.sortTriggers(value,actor());return success();}
 
@@ -127,7 +129,7 @@ public class TodoConfigurationController extends BaseController
     @PostMapping({"/simulations","/trigger-rules/simulate"}) public AjaxResult simulate(@Valid @RequestBody ConfigurationSimulationCommand value){return success(simulation.simulate(value,actor()));}
 
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
-    @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){List<?> rows=query.releases(value.toMap());return new TableDataInfo(rows,rows.size());}
+    @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){var page=query.releasePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records/{id}") public AjaxResult release(@PathVariable long id){return success(query.release(id));}
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
@@ -141,7 +143,7 @@ public class TodoConfigurationController extends BaseController
 
     private TableDataInfo page(List<?> values,int pageNum,int pageSize)
     {
-        int start=(pageNum-1)*pageSize;if(start>=values.size())return new TableDataInfo(List.of(),values.size());
+        long calculatedStart=((long)pageNum-1L)*pageSize;if(calculatedStart>=values.size())return new TableDataInfo(List.of(),values.size());int start=(int)calculatedStart;
         return new TableDataInfo(values.subList(start,Math.min(values.size(),start+pageSize)),values.size());
     }
     private void requireSame(Long path,Long body){if(path==null||body==null||!path.equals(body))throw new TodoException("TODO_CONFIGURATION_PATH_BODY_MISMATCH","Path and body identifiers must match");}

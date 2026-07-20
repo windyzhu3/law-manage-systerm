@@ -29,6 +29,7 @@ import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.TodoException;
+import com.law.todo.spi.TodoDictionaryValidationPort;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness=Strictness.LENIENT)
@@ -44,7 +45,7 @@ class TodoTemplateServiceTest
     @Test void springConstructorExplicitlyInjectsConditionValidationDependencies() throws Exception
     {
         assertTrue(TodoTemplateService.class.getConstructor(TodoMapper.class,
-                TodoEventCatalogService.class,ConditionValidator.class)
+                TodoEventCatalogService.class,ConditionValidator.class,com.law.todo.spi.TodoDictionaryValidationPort.class)
                 .isAnnotationPresent(Autowired.class));
     }
 
@@ -144,6 +145,17 @@ class TodoTemplateServiceTest
         TodoException error=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(trigger(condition)));
         assertEquals("TODO_CONDITION_INVALID",error.getBusinessCode());
+    }
+
+    @Test void springConstructorRejectsUnknownOrDisabledBusinessTypeBeforeTriggerWrites()
+    {
+        TodoDictionaryValidationPort dictionaries=org.mockito.Mockito.mock(TodoDictionaryValidationPort.class);
+        when(dictionaries.isEnabled("law_todo_business_type","UNKNOWN")).thenReturn(false);
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper,
+                new TodoEventCatalogService(mapper),new ConditionValidator(),dictionaries)
+                .saveTrigger(command(null,"UNKNOWN","trigger-disabled",0),actor()));
+        assertEquals("TODO_TEMPLATE_BUSINESS_TYPE_INVALID",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionClaim(anyMap());verify(mapper,never()).insertTriggerRule(anyMap());
     }
 
     @Test void triggerSaveAcceptsLegacyFlatMapWhenSchemaDeclaresFields()

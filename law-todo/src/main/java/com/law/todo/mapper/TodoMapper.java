@@ -66,6 +66,7 @@ public interface TodoMapper
     int insertTriggerRule(Map<String,Object> value);
     int updateTriggerRule(Map<String,Object> value);
     int updateTriggerRuleSortConditionally(Map<String,Object> value);
+    int updateTriggerRuleEnabledConditionally(Map<String,Object> value);
     List<Map<String,Object>> selectActionTimeline(Long todoId);
     List<Map<String,Object>> selectAttachments(Long todoId);
     List<Map<String,Object>> selectCc(Long todoId);

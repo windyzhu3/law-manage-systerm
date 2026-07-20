@@ -31,6 +31,7 @@ import com.alibaba.fastjson2.JSONObject;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
@@ -63,12 +64,76 @@ class TodoDefinitionServiceTest
     @Test void copyTemplateCreatesStableIndependentDefinition()
     {
         when(mapper.selectTemplateById(1L)).thenReturn(Map.of("template_id",1L,"business_type","CONTRACT","status","0"));
-        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        AtomicReference<Map<String,Object>> action=new AtomicReference<>();when(mapper.insertDefinitionActionClaim(anyMap())).thenAnswer(invocation->{Map<String,Object> value=new HashMap<>(invocation.getArgument(0));value.put("actionStatus","CLAIMED");action.set(value);return 1;});when(mapper.selectDefinitionActionForUpdate("copy-1")).thenAnswer(invocation->action.get());
         when(mapper.insertTemplate(anyMap())).thenAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("templateId",12L);return 1;});
+        when(mapper.selectTemplateVersions(1L)).thenReturn(List.of());when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",22L);return 1;});when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq("copy-1"),anyString(),org.mockito.ArgumentMatchers.eq(22L))).thenReturn(1);
 
         Long id=service().copyTemplate(1L,new CopyTemplateCommand("copy-1","CONTRACT_REVIEW_CUSTOM","自定义合同审核"),actor);
 
-        assertEquals(12L,id);verify(mapper).insertTemplate(anyMap());verify(mapper).insertDefinitionActionIfAbsent(anyMap());
+        assertEquals(12L,id);verify(mapper).insertTemplate(anyMap());verify(mapper).insertDefinitionActionClaim(anyMap());verify(mapper).insertTemplateVersion(anyMap());
+    }
+
+    @Test void copyTemplateRewritesCanonicalCodeAndClearsCompiledArtifacts()
+    {
+        when(mapper.selectTemplateById(1L)).thenReturn(Map.of("template_id",1L,"business_type","CONTRACT","status","0"));
+        templateDraftLedger("copy-canonical");
+        when(mapper.insertTemplate(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("templateId",12L);return 1;});
+        String sourceJson=canonical("CONTRACT_REVIEW");
+        Map<String,Object> sourceVersion=new HashMap<>();sourceVersion.put("version_id",9L);sourceVersion.put("definition_schema_version",1);sourceVersion.put("definition_json",sourceJson);
+        sourceVersion.put("owner_rule_json","{}");sourceVersion.put("dod_rule_json","{}");sourceVersion.put("sla_rule_json","{}");sourceVersion.put("next_rule_json","{}");sourceVersion.put("ui_schema_json","{}");sourceVersion.put("compiled_json","{\"old\":true}");sourceVersion.put("definition_hash","a".repeat(64));sourceVersion.put("validation_report_json","{\"old\":true}");
+        when(mapper.selectTemplateVersions(1L)).thenReturn(List.of(sourceVersion));
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",22L);return 1;});
+
+        TodoDefinitionService.TemplateDraftResult result=service().copyTemplateDraft(1L,
+                new CopyTemplateCommand("copy-canonical","CONTRACT_CUSTOM","Custom"),actor);
+
+        assertEquals(12L,result.templateId());assertEquals(22L,result.versionId());
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> inserted=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertTemplateVersion(inserted.capture());
+        assertEquals("CONTRACT_CUSTOM",new TodoDefinitionCodec().read(String.valueOf(inserted.getValue().get("definitionJson"))).templateCode());
+        assertEquals(null,inserted.getValue().get("compiledJson"));assertEquals(null,inserted.getValue().get("definitionHash"));assertEquals(null,inserted.getValue().get("validationReportJson"));
+    }
+
+    @Test void createTemplateDraftReplaysTheSameAggregateClaimAndReturnsBothIds()
+    {
+        templateDraftLedger("create-template");
+        when(mapper.insertTemplate(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("templateId",12L);return 1;});
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",22L);return 1;});
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of("template_id",12L));
+        CreateTemplateCommand command=new CreateTemplateCommand("create-template","LEAD_NEW","New lead","LEAD");
+
+        TodoDefinitionService.TemplateDraftResult first=service().createTemplateDraft(command,actor);
+        TodoDefinitionService.TemplateDraftResult replay=service().createTemplateDraft(command,actor);
+
+        assertEquals(new TodoDefinitionService.TemplateDraftResult(12L,22L),first);assertEquals(first,replay);
+        verify(mapper,org.mockito.Mockito.times(1)).insertTemplate(anyMap());verify(mapper,org.mockito.Mockito.times(1)).insertTemplateVersion(anyMap());
+    }
+
+    @Test void aggregateClaimRejectsDifferentCreateRequestAndLeavesNoSecondWrite()
+    {
+        templateDraftLedger("aggregate-conflict");
+        when(mapper.insertTemplate(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("templateId",12L);return 1;});
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",22L);return 1;});
+        TodoDefinitionService current=service();
+        current.createTemplateDraft(new CreateTemplateCommand("aggregate-conflict","LEAD_NEW","New lead","LEAD"),actor);
+
+        TodoException error=assertThrows(TodoException.class,()->current.createTemplateDraft(
+                new CreateTemplateCommand("aggregate-conflict","LEAD_OTHER","Other","LEAD"),actor));
+
+        assertEquals("TODO_DEFINITION_ACTION_CONFLICT",error.getBusinessCode());
+        verify(mapper,org.mockito.Mockito.times(1)).insertTemplate(anyMap());verify(mapper,org.mockito.Mockito.times(1)).insertTemplateVersion(anyMap());
+    }
+
+    @Test void productionConstructorRejectsDisabledTemplateBusinessTypeBeforeAggregateClaim()
+    {
+        com.law.todo.spi.TodoDictionaryValidationPort dictionaries=org.mockito.Mockito.mock(com.law.todo.spi.TodoDictionaryValidationPort.class);
+        when(dictionaries.isEnabled("law_todo_business_type","DISABLED")).thenReturn(false);
+        TodoDefinitionService current=new TodoDefinitionService(mapper,compiler(),null,dictionaries);
+
+        TodoException error=assertThrows(TodoException.class,()->current.createTemplateDraft(
+                new CreateTemplateCommand("disabled-template","T_DISABLED","Disabled","DISABLED"),actor));
+
+        assertEquals("TODO_TEMPLATE_BUSINESS_TYPE_INVALID",error.getBusinessCode());verify(mapper,never()).insertDefinitionActionClaim(anyMap());verify(mapper,never()).insertTemplate(anyMap());
     }
 
     @Test void updateDraftAtomicallyPersistsCanonicalDocumentAndLegacyProjections()
@@ -436,6 +501,26 @@ class TodoDefinitionServiceTest
         return TodoDefinitionSimulationService.sha256(com.alibaba.fastjson2.JSON.toJSONString(value));
     }
 
+    private AtomicReference<Map<String,Object>> templateDraftLedger(String actionId)
+    {
+        AtomicReference<Map<String,Object>> action=new AtomicReference<>();
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenAnswer(invocation->{
+            if(action.get()==null){action.set(new HashMap<>(invocation.getArgument(0)));return 1;}return 0;
+        });
+        when(mapper.selectDefinitionActionForUpdate(actionId)).thenAnswer(invocation->{
+            Map<String,Object> claimed=action.get();if(claimed==null)return null;
+            Map<String,Object> locked=new HashMap<>();locked.put("action_type",claimed.get("actionType"));locked.put("request_fingerprint",claimed.get("requestFingerprint"));
+            locked.put("operator_id",claimed.get("operatorId"));locked.put("operator_name",claimed.get("operatorName"));locked.put("action_status",claimed.getOrDefault("actionStatus","CLAIMED"));locked.put("entity_id",claimed.get("entityId"));return locked;
+        });
+        when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq(actionId),anyString(),org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation->{
+            action.get().put("actionStatus","APPLIED");action.get().put("entityId",invocation.getArgument(2));return 1;
+        });return action;
+    }
+    private String canonical(String templateCode)
+    {return new TodoDefinitionCodec().canonicalJson(new TodoDefinitionDocument(1,templateCode,
+            new TodoDefinitionDocument.EventRule("LEAD_CREATED",1,Map.of()),new TodoDefinitionDocument.OwnerRule(Map.of()),
+            new TodoDefinitionDocument.DodRule(Map.of()),new TodoDefinitionDocument.SlaRule(Map.of()),new TodoDefinitionDocument.UiSchema(Map.of()),
+            new TodoDefinitionDocument.RoutingGraph(Map.of()),List.of(),List.of(),List.of()));}
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}
     private TodoDefinitionCompiler compiler(){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
     private void registeredEvent(){when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of("event_type","LEAD_CREATED","payload_version",1,"payload_schema_json","{\"type\":\"object\"}","status","ACTIVE"));}

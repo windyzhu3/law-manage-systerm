@@ -13,6 +13,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
@@ -32,6 +33,7 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
+import com.law.todo.spi.TodoDictionaryValidationPort;
 
 @Service
 public class TodoDefinitionService
@@ -42,20 +44,23 @@ public class TodoDefinitionService
     private final TodoMapper mapper;
     private final TodoDefinitionCompiler compiler;
     private final TodoConfigurationMapper configurationMapper;
+    private final TodoDictionaryValidationPort dictionaries;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
     @Autowired
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
-            TodoConfigurationMapper configurationMapper)
+            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
     {
         this.mapper = mapper;
         this.compiler = compiler;
-        this.configurationMapper=configurationMapper;
+        this.configurationMapper=configurationMapper;this.dictionaries=dictionaries;
     }
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,TodoConfigurationMapper configurationMapper)
+    {this(mapper,compiler,configurationMapper,(type,value)->true);}
 
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
-    {this(mapper,compiler,null);}
+    {this(mapper,compiler,null,(type,value)->true);}
 
     public TodoDefinitionService(TodoMapper mapper)
     {
@@ -66,7 +71,7 @@ public class TodoDefinitionService
     public TodoDefinitionService(TodoMapper mapper,TodoAutoActionCapabilityRegistry autoActions)
     {
         this(mapper,new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
-                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions));
+                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true);
     }
 
     public List<Map<String, Object>> versions(Long templateId)
@@ -76,14 +81,26 @@ public class TodoDefinitionService
     }
 
     @Transactional
-    public Long copyTemplate(Long sourceTemplateId, CopyTemplateCommand command, Actor actor)
+    public TemplateDraftResult createTemplateDraft(CreateTemplateCommand command,Actor actor)
     {
-        Long repeated = repeatedEntity(command.actionId());
-        if (repeated != null)
-            return repeated;
+        validateBusinessType(command.businessType());
+        String fingerprint=templateFingerprint("CREATE_TEMPLATE_DRAFT",null,command,actor);Long repeated=claimTemplateDraft(command.actionId(),"CREATE_TEMPLATE_DRAFT",null,fingerprint,actor);if(repeated!=null)return resultForVersion(repeated);
+        Map<String,Object> template=new HashMap<>();template.put("templateCode",command.templateCode());template.put("templateName",command.templateName());template.put("businessType",command.businessType());template.put("status","0");template.put("createBy",actor.userName());
+        if(mapper.insertTemplate(template)<=0)throw new TodoException("TODO_TEMPLATE_CREATE_FAILED","Template creation failed");
+        Map<String,Object> draft=emptyDraft(longValue(template.get("templateId")));if(mapper.insertTemplateVersion(draft)<=0)throw new TodoException("TODO_TEMPLATE_DRAFT_CREATE_FAILED","Template draft creation failed");
+        Long versionId=longValue(draft.get("versionId"));if(mapper.completeDefinitionAction(command.actionId(),fingerprint,versionId)<=0)throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template draft action could not be completed");return new TemplateDraftResult(longValue(template.get("templateId")),versionId);
+    }
+
+    @Transactional
+    public Long copyTemplate(Long sourceTemplateId, CopyTemplateCommand command, Actor actor)
+    {return copyTemplateDraft(sourceTemplateId,command,actor).templateId();}
+
+    @Transactional
+    public TemplateDraftResult copyTemplateDraft(Long sourceTemplateId, CopyTemplateCommand command, Actor actor)
+    {
+        String fingerprint=templateFingerprint("COPY_TEMPLATE_DRAFT",sourceTemplateId,command,actor);Long repeated=claimTemplateDraft(command.actionId(),"COPY_TEMPLATE_DRAFT",sourceTemplateId,fingerprint,actor);if(repeated!=null)return resultForVersion(repeated);
         Map<String, Object> source = requireTemplate(sourceTemplateId);
-        claim(command.actionId(), "COPY_TEMPLATE", "TEMPLATE", sourceTemplateId, actor,
-                Map.of("newTemplateCode", command.newTemplateCode()));
+        validateBusinessType(text(value(source,"business_type","businessType")));
         Map<String, Object> target = new HashMap<>();
         target.put("templateCode", command.newTemplateCode());
         target.put("templateName", command.newTemplateName());
@@ -92,9 +109,9 @@ public class TodoDefinitionService
         target.put("createBy", actor.userName());
         if (mapper.insertTemplate(target) <= 0)
             throw new TodoException("TODO_TEMPLATE_COPY_FAILED", "Template copy failed");
-        Long id = longValue(target.get("templateId"));
-        mapper.updateDefinitionActionEntity(command.actionId(), id);
-        return id;
+        Long id = longValue(target.get("templateId"));Map<String,Object> draft=emptyDraft(id);List<Map<String,Object>> versions=mapper.selectTemplateVersions(sourceTemplateId);
+        if(versions!=null&&!versions.isEmpty()){Map<String,Object> version=versions.get(0);draft.put("sourceVersionId",value(version,"version_id","versionId"));draft.put("definitionSchemaVersion",value(version,"definition_schema_version","definitionSchemaVersion"));draft.put("definitionJson",copyDefinitionJson(value(version,"definition_json","definitionJson"),command.newTemplateCode()));draft.put("ownerRuleJson",value(version,"owner_rule_json","ownerRuleJson"));draft.put("dodRuleJson",value(version,"dod_rule_json","dodRuleJson"));draft.put("slaRuleJson",value(version,"sla_rule_json","slaRuleJson"));draft.put("nextRuleJson",value(version,"next_rule_json","nextRuleJson"));draft.put("uiSchemaJson",value(version,"ui_schema_json","uiSchemaJson"));}
+        if(mapper.insertTemplateVersion(draft)<=0)throw new TodoException("TODO_TEMPLATE_DRAFT_CREATE_FAILED","Template draft creation failed");Long versionId=longValue(draft.get("versionId"));if(mapper.completeDefinitionAction(command.actionId(),fingerprint,versionId)<=0)throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template copy action could not be completed");return new TemplateDraftResult(id,versionId);
     }
 
     @Transactional
@@ -717,6 +734,24 @@ public class TodoDefinitionService
     {
         return value == null ? null : Long.valueOf(String.valueOf(value));
     }
+
+    private Map<String,Object> emptyDraft(Long templateId)
+    {Map<String,Object> value=new HashMap<>();value.put("templateId",templateId);value.put("versionNo",1);value.put("status",DRAFT);value.put("definitionSchemaVersion",1);return value;}
+    private String copyDefinitionJson(Object source,String templateCode)
+    {
+        if(source==null||String.valueOf(source).isBlank())return null;
+        TodoDefinitionDocument original=codec.read(String.valueOf(source));
+        return codec.canonicalJson(new TodoDefinitionDocument(original.schemaVersion(),templateCode,original.event(),original.owner(),
+                original.dod(),original.sla(),original.ui(),original.routing(),original.autoActions(),original.decisionRefs(),original.acceptanceRefs()));
+    }
+    private String templateFingerprint(String type,Long source,Object command,Actor actor){Map<String,Object> value=new java.util.TreeMap<>();value.put("type",type);value.put("source",source);value.put("actor",actor.userId());value.put("name",actor.userName());value.put("dept",actor.deptId());value.put("request",JSON.parse(JSON.toJSONString(command)));return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));}
+    private Long claimTemplateDraft(String actionId,String type,Long source,String fingerprint,Actor actor){Map<String,Object> action=new HashMap<>();action.put("actionId",actionId);action.put("actionType",type);action.put("entityType","VERSION");action.put("sourceEntityId",source);action.put("operatorId",actor.userId());action.put("operatorName",actor.userName());action.put("operatorDeptId",actor.deptId());action.put("requestFingerprint",fingerprint);action.put("payloadJson","{}");mapper.insertDefinitionActionClaim(action);Map<String,Object> locked=mapper.selectDefinitionActionForUpdate(actionId);if(locked==null||!type.equals(text(value(locked,"action_type","actionType")))||!fingerprint.equals(text(value(locked,"request_fingerprint","requestFingerprint")))||!actor.userId().equals(longValue(value(locked,"operator_id","operatorId")))||!actor.userName().equals(text(value(locked,"operator_name","operatorName"))))throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template action id belongs to a different request");Long id=longValue(value(locked,"entity_id","entityId"));if(id!=null)return id;if(!"CLAIMED".equals(text(value(locked,"action_status","actionStatus"))))throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template action is not claimable");return null;}
+    private void validateBusinessType(String businessType){if(!dictionaries.isEnabled("law_todo_business_type",businessType))throw new TodoException("TODO_TEMPLATE_BUSINESS_TYPE_INVALID","Business type is unknown or disabled");}
+
+    private TemplateDraftResult resultForVersion(Long versionId)
+    {Map<String,Object> version=requireVersion(versionId);return new TemplateDraftResult(longValue(value(version,"template_id","templateId")),versionId);}
+
+    public record TemplateDraftResult(Long templateId,Long versionId) { }
 
     private Integer integerValue(Object value)
     {
