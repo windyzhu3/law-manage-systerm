@@ -54,9 +54,10 @@ public class TodoSlaRuleManagementService
     @Transactional
     public long save(SlaRuleCommand command,Actor actor)
     {
-        validate(command);requireCalendar(command.calendarCode());String type=command.slaRuleId()==null?"CREATE_SLA_RULE":"UPDATE_SLA_RULE";
+        String type=command.slaRuleId()==null?"CREATE_SLA_RULE":"UPDATE_SLA_RULE";
         String fingerprint=fingerprint(type,command.slaRuleId(),command.expectedVersion(),command,actor);
         Long replay=claim(command.actionId(),type,command.slaRuleId(),fingerprint,actor,command);if(replay!=null)return replay;
+        validate(command);requireCalendar(command.calendarCode());
         Map<String,Object> row=row(command,actor);
         int changed=command.slaRuleId()==null?mapper.insertSlaRule(row):mapper.updateSlaRuleConditionally(row);
         if(changed<=0)throw new TodoException("TODO_SLA_RULE_VERSION_CONFLICT","SLA rule changed; refresh before retrying");

@@ -51,7 +51,7 @@ class TodoSlaRuleManagementServiceTest
 
     @Test void rejectsUnknownCalendar()
     {
-        enabledDictionaries();
+        ledger(true);enabledDictionaries();
         when(todoMapper.selectCalendarByCode("UNKNOWN")).thenReturn(null);
 
         TodoException error=assertThrows(TodoException.class,()->service.save(command("UNKNOWN"),actor));
@@ -61,6 +61,7 @@ class TodoSlaRuleManagementServiceTest
 
     @Test void rejectsUnknownOrDisabledDictionaryValues()
     {
+        ledger(true);
         when(dictionaries.isEnabled("law_todo_sla_type","RESPONSE")).thenReturn(true);
         when(dictionaries.isEnabled("law_todo_sla_unit","MINUTE")).thenReturn(false);
 
@@ -105,6 +106,35 @@ class TodoSlaRuleManagementServiceTest
         verify(mapper,times(1)).insertSlaRule(anyMap());
         verify(todoMapper,times(1)).completeDefinitionAction(anyString(),anyString(),anyLong());
         assertEquals(10L,ledger.entityId.get());
+    }
+
+    @Test void createReplayReturnsStoredIdAfterDictionaryAndCalendarBecomeUnavailable()
+    {
+        ledger(true);enabledDictionaries();when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        when(mapper.insertSlaRule(anyMap())).thenAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("slaRuleId",10L);return 1;});
+        assertEquals(10L,service.save(command("DEFAULT"),actor));
+        lenient().when(dictionaries.isEnabled("law_todo_sla_type","RESPONSE")).thenReturn(false);
+        lenient().when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(null);
+
+        assertEquals(10L,service.save(command("DEFAULT"),actor));
+
+        verify(mapper,times(1)).insertSlaRule(anyMap());
+        verify(todoMapper,times(1)).selectCalendarByCode("DEFAULT");
+    }
+
+    @Test void updateReplayReturnsStoredIdAfterDictionaryAndCalendarBecomeUnavailable()
+    {
+        ledger(true);enabledDictionaries();when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        when(mapper.updateSlaRuleConditionally(anyMap())).thenReturn(1);
+        SlaRuleCommand command=existingCommand(4);
+        assertEquals(9L,service.save(command,actor));
+        lenient().when(dictionaries.isEnabled("law_todo_sla_type","RESPONSE")).thenReturn(false);
+        lenient().when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(null);
+
+        assertEquals(9L,service.save(command,actor));
+
+        verify(mapper,times(1)).updateSlaRuleConditionally(anyMap());
+        verify(todoMapper,times(1)).selectCalendarByCode("DEFAULT");
     }
 
     @Test void sameActionIdWithDifferentSaveRequestReturnsActionConflict()
