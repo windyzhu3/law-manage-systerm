@@ -161,7 +161,7 @@ In the same migration, create and alter the following objects exactly:
 - `todo_template_draft_rule_ref(ref_id,version_id,ref_type,ref_id_value,sort_order,config_json,create_time)` and unique key `(version_id,ref_type,ref_id_value,sort_order)`.
 - `todo_simulation_record(simulation_id,request_id,template_version_id,event_type,business_type,business_id,input_summary_json,result_json,duration_ms,operator_id,create_time)` and indexes on `(operator_id,create_time)` and `(template_version_id,create_time)`.
 - `todo_template_version.change_summary`, `impact_scope`, and `rollback_source_version_id` nullable columns.
-- Idempotent menu creation and relocation of the old `todo/config/index` entry under a new `Todo Engine` directory menu.
+- Idempotent creation of the new `Todo Engine` directory and six page menus; disable or delete the old `todo/config/index` menu so it cannot route to the removed page.
 - Exact button permissions for list/create/edit/copy/toggle/simulate/publish/diff/rollback operations.
 - Dictionary types and rows using `insert ... select ... where not exists`.
 
