@@ -25,7 +25,7 @@ if (!workflow.includes("TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' 
 if (!logback.includes('<property name="log.path" value="${LOG_PATH:-/home/ruoyi/logs}" />')) {
   throw new Error('Logback must allow a writable environment-specific log directory')
 }
-if ((workflow.match(/LOG_PATH:\s+\$\{\{ runner\.temp \}\}\/ruoyi-logs/g) || []).length < 2) {
+if ((workflow.match(/LOG_PATH:\s+\/tmp\/ruoyi-logs/g) || []).length < 2) {
   throw new Error('Database and real Todo E2E jobs must use a writable runner log directory')
 }
 const workflowLines = workflow.replace(/\r\n/g, '\n').split('\n')

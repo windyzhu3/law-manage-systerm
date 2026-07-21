@@ -75,7 +75,7 @@ jobs:
   migration:
     runs-on: ubuntu-latest
     env:
-      LOG_PATH: ${{ runner.temp }}/ruoyi-logs
+      LOG_PATH: /tmp/ruoyi-logs
     services:
       mysql:
         image: mysql:8.0
@@ -175,7 +175,7 @@ jobs:
       TODO_E2E_DB_PASSWORD: root
       TODO_E2E_REAL_BACKEND: true
       TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}
-      LOG_PATH: ${{ runner.temp }}/ruoyi-logs
+      LOG_PATH: /tmp/ruoyi-logs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
