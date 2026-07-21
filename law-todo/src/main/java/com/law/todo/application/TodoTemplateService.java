@@ -38,7 +38,7 @@ public class TodoTemplateService
     public List<Map<String,Object>> listTemplates(){return mapper.selectTemplates();}
     public List<Map<String,Object>> listEventCatalogs(){return eventCatalog.entries();}
     public List<EventCatalogEntry> listTemplateEventCatalog()
-    {return eventCatalog.entries().stream().map(row->new EventCatalogEntry(text(value(row,"event_type","eventType")),
+    {return eventCatalog.entries().stream().filter(row->"ACTIVE".equals(text(value(row,"status","status")))).map(row->new EventCatalogEntry(text(value(row,"event_type","eventType")),
             integer(value(row,"payload_version","payloadVersion")),text(value(row,"business_object_type","businessObjectType")),
             text(value(row,"payload_schema_json","payloadSchemaJson")),text(value(row,"status","status")))).toList();}
     public List<TriggerTemplateVersionCatalogView> listPublishedVersionCatalog(Long templateId)
@@ -49,17 +49,17 @@ public class TodoTemplateService
             text(value(row,"template_name","templateName")),text(value(row,"business_type","businessType")),
             number(value(row,"version_id","versionId")),integer(value(row,"version_no","versionNo")),
             text(value(row,"status","status")))).toList();}
-    @Transactional public int saveTemplate(TemplateCommand command,String operator){validateBusinessType(command.businessType());Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());value.put("templateName",command.templateName());value.put("businessType",command.businessType());value.put("status",command.status()==null?"0":command.status());value.put("createBy",operator);value.put("updateBy",operator);return saveTemplate(value);}
+    @Transactional public int saveTemplate(TemplateCommand command,String operator){validateBusinessType(command.businessType());Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());value.put("templateName",command.templateName());value.put("businessType",command.businessType());if(command.templateId()==null)value.put("status",command.status()==null?"0":command.status());value.put("createBy",operator);value.put("updateBy",operator);return saveTemplate(value);}
     @Transactional public int updateTemplateMetadata(TemplateMetadataCommand command,Actor actor)
     {
-        validateBusinessType(command.businessType());String fingerprint=fingerprint("UPDATE_TEMPLATE",command.templateId(),command.expectedVersion(),command,actor);
+        String fingerprint=fingerprint("UPDATE_TEMPLATE",command.templateId(),command.expectedVersion(),command,actor);
         if(claimTemplateAction(command.actionId(),"UPDATE_TEMPLATE",command.templateId(),fingerprint,actor,command)!=null)return 1;
         Map<String,Object> current=mapper.selectTemplateForUpdate(command.templateId());
         if(current==null||current.isEmpty())throw new TodoException("TODO_TEMPLATE_NOT_FOUND","Todo template not found");
+        validateBusinessType(text(value(current,"business_type","businessType")));
         if(!Objects.equals(command.expectedVersion(),integer(value(current,"version","version"))))
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
-        Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());
-        value.put("templateName",command.templateName());value.put("businessType",command.businessType());
+        Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateName",command.templateName());
         value.put("expectedVersion",command.expectedVersion());value.put("updateBy",actor.userName());
         if(mapper.updateTemplateMetadataConditionally(value)<=0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");

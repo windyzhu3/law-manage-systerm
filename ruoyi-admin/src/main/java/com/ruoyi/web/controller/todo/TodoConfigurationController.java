@@ -118,7 +118,7 @@ public class TodoConfigurationController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/templates") public TableDataInfo templateList(@Valid @ModelAttribute TemplateListQuery value){var page=query.templatePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/{id}") public AjaxResult template(@PathVariable Long id){return success(query.template(id));}
     @PreAuthorize("@ss.hasPermi('todo:template:create')")
     @PostMapping("/templates") public AjaxResult createTemplate(@Valid @RequestBody CreateTemplateCommand value){return success(definitions.createTemplateDraft(value,actor()));}
@@ -130,22 +130,28 @@ public class TodoConfigurationController extends BaseController
     @PostMapping("/templates/{id}/copy") public AjaxResult copyTemplate(@PathVariable Long id,@Valid @RequestBody CopyTemplateCommand value){return success(definitions.copyTemplateDraft(id,value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:template:toggle')")
     @PostMapping("/templates/{id}/toggle") public AjaxResult toggleTemplate(@PathVariable Long id,@Valid @RequestBody TemplateToggleCommand value){templates.toggleTemplate(id,value,actor());return success();}
-    @PreAuthorize("@ss.hasPermi('todo:template:edit')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:edit,todo:template:create,todo:template:copy')")
     @PutMapping("/template-versions/{id}") public AjaxResult updateTemplateDraft(@PathVariable Long id,@Valid @RequestBody UpdateDraftCommand value){requireSame(id,value.versionId());return success(definitions.updateDraft(value,actor()));}
     @PreAuthorize("@ss.hasAnyPermi('todo:release:publish,todo:simulation:simulate')")
     @PostMapping("/template-versions/{id}/preflight") public AjaxResult preflightTemplateDraft(@PathVariable Long id){return success(definitions.preflight(id));}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/events") public AjaxResult templateEventCatalog(){return success(templates.listTemplateEventCatalog());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/owners") public AjaxResult templateOwnerCatalog(){return success(query.ownerCatalog());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/handlers") public AjaxResult templateHandlerCatalog(){return success(catalogs==null?List.of():catalogs.handlers().stream().map(item->new CapabilitySummary(item.code(),item.description(),item.simulatable())).toList());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/validators") public AjaxResult templateValidatorCatalog(){return success(catalogs==null?List.of():catalogs.validators().stream().map(item->new CapabilitySummary(item.code(),item.description(),false)).toList());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/auto-actions") public AjaxResult templateAutoActionCatalog(){return success(autoActions==null?List.of():autoActions.list());}
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/routing-targets") public AjaxResult templateRoutingTargetCatalog(){return success(templates.listRoutingTargetCatalog());}
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
+    @GetMapping("/template-catalog/sla-rules") public AjaxResult templateSlaRuleCatalog(){var rows=sla.list(Map.of("status","0"));return success(rows==null?List.of():rows.stream().map(row->new TemplateRuleCatalogEntry(
+            row.slaRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.slaType(),row.durationValue(),row.durationUnit(),row.calendarCode())).toList());}
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
+    @GetMapping("/template-catalog/dod-rules") public AjaxResult templateDodRuleCatalog(){var rows=dod.list(Map.of("status","0"));return success(rows==null?List.of():rows.stream().map(row->new TemplateRuleCatalogEntry(
+            row.dodRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.ruleType(),null,null,null)).toList());}
 
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
     @GetMapping("/trigger-rules") public TableDataInfo triggerRules(@Valid @ModelAttribute PageQuery value){return page(templates.listTriggers(),value.pageNum(),value.pageSize());}
@@ -171,7 +177,7 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){var page=query.releasePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records/{id}") public AjaxResult release(@PathVariable long id){return success(query.release(id));}
-    @PreAuthorize("@ss.hasPermi('todo:release:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:release:list,todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/{id}/versions") public AjaxResult versions(@PathVariable Long id){return success(definitions.versions(id));}
     @PreAuthorize("@ss.hasPermi('todo:release:diff')")
     @GetMapping("/release-records/{left}/diff/{right}") public AjaxResult releaseDiff(@PathVariable long left,@PathVariable long right){return success(diff.diff(left,right));}
@@ -195,6 +201,8 @@ public class TodoConfigurationController extends BaseController
             String publishStatus,String status,@Min(1) Integer pageNum,@Min(1) @Max(200) Integer pageSize)
     {public TemplateListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);result.put("businessType",businessType);result.put("businessStage",businessStage);result.put("templateType",templateType);result.put("publishStatus",publishStatus);result.put("status",status);result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
     public record CapabilitySummary(String code,String description,boolean simulatable) { }
+    public record TemplateRuleCatalogEntry(Long id,String ruleCode,String ruleName,String status,String ruleType,
+            Object durationValue,String durationUnit,String calendarCode) { }
     public record RuleListQuery(String status,String slaType,String ruleType,String keyword,LocalDateTime beginTime,LocalDateTime endTime,
             @Min(1) Integer pageNum,@Min(1) @Max(500) Integer pageSize)
     {public RuleListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("status",status);result.put("slaType",slaType);result.put("ruleType",ruleType);result.put("keyword",keyword);result.put("beginTime",beginTime);result.put("endTime",endTime);return result;}}

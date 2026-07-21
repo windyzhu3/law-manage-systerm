@@ -53,7 +53,10 @@ class TodoDefinitionServiceTest
 
     @BeforeEach void lockedVersionUsesTheExistingVersionStub()
     {org.mockito.Mockito.lenient().when(mapper.selectTemplateVersionForUpdate(org.mockito.ArgumentMatchers.anyLong()))
-            .thenAnswer(invocation->mapper.selectTemplateVersionById(invocation.getArgument(0)));}
+            .thenAnswer(invocation->mapper.selectTemplateVersionById(invocation.getArgument(0)));
+     org.mockito.Mockito.lenient().when(mapper.selectEventCatalog(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyInt()))
+            .thenAnswer(invocation->Map.of("event_type",invocation.<String>getArgument(0),"payload_version",invocation.<Integer>getArgument(1),
+                    "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));}
 
     @Test void publishedVersionIsImmutable()
     {

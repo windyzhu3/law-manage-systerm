@@ -24,14 +24,32 @@ Implemented the database-backed Todo template configuration list, summary view, 
 - Added publish preflight access for either release publishers or simulation users.
 - Added migration `V0_20_31__todo_template_management_contract.sql` for template concurrency version/index and import/toggle permissions.
 
+## Review remediation
+
+- Rule references now use `(ruleType, ruleId)` identity while preserving one global execution order; SLA and DoD rules may therefore share a numeric ID safely.
+- Draft preflight persists the exact bound rule snapshots used for compilation. Published/blocked preflight is strictly read-only. Publish and simulation require the preflight definition hash and reject stale definitions.
+- Legacy template metadata updates are status-neutral, while template code and business type are immutable after aggregate creation.
+- Event selection and validation use the active `(eventType, payloadVersion)` catalogue identity and enforce business-type compatibility.
+- Template create/copy/editor users receive purpose-specific event/SLA/DoD catalogues without gaining general rule or release-record access.
+- Nested SLA/DoD creation returns and selects the exact persisted rule ID; no list-difference inference remains.
+- Basic metadata emits scalar fields only, and malformed canonical JSON can render the fail-closed summary without a valid draft object.
+
 ## Verification
 
 - `npm run test:todo-config` — PASS.
 - `node scripts/check-todo-definition-roundtrip.js` — PASS, no canonical round-trip difference.
-- Targeted backend reactor — PASS: 76 law-todo tests and 11 controller tests.
-- Final controller permission/compatibility reactor — PASS: 11 tests.
+- Targeted backend rule-binding/simulation/template reactor — PASS: 69 tests.
+- Targeted controller security/validation reactor — PASS: 16 tests.
+- Full backend reactor `mvn -pl law-todo -am test` — PASS: dependency modules passed; `law-todo` ran 543 tests with 0 failures, 0 errors, and 2 skipped.
 - `npm run build:prod` — PASS. Only the repository's existing asset and entrypoint size warnings remain.
 - `git diff --check` — PASS (line-ending conversion notices only).
+
+## Review package
+
+- Review base: `2a5a26fe`
+- Initial implementation commit: `587f8ed6`
+- Final review range: `2a5a26fe..HEAD`
+- Generated artifact: `.superpowers/sdd/review-2a5a26fe..HEAD.diff`
 
 ## Deliberately excluded
 

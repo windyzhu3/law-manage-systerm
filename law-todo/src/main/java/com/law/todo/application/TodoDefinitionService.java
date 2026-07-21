@@ -104,7 +104,7 @@ public class TodoDefinitionService
         catch(RuntimeException invalid){throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid canonical template JSON");}
         if(!command.templateCode().equals(definition.templateCode()))
             throw new TodoException("TODO_TEMPLATE_CODE_MISMATCH","Definition templateCode does not match the import envelope");
-        validateDefinition(definition);
+        validateDefinition(definition,command.businessType());
         String fingerprint=templateFingerprint("IMPORT_TEMPLATE_DRAFT",null,command,actor);
         Long repeated=claimTemplateDraft(command.actionId(),"IMPORT_TEMPLATE_DRAFT",null,fingerprint,actor);
         if(repeated!=null)return resultForVersion(repeated);
@@ -270,7 +270,7 @@ public class TodoDefinitionService
             legacy.put("owner_rule_json",command.ownerRuleJson());legacy.put("dod_rule_json",command.dodRuleJson());legacy.put("sla_rule_json",command.slaRuleJson());legacy.put("next_rule_json",command.nextRuleJson());legacy.put("ui_schema_json",command.uiSchemaJson());
             definition=legacyAdapter.fromLegacy(legacy);
         }
-        validateDefinition(definition);
+        validateDefinition(definition,text(value(current,"business_type","businessType")));
         String canonical=codec.canonicalJson(definition);
         String fingerprint=updateFingerprint(command,actor,canonical,command.expectedDefinitionJson());
         Long repeated=claimUpdateDraft(command,actor,fingerprint);
@@ -296,9 +296,10 @@ public class TodoDefinitionService
         return command.versionId();
     }
 
-    private void validateDefinition(TodoDefinitionDocument definition)
+    private void validateDefinition(TodoDefinitionDocument definition,String businessType)
     {
         validateDefinitionStructure(definition);
+        validateDefinitionEvent(definition,businessType);
         validateStableOwnerReferences(definition.owner().config());
         validate(JSON.toJSONString(definition.owner().config()),JSON.toJSONString(definition.dod().config()),
                 JSON.toJSONString(definition.sla().config()),JSON.toJSONString(definition.routing().config()),JSON.toJSONString(definition.ui().config()));
@@ -372,6 +373,18 @@ public class TodoDefinitionService
         return null;
     }
 
+    private void validateDefinitionEvent(TodoDefinitionDocument definition,String businessType)
+    {
+        Map<String,Object> event=mapper.selectEventCatalog(definition.event().eventType(),definition.event().payloadVersion());
+        if(event==null||event.isEmpty()||!"ACTIVE".equals(text(value(event,"status","status")))
+                ||text(value(event,"payload_schema_json","payloadSchemaJson"))==null)
+            throw new TodoException("TODO_EVENT_CATALOG_REQUIRED","Definition event type and payload version must be active");
+        String eventBusinessType=text(value(event,"business_object_type","businessObjectType"));
+        if(businessType!=null&&!businessType.isBlank()&&eventBusinessType!=null&&!eventBusinessType.isBlank()
+                &&!businessType.equals(eventBusinessType))
+            throw new TodoException("TODO_TEMPLATE_EVENT_BUSINESS_TYPE_MISMATCH","Definition event business type does not match the template");
+    }
+
     /** A null reference list preserves compatibility; an explicit empty list clears the editable bindings. */
     private void replaceDraftRuleReferences(Long versionId,List<RuleReference> references)
     {
@@ -425,6 +438,9 @@ public class TodoDefinitionService
             preflight = preflight(command.versionId(), true,current,definition);
         if (!preflight.publishable())
             throw new PreflightFailedException();
+        if(command.expectedDefinitionHash()!=null&&!command.expectedDefinitionHash().isBlank()
+                &&!command.expectedDefinitionHash().equals(preflight.report().definitionHash()))
+            throw new TodoException("TODO_TEMPLATE_PREFLIGHT_STALE","Definition or bound rules changed after preflight; run preflight again");
         claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,
                 Map.of("definitionHash", preflight.report().definitionHash()));
         if (mapper.publishTemplateVersionConditionally(command.versionId(),
@@ -437,17 +453,37 @@ public class TodoDefinitionService
     @Transactional
     public PreflightResult preflight(long versionId)
     {
-        return preflight(versionId, false);
+        Map<String,Object> current=requireVersion(versionId);
+        String status=text(value(current,"status","status"));
+        TodoDefinitionDocument definition=definition(current);
+        if(DRAFT.equals(status))
+        {
+            RuleBinding binding=bindReferencedRules(versionId,definition);
+            definition=binding.definition();
+            if(binding.bound())
+            {
+                Map<String,Object> snapshot=snapshotRow(versionId,definition);
+                if(mapper.updateDefinitionDocument(snapshot)<=0)
+                    throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Draft version changed before rule snapshot compilation");
+                current=withSnapshot(current,snapshot);
+            }
+            return preflight(versionId,false,current,definition,true);
+        }
+        return preflight(versionId,false,current,definition,false);
     }
 
     private PreflightResult preflight(long versionId, boolean guardedPublishPreflight)
     {
         Map<String, Object> current = requireVersion(versionId);
-        return preflight(versionId,guardedPublishPreflight,current,definition(current));
+        return preflight(versionId,guardedPublishPreflight,current,definition(current),DRAFT.equals(text(value(current,"status","status"))));
     }
 
     private PreflightResult preflight(long versionId,boolean guardedPublishPreflight,Map<String,Object> current,
             TodoDefinitionDocument definition)
+    {return preflight(versionId,guardedPublishPreflight,current,definition,true);}
+
+    private PreflightResult preflight(long versionId,boolean guardedPublishPreflight,Map<String,Object> current,
+            TodoDefinitionDocument definition,boolean persistCompilation)
     {
         validateDefinitionStructure(definition);
         boolean prdBlocked = isPrdBlocked(current);
@@ -473,9 +509,21 @@ public class TodoDefinitionService
         persisted.put("sourceSlaRuleJson", value(current, "sla_rule_json", "slaRuleJson"));
         persisted.put("sourceNextRuleJson", value(current, "next_rule_json", "nextRuleJson"));
         persisted.put("sourceUiSchemaJson", value(current, "ui_schema_json", "uiSchemaJson"));
-        if (mapper.updateDefinitionCompilation(persisted) <= 0)
+        if (persistCompilation && mapper.updateDefinitionCompilation(persisted) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Definition changed during preflight");
         return new PreflightResult(versionId, report);
+    }
+
+    private Map<String,Object> withSnapshot(Map<String,Object> current,Map<String,Object> snapshot)
+    {
+        Map<String,Object> updated=new HashMap<>(current);
+        updated.put("definition_json",snapshot.get("definitionJson"));updated.put("definitionJson",snapshot.get("definitionJson"));
+        updated.put("owner_rule_json",snapshot.get("ownerRuleJson"));updated.put("ownerRuleJson",snapshot.get("ownerRuleJson"));
+        updated.put("dod_rule_json",snapshot.get("dodRuleJson"));updated.put("dodRuleJson",snapshot.get("dodRuleJson"));
+        updated.put("sla_rule_json",snapshot.get("slaRuleJson"));updated.put("slaRuleJson",snapshot.get("slaRuleJson"));
+        updated.put("next_rule_json",snapshot.get("nextRuleJson"));updated.put("nextRuleJson",snapshot.get("nextRuleJson"));
+        updated.put("ui_schema_json",snapshot.get("uiSchemaJson"));updated.put("uiSchemaJson",snapshot.get("uiSchemaJson"));
+        return updated;
     }
 
     private Map<String,Object> snapshotRow(Long versionId,TodoDefinitionDocument definition)
@@ -523,7 +571,7 @@ public class TodoDefinitionService
 
     private List<RuleReference> validateRuleReferences(List<RuleReference> references)
     {
-        java.util.Set<Long> ids=new java.util.HashSet<>();java.util.Set<Integer> orders=new java.util.HashSet<>();int slaCount=0;
+        java.util.Set<String> identities=new java.util.HashSet<>();java.util.Set<Integer> orders=new java.util.HashSet<>();int slaCount=0;
         List<RuleReference> ordered=new java.util.ArrayList<>(references);
         for(RuleReference reference:ordered)
         {
@@ -531,7 +579,7 @@ public class TodoDefinitionService
                 throw bindingInvalid("Rule reference id and order must be positive");
             if(!"SLA".equals(reference.type())&&!"DOD".equals(reference.type()))
                 throw new TodoException("TODO_TEMPLATE_RULE_TYPE_INVALID","Unsupported draft rule reference type: "+reference.type());
-            if(!ids.add(reference.id())||!orders.add(reference.order()))
+            if(!identities.add(reference.type()+":"+reference.id())||!orders.add(reference.order()))
                 throw bindingInvalid("Duplicate draft rule reference id or order");
             if("SLA".equals(reference.type()))
             {

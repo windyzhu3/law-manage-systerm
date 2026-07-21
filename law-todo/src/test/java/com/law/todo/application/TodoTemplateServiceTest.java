@@ -43,6 +43,20 @@ class TodoTemplateServiceTest
     @Mock TodoMapper mapper;
     @BeforeEach void publishedVersion(){when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","0"));when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog());}
     @Test void createsTemplate(){when(mapper.insertTemplate(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTemplate(new java.util.HashMap<>(Map.of("templateCode","T1","templateName","测试","businessType","LEAD")));verify(mapper).insertTemplate(anyMap());}
+    @Test void metadataCommandCannotCarryImmutableTemplateCodeOrBusinessType()
+    {
+        assertEquals(List.of("templateId","templateName","actionId","expectedVersion"),
+                java.util.Arrays.stream(TemplateMetadataCommand.class.getRecordComponents()).map(component->component.getName()).toList());
+    }
+    @Test void legacyTemplateMetadataUpdateCannotChangeStatus()
+    {
+        when(mapper.updateTemplate(anyMap())).thenReturn(1);
+
+        new TodoTemplateService(mapper).saveTemplate(new com.law.todo.application.command.TodoManagementCommands.TemplateCommand(
+                5L,"T-5","Template 5","LEAD","1"),"alice");
+
+        verify(mapper).updateTemplate(org.mockito.ArgumentMatchers.argThat(row->!row.containsKey("status")));
+    }
     @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(new java.util.HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,"templateVersionId",2L,"businessType","LEAD")));verify(mapper).insertTriggerRule(anyMap());}
     @Test void rejectsInvalidTemplateJson(){TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).publish(1L,1,"OWNER","{}","{}",null,"{}","admin"));assertEquals("TODO_TEMPLATE_JSON_INVALID",error.getBusinessCode());}
     @Test void publishesUiSchemaInImmutableVersion(){when(mapper.selectTemplateVersion(1L,1)).thenReturn(null);doAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",8L);return 1;}).when(mapper).insertTemplateVersion(anyMap());new TodoTemplateService(mapper).publish(1L,1,"\"OWNER\"","{}","{}",null,"{\"type\":\"form\"}","admin");verify(mapper).insertTemplateVersion(org.mockito.ArgumentMatchers.argThat(value->"{\"type\":\"form\"}".equals(value.get("uiSchemaJson"))));}
@@ -67,6 +81,18 @@ class TodoTemplateServiceTest
         verify(mapper).selectRoutingTargetCatalog();
     }
 
+    @Test void templateEventCatalogContainsOnlyActiveCompositeEventVersions()
+    {
+        when(mapper.selectEventCatalogs()).thenReturn(List.of(
+                Map.of("event_type","LEAD_CREATED","payload_version",1,"business_object_type","LEAD","payload_schema_json","{}","status","ACTIVE"),
+                Map.of("event_type","LEAD_CREATED","payload_version",2,"business_object_type","LEAD","payload_schema_json","{}","status","ACTIVE"),
+                Map.of("event_type","LEAD_CREATED","payload_version",3,"business_object_type","LEAD","payload_schema_json","{}","status","INACTIVE")));
+
+        var entries=new TodoTemplateService(mapper).listTemplateEventCatalog();
+
+        assertEquals(List.of(1,2),entries.stream().map(entry->entry.payloadVersion()).toList());
+    }
+
     @Test void templateToggleUsesAnAuditedStatusOnlyOptimisticMutation()
     {
         ledger(true);
@@ -88,13 +114,13 @@ class TodoTemplateServiceTest
         when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
                 "template_id",5L,"business_type","LEAD","status","0","version",3));
         when(mapper.updateTemplateMetadataConditionally(anyMap())).thenReturn(1);
-        TemplateMetadataCommand command=new TemplateMetadataCommand(5L,"T-5","Template 5","LEAD","metadata-5",3);
+        TemplateMetadataCommand command=new TemplateMetadataCommand(5L,"Template 5","metadata-5",3);
 
         new TodoTemplateService(mapper).updateTemplateMetadata(command,actor());
         new TodoTemplateService(mapper).updateTemplateMetadata(command,actor());
 
         verify(mapper,times(1)).updateTemplateMetadataConditionally(org.mockito.ArgumentMatchers.argThat(row ->
-                row.size()==6&&!row.containsKey("status")&&Long.valueOf(5L).equals(row.get("templateId"))
+                row.size()==4&&!row.containsKey("status")&&Long.valueOf(5L).equals(row.get("templateId"))
                         &&Integer.valueOf(3).equals(row.get("expectedVersion"))&&"alice".equals(row.get("updateBy"))));
         assertEquals("UPDATE_TEMPLATE",ledger.claim.get().get("actionType"));
     }
@@ -104,7 +130,7 @@ class TodoTemplateServiceTest
         ledger(true);when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
                 "template_id",5L,"business_type","LEAD","status","0","version",4));
         TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).updateTemplateMetadata(
-                new TemplateMetadataCommand(5L,"T-5","Template 5","LEAD","metadata-stale",3),actor()));
+                new TemplateMetadataCommand(5L,"Template 5","metadata-stale",3),actor()));
         assertEquals("TODO_TEMPLATE_VERSION_CONFLICT",error.getBusinessCode());
         verify(mapper,never()).updateTemplateMetadataConditionally(anyMap());
     }

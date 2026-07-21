@@ -44,6 +44,15 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       authenticate("todo:template:list");
       mvc().perform(get("/todo/config/trigger-catalog/events")).andExpect(status().isForbidden());
     }
+    @Test void templateCreatorCanUseOnlyPurposeSpecificEditorCatalogsAndVersionRead() throws Exception {
+      authenticate("todo:template:create");
+      mvc().perform(get("/todo/config/template-catalog/events")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/sla-rules")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/dod-rules")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/templates/7/versions")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/sla-rules")).andExpect(status().isForbidden());
+      mvc().perform(get("/todo/config/release-records")).andExpect(status().isForbidden());
+    }
     @Test void registersEveryConfigurationEndpointAsOneUniqueHandler(){long count=handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).count();org.junit.jupiter.api.Assertions.assertTrue(count>=20);org.junit.jupiter.api.Assertions.assertEquals(count,handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).map(entry->entry.getKey().toString()).distinct().count());}
     private MockMvc mvc(){return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new Denied()).build();}
     private void authenticate(String permission){SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("tester","x",Set.of(new SimpleGrantedAuthority(permission))));}
@@ -52,5 +61,5 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       @Bean PermissionProbe ss(){return new PermissionProbe();}
       @Bean TodoConfigurationController controller(){return new TodoConfigurationController(org.mockito.Mockito.mock(TodoConfigurationQueryService.class),org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),org.mockito.Mockito.mock(TodoConfigurationSimulationService.class));}
     }
-    static class PermissionProbe {public boolean hasPermi(String permission){return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals(permission));}}
+    static class PermissionProbe {public boolean hasPermi(String permission){return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals(permission));}public boolean hasAnyPermi(String permissions){return java.util.Arrays.stream(permissions.split(",")).anyMatch(this::hasPermi);}}
 }

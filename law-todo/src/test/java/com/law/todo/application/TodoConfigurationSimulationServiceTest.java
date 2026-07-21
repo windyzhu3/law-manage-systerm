@@ -146,6 +146,18 @@ class TodoConfigurationSimulationServiceTest
         verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
+    @Test void simulationRejectsAHashThatNoLongerMatchesThePreflightGate()
+    {
+        whenSimulationReturns(sampleSimulation());
+        ConfigurationSimulationCommand stale=new ConfigurationSimulationCommand("request-stale",9L,"LEAD_CREATED","LEAD",3L,
+                command().payload(),LocalDateTime.of(2026,7,21,9,0),List.of(),"old-hash");
+
+        TodoException error=assertThrows(TodoException.class,()->service.simulate(stale,actor()));
+
+        assertEquals("TODO_TEMPLATE_PREFLIGHT_STALE",error.getBusinessCode());
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
+    }
+
     private void whenSimulationReturns(TodoSimulationView value)
     {org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenReturn(value);}
 

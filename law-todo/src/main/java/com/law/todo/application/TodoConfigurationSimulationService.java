@@ -32,6 +32,9 @@ public class TodoConfigurationSimulationService
         try
         {
             simulation=definitions.simulate(command.versionId(),command.toDefinitionCommand(),command.eventType());
+            if(command.expectedDefinitionHash()!=null&&!command.expectedDefinitionHash().equals(simulation.definitionHash()))
+                throw new com.law.todo.domain.TodoException("TODO_TEMPLATE_PREFLIGHT_STALE",
+                        "Definition or bound rules changed after preflight; run preflight again");
         }
         catch(RuntimeException failure)
         {

@@ -47,7 +47,10 @@ class TodoDefinitionRuleBindingTest
 
     @BeforeEach void lockedVersionUsesTheTestDraft()
     {org.mockito.Mockito.lenient().when(mapper.selectTemplateVersionForUpdate(org.mockito.ArgumentMatchers.anyLong()))
-            .thenAnswer(invocation->mapper.selectTemplateVersionById(invocation.getArgument(0)));}
+            .thenAnswer(invocation->mapper.selectTemplateVersionById(invocation.getArgument(0)));
+     org.mockito.Mockito.lenient().when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of(
+             "event_type","LEAD_CREATED","payload_version",1,"business_object_type","LEAD",
+             "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));}
 
     @Test void updateDraftReplacesReferencesOnlyAfterTheDefinitionRowAndKeepsTheirOrder()
     {
@@ -139,6 +142,22 @@ class TodoDefinitionRuleBindingTest
         verify(configMapper,never()).deleteDraftRuleRefs(44L);
     }
 
+    @Test void equalNumericIdsFromDifferentRuleLibrariesAreValidBindings()
+    {
+        readyUpdate("cross-library-id");
+        when(configMapper.selectSlaRule(1L)).thenReturn(slaRule(1L));
+        Map<String,Object> dod=dodRule("SAME-ID");dod.put("dod_rule_id",1L);
+        when(configMapper.selectDodRule(1L)).thenReturn(dod);
+        when(configMapper.deleteDraftRuleRefs(44L)).thenReturn(2);
+        when(configMapper.insertDraftRuleRef(anyMap())).thenReturn(1);
+        when(mapper.completeDefinitionAction(eq("cross-library-id"),anyString(),eq(44L))).thenReturn(1);
+
+        assertEquals(44L,service().updateDraft(update("cross-library-id",List.of(
+                new RuleReference("SLA",1L,0),new RuleReference("DOD",1L,1))),actor));
+
+        verify(configMapper,org.mockito.Mockito.times(2)).insertDraftRuleRef(anyMap());
+    }
+
     @Test void equalBindingOrdersAndStaleDefinitionWritesCannotReplaceReferences()
     {
         readyUpdate("equal-order");when(configMapper.selectSlaRule(8L)).thenReturn(slaRule());
@@ -169,6 +188,21 @@ class TodoDefinitionRuleBindingTest
 
         assertEquals("TODO_TEMPLATE_RULE_NOT_FOUND",error.getBusinessCode());
         verify(configMapper,never()).deleteDraftRuleRefs(44L);
+    }
+
+    @Test void draftSaveRejectsAnInactiveEventVersionBeforeWriting()
+    {
+        Map<String,Object> current=snapshotDraft();current.put("business_type","LEAD");
+        when(mapper.selectTemplateVersionById(44L)).thenReturn(current);
+        when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of(
+                "event_type","LEAD_CREATED","payload_version",1,"business_object_type","LEAD",
+                "payload_schema_json","{}","status","INACTIVE"));
+
+        TodoException error=assertThrows(TodoException.class,()->service().updateDraft(
+                new UpdateDraftCommand("inactive-event",44L,String.valueOf(current.get("definition_json"))),actor));
+
+        assertEquals("TODO_EVENT_CATALOG_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
     @Test void aDraftReferenceInsertFailurePropagatesAndStopsLaterInserts() throws Exception
@@ -209,13 +243,12 @@ class TodoDefinitionRuleBindingTest
         assertEquals("second",((Map<?,?>)saved.dod().config().get("errorMessages")).get("a"));
         assertEquals(JSON.parseObject(JSON.toJSONString(saved.sla().config())),JSON.parseObject(String.valueOf(snapshot.getValue().get("slaRuleJson"))));
         assertEquals(JSON.parseObject(JSON.toJSONString(saved.dod().config())),JSON.parseObject(String.valueOf(snapshot.getValue().get("dodRuleJson"))));
-        Map<String,Object> persistedVersion=new HashMap<>(current);persistedVersion.put("definition_json",persisted);persistedVersion.put("definitionJson",persisted);
+        Map<String,Object> persistedVersion=new HashMap<>(current);persistedVersion.put("status","PUBLISHED");persistedVersion.put("definition_json",persisted);persistedVersion.put("definitionJson",persisted);
         persistedVersion.put("sla_rule_json",snapshot.getValue().get("slaRuleJson"));persistedVersion.put("dod_rule_json",snapshot.getValue().get("dodRuleJson"));
         sla.put("rule_code","CHANGED");sla.put("duration_value",999);first.put("required_fields_json","[\"changed\"]");
         org.mockito.Mockito.clearInvocations(mapper,configMapper);when(mapper.selectTemplateVersionById(44L)).thenReturn(persistedVersion);
         service().preflight(44L);
-        ArgumentCaptor<Map<String,Object>> reloaded=ArgumentCaptor.forClass(Map.class);verify(mapper).updateDefinitionCompilation(reloaded.capture());
-        assertEquals(persisted,reloaded.getValue().get("definitionJson"));
+        verify(mapper,never()).updateDefinitionCompilation(anyMap());
         verify(configMapper,never()).selectDraftRuleRefs(44L);verify(configMapper,never()).selectSlaRule(org.mockito.ArgumentMatchers.anyLong());verify(configMapper,never()).selectDodRule(org.mockito.ArgumentMatchers.anyLong());
     }
 
@@ -229,6 +262,42 @@ class TodoDefinitionRuleBindingTest
         verify(mapper,never()).updateDefinitionDocument(anyMap());ArgumentCaptor<Map<String,Object>> compiled=ArgumentCaptor.forClass(Map.class);verify(mapper).updateDefinitionCompilation(compiled.capture());
         String canonical=new com.law.todo.definition.codec.TodoDefinitionCodec().canonicalJson(new com.law.todo.definition.codec.TodoDefinitionCodec().read(String.valueOf(current.get("definition_json"))));
         assertEquals(canonical,compiled.getValue().get("definitionJson"));assertEquals(64,String.valueOf(compiled.getValue().get("definitionHash")).length());
+    }
+
+    @Test void standalonePreflightCompilesTheSameOrderedRuleSnapshotAsPublish()
+    {
+        when(mapper.selectTemplateVersionById(44L)).thenReturn(snapshotDraft());
+        when(configMapper.selectDraftRuleRefs(44L)).thenReturn(List.of(ref("SLA",8L,0),ref("DOD",11L,1)));
+        when(configMapper.selectSlaRule(8L)).thenReturn(slaRule());
+        when(configMapper.selectDodRule(11L)).thenReturn(dodRule("A"));
+        event();
+        when(mapper.updateDefinitionDocument(anyMap())).thenReturn(1);
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+
+        service().preflight(44L);
+
+        ArgumentCaptor<Map<String,Object>> snapshot=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).updateDefinitionDocument(snapshot.capture());
+        ArgumentCaptor<Map<String,Object>> compilation=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).updateDefinitionCompilation(compilation.capture());
+        assertEquals(snapshot.getValue().get("definitionJson"),compilation.getValue().get("definitionJson"));
+        org.junit.jupiter.api.Assertions.assertTrue(String.valueOf(compilation.getValue().get("definitionJson")).contains("SLA-FIRST"));
+        org.junit.jupiter.api.Assertions.assertTrue(String.valueOf(compilation.getValue().get("definitionJson")).contains("DOD-A"));
+    }
+
+    @Test void publishedPreflightIsStrictlyReadOnly()
+    {
+        Map<String,Object> published=snapshotDraft();published.put("status","PUBLISHED");
+        published.put("compiled_json",published.get("definition_json"));
+        published.put("definition_hash","a".repeat(64));
+        when(mapper.selectTemplateVersionById(44L)).thenReturn(published);
+        event();
+
+        service().preflight(44L);
+
+        verify(mapper,never()).updateDefinitionDocument(anyMap());
+        verify(mapper,never()).updateDefinitionCompilation(anyMap());
+        verify(configMapper,never()).selectDraftRuleRefs(44L);
     }
 
     @Test void publishUsesTheSameBoundSnapshotHashForCompilationClaimAndConditionalPublish()
@@ -249,6 +318,20 @@ class TodoDefinitionRuleBindingTest
         assertEquals(snapshot.getValue().get("definitionJson"),compilation.getValue().get("definitionJson"));
         assertEquals(compilerHash,JSON.parseObject(String.valueOf(action.getValue().get("payloadJson"))).getString("definitionHash"));
         assertEquals(compilerHash,publishedHash.getValue());
+    }
+
+    @Test void publishRejectsAStalePreflightHashBeforeClaimingTheRelease()
+    {
+        Map<String,Object> current=snapshotDraft();when(mapper.selectTemplateVersionForUpdate(44L)).thenReturn(current);
+        when(configMapper.selectDraftRuleRefs(44L)).thenReturn(List.of());event();
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+
+        TodoException error=assertThrows(TodoException.class,()->service().publish(
+                new PublishDraftCommand("stale-gate",44L,"stale-hash"),actor));
+
+        assertEquals("TODO_TEMPLATE_PREFLIGHT_STALE",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionIfAbsent(anyMap());
+        verify(mapper,never()).publishTemplateVersionConditionally(eq(44L),anyString(),anyString());
     }
 
     @Test void compatibilityDraftUpdatePreservesMetadataUnlessExplicitlyCleared()

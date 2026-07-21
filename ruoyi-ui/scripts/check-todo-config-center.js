@@ -42,6 +42,8 @@ const routes = [
   ['listTemplateValidatorCatalog', '/todo/config/template-catalog/validators', 'get'],
   ['listTemplateAutoActionCatalog', '/todo/config/template-catalog/auto-actions', 'get'],
   ['listTemplateRoutingTargetCatalog', '/todo/config/template-catalog/routing-targets', 'get'],
+  ['listTemplateSlaRuleCatalog', '/todo/config/template-catalog/sla-rules', 'get'],
+  ['listTemplateDodRuleCatalog', '/todo/config/template-catalog/dod-rules', 'get'],
   ['listTriggerRules', '/todo/config/trigger-rules', 'get'],
   ['createTriggerRule', '/todo/config/trigger-rules', 'post'],
   ['updateTriggerRule', '/todo/config/trigger-rules/${id}', 'put'],
@@ -298,6 +300,7 @@ function checkTemplatePage() {
   const files = [page, drawer, summary, 'src/views/todo/config/template/template-draft-model.js', ...stepFiles]
   const contents = Object.fromEntries(files.map(file => [file, source(file)]))
   const workflow = files.map(file => contents[file]).join('\n')
+  const nestedDrawers = source('src/views/todo/config/sla/SlaRuleDrawer.vue') + '\n' + source('src/views/todo/config/dod/DodRuleDrawer.vue')
 
   requireTokens(page, contents[page], [
     'ConfigPageShell', 'ConfigMetricCard', 'TemplateDrawer', 'TemplateSummaryPanel', 'pagination',
@@ -320,7 +323,7 @@ function checkTemplatePage() {
   requireTokens(summary, contents[summary], ['触发事件', '负责人规则', 'SLA', 'DoD', '下一步规则', '版本摘要'])
   requireTokens('template workflow', workflow, [
     'listTemplateEventCatalog', 'listTemplateOwnerCatalog', 'listTemplateHandlerCatalog',
-    'listTemplateValidatorCatalog', 'listTemplateAutoActionCatalog', 'listSlaRules', 'listDodRules',
+    'listTemplateValidatorCatalog', 'listTemplateAutoActionCatalog', 'listTemplateSlaRuleCatalog', 'listTemplateDodRuleCatalog',
     'SlaRuleDrawer', 'DodRuleDrawer', 'simulateConfiguration', 'RoutingGraphEditor',
     'law_todo_owner_rule_type', 'law_todo_condition_operator', 'law_todo_rule_status',
     'actionId', 'expectedVersion', 'expectedDefinitionJson'
@@ -331,7 +334,15 @@ function checkTemplatePage() {
   assertMethodTokens(page, contents[page], 'toggleRow', ['toggleTodoTemplate', 'actionId:', 'expectedVersion:', 'rowToggleLoading', '$confirm', 'this.load()'])
   assertMethodTokens(drawer, contents[drawer], 'saveDraft', ['toTemplateDraftPayload', 'updateTemplateDraft', 'expectedDefinitionJson', 'ruleReferences', 'refreshSavedDraft'])
   assertMethodTokens(drawer, contents[drawer], 'runPreflight', ['preflightTemplateDraft', 'preflightGate', 'definitionSourceToken'])
-  assertMethodTokens(drawer, contents[drawer], 'publish', ['runPreflight', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken'])
+  assertMethodTokens(drawer, contents[drawer], 'publish', ['runPreflight', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken', 'expectedDefinitionHash'])
+  requireTokens(stepFiles[0], contents[stepFiles[0]], ['BASIC_FIELDS', 'basicValue', 'readonly || persisted'])
+  if (contents[drawer].includes('ref="basic" v-model="form"')) throw new Error('basic step must not bind the entire aggregate draft')
+  requireTokens(stepFiles[1], contents[stepFiles[1]], [':value="eventKey(item)"', 'eventSelection', 'model.payloadVersion" disabled'])
+  requireTokens(stepFiles[3], contents[stepFiles[3]], ['listTemplateSlaRuleCatalog', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:sla-rule:create']\""])
+  requireTokens(stepFiles[4], contents[stepFiles[4]], ['listTemplateDodRuleCatalog', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\""])
+  if (workflow.includes('knownIds')) throw new Error('nested rule creation must select the exact returned id instead of diff guessing')
+  requireTokens('nested exact identity', nestedDrawers, ['finishSaved(response.data)', "$emit('saved', savedId)"])
+  requireTokens(summary, contents[summary], ['draft || definitionError', '<template v-if="draft">'])
   if (contents[drawer].includes("this.mode = 'view'")) throw new Error('template drawer must not mutate the mode prop')
   if (workflow.includes('<el-dialog')) throw new Error('template operations may not use el-dialog')
 

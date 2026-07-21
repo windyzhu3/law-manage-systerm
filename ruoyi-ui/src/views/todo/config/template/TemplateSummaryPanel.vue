@@ -1,6 +1,7 @@
 <template>
-  <section v-if="draft" class="template-summary-panel">
+  <section v-if="draft || definitionError" class="template-summary-panel">
     <el-alert v-if="definitionError" title="模板规范定义损坏，系统已按只读方式阻止编辑和发布。" type="error" :closable="false" show-icon />
+    <template v-if="draft">
     <el-descriptions :column="2" border><el-descriptions-item label="模板编码">{{ draft.templateCode || '-' }}</el-descriptions-item><el-descriptions-item label="模板名称">{{ draft.templateName || '-' }}</el-descriptions-item><el-descriptions-item label="业务类型">{{ draft.businessType || '-' }}</el-descriptions-item><el-descriptions-item label="发布状态">{{ draft.versionStatus || '-' }}</el-descriptions-item></el-descriptions>
     <el-row :gutter="12" class="summary-grid">
       <el-col :span="12"><el-card shadow="never"><div slot="header">触发事件</div><strong>{{ draft.event.eventType || '未配置' }}</strong><p>载荷版本 v{{ draft.event.payloadVersion || 1 }}</p><pre>{{ pretty(draft.event.condition) }}</pre></el-card></el-col>
@@ -11,6 +12,7 @@
       <el-col :span="12"><el-card shadow="never"><div slot="header">版本摘要</div><p>版本：v{{ draft.versionNo || 1 }}</p><p>变更：{{ draft.changeSummary || '-' }}</p><p>影响：{{ draft.impactScope || '-' }}</p></el-card></el-col>
       <el-col :span="24"><el-card shadow="never" class="todo-card-preview"><div slot="header">待办卡片预览</div><div class="preview-head"><strong>{{ cardTitle }}</strong><el-tag :type="priorityTone">{{ draft.priority || 'NORMAL' }}</el-tag></div><p>负责人：{{ owner }}</p><p>到期状态：由 {{ slaName }} 计算</p><p class="preview-description">{{ draft.description || '暂无待办说明' }}</p></el-card></el-col>
     </el-row>
+    </template>
   </section>
 </template>
 <script>
