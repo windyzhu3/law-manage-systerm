@@ -134,6 +134,12 @@ function verifyTriggerMetadataWorkflow(source, expectedBaseline) {
   if (sharedMigrationStep.text.includes('TodoTriggerRuleMetadataMigrationContractTest')) {
     throw new Error('Trigger metadata migration E2E must not share the law_v017 migration command')
   }
+  const sharedMigrationRuns = Array.from(sharedMigrationStep.text.matchAll(/-Dtest=([^\s]+)/g))
+    .map(match => match[1])
+  if (sharedMigrationRuns.length !== 2 || sharedMigrationRuns[0] !== 'FlywayMigrationTest' ||
+      sharedMigrationRuns[1].split(',').includes('FlywayMigrationTest')) {
+    throw new Error('FlywayMigrationTest must run alone before the remaining shared-database migration tests')
+  }
   return { createDatabaseStep, baselineStep, isolatedMigrationStep, sharedMigrationStep: sharedMigrationStep.text, reportGateStep: reportGateStep.text }
 }
 
