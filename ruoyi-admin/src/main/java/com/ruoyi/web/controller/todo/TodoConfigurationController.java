@@ -30,6 +30,7 @@ import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationS
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.ImportTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
@@ -183,6 +184,8 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/templates/{id}/versions") public AjaxResult versions(@PathVariable Long id){return success(definitions.versions(id));}
     @PreAuthorize("@ss.hasPermi('todo:release:diff')")
     @GetMapping("/release-records/{left}/diff/{right}") public AjaxResult releaseDiff(@PathVariable long left,@PathVariable long right){return success(diff.diff(left,right));}
+    @PreAuthorize("@ss.hasPermi('todo:template:copy')")
+    @PostMapping("/release-records/{id}/copy-draft") public AjaxResult copyReleaseDraft(@PathVariable long id,@Valid @RequestBody CopyVersionCommand value){var source=query.release(id);return success(definitions.copyVersion(source.templateId(),source.versionNo(),value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:release:publish')")
     @PostMapping("/release-records/{id}/publish") public AjaxResult publish(@PathVariable Long id,@Valid @RequestBody PublishDraftCommand value){requireSame(id,value.versionId());return success(definitions.publish(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:release:rollback')")
@@ -212,7 +215,7 @@ public class TodoConfigurationController extends BaseController
     public record RuleToggleCommand(@NotBlank String status,@NotBlank String actionId,@NotNull @Min(0) Integer expectedVersion) { }
     public record SlaTestCommand(@NotNull LocalDateTime createdAt) { }
     public record DodTestCommand(@NotNull Map<String,Object> payload,List<String> attachments) {public DodTestCommand{payload=payload==null?null:Map.copyOf(payload);attachments=attachments==null?List.of():List.copyOf(attachments);}}
-    public record ReleaseListQuery(Long templateId,String templateCode,String keyword,LocalDateTime beginTime,LocalDateTime endTime,
+    public record ReleaseListQuery(Long templateId,String templateCode,String keyword,String status,String publisher,LocalDateTime beginTime,LocalDateTime endTime,
             @Min(0) Integer offset,@Min(1) @Max(500) Integer limit)
-    {public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("templateId",templateId);result.put("templateCode",templateCode);result.put("keyword",keyword);result.put("beginTime",beginTime);result.put("endTime",endTime);result.put("offset",offset);result.put("limit",limit);return result;}}
+    {public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("templateId",templateId);result.put("templateCode",templateCode);result.put("keyword",keyword);result.put("status",status);result.put("publisher",publisher);result.put("beginTime",beginTime);result.put("endTime",endTime);result.put("offset",offset);result.put("limit",limit);return result;}}
 }

@@ -96,6 +96,16 @@ class TodoConfigurationControllerValidationTest
                 .andExpect(status().isBadRequest());
     }
 
+    @Test void releaseQueryExposesStatusAndPublisherFilters()
+    {
+        List<String> fields=Arrays.stream(TodoConfigurationController.ReleaseListQuery.class.getRecordComponents())
+                .map(component->component.getName()).toList();
+        org.junit.jupiter.api.Assertions.assertTrue(fields.contains("status"));
+        org.junit.jupiter.api.Assertions.assertTrue(fields.contains("publisher"));
+        org.junit.jupiter.api.Assertions.assertTrue(Arrays.stream(TodoConfigurationController.class.getDeclaredMethods())
+                .anyMatch(method->method.getName().equals("copyReleaseDraft")));
+    }
+
     @Test
     void exposesMigrationPermissionsOnRepresentativeReadAndWriteEndpoints() throws Exception
     {

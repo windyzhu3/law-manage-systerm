@@ -97,11 +97,16 @@ class TodoConfigurationMapperXmlContractTest
     @Test void releaseProjectionUsesVersionLedgerAndCompatibleUpdateTime() throws Exception
     {
         String release=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","selectReleaseRecords");
+        String detail=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","selectReleaseRecord");
 
         assertTrue(release.contains("candidate.entity_type='VERSION'"));
         assertTrue(release.contains("candidate.source_entity_id=v.version_id"));
         assertTrue(release.contains("coalesce(v.published_time,v.create_time) update_time"));
         assertTrue(release.contains("order by coalesce(v.published_time,v.create_time) desc,v.version_id desc"));
+        assertTrue(release.contains("v.status in ('PUBLISHED','RETIRED')"));
+        assertTrue(release.contains("v.status=#{status}"));
+        assertTrue(release.contains("v.published_by=#{publisher}"));
+        assertTrue(detail.contains("v.status in ('PUBLISHED','RETIRED')"));
     }
 
     @Test void counterAndProjectionQueriesRemainSargableAndStable() throws Exception

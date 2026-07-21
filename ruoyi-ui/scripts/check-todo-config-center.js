@@ -58,6 +58,7 @@ const routes = [
   ['listReleaseRecords', '/todo/config/release-records', 'get'],
   ['getReleaseRecord', '/todo/config/release-records/${id}', 'get'],
   ['diffReleaseRecords', '/todo/config/release-records/${left}/diff/${right}', 'get'],
+  ['copyReleaseDraft', '/todo/config/release-records/${id}/copy-draft', 'post'],
   ['publishReleaseRecord', '/todo/config/release-records/${id}/publish', 'post'],
   ['rollbackReleaseDraft', '/todo/config/release-records/${id}/rollback-draft', 'post']
 ]
@@ -111,6 +112,7 @@ function check() {
   checkRuleLibraryPages()
   checkTriggerRulePage()
   checkTemplatePage()
+  checkSimulationAndReleasePages()
 }
 
 function source(file) {
@@ -386,6 +388,55 @@ function checkTemplatePage() {
   assert.deepStrictEqual(created.owner.config.candidates, ['lawyer'], 'create/copy must retain the unsaved owner')
   assert.deepStrictEqual(created.dodRuleIds, [11, 12], 'create/copy must retain ordered DoD references')
   assert.strictEqual(created.versionId, 99, 'create/copy must merge the persisted aggregate identity')
+}
+
+function checkSimulationAndReleasePages() {
+  const simulationPage = 'src/views/todo/config/simulation/index.vue'
+  const simulationDrawer = 'src/views/todo/config/simulation/SimulationDrawer.vue'
+  const simulationResult = 'src/views/todo/config/simulation/SimulationResult.vue'
+  const releasePage = 'src/views/todo/config/release/index.vue'
+  const releaseDrawer = 'src/views/todo/config/release/ReleaseRecordDrawer.vue'
+  const semanticDiff = 'src/views/todo/config/release/VersionSemanticDiff.vue'
+  const contents = Object.fromEntries([
+    simulationPage, simulationDrawer, simulationResult, releasePage, releaseDrawer, semanticDiff
+  ].map(file => [file, source(file)]))
+
+  requireTokens(simulationPage, contents[simulationPage], [
+    'ConfigPageShell', 'ConfigMetricCard', 'SimulationDrawer',
+    'todo:simulation:simulate', '只读模拟，不创建真实待办', 'listTemplateEventCatalog',
+    'listTodoTemplates', 'law_todo_business_type', '$route.query', ':initial-event="handoffEvent"'
+  ])
+  requireTokens(simulationDrawer, contents[simulationDrawer], [
+    'ConfigDetailDrawer', 'SimulationResult', 'simulateConfiguration', 'versionId',
+    'eventType', 'payloadVersion', 'businessType', 'businessId', 'payload', 'effectiveAt',
+    'expectedDefinitionHash', '只读模拟，不创建真实待办'
+  ])
+  requireTokens(simulationResult, contents[simulationResult], [
+    '状态变化', '命中模板', '负责人', 'SLA', 'DoD', '下一步路由', '待办卡片预览', '技术日志',
+    'simulation.trigger', 'simulation.owner', 'simulation.sla', 'simulation.form', 'simulation.routes'
+  ])
+  const ordered = ['状态变化', '命中模板', '负责人', 'SLA', 'DoD', '下一步路由', '待办卡片预览', '技术日志']
+    .map(token => contents[simulationResult].indexOf(token))
+  assert(ordered.every(index => index >= 0) && ordered.every((index, position) => position === 0 || ordered[position - 1] < index),
+    'simulation result sections must follow execution order')
+
+  requireTokens(releasePage, contents[releasePage], [
+    'ConfigPageShell', 'ConfigMetricCard', 'ReleaseRecordDrawer', 'listReleaseRecords',
+    'todo:release:list',
+    'publisher', 'beginTime', 'endTime', 'exportRelease'
+  ])
+  requireTokens(releaseDrawer, contents[releaseDrawer], [
+    'ConfigDetailDrawer', 'VersionSemanticDiff', 'getReleaseRecord', 'diffReleaseRecords',
+    'copyReleaseDraft', 'rollbackReleaseDraft', '变更摘要', '影响范围', '规则快照',
+    '回滚来源', '生成新草稿', '不可变发布版本', 'todo:release:diff',
+    'todo:release:rollback', 'todo:template:copy'
+  ])
+  requireTokens(semanticDiff, contents[semanticDiff], [
+    'changes', 'path', 'before', 'after', '无语义差异'
+  ])
+  if (/updateTodoTemplate|updateTemplateDraft|publishReleaseRecord/.test(contents[releaseDrawer])) {
+    throw new Error('published release drawer must never mutate or republish an immutable version')
+  }
 }
 
 runNegativeFixture()

@@ -202,7 +202,9 @@
         and candidate.action_type='PUBLISH_VERSION'
       order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
     <where>
-      v.status='PUBLISHED'
+      v.status in ('PUBLISHED','RETIRED')
+      <if test="status != null and status != ''">and v.status=#{status}</if>
+      <if test="publisher != null and publisher != ''">and v.published_by=#{publisher}</if>
       <if test="templateId != null">and v.template_id=#{templateId}</if>
       <if test="templateCode != null and templateCode != ''">and t.template_code=#{templateCode}</if>
       <if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if>
@@ -221,11 +223,11 @@
       where candidate.source_entity_id=v.version_id and candidate.entity_type='VERSION'
         and candidate.action_type='PUBLISH_VERSION'
       order by candidate.create_time desc,candidate.definition_action_id desc limit 1)
-    where v.status='PUBLISHED' and v.version_id=#{versionId}
+    where v.status in ('PUBLISHED','RETIRED') and v.version_id=#{versionId}
   </select>
   <select id="countReleaseRecords" resultType="long">
     select count(*) from todo_template_version v join todo_template t on t.template_id=v.template_id
-    <where>v.status='PUBLISHED'<if test="templateId != null">and v.template_id=#{templateId}</if><if test="templateCode != null and templateCode != ''">and t.template_code=#{templateCode}</if><if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if><if test="beginTime != null">and coalesce(v.published_time,v.create_time) &gt;= #{beginTime}</if><if test="endTime != null">and coalesce(v.published_time,v.create_time) &lt;= #{endTime}</if></where>
+    <where>v.status in ('PUBLISHED','RETIRED')<if test="status != null and status != ''">and v.status=#{status}</if><if test="publisher != null and publisher != ''">and v.published_by=#{publisher}</if><if test="templateId != null">and v.template_id=#{templateId}</if><if test="templateCode != null and templateCode != ''">and t.template_code=#{templateCode}</if><if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if><if test="beginTime != null">and coalesce(v.published_time,v.create_time) &gt;= #{beginTime}</if><if test="endTime != null">and coalesce(v.published_time,v.create_time) &lt;= #{endTime}</if></where>
   </select>
   <insert id="insertSimulationRecord" useGeneratedKeys="true" keyProperty="simulationId">
     insert into todo_simulation_record(request_id,template_version_id,event_type,business_type,business_id,input_summary_json,
