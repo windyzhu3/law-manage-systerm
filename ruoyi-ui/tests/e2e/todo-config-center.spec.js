@@ -143,8 +143,13 @@ async function loginAs(page, username, secret) {
   await page.goto('/login')
   await page.getByPlaceholder('请输入账号/手机号/邮箱').fill(username)
   await page.getByPlaceholder('请输入密码').fill(secret)
+  const loginResponsePromise = page.waitForResponse(response =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/prod-api/login',
+    { timeout: 15000 }
+  )
   await page.getByRole('button', { name: '登录系统' }).click()
-  await expect(page).not.toHaveURL(/\/login(?:\?|$)/)
+  await expectSuccessfulApiResponse(loginResponsePromise)
+  await expect(page).not.toHaveURL(/\/login(?:\?|$)/, { timeout: 15000 })
 }
 
 async function fillTextField(scope, label, value) {

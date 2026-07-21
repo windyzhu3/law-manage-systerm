@@ -39,6 +39,9 @@ for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
 forbidText(spec, 'if (screenshotDir) {', 'Todo configuration real E2E functional assertions')
 for (const required of [
   "loginAs(page, 'todo_config_admin'",
+  "pathname === '/prod-api/login'",
+  'expectSuccessfulApiResponse(loginResponsePromise)',
+  "not.toHaveURL(/\\/login(?:\\?|$)/, { timeout: 15000 })",
   "page.goto('/todo-engine/todo-template')",
   '新建模板',
   '保存草稿',
