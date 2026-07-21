@@ -33,14 +33,15 @@ for (const required of ['TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL
 for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
   if (spec.includes(forbidden)) throw new Error(`Todo configuration real E2E must not mock core APIs: ${forbidden}`)
 }
+forbidText(spec, 'if (screenshotDir) {', 'Todo configuration real E2E functional assertions')
 for (const required of [
   "loginAs(page, 'todo_config_admin'",
-  "page.goto('/todo-template')",
+  "page.goto('/todo-engine/todo-template')",
   '新建模板',
   '保存草稿',
   '运行真实模拟',
   '发布',
-  "page.goto('/todo-release-record')",
+  "page.goto('/todo-engine/todo-release-record')",
   'cleanupTodoConfiguration',
   'TODO_CONFIG_E2E_RUN_MARKER',
   'TODO_CONFIG_E2E_SLA_CODE',
@@ -48,9 +49,12 @@ for (const required of [
   'TODO_CONFIG_E2E_LEAD_NO',
   'contactResult',
   'routing-add-node',
-  '当前定义版本（起点）',
+  "toHaveValue('当前定义版本（起点）')",
   '新增连线',
   'END',
+  'expectSuccessfulApiResponse(calendarResponsePromise)',
+  'expectSuccessfulApiResponse(validatorResponsePromise)',
+  'await expect(triggerRow).toBeVisible()',
   '只读模拟，不创建真实待办',
   '1. 状态变化',
   '2. 命中模板',
@@ -88,7 +92,8 @@ for (const required of [
   'TODO_CONFIG_E2E_SLA_CODE',
   'TODO_CONFIG_E2E_DOD_CODE',
   'TODO_CONFIG_E2E_LEAD_NO',
-  'TEST_ONLY|TODO_CONFIG_E2E|'
+  'TEST_ONLY|TODO_CONFIG_E2E|',
+  'pwd_update_date'
 ]) requireText(bootstrap, required, 'Test-only identity bootstrap')
 for (const required of [
   "coalesce(remark,'')", "coalesce(create_by,'')", "coalesce(@test_remark,'')", 'todo.e2e.captcha.restore.'

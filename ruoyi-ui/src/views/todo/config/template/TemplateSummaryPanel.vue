@@ -19,7 +19,17 @@
 export default {
   name: 'TemplateSummaryPanel', props: { draft: { type: Object, default: null }, definitionError: String },
   computed: { routingSummary() { const routing = this.draft.routing && this.draft.routing.config ? this.draft.routing.config : {}; return `${(routing.nodes || []).length} 个节点，${(routing.edges || []).length} 条连线` }, cardTitle() { const ui = this.draft.ui && this.draft.ui.config ? this.draft.ui.config : {}; return ui.cardTitle || this.draft.templateName || '待办标题' }, owner() { const config = this.draft.owner && this.draft.owner.config ? this.draft.owner.config : {}; return config.type ? `${config.type}${config.candidates && config.candidates.length ? ` · ${config.candidates.join('、')}` : ''}` : '未配置' }, slaName() { return this.referenceLabel('SLA') }, priorityTone() { return { URGENT: 'danger', HIGH: 'warning', NORMAL: '', LOW: 'info' }[this.draft.priority] || '' } },
-  methods: { pretty(value) { return JSON.stringify(value || {}, null, 2) }, referenceLabel(type) { const refs = (this.draft.ruleReferences || []).filter(item => item.type === type); return refs.length ? refs.map(item => item.ruleName || item.ruleCode || item.id).join('、') : '未绑定规则库' } }
+  methods: {
+    pretty(value) { return JSON.stringify(value || {}, null, 2) },
+    referenceLabel(type) {
+      const refs = (this.draft.ruleReferences || []).filter(item => item.type === type)
+      if (refs.length) return refs.map(item => item.ruleName || item.ruleCode || item.id).join('、')
+      const section = type === 'SLA' ? this.draft.sla : this.draft.dod
+      const config = section && section.config ? section.config : {}
+      const snapshots = Array.isArray(config.ruleSnapshots) ? config.ruleSnapshots : []
+      return snapshots.length ? snapshots.map(item => item.ruleName || item.ruleCode || item.ruleId || item.id).join('、') : '未绑定规则库'
+    }
+  }
 }
 </script>
 <style scoped lang="scss">@import '../styles/config-center.scss';.summary-grid{margin-top:14px}.summary-grid .el-col{margin-bottom:12px}.summary-grid .el-card{min-height:170px}.summary-grid p{margin:7px 0;color:#64748b}.summary-grid pre{max-height:90px;margin:8px 0 0;overflow:auto;white-space:pre-wrap;word-break:break-word}</style>

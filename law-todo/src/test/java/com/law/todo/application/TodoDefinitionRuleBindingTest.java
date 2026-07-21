@@ -278,6 +278,13 @@ class TodoDefinitionRuleBindingTest
 
         ArgumentCaptor<Map<String,Object>> snapshot=ArgumentCaptor.forClass(Map.class);
         verify(mapper).updateDefinitionDocument(snapshot.capture());
+        Map<String,Object> source=snapshotDraft();
+        assertEquals(source.get("definition_json"),snapshot.getValue().get("sourceDefinitionJson"));
+        assertEquals(source.get("owner_rule_json"),snapshot.getValue().get("sourceOwnerRuleJson"));
+        assertEquals(source.get("dod_rule_json"),snapshot.getValue().get("sourceDodRuleJson"));
+        assertEquals(source.get("sla_rule_json"),snapshot.getValue().get("sourceSlaRuleJson"));
+        assertEquals(source.get("next_rule_json"),snapshot.getValue().get("sourceNextRuleJson"));
+        assertEquals(source.get("ui_schema_json"),snapshot.getValue().get("sourceUiSchemaJson"));
         ArgumentCaptor<Map<String,Object>> compilation=ArgumentCaptor.forClass(Map.class);
         verify(mapper).updateDefinitionCompilation(compilation.capture());
         assertEquals(snapshot.getValue().get("definitionJson"),compilation.getValue().get("definitionJson"));

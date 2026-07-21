@@ -55,6 +55,14 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       mvc().perform(get("/todo/config/sla-rules")).andExpect(status().isForbidden());
       mvc().perform(get("/todo/config/release-records")).andExpect(status().isForbidden());
     }
+    @Test void ruleEditorsCanReadOnlyTheirRequiredSharedCatalogs() throws Exception {
+      authenticate("todo:sla-rule:list");
+      mvc().perform(get("/todo/config/template-catalog/calendars")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/validators")).andExpect(status().isForbidden());
+      authenticate("todo:dod-rule:list");
+      mvc().perform(get("/todo/config/template-catalog/validators")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/calendars")).andExpect(status().isForbidden());
+    }
     @Test void releaseListPermissionCanReadOnlyTheImmutableVersionDirectory() throws Exception {
       authenticate("todo:release:list");
       mvc().perform(get("/todo/config/release-records/9/versions")).andExpect(status().isOk());

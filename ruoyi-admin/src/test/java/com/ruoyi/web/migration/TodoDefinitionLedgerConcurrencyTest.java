@@ -65,6 +65,39 @@ class TodoDefinitionLedgerConcurrencyTest
         }
     }
 
+    @Test void preflightSnapshotCannotOverwriteAConcurrentlySavedDraft() throws Exception
+    {
+        String url=MigrationTestDatabase.migrate(),user=MigrationTestDatabase.user(),password=MigrationTestDatabase.password();
+        String suffix=String.valueOf(System.nanoTime()),templateCode="PREFLIGHT_GUARD_"+suffix;long templateId=0,versionId=0;
+        String oldDefinition="{\"revision\":1}",newDefinition="{\"revision\":2}",snapshotDefinition="{\"revision\":1,\"snapshotted\":true}";
+        String owner="{\"type\":\"USER\"}",dod="{\"fields\":[]}",sla="{\"minutes\":30}",next="{\"type\":\"END\"}",ui="{\"fields\":[]}";
+        try(Connection setup=DriverManager.getConnection(url,user,password))
+        {
+            try(PreparedStatement insert=setup.prepareStatement("insert into todo_template(template_code,template_name,business_type,status) values(?,?,'TEST','0')",Statement.RETURN_GENERATED_KEYS))
+            {insert.setString(1,templateCode);insert.setString(2,templateCode);assertEquals(1,insert.executeUpdate());try(ResultSet keys=insert.getGeneratedKeys()){assertTrue(keys.next());templateId=keys.getLong(1);}}
+            try(PreparedStatement insert=setup.prepareStatement("insert into todo_template_version(template_id,version_no,status,definition_schema_version,definition_json,owner_rule_json,dod_rule_json,sla_rule_json,next_rule_json,ui_schema_json) values(?,1,'DRAFT',1,cast(? as json),cast(? as json),cast(? as json),cast(? as json),cast(? as json),cast(? as json))",Statement.RETURN_GENERATED_KEYS))
+            {insert.setLong(1,templateId);insert.setString(2,oldDefinition);insert.setString(3,owner);insert.setString(4,dod);insert.setString(5,sla);insert.setString(6,next);insert.setString(7,ui);assertEquals(1,insert.executeUpdate());try(ResultSet keys=insert.getGeneratedKeys()){assertTrue(keys.next());versionId=keys.getLong(1);}}
+        }
+        try(Connection preflight=DriverManager.getConnection(url,user,password);Connection save=DriverManager.getConnection(url,user,password))
+        {
+            preflight.setAutoCommit(false);
+            try(PreparedStatement read=preflight.prepareStatement("select json_extract(definition_json,'$.revision') from todo_template_version where version_id=?"))
+            {read.setLong(1,versionId);try(ResultSet rows=read.executeQuery()){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}}
+            try(PreparedStatement update=save.prepareStatement("update todo_template_version set definition_json=cast(? as json) where version_id=?"))
+            {update.setString(1,newDefinition);update.setLong(2,versionId);assertEquals(1,update.executeUpdate());}
+            try(PreparedStatement snapshot=preflight.prepareStatement("update todo_template_version set definition_json=cast(? as json) where version_id=? and status in ('DRAFT','BLOCKED') and definition_json <=> cast(? as json) and owner_rule_json <=> cast(? as json) and dod_rule_json <=> cast(? as json) and sla_rule_json <=> cast(? as json) and next_rule_json <=> cast(? as json) and ui_schema_json <=> cast(? as json)"))
+            {snapshot.setString(1,snapshotDefinition);snapshot.setLong(2,versionId);snapshot.setString(3,oldDefinition);snapshot.setString(4,owner);snapshot.setString(5,dod);snapshot.setString(6,sla);snapshot.setString(7,next);snapshot.setString(8,ui);assertEquals(0,snapshot.executeUpdate());}
+            preflight.rollback();
+            try(PreparedStatement verify=save.prepareStatement("select json_extract(definition_json,'$.revision') from todo_template_version where version_id=?"))
+            {verify.setLong(1,versionId);try(ResultSet rows=verify.executeQuery()){assertTrue(rows.next());assertEquals(2,rows.getInt(1));}}
+        }
+        finally
+        {
+            try(Connection cleanup=DriverManager.getConnection(url,user,password);PreparedStatement versions=cleanup.prepareStatement("delete from todo_template_version where template_id=?");PreparedStatement template=cleanup.prepareStatement("delete from todo_template where template_id=?"))
+            {versions.setLong(1,templateId);versions.executeUpdate();template.setLong(1,templateId);template.executeUpdate();}
+        }
+    }
+
     private void insertRollbackAction(Connection c,String action)throws Exception
     {try(PreparedStatement insert=c.prepareStatement("insert into todo_definition_action(action_id,action_type,action_status,request_fingerprint,entity_type,source_entity_id,operator_id,operator_name,payload_json) values(?,'ROLLBACK_DRAFT','CLAIMED',?,'VERSION',9,7,'alice','{}')")){insert.setString(1,action);insert.setString(2,"b".repeat(64));assertEquals(1,insert.executeUpdate());}}
     private int insertDraft(Connection c,long templateId,int versionNo)throws Exception

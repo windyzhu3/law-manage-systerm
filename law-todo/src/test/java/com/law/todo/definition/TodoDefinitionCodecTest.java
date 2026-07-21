@@ -52,6 +52,32 @@ class TodoDefinitionCodecTest
     }
 
     @Test
+    void readsConfigurationCenterDraftWithEmptyRuleSections()
+    {
+        String json = """
+                {
+                  "schemaVersion": 1,
+                  "templateCode": "E2E_TODO_CONFIG",
+                  "event": {"eventType": "LEAD_ASSIGNED", "payloadVersion": 1, "condition": {}},
+                  "owner": {"config": {"type": "BUSINESS_OWNER", "candidates": [], "cc": [], "skipUnavailable": true, "useDelegation": true}},
+                  "dod": {"config": {"composition": "ALL", "systemDerivedFields": []}},
+                  "sla": {"config": {}},
+                  "ui": {"config": {"fields": ["contactResult"], "businessStage": "LEAD", "templateType": "STANDARD", "priority": "NORMAL", "description": ""}},
+                  "routing": {"config": {"nodes": [], "edges": []}},
+                  "autoActions": [],
+                  "decisionRefs": [],
+                  "acceptanceRefs": []
+                }
+                """;
+
+        TodoDefinitionDocument definition = codec.read(json);
+
+        assertEquals("E2E_TODO_CONFIG", definition.templateCode());
+        assertEquals("BUSINESS_OWNER", definition.owner().config().get("type"));
+        assertEquals(List.of("contactResult"), definition.ui().config().get("fields"));
+    }
+
+    @Test
     void nestedConfigurationCannotChangeCanonicalJsonAfterConstruction()
     {
         List<String> candidates = new ArrayList<>(List.of("alice"));
@@ -125,6 +151,19 @@ class TodoDefinitionCodecTest
         org.junit.jupiter.api.Assertions.assertTrue(migration.contains("idx_todo_definition_status"));
         org.junit.jupiter.api.Assertions.assertTrue(migration.contains("idx_todo_definition_hash"));
         org.junit.jupiter.api.Assertions.assertTrue(mapper.contains("updateDefinitionDocument"));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                mapper.contains("definition_json &lt;=&gt; cast(#{expectedDefinitionJson} as json)"),
+                "draft optimistic locking must compare JSON values instead of JSON and VARCHAR values");
+        for (String sourceColumn : List.of("definition_json:sourceDefinitionJson",
+                "owner_rule_json:sourceOwnerRuleJson", "dod_rule_json:sourceDodRuleJson",
+                "sla_rule_json:sourceSlaRuleJson", "next_rule_json:sourceNextRuleJson",
+                "ui_schema_json:sourceUiSchemaJson"))
+        {
+            String[] parts = sourceColumn.split(":");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    mapper.contains(parts[0] + " &lt;=&gt; cast(#{" + parts[1] + "} as json)"),
+                    parts[0] + " compilation guard must compare JSON values");
+        }
     }
 
     private TodoDefinitionDocument fixture(String templateCode)

@@ -142,7 +142,7 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/template-catalog/owners") public AjaxResult templateOwnerCatalog(){return success(query.ownerCatalog());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/handlers") public AjaxResult templateHandlerCatalog(){return success(catalogs==null?List.of():catalogs.handlers().stream().map(item->new CapabilitySummary(item.code(),item.description(),item.simulatable())).toList());}
-    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:dod-rule:copy')")
     @GetMapping("/template-catalog/validators") public AjaxResult templateValidatorCatalog(){return success(catalogs==null?List.of():catalogs.validators().stream().map(item->new CapabilitySummary(item.code(),item.description(),false)).toList());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/auto-actions") public AjaxResult templateAutoActionCatalog(){return success(autoActions==null?List.of():autoActions.list());}
@@ -155,7 +155,7 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/template-catalog/dod-rules") public AjaxResult templateDodRuleCatalog(){var rows=dod.list(Map.of("status","0"));return success(rows==null?List.of():rows.stream().map(row->new TemplateRuleCatalogEntry(
             row.dodRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.ruleType(),null,null,null,
             row.requiredFieldsJson(),row.requiredAttachmentsJson(),row.conditionalRulesJson())).toList());}
-    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:sla-rule:list,todo:sla-rule:create,todo:sla-rule:edit,todo:sla-rule:copy')")
     @GetMapping("/template-catalog/calendars") public AjaxResult templateCalendarCatalog(){return success(templates.listTemplateCalendarCatalog());}
 
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")

@@ -116,8 +116,14 @@ export default {
   methods: {
     json(value) { return value && Object.keys(value).length ? JSON.stringify(value) : '' },
     nodeType(key) { const node = this.graph.nodes.find(item => item.key === key); return node && node.type },
+    currentDefinitionVersionId() {
+      const direct = Number(this.currentVersionId)
+      if (direct > 0) return direct
+      const draft = this.versions.find(row => String(row.status || '').toUpperCase() === 'DRAFT')
+      return draft ? Number(draft.versionId || draft.version_id) || null : null
+    },
     versionOptions(node) {
-      const current = Number(this.currentVersionId)
+      const current = this.currentDefinitionVersionId()
       if (node.key === this.graph.start) return current ? [{ id: current, label: '当前定义版本（起点）' }] : []
       const options = this.routingTargets.map(row => ({ id: Number(row.versionId || row.version_id), label: `${row.templateName || row.template_name} · v${row.versionNo || row.version_no} · 已发布` }))
       return options
@@ -139,8 +145,9 @@ export default {
     },
     addNode() {
       const index = this.graph.nodes.length + 1
+      const isStart = this.graph.nodes.length === 0
       const published = this.routingTargets[0]
-      const node = { key: `node_${index}`, type: 'TASK', templateVersionId: published ? Number(published.version_id || published.versionId) : null }
+      const node = { key: `node_${index}`, type: 'TASK', templateVersionId: isStart ? this.currentDefinitionVersionId() : (published ? Number(published.version_id || published.versionId) : null) }
       this.graph.nodes.push(node)
       if (!this.graph.start) this.graph.start = node.key
       this.commit()

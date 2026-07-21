@@ -132,6 +132,8 @@ class TodoConfigurationControllerValidationTest
         String editorRead="@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')";
         assertPermissionExpression("templateOwnerCatalog",editorRead);
         assertPermissionExpression("templateRoutingTargetCatalog",editorRead);
+        assertPermissionExpression("templateValidatorCatalog","@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:dod-rule:copy')");
+        assertPermissionExpression("templateCalendarCatalog","@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:sla-rule:list,todo:sla-rule:create,todo:sla-rule:edit,todo:sla-rule:copy')");
     }
 
     @Test

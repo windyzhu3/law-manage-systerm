@@ -45,10 +45,10 @@ update sys_role set status='0',create_by=@run_marker,remark=@test_remark
 where role_key='todo_config_admin' and del_flag='0' and remark like 'TEST_ONLY|TODO_CONFIG_E2E|%';
 set @todo_config_role_id=(select role_id from sys_role where role_key='todo_config_admin' and del_flag='0' and create_by=@run_marker and remark=@test_remark order by role_id limit 1);
 
-insert into sys_user(dept_id,user_name,nick_name,user_type,email,phonenumber,sex,avatar,password,status,del_flag,create_by,create_time,remark)
-select 103,'todo_config_admin','Todo E2E admin','99','','','0','','TODO_CONFIG_E2E_PASSWORD_HASH','0','0',@run_marker,sysdate(),@test_remark
+insert into sys_user(dept_id,user_name,nick_name,user_type,email,phonenumber,sex,avatar,password,pwd_update_date,status,del_flag,create_by,create_time,remark)
+select 103,'todo_config_admin','Todo E2E admin','99','','','0','','TODO_CONFIG_E2E_PASSWORD_HASH',sysdate(),'0','0',@run_marker,sysdate(),@test_remark
 where not exists(select 1 from sys_user where user_name='todo_config_admin' and del_flag='0');
-update sys_user set password='TODO_CONFIG_E2E_PASSWORD_HASH',status='0',user_type='99',create_by=@run_marker,remark=@test_remark
+update sys_user set password='TODO_CONFIG_E2E_PASSWORD_HASH',pwd_update_date=sysdate(),status='0',user_type='99',create_by=@run_marker,remark=@test_remark
 where user_name='todo_config_admin' and del_flag='0' and remark like 'TEST_ONLY|TODO_CONFIG_E2E|%';
 set @todo_config_user_id=(select user_id from sys_user where user_name='todo_config_admin' and del_flag='0' and create_by=@run_marker and remark=@test_remark order by user_id limit 1);
 

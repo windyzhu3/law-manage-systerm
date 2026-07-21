@@ -40,8 +40,7 @@
 <script>
 import ConfigDetailDrawer from '../shared/ConfigDetailDrawer'
 import SlaTimeline from './SlaTimeline'
-import { listWorkCalendars } from '@/api/todo-definition'
-import { createSlaRule, updateSlaRule, copySlaRule, toggleSlaRule, testSlaRule } from '@/api/todo-config'
+import { createSlaRule, updateSlaRule, copySlaRule, toggleSlaRule, testSlaRule, listTemplateCalendarCatalog } from '@/api/todo-config'
 
 const emptyForm = () => ({ slaRuleId: null, ruleCode: '', ruleName: '', slaType: '', durationValue: 60, durationUnit: '', calendarCode: '', startStrategy: '', softRemindPercent: 80, hardRemindPercent: 100, escalatePercent: 150, pausePolicyJson: '', escalationPolicyJson: '', autoActionJson: '', timeoutStrategy: '', status: '0', serverStatus: '0', version: 0, referenceCount: 0, updateTime: '', updateBy: '' })
 const valueOf = (row, camel, snake) => row && (row[camel] !== undefined ? row[camel] : row[snake])
@@ -55,7 +54,7 @@ export default {
   watch: { visible(open) { if (open) this.hydrate() }, rule() { if (this.visible) this.hydrate() }, calendarOptions: { deep: true, handler(value) { if (Array.isArray(value)) this.calendars = value.slice() } } },
   created() { this.loadCalendars() },
   methods: {
-    loadCalendars() { if (Array.isArray(this.calendarOptions)) { this.calendars = this.calendarOptions.slice(); return Promise.resolve() } return listWorkCalendars().then(response => { this.calendars = response.data || [] }).catch(() => { this.calendars = [] }) },
+    loadCalendars() { if (Array.isArray(this.calendarOptions)) { this.calendars = this.calendarOptions.slice(); return Promise.resolve() } return listTemplateCalendarCatalog().then(response => { this.calendars = response.data || [] }).catch(() => { this.calendars = [] }) },
     calendarCode(calendar) { return valueOf(calendar, 'calendarCode', 'calendar_code') },
     calendarName(calendar) { return valueOf(calendar, 'calendarName', 'calendar_name') || this.calendarCode(calendar) },
     hydrate() { const source = this.rule || {}; const form = emptyForm(); Object.keys(form).forEach(key => { const snake = key.replace(/[A-Z]/g, item => `_${item.toLowerCase()}`); const value = valueOf(source, key, snake); if (value !== undefined && value !== null) form[key] = value }); try { const action = form.autoActionJson ? JSON.parse(form.autoActionJson) : null; if (action && !Array.isArray(action) && action.timeoutStrategy) form.timeoutStrategy = action.timeoutStrategy } catch (error) { /* preserve malformed policy text for explicit correction */ } form.slaRuleId = Number(form.slaRuleId) || null; form.version = Number(form.version) || 0; form.referenceCount = Number(form.referenceCount) || 0; form.durationValue = Number(form.durationValue) || 1; form.softRemindPercent = 80; form.hardRemindPercent = 100; form.escalatePercent = 150; form.serverStatus = form.status; if (this.copyMode) { form.slaRuleId = null; form.version = 0; form.referenceCount = 0; form.ruleCode = `${form.ruleCode || 'SLA'}_COPY`; } this.form = form; this.calculation = null; this.testCreatedAt = ''; this.initialSnapshot = this.snapshot(); this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate()) },

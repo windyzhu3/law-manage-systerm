@@ -349,6 +349,31 @@ class TodoDefinitionServiceTest
         verify(mapper).updateDefinitionCompilation(anyMap());
     }
 
+    @Test void draftPublishPreflightAllowsItsOwnStartTaskVersion()
+    {
+        Map<String,Object> current=draft(null,null);
+        current.put("definition_json", """
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"PAYLOAD","operand":"ownerId"}},
+                 "dod":{"config":{}},"sla":{"config":{}},"ui":{"config":{}},
+                 "routing":{"config":{"start":"start","nodes":[
+                   {"key":"start","type":"TASK","templateVersionId":9},
+                   {"key":"end","type":"END"}],
+                   "edges":[{"key":"start-end","from":"start","to":"end"}]}},
+                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        registeredEvent();
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+
+        TodoDefinitionService.PreflightResult result=service().preflight(9L);
+
+        assertTrue(result.report().publishable());
+        assertTrue(result.report().errors().stream().noneMatch(issue ->
+                "TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
+    }
+
     @Test void unresolvedDecisionRejectsPublishAfterPersistingReport()
     {
         Map<String,Object> definition=draft(null,null);
@@ -525,6 +550,34 @@ class TodoDefinitionServiceTest
 
         assertEquals("TODO_DEFINITION_VERSION_CONFLICT",error.getBusinessCode());
         verify(mapper,never()).completeDefinitionAction(anyString(),anyString(),org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test void updateDraftAcceptsConfigurationCenterDocumentWithEmptyRuleSections()
+    {
+        Map<String,Object> current=draft(null,null);
+        current.put("template_code","E2E_TODO_CONFIG");
+        current.put("business_type","LEAD");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        AtomicReference<Map<String,Object>> action=new AtomicReference<>();
+        when(mapper.insertDefinitionActionClaim(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> recorded=new HashMap<>(invocation.getArgument(0));
+            recorded.put("actionStatus","CLAIMED");action.set(recorded);return 1;
+        });
+        when(mapper.selectDefinitionActionForUpdate("edit-configuration-center")).thenAnswer(invocation->action.get());
+        when(mapper.updateTemplateVersionDraft(anyMap())).thenReturn(1);
+        when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq("edit-configuration-center"),anyString(),org.mockito.ArgumentMatchers.eq(9L))).thenReturn(1);
+        String document="""
+                {"schemaVersion":1,"templateCode":"E2E_TODO_CONFIG",
+                 "event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"BUSINESS_OWNER","candidates":[],"cc":[],"skipUnavailable":true,"useDelegation":true}},
+                 "dod":{"config":{"composition":"ALL","systemDerivedFields":[]}},"sla":{"config":{}},
+                 "ui":{"config":{"fields":["contactResult"],"businessStage":"LEAD","templateType":"STANDARD","priority":"NORMAL","description":""}},
+                 "routing":{"config":{"nodes":[],"edges":[]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+
+        assertEquals(9L,service().updateDraft(new UpdateDraftCommand("edit-configuration-center",9L,document),actor));
+
+        verify(mapper).updateTemplateVersionDraft(anyMap());
     }
 
     @Test void releaseRollbackAllocatesTheNextVersionWhileHoldingTheTemplateLock()

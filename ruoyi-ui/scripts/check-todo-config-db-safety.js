@@ -21,7 +21,7 @@ Object.assign(process.env, { TODO_E2E_REAL_BACKEND: 'true', TODO_CONFIG_E2E_RUN_
 
 function cloneSource() {
   executeSql(`drop database if exists \`${database}\`; create database \`${database}\` character set utf8mb4 collate utf8mb4_unicode_ci;`, 'mysql')
-  const dump = execFileSync('docker', ['exec', '-e', `MYSQL_PWD=${password}`, container, 'mysqldump', '--single-transaction', '--no-tablespaces', '--skip-triggers', '-uroot', sourceDb], { encoding: 'utf8', windowsHide: true })
+  const dump = execFileSync('docker', ['exec', '-e', `MYSQL_PWD=${password}`, container, 'mysqldump', '--single-transaction', '--no-tablespaces', '--skip-triggers', '-uroot', sourceDb], { encoding: 'utf8', windowsHide: true, maxBuffer: 64 * 1024 * 1024 })
   executeSql(dump, database)
 }
 

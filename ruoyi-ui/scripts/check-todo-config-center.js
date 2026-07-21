@@ -303,7 +303,7 @@ function checkRuleLibraryPages() {
     'todo:sla-rule:toggle', 'createSlaRule', 'updateSlaRule', 'copySlaRule', 'toggleSlaRule', 'testSlaRule',
     'actionId', 'expectedVersion'])
   requireTokens(slaDrawer, contents[slaDrawer], [
-    'ConfigDetailDrawer', 'listWorkCalendars', 'SlaTimeline', 'softRemindPercent',
+    'ConfigDetailDrawer', 'listTemplateCalendarCatalog', 'SlaTimeline', 'softRemindPercent',
     'hardRemindPercent', 'escalatePercent', '80%', '100%', '150%', 'createdAt',
     'pausePolicyJson', 'escalationPolicyJson', 'autoActionJson', 'actionId', 'expectedVersion'
   ])
@@ -320,7 +320,7 @@ function checkRuleLibraryPages() {
     'todo:dod-rule:toggle', 'createDodRule', 'updateDodRule', 'copyDodRule', 'toggleDodRule',
     'getDodRuleReferenceCount', 'testDodRule', 'actionId', 'expectedVersion'])
   requireTokens(dodDrawer, contents[dodDrawer], [
-    'ConfigDetailDrawer', 'listTodoValidatorCatalog', 'requiredFieldsJson',
+    'ConfigDetailDrawer', 'listTemplateValidatorCatalog', 'requiredFieldsJson',
     'requiredAttachmentsJson', 'conditionalRulesJson', 'validatorRefsJson', 'errorMessagesJson',
     'missingFields', 'missingAttachments', 'validatorIssues', 'payload', 'attachments',
     'actionId', 'expectedVersion'
@@ -328,6 +328,8 @@ function checkRuleLibraryPages() {
   assertDirectToggleContract(dodPage, contents[dodPage], 'toggleDodRule')
   assertMethodTokens(dodPage, contents[dodPage], 'toggleRow', ['getDodRuleReferenceCount', '$confirm'])
   assertPersistedStatusContract(dodDrawer, contents[dodDrawer])
+  if (contents[slaDrawer].includes('listWorkCalendars')) throw new Error(`${slaDrawer} must use the configuration-centre calendar catalogue`)
+  if (contents[dodDrawer].includes('listTodoValidatorCatalog')) throw new Error(`${dodDrawer} must use the configuration-centre validator catalogue`)
 
   const fixedOptionMarkers = ['slaTypeOptions', 'durationUnitOptions', 'startStrategyOptions', 'ruleTypeOptions', 'validatorOptions']
   Object.entries(contents).forEach(([file, content]) => {
@@ -438,10 +440,14 @@ function checkTemplatePage() {
     'law_todo_owner_rule_type', 'law_todo_condition_operator', 'law_todo_rule_status',
     'actionId', 'expectedVersion', 'expectedDefinitionJson'
   ])
+  requireTokens('template summary', source('src/views/todo/config/template/TemplateSummaryPanel.vue'), ['ruleReferences', 'ruleSnapshots', 'ruleName', 'ruleCode'])
   requireTokens('routing workflow', workflow, ['listTemplateRoutingTargetCatalog', 'TriggerConditionBuilder', 'payloadSchemaJson', 'termination'])
+  requireTokens('routing start defaults', source('src/views/todo/config/components/RoutingGraphEditor.vue'),
+    ['const isStart = this.graph.nodes.length === 0', 'isStart ? this.currentDefinitionVersionId()', "toUpperCase() === 'DRAFT'"])
   requireTokens('simulation freshness', workflow, ['definitionReady', 'sourceToken', '当前草稿已变更，请先保存并完成发布预检'])
   requireTokens(summary, contents[summary], ['待办卡片预览', 'priority', 'owner'])
   assertMethodTokens(page, contents[page], 'toggleRow', ['toggleTodoTemplate', 'actionId:', 'expectedVersion:', 'rowToggleLoading', '$confirm', 'this.load()'])
+  assertMethodTokens(page, contents[page], 'afterDraftSaved', ['loadDashboard', 'this.load(true)'])
   assertMethodTokens(drawer, contents[drawer], 'saveDraft', ['toTemplateDraftPayload', 'updateTemplateDraft', 'expectedDefinitionJson', 'ruleReferences', 'refreshSavedDraft'])
   assertMethodTokens(drawer, contents[drawer], 'runPreflight', ['preflightTemplateDraft', 'preflightGate', 'definitionSourceToken'])
   assertMethodTokens(drawer, contents[drawer], 'publish', ['runPreflight', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken', 'expectedDefinitionHash'])
@@ -453,6 +459,8 @@ function checkTemplatePage() {
   requireTokens(stepFiles[4], contents[stepFiles[4]], ['listTemplateDodRuleCatalog', 'listTemplateValidatorCatalog',
     ':provided-validators="validatorCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\"",
     'template-dod-ui-rules', 'systemDerivedFields', 'system-derived-fields-change', 'missingUiFields'])
+  requireTokens(stepFiles[6], contents[stepFiles[6]], ['payloadVersion: [Number, String]', 'payloadVersion: Number(this.payloadVersion || 1)'])
+  requireTokens(drawer, contents[drawer], [':payload-version="form.event.payloadVersion"'])
   if (/uiFields\s*:\s*\[\{[^}]*required\s*:\s*true/.test(contents[stepFiles[4]])) {
     throw new Error('template DoD step must not require UI fields when the selected rules only need attachments or system-derived values')
   }

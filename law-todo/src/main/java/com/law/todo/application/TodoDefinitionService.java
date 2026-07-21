@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.dao.DuplicateKeyException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONWriter;
@@ -41,6 +43,7 @@ import com.law.todo.spi.TodoDictionaryValidationPort;
 @Service
 public class TodoDefinitionService
 {
+    private static final Logger log = LoggerFactory.getLogger(TodoDefinitionService.class);
     private static final String DRAFT = "DRAFT";
     private static final String PUBLISHED = "PUBLISHED";
 
@@ -307,7 +310,11 @@ public class TodoDefinitionService
         if (command.definitionJson() != null && !command.definitionJson().isBlank())
         {
             try { definition=codec.read(command.definitionJson()); }
-            catch (RuntimeException invalid) { throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid template JSON: definitionJson"); }
+            catch (RuntimeException invalid)
+            {
+                log.warn("Unable to parse Todo template definition JSON for version {}", command.versionId(), invalid);
+                throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid template JSON: definitionJson");
+            }
             String code=text(value(current,"template_code","templateCode"));
             if (code != null && !code.equals(definition.templateCode()))
                 throw new TodoException("TODO_TEMPLATE_CODE_MISMATCH","Definition templateCode does not match the draft");
@@ -462,7 +469,7 @@ public class TodoDefinitionService
         TodoDefinitionDocument definition=binding.definition();
         if(binding.bound())
         {
-            Map<String,Object> snapshot=snapshotRow(command.versionId(),definition);
+            Map<String,Object> snapshot=snapshotRow(command.versionId(),definition,current);
             if(mapper.updateDefinitionDocument(snapshot)<=0)
                 throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Draft version changed before rule snapshot compilation");
             current=new HashMap<>(current);
@@ -511,12 +518,12 @@ public class TodoDefinitionService
             definition=binding.definition();
             if(binding.bound())
             {
-                Map<String,Object> snapshot=snapshotRow(versionId,definition);
+                Map<String,Object> snapshot=snapshotRow(versionId,definition,current);
                 if(mapper.updateDefinitionDocument(snapshot)<=0)
                     throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Draft version changed before rule snapshot compilation");
                 current=withSnapshot(current,snapshot);
             }
-            return preflight(versionId,false,current,definition,true);
+            return preflight(versionId,true,current,definition,true);
         }
         return preflight(versionId,false,current,definition,false);
     }
@@ -602,11 +609,18 @@ public class TodoDefinitionService
         return updated;
     }
 
-    private Map<String,Object> snapshotRow(Long versionId,TodoDefinitionDocument definition)
+    private Map<String,Object> snapshotRow(Long versionId,TodoDefinitionDocument definition,Map<String,Object> source)
     {
         Map<String,Object> row=new HashMap<>();row.put("versionId",versionId);row.put("definitionSchemaVersion",definition.schemaVersion());
         row.put("definitionJson",codec.canonicalJson(definition));row.put("compiledJson",null);row.put("definitionHash",null);
-        row.put("validationReportJson",null);projectLegacyRules(definition,row);return row;
+        row.put("validationReportJson",null);projectLegacyRules(definition,row);
+        row.put("sourceDefinitionJson",value(source,"definition_json","definitionJson"));
+        row.put("sourceOwnerRuleJson",value(source,"owner_rule_json","ownerRuleJson"));
+        row.put("sourceDodRuleJson",value(source,"dod_rule_json","dodRuleJson"));
+        row.put("sourceSlaRuleJson",value(source,"sla_rule_json","slaRuleJson"));
+        row.put("sourceNextRuleJson",value(source,"next_rule_json","nextRuleJson"));
+        row.put("sourceUiSchemaJson",value(source,"ui_schema_json","uiSchemaJson"));
+        return row;
     }
 
     private RuleBinding bindReferencedRules(Long versionId,TodoDefinitionDocument definition)

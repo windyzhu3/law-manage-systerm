@@ -69,6 +69,9 @@ class TodoMapperXmlContractTest
             assertTrue(update.contains("next_rule_json=#{nextRuleJson}"));
             assertTrue(update.contains("ui_schema_json=#{uiSchemaJson}"));
             assertTrue(update.contains("where version_id=#{versionId} and status in ('DRAFT','BLOCKED')"));
+            for (String guard : new String[] { "sourceDefinitionJson", "sourceOwnerRuleJson", "sourceDodRuleJson",
+                    "sourceSlaRuleJson", "sourceNextRuleJson", "sourceUiSchemaJson" })
+                assertTrue(update.contains("cast(#{" + guard + "} as json)"), guard);
         }
     }
 
