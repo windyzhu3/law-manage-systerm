@@ -42,7 +42,7 @@ if (!workflow.includes('FoundationTestIdentityRollbackTest')) {
 }
 const migrationDatabaseUrls = workflow.match(/TODO_MIGRATION_DB_URL:\s+([^\r\n]+)/g) || []
 if (
-  migrationDatabaseUrls.length !== 2 ||
+  migrationDatabaseUrls.length < 2 ||
   migrationDatabaseUrls.some(url => !url.includes('connectionCollation=utf8mb4_unicode_ci'))
 ) {
   throw new Error('Foundation migration databases must use utf8mb4_unicode_ci connection collation')

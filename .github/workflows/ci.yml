@@ -31,11 +31,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
       - name: Verify Todo UI contract
         run: npm run test:todo
+      - name: Verify Todo configuration contract
+        run: npm run test:todo-config
+      - name: Verify real-backend E2E source contract
+        run: npm run test:e2e:contract
       - name: Verify Todo schema runtime contract
         run: npm run test:todo-schema
       - name: Verify Foundation CI scope
@@ -93,7 +97,7 @@ jobs:
       - name: Install MySQL client
         run: sudo apt-get update -qq && sudo apt-get install -y mysql-client
       - name: Create isolated Foundation test database
-        run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_v017_foundation"
+        run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_v017_foundation character set utf8mb4 collate utf8mb4_unicode_ci"
       - name: Initialize v0.15 baseline schemas in empty databases
         run: |
           for database in law_v017 law_v017_foundation; do
@@ -117,7 +121,14 @@ jobs:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,FileMaterialEndToEndTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,FileMaterialEndToEndTest,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest -Dsurefire.failIfNoSpecifiedTests=false test
+      - name: Assert external-database Todo tests were not skipped
+        shell: bash
+        run: |
+          if grep -R '<skipped' ruoyi-admin/target/surefire-reports/TEST-com.ruoyi.web.migration.Todo*.xml; then
+            echo 'A core external-database Todo test was skipped' >&2
+            exit 1
+          fi
       - name: Generate ephemeral Foundation test password
         shell: bash
         run: echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
@@ -127,3 +138,136 @@ jobs:
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
         run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FoundationGovernanceRoleMigrationContractTest,FoundationTestIdentityEndToEndTest,FoundationTestIdentityRollbackTest -Dsurefire.failIfNoSpecifiedTests=false test
+
+  todo-config-real-e2e:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      TODO_E2E_DB_NAME: law_todo_config_e2e
+      TODO_E2E_DB_HOST: 127.0.0.1
+      TODO_E2E_DB_PORT: 3306
+      TODO_E2E_DB_USER: root
+      TODO_E2E_DB_PASSWORD: root
+      TODO_E2E_REAL_BACKEND: true
+      TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Require the user-selected browser channel
+        shell: bash
+        run: |
+          test "$TODO_E2E_BROWSER" = chrome -o "$TODO_E2E_BROWSER" = msedge || {
+            echo 'Set repository variable TODO_E2E_BROWSER to chrome or msedge after the user chooses a browser.' >&2
+            exit 1
+          }
+      - name: Install runtime clients
+        run: sudo apt-get update -qq && sudo apt-get install -y mysql-client apache2-utils
+      - name: Create utf8mb4 E2E database
+        run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_todo_config_e2e character set utf8mb4 collate utf8mb4_unicode_ci"
+      - name: Initialize v0.15 baseline schema
+        shell: bash
+        run: |
+          for file in \
+            sql/ry_20260417.sql \
+            sql/quartz.sql \
+            sql/lead_module_20260602.sql \
+            sql/lead_menu_20260602.sql \
+            sql/customer_contract_module_20260603.sql \
+            sql/customer_contract_dict_patch_20260611.sql \
+            sql/case_module_20260611.sql \
+            sql/matter_module_20260615.sql \
+            sql/matter_menu_patch_20260617.sql \
+            sql/finance_module_20260624.sql \
+            sql/customer_tag_assign_permission_fix_20260627.sql; do
+            mysql --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e < "$file"
+          done
+      - name: Execute real Flyway migrations
+        env:
+          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_todo_config_e2e?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
+          TODO_MIGRATION_DB_USER: root
+          TODO_MIGRATION_DB_PASSWORD: root
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
+      - name: Create isolated Todo configuration test identity
+        shell: bash
+        run: |
+          # RuoYi rejects login passwords longer than 20 characters before BCrypt validation.
+          password="$(openssl rand -hex 9)"
+          password_hash="$(htpasswd -bnBC 10 '' "$password" | tr -d ':\n')"
+          echo "TODO_CONFIG_E2E_PASSWORD=$password" >> "$GITHUB_ENV"
+          echo "TODO_CONFIG_E2E_PASSWORD_HASH=$password_hash" >> "$GITHUB_ENV"
+          sed "s|TODO_CONFIG_E2E_PASSWORD_HASH|$password_hash|g" ruoyi-ui/tests/e2e/bootstrap/todo-config-admin.sql \
+            | mysql --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e
+          lead_id="$(mysql --batch --skip-column-names --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e \
+            -e "select lead_id from biz_lead where lead_no='E2E-TODO-CONFIG-LEAD' limit 1")"
+          echo "TODO_CONFIG_E2E_BUSINESS_ID=$lead_id" >> "$GITHUB_ENV"
+      - name: Build backend
+        run: mvn --batch-mode --no-transfer-progress -DskipTests package
+      - name: Start real backend
+        shell: bash
+        env:
+          DB_URL: jdbc:mysql://127.0.0.1:3306/law_todo_config_e2e?useUnicode=true&characterEncoding=utf8&connectionCollation=utf8mb4_unicode_ci&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          REDIS_HOST: 127.0.0.1
+          REDIS_PORT: 6379
+          TOKEN_SECRET: todo-config-e2e-only-secret-with-at-least-32-characters
+          FLYWAY_ENABLED: true
+        run: |
+          nohup java -jar ruoyi-admin/target/ruoyi-admin.jar > "$RUNNER_TEMP/todo-config-backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/todo-config-backend.pid"
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:8080/captchaImage >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/todo-config-backend.log"
+          exit 1
+      - name: Install frontend dependencies
+        working-directory: ruoyi-ui
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Verify real-backend E2E source contract
+        working-directory: ruoyi-ui
+        run: npm run test:e2e:contract
+      - name: Build production frontend
+        working-directory: ruoyi-ui
+        run: npm run build:prod
+      - name: Install the user-selected browser
+        working-directory: ruoyi-ui
+        run: npx playwright install --with-deps "$TODO_E2E_BROWSER"
+      - name: Run Todo configuration real-backend journey
+        working-directory: ruoyi-ui
+        run: npm run test:e2e -- tests/e2e/todo-config-center.spec.js
+      - name: Upload real-backend diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: todo-config-real-e2e-diagnostics
+          path: |
+            ${{ runner.temp }}/todo-config-backend.log
+            ruoyi-ui/output/playwright

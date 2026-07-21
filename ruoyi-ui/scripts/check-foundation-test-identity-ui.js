@@ -6,7 +6,7 @@ const read = relativePath => fs.readFileSync(path.join(uiRoot, relativePath), 'u
 const componentDir = path.join(uiRoot, 'src/components/TestIdentityTag')
 const componentFiles = collectFiles(componentDir)
 const componentSources = componentFiles.map(file => ({ file, source: fs.readFileSync(file, 'utf8') }))
-const tag = read('src/components/TestIdentityTag/index.vue')
+const tag = read('src/components/TestIdentityTag/index.vue').replace(/\r\n/g, '\n')
 const userList = read('src/views/system/user/index.vue')
 const userDetail = read('src/views/system/user/view.vue')
 const userSources = [userList, userDetail].join('\n')

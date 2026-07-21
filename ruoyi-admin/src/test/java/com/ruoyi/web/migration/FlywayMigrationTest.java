@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.30", current.getVersion().getVersion());
+        assertEquals("0.20.33", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
