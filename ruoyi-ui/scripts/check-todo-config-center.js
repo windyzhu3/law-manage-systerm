@@ -44,6 +44,7 @@ const routes = [
   ['listTemplateRoutingTargetCatalog', '/todo/config/template-catalog/routing-targets', 'get'],
   ['listTemplateSlaRuleCatalog', '/todo/config/template-catalog/sla-rules', 'get'],
   ['listTemplateDodRuleCatalog', '/todo/config/template-catalog/dod-rules', 'get'],
+  ['listTemplateCalendarCatalog', '/todo/config/template-catalog/calendars', 'get'],
   ['listTriggerRules', '/todo/config/trigger-rules', 'get'],
   ['createTriggerRule', '/todo/config/trigger-rules', 'post'],
   ['updateTriggerRule', '/todo/config/trigger-rules/${id}', 'put'],
@@ -324,6 +325,7 @@ function checkTemplatePage() {
   requireTokens('template workflow', workflow, [
     'listTemplateEventCatalog', 'listTemplateOwnerCatalog', 'listTemplateHandlerCatalog',
     'listTemplateValidatorCatalog', 'listTemplateAutoActionCatalog', 'listTemplateSlaRuleCatalog', 'listTemplateDodRuleCatalog',
+    'listTemplateCalendarCatalog',
     'SlaRuleDrawer', 'DodRuleDrawer', 'simulateConfiguration', 'RoutingGraphEditor',
     'law_todo_owner_rule_type', 'law_todo_condition_operator', 'law_todo_rule_status',
     'actionId', 'expectedVersion', 'expectedDefinitionJson'
@@ -338,8 +340,12 @@ function checkTemplatePage() {
   requireTokens(stepFiles[0], contents[stepFiles[0]], ['BASIC_FIELDS', 'basicValue', 'readonly || persisted'])
   if (contents[drawer].includes('ref="basic" v-model="form"')) throw new Error('basic step must not bind the entire aggregate draft')
   requireTokens(stepFiles[1], contents[stepFiles[1]], [':value="eventKey(item)"', 'eventSelection', 'model.payloadVersion" disabled'])
-  requireTokens(stepFiles[3], contents[stepFiles[3]], ['listTemplateSlaRuleCatalog', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:sla-rule:create']\""])
-  requireTokens(stepFiles[4], contents[stepFiles[4]], ['listTemplateDodRuleCatalog', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\""])
+  requireTokens(stepFiles[3], contents[stepFiles[3]], ['listTemplateSlaRuleCatalog', 'listTemplateCalendarCatalog',
+    ':calendar-options="calendarCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:sla-rule:create']\""])
+  requireTokens(stepFiles[4], contents[stepFiles[4]], ['listTemplateDodRuleCatalog', 'listTemplateValidatorCatalog',
+    ':provided-validators="validatorCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\""])
+  requireTokens('nested operation catalogs', nestedDrawers, ['calendarOptions', 'providedValidators'])
+  requireTokens(stepFiles[7], contents[stepFiles[7]], ["v-hasPermi=\"['todo:release:diff']\""])
   if (workflow.includes('knownIds')) throw new Error('nested rule creation must select the exact returned id instead of diff guessing')
   requireTokens('nested exact identity', nestedDrawers, ['finishSaved(response.data)', "$emit('saved', savedId)"])
   requireTokens(summary, contents[summary], ['draft || definitionError', '<template v-if="draft">'])

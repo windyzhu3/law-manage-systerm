@@ -48,14 +48,19 @@ class TodoTemplateServiceTest
         assertEquals(List.of("templateId","templateName","actionId","expectedVersion"),
                 java.util.Arrays.stream(TemplateMetadataCommand.class.getRecordComponents()).map(component->component.getName()).toList());
     }
-    @Test void legacyTemplateMetadataUpdateCannotChangeStatus()
+    @Test void legacyTemplateMetadataUpdateCannotChangeImmutableFields()
     {
+        when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","T-5","template_name","Old",
+                "business_type","LEAD","status","0"));
         when(mapper.updateTemplate(anyMap())).thenReturn(1);
 
         new TodoTemplateService(mapper).saveTemplate(new com.law.todo.application.command.TodoManagementCommands.TemplateCommand(
-                5L,"T-5","Template 5","LEAD","1"),"alice");
+                5L,"MUTATED-CODE","Template 5","CASE","1"),"alice");
 
-        verify(mapper).updateTemplate(org.mockito.ArgumentMatchers.argThat(row->!row.containsKey("status")));
+        verify(mapper).updateTemplate(org.mockito.ArgumentMatchers.argThat(row->
+                !row.containsKey("templateCode")&&!row.containsKey("businessType")&&!row.containsKey("status")
+                &&"Template 5".equals(row.get("templateName"))));
     }
     @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(new java.util.HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,"templateVersionId",2L,"businessType","LEAD")));verify(mapper).insertTriggerRule(anyMap());}
     @Test void rejectsInvalidTemplateJson(){TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).publish(1L,1,"OWNER","{}","{}",null,"{}","admin"));assertEquals("TODO_TEMPLATE_JSON_INVALID",error.getBusinessCode());}
@@ -79,6 +84,18 @@ class TodoTemplateServiceTest
         assertEquals(List.of(new RoutingTargetCatalogEntry(1L,"NEXT-A","Next A","CASE",2L,7,"PUBLISHED")),
                 new TodoTemplateService(mapper).listRoutingTargetCatalog());
         verify(mapper).selectRoutingTargetCatalog();
+    }
+
+    @Test void templateCalendarCatalogReturnsActiveMinimalOptionsWithoutCalendarManageAccess()
+    {
+        when(mapper.selectCalendars()).thenReturn(List.of(
+                Map.of("calendar_id",1L,"calendar_code","DEFAULT","calendar_name","默认日历","timezone","Asia/Shanghai","status","0","exception_json","{}"),
+                Map.of("calendar_id",2L,"calendar_code","OLD","calendar_name","旧日历","timezone","UTC","status","1","exception_json","{}")));
+
+        List<Map<String,Object>> result=new TodoTemplateService(mapper).listTemplateCalendarCatalog();
+
+        assertEquals(List.of(Map.of("calendarCode","DEFAULT","calendarName","默认日历","timezone","Asia/Shanghai")),result);
+        verify(mapper).selectCalendars();
     }
 
     @Test void templateEventCatalogContainsOnlyActiveCompositeEventVersions()

@@ -37,6 +37,7 @@ export function listTemplateAutoActionCatalog() { return request({ url: '/todo/c
 export function listTemplateRoutingTargetCatalog() { return request({ url: '/todo/config/template-catalog/routing-targets', method: 'get' }) }
 export function listTemplateSlaRuleCatalog() { return request({ url: '/todo/config/template-catalog/sla-rules', method: 'get' }) }
 export function listTemplateDodRuleCatalog() { return request({ url: '/todo/config/template-catalog/dod-rules', method: 'get' }) }
+export function listTemplateCalendarCatalog() { return request({ url: '/todo/config/template-catalog/calendars', method: 'get' }) }
 
 export function listTriggerRules(params) { return request({ url: '/todo/config/trigger-rules', method: 'get', params }) }
 export function createTriggerRule(data) { return request({ url: '/todo/config/trigger-rules', method: 'post', data }) }

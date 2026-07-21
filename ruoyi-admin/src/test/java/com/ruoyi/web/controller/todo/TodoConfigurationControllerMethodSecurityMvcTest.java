@@ -49,6 +49,8 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       mvc().perform(get("/todo/config/template-catalog/events")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/template-catalog/sla-rules")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/template-catalog/dod-rules")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/calendars")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/template-catalog/validators")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/templates/7/versions")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/sla-rules")).andExpect(status().isForbidden());
       mvc().perform(get("/todo/config/release-records")).andExpect(status().isForbidden());

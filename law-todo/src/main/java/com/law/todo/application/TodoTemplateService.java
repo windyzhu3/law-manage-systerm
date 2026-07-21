@@ -36,6 +36,15 @@ public class TodoTemplateService
     public TodoTemplateService(TodoMapper mapper){this(mapper,new TodoEventCatalogService(mapper),new ConditionValidator(),(type,value)->true);}
     @Autowired public TodoTemplateService(TodoMapper mapper,TodoEventCatalogService eventCatalog,ConditionValidator conditionValidator,TodoDictionaryValidationPort dictionaries){this.mapper=mapper;this.eventCatalog=eventCatalog;this.conditionValidator=conditionValidator;this.dictionaries=dictionaries;}
     public List<Map<String,Object>> listTemplates(){return mapper.selectTemplates();}
+    public List<Map<String,Object>> listTemplateCalendarCatalog()
+    {
+        List<Map<String,Object>> rows=mapper.selectCalendars();if(rows==null)return List.of();
+        return rows.stream().filter(row->"0".equals(text(value(row,"status","status")))).map(row->{
+            Map<String,Object> item=new java.util.LinkedHashMap<>();item.put("calendarCode",text(value(row,"calendar_code","calendarCode")));
+            item.put("calendarName",text(value(row,"calendar_name","calendarName")));item.put("timezone",text(value(row,"timezone","timezone")));
+            return item;
+        }).toList();
+    }
     public List<Map<String,Object>> listEventCatalogs(){return eventCatalog.entries();}
     public List<EventCatalogEntry> listTemplateEventCatalog()
     {return eventCatalog.entries().stream().filter(row->"ACTIVE".equals(text(value(row,"status","status")))).map(row->new EventCatalogEntry(text(value(row,"event_type","eventType")),
@@ -49,7 +58,17 @@ public class TodoTemplateService
             text(value(row,"template_name","templateName")),text(value(row,"business_type","businessType")),
             number(value(row,"version_id","versionId")),integer(value(row,"version_no","versionNo")),
             text(value(row,"status","status")))).toList();}
-    @Transactional public int saveTemplate(TemplateCommand command,String operator){validateBusinessType(command.businessType());Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());value.put("templateName",command.templateName());value.put("businessType",command.businessType());if(command.templateId()==null)value.put("status",command.status()==null?"0":command.status());value.put("createBy",operator);value.put("updateBy",operator);return saveTemplate(value);}
+    @Transactional public int saveTemplate(TemplateCommand command,String operator)
+    {
+        Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateName",command.templateName());
+        if(command.templateId()==null)
+        {
+            validateBusinessType(command.businessType());value.put("templateCode",command.templateCode());
+            value.put("businessType",command.businessType());value.put("status",command.status()==null?"0":command.status());
+            value.put("createBy",operator);
+        }
+        value.put("updateBy",operator);return saveTemplate(value);
+    }
     @Transactional public int updateTemplateMetadata(TemplateMetadataCommand command,Actor actor)
     {
         String fingerprint=fingerprint("UPDATE_TEMPLATE",command.templateId(),command.expectedVersion(),command,actor);
@@ -65,7 +84,15 @@ public class TodoTemplateService
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
         complete(command.actionId(),fingerprint,command.templateId(),"TODO_TEMPLATE_ACTION_CONFLICT");return 1;
     }
-    @Transactional public int saveTemplate(Map<String,Object> value){required(value,"templateCode");required(value,"templateName");required(value,"businessType");return value.get("templateId")==null?mapper.insertTemplate(value):mapper.updateTemplate(value);}
+    @Transactional public int saveTemplate(Map<String,Object> value)
+    {
+        required(value,"templateName");
+        if(value.get("templateId")==null)
+        {required(value,"templateCode");required(value,"businessType");return mapper.insertTemplate(value);}
+        Map<String,Object> metadata=new HashMap<>();metadata.put("templateId",value.get("templateId"));
+        metadata.put("templateName",value.get("templateName"));metadata.put("updateBy",value.get("updateBy"));
+        return mapper.updateTemplate(metadata);
+    }
     @Transactional public void toggleTemplate(long templateId,TemplateToggleCommand command,Actor actor)
     {
         String fingerprint=fingerprint("TOGGLE_TEMPLATE",templateId,command.expectedVersion(),command,actor);

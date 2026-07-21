@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.dao.DuplicateKeyException;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
@@ -471,6 +472,33 @@ public class TodoDefinitionService
         }
         return preflight(versionId,false,current,definition,false);
     }
+
+    /**
+     * Verifies that a simulation still targets the exact preflighted draft and referenced-rule snapshots.
+     * Published/retired definitions remain immutable and therefore never consult the mutable rule library.
+     */
+    @Transactional(readOnly=true)
+    public void assertSimulationGate(long versionId,String expectedDefinitionHash)
+    {
+        Map<String,Object> current=requireVersion(versionId);
+        String persistedHash=text(value(current,"definition_hash","definitionHash"));
+        if(expectedDefinitionHash==null||!expectedDefinitionHash.equals(persistedHash))throw stalePreflight();
+        if(!DRAFT.equals(text(value(current,"status","status"))))return;
+        TodoDefinitionDocument persisted=definition(current);RuleBinding rebound;
+        try{rebound=bindReferencedRules(versionId,persisted);}
+        catch(TodoException changed){throw stalePreflight();}
+        Object persistedSla=persisted.sla().config().get("ruleSnapshots");Object persistedDod=persisted.dod().config().get("ruleSnapshots");
+        Object currentSla=rebound.bound()?rebound.definition().sla().config().get("ruleSnapshots"):null;
+        Object currentDod=rebound.bound()?rebound.definition().dod().config().get("ruleSnapshots"):null;
+        if(!canonicalRuleSnapshot(persistedSla).equals(canonicalRuleSnapshot(currentSla))
+                ||!canonicalRuleSnapshot(persistedDod).equals(canonicalRuleSnapshot(currentDod)))throw stalePreflight();
+    }
+
+    private String canonicalRuleSnapshot(Object value)
+    {return JSON.toJSONString(value==null?List.of():value,JSONWriter.Feature.SortMapEntriesByKeys);}
+
+    private TodoException stalePreflight()
+    {return new TodoException("TODO_TEMPLATE_PREFLIGHT_STALE","Definition or bound rules changed after preflight; run preflight again");}
 
     private PreflightResult preflight(long versionId, boolean guardedPublishPreflight)
     {

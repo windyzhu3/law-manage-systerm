@@ -33,14 +33,19 @@ Implemented the database-backed Todo template configuration list, summary view, 
 - Template create/copy/editor users receive purpose-specific event/SLA/DoD catalogues without gaining general rule or release-record access.
 - Nested SLA/DoD creation returns and selects the exact persisted rule ID; no list-difference inference remains.
 - Basic metadata emits scalar fields only, and malformed canonical JSON can render the fail-closed summary without a valid draft object.
+- Legacy `/todo/template` updates now accept only the mutable name metadata; template code, business type, and status are ignored by the service and cannot be updated by SQL.
+- Nested SLA/DoD creation receives template-operation-specific calendar and validator catalogues, so rule creators do not need calendar-management or validator-management read permissions.
+- Simulation performs a read-only comparison of the current active rule identities, versions, and content against the preflighted snapshots before executing. Rule-library changes invalidate the old gate; published/retired snapshots never consult mutable rules.
+- Version comparison is rendered only for users with `todo:release:diff`, matching the backend endpoint.
 
 ## Verification
 
 - `npm run test:todo-config` — PASS.
 - `node scripts/check-todo-definition-roundtrip.js` — PASS, no canonical round-trip difference.
-- Targeted backend rule-binding/simulation/template reactor — PASS: 69 tests.
+- Targeted backend template/mapper/rule-binding/simulation reactor — PASS: 87 tests.
 - Targeted controller security/validation reactor — PASS: 16 tests.
-- Full backend reactor `mvn -pl law-todo -am test` — PASS: dependency modules passed; `law-todo` ran 543 tests with 0 failures, 0 errors, and 2 skipped.
+- Full backend reactor `mvn -pl law-todo -am test` — PASS: dependency modules passed; `law-todo` ran 548 tests with 0 failures, 0 errors, and 2 skipped.
+- Full admin reactor `mvn -pl ruoyi-admin -am test` — PASS: `ruoyi-admin` ran 86 tests with 0 failures, 0 errors, and 11 environment-dependent skips; all reactor modules passed.
 - `npm run build:prod` — PASS. Only the repository's existing asset and entrypoint size warnings remain.
 - `git diff --check` — PASS (line-ending conversion notices only).
 

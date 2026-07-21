@@ -16,10 +16,14 @@ public final class TodoManagementCommands
 
     public record TemplateCommand(
         Long templateId,
-        @NotBlank String templateCode,
+        String templateCode,
         @NotBlank String templateName,
-        @NotBlank String businessType,
-        @Pattern(regexp = "0|1") String status) { }
+        String businessType,
+        @Pattern(regexp = "0|1") String status) {
+        @AssertTrue(message="templateCode and businessType are required when creating a template")
+        public boolean isCreateIdentityValid()
+        {return templateId!=null||(templateCode!=null&&!templateCode.isBlank()&&businessType!=null&&!businessType.isBlank());}
+    }
 
     public record TemplateMetadataCommand(Long templateId,@NotBlank String templateName,
             @NotBlank String actionId,@NotNull @Min(0) Integer expectedVersion) { }

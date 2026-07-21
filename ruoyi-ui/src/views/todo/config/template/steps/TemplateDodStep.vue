@@ -6,7 +6,7 @@
       <el-form-item label="DoD 规则" prop="dodRuleIds"><el-select v-model="model.dodRuleIds" :disabled="readonly" multiple filterable class="full"><el-option v-for="item in rulesCatalog" :key="ruleId(item)" :label="`${field(item,'ruleCode','rule_code')} · ${field(item,'ruleName','rule_name')}`" :value="ruleId(item)" /></el-select><el-button v-if="!readonly" v-hasPermi="['todo:dod-rule:create']" type="text" icon="el-icon-plus" @click="openNested">新建 DoD 规则</el-button></el-form-item>
     </el-form>
     <el-table :data="selectedRules" border size="mini"><el-table-column type="index" label="顺序" width="70" /><el-table-column prop="ruleCode" label="规则编码" min-width="150" /><el-table-column prop="ruleName" label="规则名称" min-width="180" /><el-table-column v-if="!readonly" label="调整" width="120"><template slot-scope="{ $index }"><el-button type="text" :disabled="$index===0" @click="move($index,-1)">上移</el-button><el-button type="text" :disabled="$index===selectedRules.length-1" @click="move($index,1)">下移</el-button></template></el-table-column></el-table>
-    <dod-rule-drawer :visible.sync="nestedOpen" mode="create" :rule="null" @saved="nestedSaved" />
+    <dod-rule-drawer :visible.sync="nestedOpen" mode="create" :rule="null" :provided-validators="validatorCatalog" @saved="nestedSaved" />
   </section>
 </template>
 <script>

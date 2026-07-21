@@ -10,6 +10,20 @@ import org.junit.jupiter.api.Test;
 
 class TodoMapperXmlContractTest
 {
+    @Test void legacyTemplateUpdateChangesNameOnly() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8);
+            int start=xml.indexOf("<update id=\"updateTemplate\"");int end=xml.indexOf("</update>",start);
+            String update=xml.substring(start,end);
+            assertTrue(update.contains("template_name=#{templateName}"));
+            assertFalse(update.contains("template_code="));
+            assertFalse(update.contains("business_type="));
+            assertFalse(update.contains("status="));
+        }
+    }
+
     @Test
     void lifecycleUpdatePersistsMilestoneTimestamps() throws Exception
     {

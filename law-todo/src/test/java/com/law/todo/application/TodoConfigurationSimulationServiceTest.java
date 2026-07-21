@@ -36,6 +36,7 @@ import com.law.todo.domain.TodoException;
 class TodoConfigurationSimulationServiceTest
 {
     @Mock private TodoDefinitionSimulationService definitions;
+    @Mock private TodoDefinitionService definitionGates;
     @Mock private TodoConfigurationSimulationAuditService audits;
     @InjectMocks private TodoConfigurationSimulationService service;
 
@@ -85,7 +86,7 @@ class TodoConfigurationSimulationServiceTest
 
     @Test void ineligibleSimulationWithMissingDefinitionFieldsIsStillAudited()
     {
-        TodoSimulationView halted=new TodoSimulationView(9L,null,new TriggerTrace("SKIPPED","LEAD_CREATED",0,List.of()),
+        TodoSimulationView halted=new TodoSimulationView(9L,"definition-hash",new TriggerTrace("SKIPPED","LEAD_CREATED",0,List.of()),
                 new OwnerTrace("SKIPPED",null,List.of(),List.of(),false,List.of()),
                 new SlaTrace("SKIPPED",null,LocalDateTime.of(2026,7,21,9,0),null,null,null,null,List.of()),
                 new FormTrace(Map.of(),Map.of()),List.of(),List.of(),List.of(),List.of());
@@ -158,6 +159,19 @@ class TodoConfigurationSimulationServiceTest
         verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
+    @Test void simulationChecksCurrentRuleBindingsBeforeUsingTheCompiledSnapshot()
+    {
+        TodoException stale=new TodoException("TODO_TEMPLATE_PREFLIGHT_STALE","rule changed");
+        org.mockito.Mockito.doThrow(stale).when(definitionGates)
+                .assertSimulationGate(9L,"definition-hash");
+
+        TodoException error=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
+
+        assertSame(stale,error);
+        verify(definitions,never()).simulate(eq(9L),any(),eq("LEAD_CREATED"));
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
+    }
+
     private void whenSimulationReturns(TodoSimulationView value)
     {org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenReturn(value);}
 
@@ -170,7 +184,7 @@ class TodoConfigurationSimulationServiceTest
         nested.put("fileUrl","file:///private/evidence.pdf");nested.put("customerEmail","alice@example.com");
         nested.put("idCardNo","11010519491231002X");
         return new ConfigurationSimulationCommand("request-6",9L,"LEAD_CREATED","LEAD",3L,
-                Map.of("stage","READY","customer",nested),LocalDateTime.of(2026,7,21,9,0),List.of());
+                Map.of("stage","READY","customer",nested),LocalDateTime.of(2026,7,21,9,0),List.of(),"definition-hash");
     }
 
     private TodoSimulationView sampleSimulation()

@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
@@ -20,10 +21,17 @@ import com.law.todo.application.view.TodoSimulationView;
 public class TodoConfigurationSimulationService
 {
     private final TodoDefinitionSimulationService definitions;
+    private final TodoDefinitionService definitionGates;
     private final TodoConfigurationSimulationAuditService audits;
 
+    @Autowired
+    public TodoConfigurationSimulationService(TodoDefinitionSimulationService definitions,TodoDefinitionService definitionGates,
+            TodoConfigurationSimulationAuditService audits)
+    {this.definitions=definitions;this.definitionGates=definitionGates;this.audits=audits;}
+
+    /** Focused-test compatibility; production always injects the authoritative definition gate. */
     public TodoConfigurationSimulationService(TodoDefinitionSimulationService definitions,TodoConfigurationSimulationAuditService audits)
-    {this.definitions=definitions;this.audits=audits;}
+    {this(definitions,null,audits);}
 
     public ConfigurationSimulationResult simulate(ConfigurationSimulationCommand command,Actor actor)
     {
@@ -31,6 +39,7 @@ public class TodoConfigurationSimulationService
         TodoSimulationView simulation;
         try
         {
+            if(definitionGates!=null)definitionGates.assertSimulationGate(command.versionId(),command.expectedDefinitionHash());
             simulation=definitions.simulate(command.versionId(),command.toDefinitionCommand(),command.eventType());
             if(command.expectedDefinitionHash()!=null&&!command.expectedDefinitionHash().equals(simulation.definitionHash()))
                 throw new com.law.todo.domain.TodoException("TODO_TEMPLATE_PREFLIGHT_STALE",

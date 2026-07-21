@@ -334,6 +334,41 @@ class TodoDefinitionRuleBindingTest
         verify(mapper,never()).publishTemplateVersionConditionally(eq(44L),anyString(),anyString());
     }
 
+    @Test void simulationGateRejectsRuleMutationAfterPreflightWithoutWritingTheDraft()
+    {
+        Map<String,Object> initial=snapshotDraft();when(mapper.selectTemplateVersionById(44L)).thenReturn(initial);
+        Map<String,Object> original=slaRule();when(configMapper.selectDraftRuleRefs(44L)).thenReturn(List.of(ref("SLA",8L,0)));
+        when(configMapper.selectSlaRule(8L)).thenReturn(original);event();
+        when(mapper.updateDefinitionDocument(anyMap())).thenReturn(1);when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        TodoDefinitionService definitions=service();definitions.preflight(44L);
+        ArgumentCaptor<Map<String,Object>> snapshot=ArgumentCaptor.forClass(Map.class);verify(mapper).updateDefinitionDocument(snapshot.capture());
+        ArgumentCaptor<Map<String,Object>> compilation=ArgumentCaptor.forClass(Map.class);verify(mapper).updateDefinitionCompilation(compilation.capture());
+        String hash=String.valueOf(compilation.getValue().get("definitionHash"));
+        Map<String,Object> preflighted=new HashMap<>(initial);preflighted.put("definition_json",snapshot.getValue().get("definitionJson"));
+        preflighted.put("definition_hash",hash);when(mapper.selectTemplateVersionById(44L)).thenReturn(preflighted);
+        org.mockito.Mockito.clearInvocations(mapper,configMapper);definitions.assertSimulationGate(44L,hash);
+        verify(mapper,never()).updateDefinitionDocument(anyMap());verify(mapper,never()).updateDefinitionCompilation(anyMap());
+        Map<String,Object> changed=slaRule();changed.put("duration_value",240);changed.put("version",2);
+        when(configMapper.selectSlaRule(8L)).thenReturn(changed);org.mockito.Mockito.clearInvocations(mapper,configMapper);
+
+        TodoException error=assertThrows(TodoException.class,()->definitions.assertSimulationGate(44L,hash));
+
+        assertEquals("TODO_TEMPLATE_PREFLIGHT_STALE",error.getBusinessCode());
+        verify(mapper,never()).updateDefinitionDocument(anyMap());verify(mapper,never()).updateDefinitionCompilation(anyMap());
+    }
+
+    @Test void publishedSimulationGateUsesOnlyItsImmutableStoredHash()
+    {
+        Map<String,Object> published=snapshotDraft();published.put("status","PUBLISHED");published.put("definition_hash","p".repeat(64));
+        when(mapper.selectTemplateVersionById(44L)).thenReturn(published);
+
+        service().assertSimulationGate(44L,"p".repeat(64));
+
+        verify(configMapper,never()).selectDraftRuleRefs(44L);verify(configMapper,never()).selectSlaRule(org.mockito.ArgumentMatchers.anyLong());
+        verify(configMapper,never()).selectDodRule(org.mockito.ArgumentMatchers.anyLong());verify(mapper,never()).updateDefinitionDocument(anyMap());
+        verify(mapper,never()).updateDefinitionCompilation(anyMap());
+    }
+
     @Test void compatibilityDraftUpdatePreservesMetadataUnlessExplicitlyCleared()
     {
         Map<String,Object> current=draft();current.put("change_summary","old summary");current.put("impact_scope","old impact");when(mapper.selectTemplateVersionById(44L)).thenReturn(current);
