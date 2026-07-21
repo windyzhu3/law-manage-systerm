@@ -68,3 +68,26 @@ No local migration database was supplied, so full Flyway execution is covered by
 ### Follow-up commit
 
 `fix(todo-config): harden trigger metadata migration`
+
+## CI reachability follow-up
+
+### RED evidence
+
+`node ruoyi-ui/scripts/check-foundation-ci.js` failed before workflow changes with: `CI must initialize a dedicated trigger metadata migration database`.
+
+### GREEN evidence
+
+- `node ruoyi-ui/scripts/check-foundation-ci.js` passed: `Foundation CI contract ok`.
+- `node ruoyi-ui/scripts/check-external-db-reports-contract.js` passed: the no-skip gate now requires the metadata migration E2E Surefire XML and its negative fixtures pass.
+- `npx --yes prettier --parser yaml .github/workflows/ci.yml` completed successfully, confirming YAML parseability.
+- `git diff --check` passed.
+
+### CI wiring
+
+- The `migration` job creates `law_v017_trigger_metadata`, initializes it with the same exact eleven v0.15 baseline files as the shared migration database, and runs `TodoTriggerRuleMetadataMigrationContractTest` alone against it.
+- The shared `law_v017` migration command remains independent of this test.
+- The external-database no-skip report assertion now requires `TodoTriggerRuleMetadataMigrationContractTest`.
+
+### Follow-up commit
+
+`ci(todo-config): verify trigger metadata upgrade`

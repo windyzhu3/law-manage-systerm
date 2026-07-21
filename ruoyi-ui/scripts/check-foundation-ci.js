@@ -40,6 +40,32 @@ if (!workflow.includes('FoundationTestIdentityEndToEndTest')) {
 if (!workflow.includes('FoundationTestIdentityRollbackTest')) {
   throw new Error('CI does not execute the Foundation identity rollback scenarios')
 }
+if (!workflow.includes('law_v017_trigger_metadata')) {
+  throw new Error('CI must initialize a dedicated trigger metadata migration database')
+}
+if (!workflow.includes('TodoTriggerRuleMetadataMigrationContractTest')) {
+  throw new Error('CI does not execute the trigger metadata MySQL migration E2E')
+}
+if (!/TODO_MIGRATION_DB_URL:\s+jdbc:mysql:\/\/127\.0\.0\.1:3306\/law_v017_trigger_metadata/.test(workflow)) {
+  throw new Error('Trigger metadata migration E2E must use its dedicated database')
+}
+const triggerMetadataStep = /- name: Verify isolated trigger metadata migration upgrade\s+env:\s+TODO_MIGRATION_DB_URL: jdbc:mysql:\/\/127\.0\.0\.1:3306\/law_v017_trigger_metadata[^\n]*\n\s+TODO_MIGRATION_DB_USER: root\n\s+TODO_MIGRATION_DB_PASSWORD: root\n\s+run: ([^\n]+)/.exec(workflow)
+if (!triggerMetadataStep || !/^-Dtest=TodoTriggerRuleMetadataMigrationContractTest(?:\s|$)/.test(triggerMetadataStep[1].replace(/^.*?\s-Dtest=/, '-Dtest='))) {
+  throw new Error('Trigger metadata migration E2E must run alone against its isolated database')
+}
+const sharedMigrationStep = /- name: Execute and verify all Flyway migrations[\s\S]*?\n\s+run: ([^\n]+)/.exec(workflow)
+if (!sharedMigrationStep || sharedMigrationStep[1].includes('TodoTriggerRuleMetadataMigrationContractTest')) {
+  throw new Error('Trigger metadata migration E2E must not share the law_v017 migration command')
+}
+const exactV015Baseline = [
+  'sql/ry_20260417.sql', 'sql/quartz.sql', 'sql/lead_module_20260602.sql', 'sql/lead_menu_20260602.sql',
+  'sql/customer_contract_module_20260603.sql', 'sql/customer_contract_dict_patch_20260611.sql',
+  'sql/case_module_20260611.sql', 'sql/matter_module_20260615.sql', 'sql/matter_menu_patch_20260617.sql',
+  'sql/finance_module_20260624.sql', 'sql/customer_tag_assign_permission_fix_20260627.sql'
+]
+if (!workflow.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do') || exactV015Baseline.some(file => !workflow.includes(file))) {
+  throw new Error('Trigger metadata database must receive the exact eleven-file v0.15 baseline')
+}
 const migrationDatabaseUrls = workflow.match(/TODO_MIGRATION_DB_URL:\s+([^\r\n]+)/g) || []
 if (
   migrationDatabaseUrls.length < 2 ||

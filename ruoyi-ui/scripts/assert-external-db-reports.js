@@ -13,6 +13,7 @@ const requiredClasses = [
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest'
+  ,'TodoTriggerRuleMetadataMigrationContractTest'
 ]
 
 function suiteAttributes(xml, className) {

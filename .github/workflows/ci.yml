@@ -96,11 +96,11 @@ jobs:
           cache: maven
       - name: Install MySQL client
         run: sudo apt-get update -qq && sudo apt-get install -y mysql-client
-      - name: Create isolated Foundation test database
-        run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_v017_foundation character set utf8mb4 collate utf8mb4_unicode_ci"
+      - name: Create isolated Foundation and trigger metadata test databases
+        run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_v017_foundation character set utf8mb4 collate utf8mb4_unicode_ci; create database law_v017_trigger_metadata character set utf8mb4 collate utf8mb4_unicode_ci"
       - name: Initialize v0.15 baseline schemas in empty databases
         run: |
-          for database in law_v017 law_v017_foundation; do
+          for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do
             for file in \
               sql/ry_20260417.sql \
               sql/quartz.sql \
@@ -116,6 +116,12 @@ jobs:
               mysql --protocol=tcp -h127.0.0.1 -uroot -proot "$database" < "$file"
             done
           done
+      - name: Verify isolated trigger metadata migration upgrade
+        env:
+          TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017_trigger_metadata?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
+          TODO_MIGRATION_DB_USER: root
+          TODO_MIGRATION_DB_PASSWORD: root
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=TodoTriggerRuleMetadataMigrationContractTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Execute and verify all Flyway migrations
         env:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
