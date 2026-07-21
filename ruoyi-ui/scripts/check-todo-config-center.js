@@ -27,6 +27,7 @@ const foundationGovernanceComponents = [
   'FinanceReadiness.vue',
   'AcceptanceReadiness.vue'
 ].map(name => `src/views/todo/config/components/${name}`)
+const foundationE2eHarness = 'src/views/todo/config/components/FoundationConfigurationHarness.vue'
 
 const routes = [
   ['getTodoConfigDashboard', '/todo/config/dashboard', 'get'],
@@ -123,6 +124,44 @@ function assertNoLegacyConfigurationComponentReferences() {
   }
 }
 
+function assertFoundationE2eBehaviorCoverage() {
+  const contracts = {
+    'e2e/todo-foundation-config-resources.spec.js': [
+      'trigger rules use the active catalog and refresh create, edit and toggle state',
+      'calendar edit and status survive a server reload',
+      'decision requires a conclusion and displays impacted template codes',
+      'admission evidence requires independent review and survives submit and approval reloads',
+      'foundation resources expose repository source and runtime gaps without promoting values',
+      'aggregate admission truthfully remains two of eight until every gate is ready',
+      'historical migration readiness exposes inventory and blockers without selecting defaults',
+      'historical migration preflight failure preserves the existing readiness requirements',
+      'historical migration JSON blob export failure stays local and produces no evidence download',
+      'historical migration inventory hides evidence export without permission',
+      'file security readiness separates technical controls from independent review',
+      'finance readiness separates repository capabilities from schema and decision blockers',
+      'phase-one acceptance governs scenarios mappings and batch bind without mock credit',
+      '/todo/foundation-migration/exception-export', 'state.admissionUpdates', 'state.acceptanceUpdates'
+    ],
+    'e2e/todo-foundation-definition.spec.js': [
+      'valid TASK to DECISION to END preflight enables publish and edits invalidate the gate',
+      'unresolved decisions and invalid LOOP/JOIN are visible and keep publish blocked',
+      'catalog text field can be edited and saved into the canonical definition',
+      'simulation sends the complete command and semantic diff renders server content as text',
+      'requests.simulation.push', 'requests.diff.push', 'requests.drafts.push',
+      'simulation-completed-at', 'preflight-run', 'diff-result'
+    ]
+  }
+  Object.entries(contracts).forEach(([file, tokens]) => {
+    const content = fs.readFileSync(file, 'utf8')
+    if (!content.includes('todo/config/components/FoundationConfigurationHarness')) {
+      throw new Error(`${file} must render the retained Foundation components through the real E2E harness`)
+    }
+    tokens.forEach(token => {
+      if (!content.includes(token)) throw new Error(`${file} missing executable Foundation E2E contract ${token}`)
+    })
+  })
+}
+
 async function check() {
   if (fs.existsSync('src/views/todo/config/index.vue')) {
     throw new Error('old tabbed configuration page must be removed')
@@ -133,7 +172,9 @@ async function check() {
   foundationGovernanceComponents.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`Foundation component must be retained: ${file}`)
   })
+  if (!fs.existsSync(foundationE2eHarness)) throw new Error(`Foundation E2E harness must be retained: ${foundationE2eHarness}`)
   assertNoLegacyConfigurationComponentReferences()
+  assertFoundationE2eBehaviorCoverage()
   required.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
   })
