@@ -162,6 +162,18 @@ function assertFoundationE2eBehaviorCoverage() {
   })
 }
 
+function assertLocalizedConfigurationMetadata() {
+  const migration = '../ruoyi-admin/src/main/resources/db/migration/V0_20_34__todo_configuration_center_localization.sql'
+  const content = fs.readFileSync(migration, 'utf8')
+  requireTokens(migration, content, [
+    "'待办模板'", "'触发规则'", "'SLA规则'", "'完成条件'", "'模拟测试'", "'发布记录'",
+    "'业务阶段'", "'业务类型'", "'模板类型'", "'发布状态'", "'触发方式'", "'条件操作符'",
+    "'负责人规则类型'", "'SLA类型'", "'SLA时间单位'", "'SLA计时起点'", "'超时策略'",
+    "'完成条件类型'", "'规则状态'", "'版本状态'", "'已退役'", "'RETIRED'",
+    "component='todo/config/index'", "visible='1',status='1'"
+  ])
+}
+
 async function check() {
   if (fs.existsSync('src/views/todo/config/index.vue')) {
     throw new Error('old tabbed configuration page must be removed')
@@ -174,6 +186,7 @@ async function check() {
   })
   if (!fs.existsSync(foundationE2eHarness)) throw new Error(`Foundation E2E harness must be retained: ${foundationE2eHarness}`)
   assertNoLegacyConfigurationComponentReferences()
+  assertLocalizedConfigurationMetadata()
   assertFoundationE2eBehaviorCoverage()
   required.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`)

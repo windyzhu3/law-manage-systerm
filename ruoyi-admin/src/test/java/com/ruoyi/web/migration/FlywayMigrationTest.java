@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.33", current.getVersion().getVersion());
+        assertEquals("0.20.34", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -112,6 +112,29 @@ class FlywayMigrationTest
                     + "'todo:dod-rule:create','todo:dod-rule:edit','todo:dod-rule:copy','todo:dod-rule:toggle',"
                     + "'todo:simulation:list','todo:simulation:simulate','todo:release:list','todo:release:publish',"
                     + "'todo:release:diff','todo:release:rollback')"));
+            assertEquals(6L, count(connection,
+                "select count(*) from sys_menu where (component='todo/config/template/index' and menu_name='待办模板') "
+                    + "or (component='todo/config/trigger/index' and menu_name='触发规则') "
+                    + "or (component='todo/config/sla/index' and menu_name='SLA规则') "
+                    + "or (component='todo/config/dod/index' and menu_name='完成条件') "
+                    + "or (component='todo/config/simulation/index' and menu_name='模拟测试') "
+                    + "or (component='todo/config/release/index' and menu_name='发布记录')"));
+            assertEquals(14L, count(connection,
+                "select count(*) from sys_dict_type where dict_type in "
+                    + "('law_todo_business_stage','law_todo_business_type','law_todo_template_type',"
+                    + "'law_todo_publish_status','law_todo_trigger_mode','law_todo_condition_operator',"
+                    + "'law_todo_owner_rule_type','law_todo_sla_type','law_todo_sla_unit',"
+                    + "'law_todo_sla_start_strategy','law_todo_timeout_strategy','law_todo_dod_rule_type',"
+                    + "'law_todo_rule_status','law_todo_version_status') and dict_name in "
+                    + "('业务阶段','业务类型','模板类型','发布状态','触发方式','条件操作符','负责人规则类型',"
+                    + "'SLA类型','SLA时间单位','SLA计时起点','超时策略','完成条件类型','规则状态','版本状态')"));
+            assertEquals(48L, count(connection,
+                "select count(*) from sys_dict_data where dict_type in "
+                    + "('law_todo_business_stage','law_todo_business_type','law_todo_template_type',"
+                    + "'law_todo_publish_status','law_todo_trigger_mode','law_todo_condition_operator',"
+                    + "'law_todo_owner_rule_type','law_todo_sla_type','law_todo_sla_unit',"
+                    + "'law_todo_sla_start_strategy','law_todo_timeout_strategy','law_todo_dod_rule_type',"
+                    + "'law_todo_rule_status','law_todo_version_status') and char_length(dict_label)<length(dict_label)"));
             assertEquals(2L, count(connection,
                 "select count(*) from sys_dict_data where dict_type='law_todo_rule_status' and dict_value in ('0','1')"));
             assertEquals(1L, count(connection,
