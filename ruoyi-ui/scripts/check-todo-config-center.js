@@ -434,7 +434,11 @@ function checkTemplatePage() {
   requireTokens(stepFiles[3], contents[stepFiles[3]], ['listTemplateSlaRuleCatalog', 'listTemplateCalendarCatalog',
     ':calendar-options="calendarCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:sla-rule:create']\""])
   requireTokens(stepFiles[4], contents[stepFiles[4]], ['listTemplateDodRuleCatalog', 'listTemplateValidatorCatalog',
-    ':provided-validators="validatorCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\""])
+    ':provided-validators="validatorCatalog"', 'nestedSaved(savedId)', "v-hasPermi=\"['todo:dod-rule:create']\"",
+    'template-dod-ui-rules', 'systemDerivedFields', 'system-derived-fields-change', 'missingUiFields'])
+  if (/uiFields\s*:\s*\[\{[^}]*required\s*:\s*true/.test(contents[stepFiles[4]])) {
+    throw new Error('template DoD step must not require UI fields when the selected rules only need attachments or system-derived values')
+  }
   requireTokens('nested operation catalogs', nestedDrawers, ['calendarOptions', 'providedValidators'])
   requireTokens(stepFiles[7], contents[stepFiles[7]], ["v-hasPermi=\"['todo:release:diff']\""])
   if (workflow.includes('knownIds')) throw new Error('nested rule creation must select the exact returned id instead of diff guessing')
@@ -444,6 +448,17 @@ function checkTemplatePage() {
   if (workflow.includes('<el-dialog')) throw new Error('template operations may not use el-dialog')
 
   const model = require('../src/views/todo/config/template/template-draft-model')
+  const dodUiRules = require('../src/views/todo/config/template/template-dod-ui-rules')
+  const fieldRule = [{ id: 1, requiredFieldsJson: '["contactResult"]', requiredAttachmentsJson: '[]', conditionalRulesJson: '[]' }]
+  assert.deepStrictEqual(dodUiRules.missingUiFields(fieldRule, [1], [], []), ['contactResult'], 'selected field rules must expose missing UI fields')
+  assert.deepStrictEqual(dodUiRules.missingUiFields(fieldRule, [1], ['contactResult'], []), [], 'configured UI fields must satisfy selected DoD rules')
+  const attachmentRule = [{ id: 2, requiredFieldsJson: '[]', requiredAttachmentsJson: '["SIGNED_FILE"]', conditionalRulesJson: '[]' }]
+  assert.deepStrictEqual(dodUiRules.missingUiFields(attachmentRule, [2], [], []), [], 'attachment-only DoD rules must not require UI fields')
+  const derivedRule = [{ id: 3, requiredFieldsJson: '["generatedCaseNo"]', requiredAttachmentsJson: '[]', conditionalRulesJson: '[]' }]
+  assert.deepStrictEqual(dodUiRules.missingUiFields(derivedRule, [3], [], ['generatedCaseNo']), [], 'system-derived fields must not require user-facing controls')
+  const conditionalRule = [{ id: 4, requiredFieldsJson: '[]', requiredAttachmentsJson: '[]', conditionalRulesJson: '[{"field":"reason","when":{"field":"result","equals":"REJECT"}}]' }]
+  assert.deepStrictEqual(dodUiRules.missingUiFields(conditionalRule, [4], ['reason'], []), ['result'], 'conditional source fields must be represented in the UI or system-derived')
+  assert.deepStrictEqual(dodUiRules.missingUiFields(conditionalRule, [4], ['reason', 'result'], []), [], 'conditional target and source fields must satisfy the UI contract together')
   assert.throws(() => model.hydrateTemplateDraft({ editableVersion: { definitionJson: '{broken' } }),
     error => error && error.code === 'TODO_DEFINITION_CANONICAL_INVALID', 'malformed canonical template data must fail closed')
   const fixture = {

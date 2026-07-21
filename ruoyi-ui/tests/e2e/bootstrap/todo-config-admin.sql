@@ -6,6 +6,7 @@ set @test_remark=concat('TEST_ONLY|TODO_CONFIG_E2E|',@run_marker);
 set @sla_code='TODO_CONFIG_E2E_SLA_CODE';
 set @dod_code='TODO_CONFIG_E2E_DOD_CODE';
 set @lead_no='TODO_CONFIG_E2E_LEAD_NO';
+set @captcha_restore_key=concat('todo.e2e.captcha.restore.',@run_marker);
 
 delimiter //
 drop procedure if exists todo_config_e2e_bootstrap_guard//
@@ -14,20 +15,23 @@ begin
   if database() <> 'TODO_CONFIG_E2E_DATABASE' or database() not regexp '_e2e$' then
     signal sqlstate '45000' set message_text='Unsafe Todo configuration E2E bootstrap database';
   end if;
-  if exists(select 1 from sys_role where role_key='todo_config_admin' and del_flag='0' and remark not like 'TEST_ONLY|TODO_CONFIG_E2E|%') then
+  if exists(select 1 from sys_role where role_key='todo_config_admin' and del_flag='0' and coalesce(remark,'') not like 'TEST_ONLY|TODO_CONFIG_E2E|%') then
     signal sqlstate '45000' set message_text='todo_config_admin role collides with a non-test role';
   end if;
-  if exists(select 1 from sys_user where user_name='todo_config_admin' and del_flag='0' and remark not like 'TEST_ONLY|TODO_CONFIG_E2E|%') then
+  if exists(select 1 from sys_user where user_name='todo_config_admin' and del_flag='0' and coalesce(remark,'') not like 'TEST_ONLY|TODO_CONFIG_E2E|%') then
     signal sqlstate '45000' set message_text='todo_config_admin user collides with a non-test user';
   end if;
-  if exists(select 1 from todo_sla_rule where rule_code=@sla_code and create_by<>@run_marker) then
+  if exists(select 1 from todo_sla_rule where rule_code=@sla_code and coalesce(create_by,'')<>coalesce(@run_marker,'')) then
     signal sqlstate '45000' set message_text='E2E SLA code collides with another resource';
   end if;
-  if exists(select 1 from todo_dod_rule where rule_code=@dod_code and create_by<>@run_marker) then
+  if exists(select 1 from todo_dod_rule where rule_code=@dod_code and coalesce(create_by,'')<>coalesce(@run_marker,'')) then
     signal sqlstate '45000' set message_text='E2E DoD code collides with another resource';
   end if;
-  if exists(select 1 from biz_lead where lead_no=@lead_no and (create_by<>@run_marker or remark<>@test_remark)) then
+  if exists(select 1 from biz_lead where lead_no=@lead_no and (coalesce(create_by,'')<>coalesce(@run_marker,'') or coalesce(remark,'')<>coalesce(@test_remark,''))) then
     signal sqlstate '45000' set message_text='E2E lead number collides with another resource';
+  end if;
+  if exists(select 1 from sys_config where config_key=@captcha_restore_key and (coalesce(create_by,'')<>coalesce(@run_marker,'') or coalesce(remark,'')<>coalesce(@test_remark,''))) then
+    signal sqlstate '45000' set message_text='E2E captcha restore key collides with another resource';
   end if;
 end//
 delimiter ;
@@ -82,6 +86,10 @@ select @lead_no,concat('Todo configuration E2E lead · ',@run_marker),'E2E conta
 where not exists(select 1 from biz_lead where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark);
 
 -- Disable captcha only in this guarded disposable E2E database.
+insert into sys_config(config_name,config_key,config_value,config_type,create_by,create_time,remark)
+select 'Todo E2E captcha restore',@captcha_restore_key,config_value,'N',@run_marker,sysdate(),@test_remark
+from sys_config where config_key='sys.account.captchaEnabled'
+  and not exists(select 1 from sys_config restore where restore.config_key=@captcha_restore_key);
 update sys_config set config_value='false' where config_key='sys.account.captchaEnabled';
 
 call todo_config_e2e_bootstrap_guard();

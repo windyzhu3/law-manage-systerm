@@ -198,7 +198,8 @@ public class TodoDodRuleManagementService
     }
     private DodRuleListItem listItem(Map<String,Object> row)
     {return new DodRuleListItem(number(value(row,"dod_rule_id","dodRuleId")),text(row,"rule_code","ruleCode"),text(row,"rule_name","ruleName"),
-            text(row,"rule_type","ruleType"),text(row,"status","status"),integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")));}
+            text(row,"rule_type","ruleType"),text(row,"status","status"),integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")),
+            text(row,"required_fields_json","requiredFieldsJson"),text(row,"required_attachments_json","requiredAttachmentsJson"),text(row,"conditional_rules_json","conditionalRulesJson"));}
     private DodRuleDetail detail(Map<String,Object> row)
     {return new DodRuleDetail(number(value(row,"dod_rule_id","dodRuleId")),text(row,"rule_code","ruleCode"),text(row,"rule_name","ruleName"),
             text(row,"rule_type","ruleType"),text(row,"required_fields_json","requiredFieldsJson"),text(row,"required_attachments_json","requiredAttachmentsJson"),

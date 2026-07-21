@@ -150,10 +150,11 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/template-catalog/routing-targets") public AjaxResult templateRoutingTargetCatalog(){return success(templates.listRoutingTargetCatalog());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
     @GetMapping("/template-catalog/sla-rules") public AjaxResult templateSlaRuleCatalog(){var rows=sla.list(Map.of("status","0"));return success(rows==null?List.of():rows.stream().map(row->new TemplateRuleCatalogEntry(
-            row.slaRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.slaType(),row.durationValue(),row.durationUnit(),row.calendarCode())).toList());}
+            row.slaRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.slaType(),row.durationValue(),row.durationUnit(),row.calendarCode(),null,null,null)).toList());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
     @GetMapping("/template-catalog/dod-rules") public AjaxResult templateDodRuleCatalog(){var rows=dod.list(Map.of("status","0"));return success(rows==null?List.of():rows.stream().map(row->new TemplateRuleCatalogEntry(
-            row.dodRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.ruleType(),null,null,null)).toList());}
+            row.dodRuleId(),row.ruleCode(),row.ruleName(),row.status(),row.ruleType(),null,null,null,
+            row.requiredFieldsJson(),row.requiredAttachmentsJson(),row.conditionalRulesJson())).toList());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit')")
     @GetMapping("/template-catalog/calendars") public AjaxResult templateCalendarCatalog(){return success(templates.listTemplateCalendarCatalog());}
 
@@ -212,7 +213,8 @@ public class TodoConfigurationController extends BaseController
     {public TemplateListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);result.put("businessType",businessType);result.put("businessStage",businessStage);result.put("templateType",templateType);result.put("publishStatus",publishStatus);result.put("status",status);result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
     public record CapabilitySummary(String code,String description,boolean simulatable) { }
     public record TemplateRuleCatalogEntry(Long id,String ruleCode,String ruleName,String status,String ruleType,
-            Object durationValue,String durationUnit,String calendarCode) { }
+            Object durationValue,String durationUnit,String calendarCode,String requiredFieldsJson,
+            String requiredAttachmentsJson,String conditionalRulesJson) { }
     public record RuleListQuery(String status,String slaType,String ruleType,String keyword,LocalDateTime beginTime,LocalDateTime endTime,
             @Min(1) Integer pageNum,@Min(1) @Max(500) Integer pageSize)
     {public RuleListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("status",status);result.put("slaType",slaType);result.put("ruleType",ruleType);result.put("keyword",keyword);result.put("beginTime",beginTime);result.put("endTime",endTime);return result;}}

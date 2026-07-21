@@ -63,7 +63,12 @@ for (const required of [
 ]) requireText(spec, required, 'Todo configuration real E2E spec')
 requireText(spec, "require('./support/todo-config-e2e-database')", 'Todo configuration real E2E spec')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
-for (const required of ['assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();']) requireText(databaseFixture, required, 'Todo configuration database fixture')
+for (const required of [
+  'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',
+  'E2E_TODO_CONFIG_${runMarker}_', 'Todo E2E template ownership mismatch',
+  'todo_instance', 'todo_route_token', 'todo_route_join', 'todo_sla_record', 'todo_sla_policy_version', 'todo_cycle_occurrence',
+  'todo.e2e.captcha.restore.'
+]) requireText(databaseFixture, required, 'Todo configuration database fixture')
 forbidText(spec, "delete from todo_definition_action where operator_id=", 'Todo configuration real E2E cleanup')
 forbidText(databaseFixture, "delete from todo_definition_action where operator_id=(select", 'Todo configuration database fixture')
 
@@ -84,6 +89,9 @@ for (const required of [
   'TODO_CONFIG_E2E_DOD_CODE',
   'TODO_CONFIG_E2E_LEAD_NO',
   'TEST_ONLY|TODO_CONFIG_E2E|'
+]) requireText(bootstrap, required, 'Test-only identity bootstrap')
+for (const required of [
+  "coalesce(remark,'')", "coalesce(create_by,'')", "coalesce(@test_remark,'')", 'todo.e2e.captcha.restore.'
 ]) requireText(bootstrap, required, 'Test-only identity bootstrap')
 
 const playwrightConfig = read(playwrightConfigPath)

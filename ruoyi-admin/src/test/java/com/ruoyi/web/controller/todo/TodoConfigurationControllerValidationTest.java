@@ -106,6 +106,15 @@ class TodoConfigurationControllerValidationTest
                 .anyMatch(method->method.getName().equals("copyReleaseDraft")));
     }
 
+    @Test void dodTemplateCatalogExposesFormRequirementMetadata()
+    {
+        List<String> fields=Arrays.stream(TodoConfigurationController.TemplateRuleCatalogEntry.class.getRecordComponents())
+                .map(component->component.getName()).toList();
+        org.junit.jupiter.api.Assertions.assertTrue(fields.contains("requiredFieldsJson"));
+        org.junit.jupiter.api.Assertions.assertTrue(fields.contains("requiredAttachmentsJson"));
+        org.junit.jupiter.api.Assertions.assertTrue(fields.contains("conditionalRulesJson"));
+    }
+
     @Test
     void exposesMigrationPermissionsOnRepresentativeReadAndWriteEndpoints() throws Exception
     {

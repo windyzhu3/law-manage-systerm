@@ -25,7 +25,8 @@ public final class TodoConfigurationViews
             LocalDateTime escalate150At) { }
 
     public record DodRuleListItem(long dodRuleId,String ruleCode,String ruleName,String ruleType,String status,
-            Integer version,long referenceCount,LocalDateTime updateTime) { }
+            Integer version,long referenceCount,LocalDateTime updateTime,String requiredFieldsJson,
+            String requiredAttachmentsJson,String conditionalRulesJson) { }
 
     public record DodRuleDetail(long dodRuleId,String ruleCode,String ruleName,String ruleType,
             String requiredFieldsJson,String requiredAttachmentsJson,String conditionalRulesJson,String validatorRefsJson,
