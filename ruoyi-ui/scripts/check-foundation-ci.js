@@ -15,6 +15,9 @@ if (branchMentions < 2) throw new Error('CI must trigger for v0.2-Foundation pus
 if (/branches:\s*\[[^\]]*V0\.17/i.test(workflow)) throw new Error('stale V0.17 branch trigger remains')
 if (!workflow.includes('npm run test:todo-schema')) throw new Error('CI does not execute Todo schema contracts')
 if (!workflow.includes('npm run test:foundation-identities')) throw new Error('CI does not execute Foundation test identity UI contract')
+if (!workflow.includes("TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}")) {
+  throw new Error('Todo configuration E2E must default to the user-selected Chrome browser')
+}
 const workflowLines = workflow.replace(/\r\n/g, '\n').split('\n')
 const documentationStepName = '      - name: Verify Foundation documentation contract'
 const documentationStepCommand = '        run: npm run test:foundation-docs'
@@ -117,6 +120,9 @@ function verifyTriggerMetadataWorkflow(source, expectedBaseline) {
   }
   if (!baselineStep.text.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do')) {
     throw new Error('Trigger metadata database must participate in the exact v0.15 baseline loop')
+  }
+  if (!createDatabaseStep.text.includes('alter database law_v017 character set utf8mb4 collate utf8mb4_unicode_ci')) {
+    throw new Error('CI must normalize the auto-created law_v017 database collation before importing the baseline')
   }
   const baselinePaths = Array.from(baselineStep.text.matchAll(/^\s+(sql\/[^\s]+\.sql)\s*(?:\\|;\s+do)?\s*$/gm)).map(match => match[1])
   if (JSON.stringify(baselinePaths) !== JSON.stringify(expectedBaseline)) {
