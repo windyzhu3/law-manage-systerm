@@ -7,7 +7,12 @@ const required = [
   'src/views/todo/components/TodoSummaryCard.vue',
   'src/views/todo/components/TodoRelationPanel.vue'
   ,'src/api/todo-definition.js'
-  ,'src/views/todo/config/index.vue'
+  ,'src/views/todo/config/template/index.vue'
+  ,'src/views/todo/config/sla/index.vue'
+  ,'src/views/todo/config/dod/index.vue'
+  ,'src/views/todo/config/trigger/index.vue'
+  ,'src/views/todo/config/simulation/index.vue'
+  ,'src/views/todo/config/release/index.vue'
   ,'src/views/todo/config/components/TemplateList.vue'
   ,'src/views/todo/config/components/VersionDrawer.vue'
   ,'src/views/todo/config/components/DefinitionForm.vue'
@@ -68,8 +73,14 @@ const definitionCodec = fs.readFileSync('src/views/todo/config/definition-codec.
 for (const marker of ['hydrateDefinition','serializeDefinition','toDraftPayload','autoActions','acceptanceRefs']) if (!definitionCodec.includes(marker)) throw new Error(`missing definition codec marker ${marker}`)
 const autoActionEditor=fs.readFileSync('src/views/todo/config/components/AutoActionEditor.vue','utf8')
 for(const marker of ['field.type === \'number\'','el-input-number','el-input','required && !String(value || \'\').trim()','listTodoAutoActionCapabilities']) if(!autoActionEditor.includes(marker)) throw new Error(`missing catalog-driven auto action field marker ${marker}`)
-const configPage=fs.readFileSync('src/views/todo/config/index.vue','utf8')
-for(const marker of ["v-hasPermi",'copyDefinition','publishDefinition','发布后该版本不可修改']) if(!configPage.includes(marker)&&!fs.readFileSync('src/views/todo/config/components/TemplateList.vue','utf8').includes(marker)&&!fs.readFileSync('src/views/todo/config/components/VersionDrawer.vue','utf8').includes(marker)) throw new Error(`missing config marker ${marker}`)
+const configPage=[
+  'src/views/todo/config/template/index.vue',
+  'src/views/todo/config/template/TemplateDrawer.vue',
+  'src/views/todo/config/template/steps/TemplateVersionStep.vue',
+  'src/views/todo/config/components/TemplateList.vue',
+  'src/views/todo/config/components/VersionDrawer.vue'
+].map(file=>fs.readFileSync(file,'utf8')).join('\n')
+for(const marker of ["v-hasPermi",'copyTodoTemplate','publishReleaseRecord','publishedReadOnly']) if(!configPage.includes(marker)) throw new Error(`missing config marker ${marker}`)
 
 const operationsApi=fs.readFileSync('src/api/todo-operations.js','utf8')
 for(const name of ['getOperationsDashboard','listDeadEvents','replayDeadEvent','forceCompleteTodo','forceCancelTodo','regenerateTodo','batchTransferTodos','waiveTodoSla']) if(!operationsApi.includes(`export function ${name}`)) throw new Error(`missing operations api ${name}`)
@@ -102,7 +113,6 @@ const admissionEvidence=fs.readFileSync('src/views/todo/config/components/Admiss
 for(const marker of ['todo:admission:edit','独立评审人','artifactRef','APPROVED','validateAdmissionEvidence']) if(!admissionEvidence.includes(marker)) throw new Error(`missing admission evidence marker ${marker}`)
 const admissionOverview=fs.readFileSync('src/views/todo/config/components/FoundationAdmissionOverview.vue','utf8')
 for(const marker of ['overallStatus','readyGateCount','totalGateCount','NOT_ADMITTED','blockers','技术就绪不替代']) if(!admissionOverview.includes(marker)) throw new Error(`missing aggregate admission marker ${marker}`)
-if(!configPage.includes('foundation-admission-overview')) throw new Error('missing aggregate admission overview tab')
 for(const file of ['src/views/contract/components/ContractDetailDrawer.vue','src/views/case/components/CaseDetailDrawer.vue','src/views/matter/components/MatterDetailDrawer.vue']) if(!fs.readFileSync(file,'utf8').includes('business-todo-summary')) throw new Error(`missing embedded todo summary ${file}`)
 const embedded=fs.readFileSync('src/views/todo/components/BusinessTodoSummary.vue','utf8')+fs.readFileSync('src/views/todo/components/BusinessTodoDrawer.vue','utf8')+fs.readFileSync('src/views/todo/components/TodoChainTimeline.vue','utf8')
 for(const marker of ['activeCount','overdueCount','ownerIds','nearestDueAt','listBusinessTodos','getTodoChain','独立']) if(!embedded.includes(marker)&&marker!=='独立') throw new Error(`missing business todo marker ${marker}`)

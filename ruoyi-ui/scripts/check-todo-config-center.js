@@ -10,6 +10,24 @@ const required = [
   'src/views/todo/config/release/release-model.js'
 ]
 
+const configurationPages = [
+  'src/views/todo/config/template/index.vue',
+  'src/views/todo/config/sla/index.vue',
+  'src/views/todo/config/dod/index.vue',
+  'src/views/todo/config/trigger/index.vue',
+  'src/views/todo/config/simulation/index.vue',
+  'src/views/todo/config/release/index.vue'
+]
+
+const foundationGovernanceComponents = [
+  'FoundationAdmissionOverview.vue',
+  'FoundationResourceReadiness.vue',
+  'HistoricalMigrationReadiness.vue',
+  'FileSecurityReadiness.vue',
+  'FinanceReadiness.vue',
+  'AcceptanceReadiness.vue'
+].map(name => `src/views/todo/config/components/${name}`)
+
 const routes = [
   ['getTodoConfigDashboard', '/todo/config/dashboard', 'get'],
   ['listSlaRules', '/todo/config/sla-rules', 'get'],
@@ -89,6 +107,15 @@ function runNegativeFixture() {
 }
 
 async function check() {
+  if (fs.existsSync('src/views/todo/config/index.vue')) {
+    throw new Error('old tabbed configuration page must be removed')
+  }
+  configurationPages.forEach(file => {
+    if (!fs.existsSync(file)) throw new Error(`new configuration page must be retained: ${file}`)
+  })
+  foundationGovernanceComponents.forEach(file => {
+    if (!fs.existsSync(file)) throw new Error(`Foundation component must be retained: ${file}`)
+  })
   required.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
   })

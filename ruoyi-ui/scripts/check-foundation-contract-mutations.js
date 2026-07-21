@@ -38,8 +38,9 @@ function copyFile(relativePath, targetRoot) {
 function makeCiFixture(workflowMutation) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'foundation-ci-contract-'))
   copyFile('ruoyi-ui/scripts/check-foundation-ci.js', root)
+  copyFile('ruoyi-admin/src/main/resources/application-druid.yml', root)
   const workflowRelative = '.github/workflows/ci.yml'
-  const workflow = fs.readFileSync(path.join(repoRoot, workflowRelative), 'utf8')
+  const workflow = fs.readFileSync(path.join(repoRoot, workflowRelative), 'utf8').replace(/\r\n/g, '\n')
   const target = path.join(root, workflowRelative)
   fs.mkdirSync(path.dirname(target), { recursive: true })
   fs.writeFileSync(target, workflowMutation(workflow), 'utf8')
