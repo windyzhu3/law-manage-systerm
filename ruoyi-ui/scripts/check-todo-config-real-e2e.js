@@ -29,7 +29,10 @@ function forbidText(source, value, label) {
 const spec = read(specPath)
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
-for (const required of ['TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL execution path is available']) requireText(mysqlRunner, required, 'Portable MySQL E2E runner')
+for (const required of [
+  'TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL execution path is available',
+  '--init-command=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
+]) requireText(mysqlRunner, required, 'Portable MySQL E2E runner')
 for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
   if (spec.includes(forbidden)) throw new Error(`Todo configuration real E2E must not mock core APIs: ${forbidden}`)
 }

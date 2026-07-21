@@ -13,6 +13,7 @@ function connectionArguments(database, host) {
     `-u${process.env.TODO_E2E_DB_USER || 'root'}`,
     '--batch',
     '--skip-column-names',
+    '--init-command=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci',
     database
   ]
 }
