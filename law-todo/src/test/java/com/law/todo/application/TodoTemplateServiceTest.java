@@ -288,7 +288,7 @@ class TodoTemplateServiceTest
     {
         ledger(true);
         when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(0);
-        when(mapper.insertTriggerRule(anyMap())).thenThrow(new org.springframework.dao.DuplicateKeyException("rule_code"));
+        when(mapper.insertTriggerRule(anyMap())).thenThrow(new org.springframework.dao.DuplicateKeyException("Duplicate entry for key 'uk_todo_trigger_rule_code'"));
         TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
                 "trigger-race",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
 
@@ -296,6 +296,20 @@ class TodoTemplateServiceTest
                 ()->new TodoTemplateService(mapper).saveTrigger(duplicate,actor()));
 
         assertEquals("TODO_TRIGGER_CODE_DUPLICATE",error.getBusinessCode());
+    }
+
+    @Test void triggerSaveDoesNotMisclassifyBindingUniqueConstraintAsRuleCodeDuplicate()
+    {
+        ledger(true);
+        when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(0);
+        org.springframework.dao.DuplicateKeyException binding=
+                new org.springframework.dao.DuplicateKeyException("Duplicate entry for key 'uk_todo_trigger_rule_binding'");
+        when(mapper.insertTriggerRule(anyMap())).thenThrow(binding);
+        TriggerCommand command=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+                "trigger-binding-race",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
+
+        assertThrows(org.springframework.dao.DuplicateKeyException.class,
+                ()->new TodoTemplateService(mapper).saveTrigger(command,actor()));
     }
 
     @Test void legacyTriggerConstructorDerivesValidIdentityMetadata()

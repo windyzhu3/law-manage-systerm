@@ -46,4 +46,8 @@ function buildTriggerToggleCommand(enabled, expectedVersion, actionId) {
   return { enabled, actionId, expectedVersion: Number(expectedVersion || 0) }
 }
 
-module.exports = { moveTriggerRows, pageTriggerRows, changedTriggerSortItems, buildTriggerToggleCommand }
+function canModifyTriggerSort(keyword) {
+  return !String(keyword || '').trim()
+}
+
+module.exports = { moveTriggerRows, pageTriggerRows, changedTriggerSortItems, buildTriggerToggleCommand, canModifyTriggerSort }

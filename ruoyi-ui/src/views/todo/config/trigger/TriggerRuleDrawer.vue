@@ -8,7 +8,7 @@
     @update:visible="$emit('update:visible', $event)"
     @reset="reset"
   >
-    <el-form ref="form" :model="form" :rules="rules" label-width="118px" class="trigger-rule-form">
+    <el-form ref="form" :model="form" :rules="validatedRules" label-width="118px" class="trigger-rule-form">
       <el-collapse v-model="sections">
         <el-collapse-item title="事件来源" name="event">
           <el-form-item label="触发方式">
@@ -135,6 +135,12 @@ export default {
   computed: {
     persisted() { return Boolean(this.form.triggerRuleId) },
     readonly() { return this.mode === 'view' },
+    validatedRules() {
+      return { ...this.rules,
+        ruleCode: [...this.rules.ruleCode, { max: 64, message: 'Rule code must be at most 64 characters', trigger: 'blur' }],
+        ruleName: [...this.rules.ruleName, { max: 128, message: 'Rule name must be at most 128 characters', trigger: 'blur' }]
+      }
+    },
     drawerTitle() { return ({ create: '新增触发规则', copy: '复制触发规则', edit: '编辑触发规则', view: '触发规则详情' })[this.mode] || '触发规则详情' },
     activeEventCatalog() { return this.eventCatalog.filter(item => valueOf(item, 'status', 'status') === 'ACTIVE') },
     selectableEventCatalog() { const active = this.activeEventCatalog.slice(); const selected = this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey); if (selected && !active.some(item => this.catalogKey(item) === this.form.eventKey)) active.push(selected); return active },
@@ -195,6 +201,7 @@ export default {
         form.version = 0
         form.ruleName = `${form.ruleName || '规则'}-副本`
         form.ruleCode = this.copyRuleCode(form.ruleCode)
+        form.ruleName = this.copyRuleName(form.ruleName)
       }
       form.eventKey = form.eventType ? `${form.eventType}@@${form.payloadVersion}` : ''
       this.form = form
@@ -206,6 +213,7 @@ export default {
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
     },
     reset() { this.form = emptyForm(); this.versions = []; this.initialSnapshot = ''; this.conditionValid = true; this.conditionDraftDirty = false; this.$emit('reset') },
+    copyRuleName(name) { const base = String(name || '瑙勫垯').replace(/-鍓湰$/, ''); return `${base.slice(0, 125)}-鍓湰` },
     copyRuleCode(code) { const base = String(code || 'TRIGGER_RULE').toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+$/, ''); return `${base.slice(0, 59) || 'TRIGGER_RULE'}_COPY` },
     snapshot() { return JSON.stringify(this.form) },
     catalogKey(item) { return `${valueOf(item, 'eventType', 'event_type')}@@${Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)}` },

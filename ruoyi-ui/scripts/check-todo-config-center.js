@@ -372,9 +372,10 @@ function checkTriggerRulePage() {
   requireTokens('trigger workflow', workflow, ['eventType', 'payloadVersion', 'businessType', 'templateId', 'templateVersionId', 'sortOrder', 'version'])
   assertTriggerToggleContract(page, contents[page])
   assertTriggerSortContract(page, contents[page])
-  requireTokens(page, contents[page], ['loadGlobalSortSnapshot', 'pageSize: 500', 'globalRows', 'handlePagination', 'moveTriggerRows', 'changedTriggerSortItems', 'sortPreparing: false'])
+  requireTokens(page, contents[page], ['loadGlobalSortSnapshot', 'pageSize: 500', 'globalRows', 'handlePagination', 'moveTriggerRows', 'changedTriggerSortItems', 'sortPreparing: false', 'sortLockedByKeyword', '排序筛选结果不能调整全局排序'])
   assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'ruleCode', 'ruleName', 'actionId', 'expectedVersion'])
   assertMethodTokens(drawer, contents[drawer], 'validate', ['effectiveEnabled', 'selectedTemplateActive'])
+  assertMethodTokens(drawer, contents[drawer], 'copyRuleName', ['slice(0, 125)', '-鍓湰'])
   const saveBody = methodWindow(contents[drawer], 'save')
   if (saveBody.includes('sortOrder:')) throw new Error('trigger save command must not send unsupported sortOrder; use sortTriggerRules')
   if (workflow.includes('simulateTriggerRule(')) throw new Error('Task 10 must not send an invented trigger simulation command')
@@ -392,6 +393,8 @@ function checkTriggerRulePage() {
   assert.strictEqual(model.pageTriggerRows(moved.rows, 2, 500)[0].triggerRuleId, 500, 'dirty pagination must slice the global snapshot')
   assert.strictEqual(model.changedTriggerSortItems(moved.rows, baseline).length, 501, 'sort payload must include every globally changed row')
   assert.deepStrictEqual(Object.keys(model.buildTriggerToggleCommand('N', 7, 'toggle-1')).sort(), ['actionId', 'enabled', 'expectedVersion'])
+  assert.strictEqual(model.canModifyTriggerSort('LEAD'), false, 'keyword-filtered rows must not be used to rewrite global sort order')
+  assert.strictEqual(model.canModifyTriggerSort('   '), true, 'blank keyword may use the complete global sort snapshot')
 }
 
 function checkTemplatePage() {

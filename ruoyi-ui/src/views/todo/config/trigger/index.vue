@@ -16,7 +16,7 @@
         size="small"
         icon="el-icon-sort"
         :loading="sorting || sortPreparing"
-        :disabled="!sortDirty || sorting || sortPreparing"
+        :disabled="!sortDirty || sorting || sortPreparing || sortLockedByKeyword"
         @click="saveSort"
       >保存排序</el-button>
     </template>
@@ -78,7 +78,7 @@ import ConfigPageShell from '../shared/ConfigPageShell'
 import ConfigMetricCard from '../shared/ConfigMetricCard'
 import TriggerRuleDrawer from './TriggerRuleDrawer'
 import { listTriggerRules, toggleTriggerRule, sortTriggerRules } from '@/api/todo-config'
-const { moveTriggerRows, pageTriggerRows, changedTriggerSortItems, buildTriggerToggleCommand } = require('./trigger-sort-model')
+const { moveTriggerRows, pageTriggerRows, changedTriggerSortItems, buildTriggerToggleCommand, canModifyTriggerSort } = require('./trigger-sort-model')
 
 export default {
   name: 'TodoTriggerRuleConfig',
@@ -105,7 +105,8 @@ export default {
     conditionalCount() { return this.rows.filter(row => Boolean(this.field(row, 'conditionJson', 'condition_json'))).length },
     changedSortRows() { return this.globalRows ? changedTriggerSortItems(this.globalRows, this.initialGlobalSort) : [] },
     changedSortCount() { return this.changedSortRows.length },
-    sortDirty() { return this.changedSortCount > 0 }
+    sortDirty() { return this.changedSortCount > 0 },
+    sortLockedByKeyword() { return !canModifyTriggerSort(this.query.keyword) }
   },
   created() { this.load() },
   methods: {
@@ -181,6 +182,7 @@ export default {
     moveUp(row) { this.move(row, -1) },
     moveDown(row) { this.move(row, 1) },
     async move(row, offset) {
+      if (this.sortLockedByKeyword) return this.$modal.msgWarning('排序筛选结果不能调整全局排序，请清空关键词后重试')
       if (this.sortPreparing || this.sorting) return
       try {
         await this.loadGlobalSortSnapshot()
@@ -220,6 +222,7 @@ export default {
       else this.load()
     },
     async saveSort() {
+      if (this.sortLockedByKeyword) return this.$modal.msgWarning('排序筛选结果不能调整全局排序，请清空关键词后重试')
       if (!this.sortDirty || this.sorting) return
       this.sorting = true
       try {
