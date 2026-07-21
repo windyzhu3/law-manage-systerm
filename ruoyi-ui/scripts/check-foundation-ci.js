@@ -6,6 +6,10 @@ const applicationDruid = fs.readFileSync(
   path.resolve(__dirname, '../../ruoyi-admin/src/main/resources/application-druid.yml'),
   'utf8'
 )
+const logback = fs.readFileSync(
+  path.resolve(__dirname, '../../ruoyi-admin/src/main/resources/logback.xml'),
+  'utf8'
+)
 
 if (!/^name:\s+V0\.2 Foundation quality gate$/m.test(workflow)) {
   throw new Error('CI workflow name is not scoped to V0.2 Foundation')
@@ -17,6 +21,12 @@ if (!workflow.includes('npm run test:todo-schema')) throw new Error('CI does not
 if (!workflow.includes('npm run test:foundation-identities')) throw new Error('CI does not execute Foundation test identity UI contract')
 if (!workflow.includes("TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}")) {
   throw new Error('Todo configuration E2E must default to the user-selected Chrome browser')
+}
+if (!logback.includes('<property name="log.path" value="${LOG_PATH:-/home/ruoyi/logs}" />')) {
+  throw new Error('Logback must allow a writable environment-specific log directory')
+}
+if ((workflow.match(/LOG_PATH:\s+\$\{\{ runner\.temp \}\}\/ruoyi-logs/g) || []).length < 2) {
+  throw new Error('Database and real Todo E2E jobs must use a writable runner log directory')
 }
 const workflowLines = workflow.replace(/\r\n/g, '\n').split('\n')
 const documentationStepName = '      - name: Verify Foundation documentation contract'
