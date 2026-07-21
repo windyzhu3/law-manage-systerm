@@ -106,6 +106,23 @@ function runNegativeFixture() {
   assert.throws(() => assertRouteContract(wrongPath, 'getTodoConfigDashboard', '/todo/config/dashboard', 'get'), /missing route contract getTodoConfigDashboard/)
 }
 
+function runtimeAndE2eSources(root) {
+  return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
+    const file = `${root}/${entry.name}`
+    if (entry.isDirectory()) return runtimeAndE2eSources(file)
+    return /\.(js|ts|vue)$/.test(entry.name) ? [file] : []
+  })
+}
+
+function assertNoLegacyConfigurationComponentReferences() {
+  const legacyComponent = ['todo', 'config', 'index'].join('/')
+  const offenders = ['src', 'e2e'].flatMap(runtimeAndE2eSources)
+    .filter(file => fs.readFileSync(file, 'utf8').includes(legacyComponent))
+  if (offenders.length) {
+    throw new Error(`old configuration component path is forbidden in runtime/test routes: ${offenders.join(', ')}`)
+  }
+}
+
 async function check() {
   if (fs.existsSync('src/views/todo/config/index.vue')) {
     throw new Error('old tabbed configuration page must be removed')
@@ -116,6 +133,7 @@ async function check() {
   foundationGovernanceComponents.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`Foundation component must be retained: ${file}`)
   })
+  assertNoLegacyConfigurationComponentReferences()
   required.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
   })
