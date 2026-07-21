@@ -75,7 +75,12 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
     }
     @Test void registersEveryConfigurationEndpointAsOneUniqueHandler(){long count=handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).count();org.junit.jupiter.api.Assertions.assertTrue(count>=20);org.junit.jupiter.api.Assertions.assertEquals(count,handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).map(entry->entry.getKey().toString()).distinct().count());}
     private MockMvc mvc(){return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new Denied()).build();}
-    private void authenticate(String permission){SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("tester","x",Set.of(new SimpleGrantedAuthority(permission))));}
+    private void authenticate(String permission){
+      com.ruoyi.common.core.domain.entity.SysUser user=new com.ruoyi.common.core.domain.entity.SysUser();
+      user.setUserId(7L);user.setDeptId(2L);user.setUserName("tester");
+      com.ruoyi.common.core.domain.model.LoginUser principal=new com.ruoyi.common.core.domain.model.LoginUser(7L,2L,user,Set.of(permission));
+      SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(principal,"x",Set.of(new SimpleGrantedAuthority(permission))));
+    }
     @ControllerAdvice static class Denied {@ExceptionHandler(AccessDeniedException.class) @ResponseStatus(HttpStatus.FORBIDDEN) void denied(){}}
     @Configuration @EnableWebMvc @EnableMethodSecurity static class Config {
       @Bean PermissionProbe ss(){return new PermissionProbe();}
@@ -84,7 +89,7 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
         org.mockito.Mockito.when(query.templatePage(org.mockito.ArgumentMatchers.anyMap())).thenReturn(
             new com.law.todo.application.view.TodoConfigurationViews.TemplatePage(java.util.List.of(),0));
         org.mockito.Mockito.when(query.businessObjects(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class),
-            org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt())).thenReturn(
+            org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.any())).thenReturn(
             new com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage(java.util.List.of(),0));
         return new TodoConfigurationController(query,org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),org.mockito.Mockito.mock(TodoConfigurationSimulationService.class));
       }

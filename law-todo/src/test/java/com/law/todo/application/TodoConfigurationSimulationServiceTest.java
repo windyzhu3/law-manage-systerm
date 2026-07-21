@@ -54,7 +54,7 @@ class TodoConfigurationSimulationServiceTest
         assertEquals(List.of("state","template","owner","sla","dod","route","card","log"),
                 List.copyOf(ordered.keySet()));
         verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"));
-        verify(businessObjects).requireBusinessObject("LEAD",3L);
+        verify(businessObjects).requireBusinessObject("LEAD",3L,actor());
     }
 
     @Test void failedSimulationIsAuditedWithSanitizedFailureThenRethrown()
@@ -177,7 +177,7 @@ class TodoConfigurationSimulationServiceTest
     @Test void missingBusinessObjectStopsSimulationAndIsAudited()
     {
         TodoException missing=new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","missing");
-        org.mockito.Mockito.when(businessObjects.requireBusinessObject("LEAD",3L)).thenThrow(missing);
+        org.mockito.Mockito.when(businessObjects.requireBusinessObject("LEAD",3L,actor())).thenThrow(missing);
 
         TodoException error=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 

@@ -10,7 +10,7 @@
     <template #filters>
       <el-card shadow="never" class="filter-card"><el-form :inline="true" size="small">
         <el-form-item><el-input v-model="query.keyword" clearable placeholder="模板名称或编码" @keyup.enter.native="search" /></el-form-item>
-        <el-form-item><el-select v-model="query.status" clearable placeholder="发布状态"><el-option v-for="item in dict.type.law_todo_version_status" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
+        <el-form-item><el-select v-model="query.status" clearable placeholder="发布状态"><el-option v-for="item in releaseStatusOptions" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item>
         <el-form-item><el-input v-model="query.publisher" clearable placeholder="发布人" /></el-form-item>
         <el-form-item><el-date-picker v-model="dateRange" type="datetimerange" value-format="yyyy-MM-ddTHH:mm:ss" range-separator="至" start-placeholder="开始时间" end-placeholder="结束时间" /></el-form-item>
         <el-form-item><el-button type="primary" icon="el-icon-search" @click="search">查询</el-button><el-button icon="el-icon-refresh" @click="resetQuery">重置</el-button></el-form-item>
@@ -43,7 +43,7 @@ export default {
   name: 'TodoConfigRelease', components: { ConfigPageShell, ConfigMetricCard, ReleaseRecordDrawer },
   dicts: ['law_todo_version_status'],
   data() { return { loading: false, rows: [], total: 0, pageNum: 1, pageSize: 20, query: { keyword: '', status: '', publisher: '', beginTime: '', endTime: '' }, dateRange: [], drawerOpen: false, selected: null } },
-  computed: { publishedCount() { return this.rows.filter(row => row.status === 'PUBLISHED').length }, retiredCount() { return this.rows.filter(row => row.status === 'RETIRED').length }, rollbackCount() { return this.rows.filter(row => row.rollbackSourceVersionId).length } },
+  computed: { releaseStatusOptions() { return (this.dict.type.law_todo_version_status || []).filter(item => ['PUBLISHED', 'RETIRED'].includes(item.value)) }, publishedCount() { return this.rows.filter(row => row.status === 'PUBLISHED').length }, retiredCount() { return this.rows.filter(row => row.status === 'RETIRED').length }, rollbackCount() { return this.rows.filter(row => row.rollbackSourceVersionId).length } },
   created() { this.load() },
   methods: {
     params(overrides) { return { ...this.query, beginTime: this.dateRange && this.dateRange[0], endTime: this.dateRange && this.dateRange[1], offset: (this.pageNum - 1) * this.pageSize, limit: this.pageSize, ...(overrides || {}) } },

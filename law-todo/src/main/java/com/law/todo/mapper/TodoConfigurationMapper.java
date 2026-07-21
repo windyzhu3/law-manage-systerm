@@ -33,8 +33,5 @@ public interface TodoConfigurationMapper
     long countReleaseRecords(Map<String,Object> query);
     Map<String,Object> selectReleaseRecord(Long versionId);
     List<Map<String,Object>> selectImmutableTemplateVersions(Long templateId);
-    List<Map<String,Object>> selectBusinessObjects(Map<String,Object> query);
-    long countBusinessObjects(Map<String,Object> query);
-    Map<String,Object> selectBusinessObject(@Param("businessType") String businessType,@Param("businessId") Long businessId);
     int insertSimulationRecord(Map<String,Object> row);
 }

@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.TodoBusinessDirectoryMapper">
+    <sql id="actorDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur
+                inner join sys_role r on r.role_id=ur.role_id and r.status='0'
+                where ur.user_id=#{currentUserId}
+                <if test="permissions != null and permissions != ''">
+                    and exists (
+                        select 1 from sys_role_menu rm
+                        inner join sys_menu m on m.menu_id=rm.menu_id
+                        where rm.role_id=r.role_id and m.status='0' and m.perms is not null and m.perms!=''
+                          and find_in_set(m.perms,#{permissions}) &gt; 0
+                    )
+                </if>
+                and (
+                    r.data_scope='1'
+                    or (r.data_scope='2' and b.dept_id in (select dept_id from sys_role_dept where role_id=r.role_id))
+                    or (r.data_scope='3' and b.dept_id=#{currentDeptId})
+                    or (r.data_scope='4' and b.dept_id in (
+                        select sd.dept_id from sys_dept sd
+                        where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)
+                    ))
+                    <choose>
+                        <when test="businessType == 'CASE' or businessType == 'MATTER'">
+                            or (r.data_scope='5' and (b.owner_id=#{currentUserId} or b.main_lawyer_id=#{currentUserId}
+                                or find_in_set(#{currentUserId},ifnull(b.assistant_lawyer_ids,''))))
+                        </when>
+                        <otherwise>or (r.data_scope='5' and b.owner_id=#{currentUserId})</otherwise>
+                    </choose>
+                )
+            )
+        </if>
+    </sql>
+
+    <!-- This is the single source for list, count, and direct lookup, keeping their authorization semantics identical. -->
+    <sql id="visibleDirectorySource">
+        <choose>
+            <when test="businessType == 'LEAD'">
+                select b.lead_id business_id,b.lead_no business_no,b.lead_name business_name,'LEAD' business_type
+                from biz_lead b where b.del_flag='0'
+                <if test="businessId != null">and b.lead_id=#{businessId}</if>
+                <if test="keyword != null and keyword != ''">and (b.lead_no like concat('%',#{keyword},'%') or b.lead_name like concat('%',#{keyword},'%'))</if>
+                <include refid="actorDataScope"/>
+            </when>
+            <when test="businessType == 'CUSTOMER'">
+                select b.customer_id business_id,b.customer_no business_no,b.customer_name business_name,'CUSTOMER' business_type
+                from biz_customer b where b.del_flag='0'
+                <if test="businessId != null">and b.customer_id=#{businessId}</if>
+                <if test="keyword != null and keyword != ''">and (b.customer_no like concat('%',#{keyword},'%') or b.customer_name like concat('%',#{keyword},'%'))</if>
+                <include refid="actorDataScope"/>
+            </when>
+            <when test="businessType == 'CONTRACT'">
+                select b.contract_id business_id,b.contract_no business_no,b.contract_name business_name,'CONTRACT' business_type
+                from biz_contract b where b.del_flag='0'
+                <if test="businessId != null">and b.contract_id=#{businessId}</if>
+                <if test="keyword != null and keyword != ''">and (b.contract_no like concat('%',#{keyword},'%') or b.contract_name like concat('%',#{keyword},'%'))</if>
+                <include refid="actorDataScope"/>
+            </when>
+            <when test="businessType == 'CASE'">
+                select b.case_id business_id,b.case_no business_no,b.case_name business_name,'CASE' business_type
+                from biz_case b where b.del_flag='0'
+                <if test="businessId != null">and b.case_id=#{businessId}</if>
+                <if test="keyword != null and keyword != ''">and (b.case_no like concat('%',#{keyword},'%') or b.case_name like concat('%',#{keyword},'%'))</if>
+                <include refid="actorDataScope"/>
+            </when>
+            <when test="businessType == 'MATTER'">
+                select b.case_id business_id,b.case_no business_no,b.case_name business_name,'MATTER' business_type
+                from biz_case b where b.del_flag='0'
+                <if test="businessId != null">and b.case_id=#{businessId}</if>
+                <if test="keyword != null and keyword != ''">and (b.case_no like concat('%',#{keyword},'%') or b.case_name like concat('%',#{keyword},'%'))</if>
+                <include refid="actorDataScope"/>
+            </when>
+            <otherwise>select null business_id,null business_no,null business_name,null business_type where 1=0</otherwise>
+        </choose>
+    </sql>
+
+    <select id="selectVisibleBusinessObjects" resultType="java.util.Map">
+        <include refid="visibleDirectorySource"/> order by business_id desc limit #{limit} offset #{offset}
+    </select>
+    <select id="countVisibleBusinessObjects" resultType="long">
+        select count(*) from (<include refid="visibleDirectorySource"/>) authorized_directory
+    </select>
+    <select id="selectVisibleBusinessObject" resultType="java.util.Map">
+        <include refid="visibleDirectorySource"/> limit 1
+    </select>
+</mapper>

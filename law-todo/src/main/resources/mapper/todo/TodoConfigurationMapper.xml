@@ -234,44 +234,6 @@
     where template_id=#{templateId} and status in ('PUBLISHED','RETIRED')
     order by version_no desc,version_id desc
   </select>
-  <select id="selectBusinessObjects" resultType="java.util.Map">
-    select directory.* from (
-      <choose>
-        <when test="businessType == 'LEAD'">select lead_id business_id,lead_no business_no,lead_name business_name,'LEAD' business_type from biz_lead where del_flag='0'</when>
-        <when test="businessType == 'CUSTOMER'">select customer_id business_id,customer_no business_no,customer_name business_name,'CUSTOMER' business_type from biz_customer where del_flag='0'</when>
-        <when test="businessType == 'CONTRACT'">select contract_id business_id,contract_no business_no,contract_name business_name,'CONTRACT' business_type from biz_contract where del_flag='0'</when>
-        <when test="businessType == 'CASE'">select case_id business_id,case_no business_no,case_name business_name,'CASE' business_type from biz_case where del_flag='0'</when>
-        <when test="businessType == 'MATTER'">select case_id business_id,case_no business_no,case_name business_name,'MATTER' business_type from biz_case where del_flag='0'</when>
-        <otherwise>select null business_id,null business_no,null business_name,null business_type where 1=0</otherwise>
-      </choose>
-    ) directory
-    <where><if test="keyword != null and keyword != ''">directory.business_no like concat('%',#{keyword},'%') or directory.business_name like concat('%',#{keyword},'%')</if></where>
-    order by directory.business_id desc limit #{limit} offset #{offset}
-  </select>
-  <select id="countBusinessObjects" resultType="long">
-    select count(*) from (
-      <choose>
-        <when test="businessType == 'LEAD'">select lead_id business_id,lead_no business_no,lead_name business_name from biz_lead where del_flag='0'</when>
-        <when test="businessType == 'CUSTOMER'">select customer_id business_id,customer_no business_no,customer_name business_name from biz_customer where del_flag='0'</when>
-        <when test="businessType == 'CONTRACT'">select contract_id business_id,contract_no business_no,contract_name business_name from biz_contract where del_flag='0'</when>
-        <when test="businessType == 'CASE' or businessType == 'MATTER'">select case_id business_id,case_no business_no,case_name business_name from biz_case where del_flag='0'</when>
-        <otherwise>select null business_id,null business_no,null business_name where 1=0</otherwise>
-      </choose>
-    ) directory
-    <where><if test="keyword != null and keyword != ''">directory.business_no like concat('%',#{keyword},'%') or directory.business_name like concat('%',#{keyword},'%')</if></where>
-  </select>
-  <select id="selectBusinessObject" resultType="java.util.Map">
-    select directory.* from (
-      <choose>
-        <when test="businessType == 'LEAD'">select lead_id business_id,lead_no business_no,lead_name business_name,'LEAD' business_type from biz_lead where del_flag='0'</when>
-        <when test="businessType == 'CUSTOMER'">select customer_id business_id,customer_no business_no,customer_name business_name,'CUSTOMER' business_type from biz_customer where del_flag='0'</when>
-        <when test="businessType == 'CONTRACT'">select contract_id business_id,contract_no business_no,contract_name business_name,'CONTRACT' business_type from biz_contract where del_flag='0'</when>
-        <when test="businessType == 'CASE'">select case_id business_id,case_no business_no,case_name business_name,'CASE' business_type from biz_case where del_flag='0'</when>
-        <when test="businessType == 'MATTER'">select case_id business_id,case_no business_no,case_name business_name,'MATTER' business_type from biz_case where del_flag='0'</when>
-        <otherwise>select null business_id,null business_no,null business_name,null business_type where 1=0</otherwise>
-      </choose>
-    ) directory where directory.business_id=#{businessId}
-  </select>
   <insert id="insertSimulationRecord" useGeneratedKeys="true" keyProperty="simulationId">
     insert into todo_simulation_record(request_id,template_version_id,event_type,business_type,business_id,input_summary_json,
       result_json,duration_ms,operator_id)

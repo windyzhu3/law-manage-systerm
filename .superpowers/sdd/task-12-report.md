@@ -31,6 +31,16 @@ Implemented the two remaining Todo configuration-centre menu pages without intro
 - Failed or timed-out copy/rollback requests retain the same action ID for a safe retry; successful requests rotate it.
 - Release status rendering uses `law_todo_version_status`, and page-local metrics are labelled as current-page counts.
 
+## Second review follow-up: data scope and dictionary repair
+
+- Replaced the generic unscoped business-object mapper with an Actor-scoped `TodoBusinessDirectoryAccess` SPI.
+- Added one RuoYi SQL adapter whose shared authorized source powers list, count, and direct lookup, so filtering occurs before pagination/projection and does not use N+1 checks.
+- Covered LEAD, CUSTOMER, CONTRACT, CASE, and MATTER with the existing role/menu/data-scope semantics; CASE/MATTER personal scope includes owner, main lawyer, and assistant lawyer.
+- The controller now supplies the authenticated Actor to directory reads, and simulation reuses the same Actor-scoped direct lookup before any definition execution.
+- Unauthorized and nonexistent objects share the stable not-found response, preventing identity/count/name/number disclosure.
+- Kept historical `V0_20_30` unchanged and added forward-only `V0_20_32` to seed/enable RETIRED idempotently and disable the incorrect ROLLED_BACK dictionary option.
+- The release filter exposes only immutable PUBLISHED/RETIRED options while retaining DRAFT for other editor pages.
+
 ## TDD evidence
 
 RED was observed before production changes:
@@ -40,6 +50,8 @@ RED was observed before production changes:
 3. Controller contract failed until the typed query and copy-draft endpoint existed.
 4. Handoff contract failed until `$route.query` was consumed by the simulation page.
 5. Retired-detail contract failed until `selectReleaseRecord` accepted immutable RETIRED versions.
+6. The second review RED failed test compilation because no Actor-scoped directory SPI/signatures existed and the forward-only status repair migration was absent.
+7. Focused GREEN now covers actor propagation, unauthorized list/count/lookup behavior, simulation denial before execution, all five business types, shared SQL scope, and the migration value-set contract.
 
 ## Verification
 

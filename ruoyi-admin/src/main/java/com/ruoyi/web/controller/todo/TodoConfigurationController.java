@@ -177,7 +177,7 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
     @PostMapping({"/simulations","/trigger-rules/simulate"}) public AjaxResult simulate(@Valid @RequestBody ConfigurationSimulationCommand value){return success(simulation.simulate(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:simulation:list')")
-    @GetMapping("/business-objects") public TableDataInfo businessObjects(@Valid @ModelAttribute BusinessObjectQuery value){var page=query.businessObjects(value.businessType(),value.keyword(),value.pageNum(),value.pageSize());return new TableDataInfo(page.rows(),page.total());}
+    @GetMapping("/business-objects") public TableDataInfo businessObjects(@Valid @ModelAttribute BusinessObjectQuery value){var page=query.businessObjects(value.businessType(),value.keyword(),value.pageNum(),value.pageSize(),actor());return new TableDataInfo(page.rows(),page.total());}
 
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){var page=query.releasePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}

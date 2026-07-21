@@ -23,11 +23,14 @@ import com.law.todo.application.view.TodoConfigurationViews.TemplatePage;
 import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.spi.TodoBusinessDirectoryAccess;
+import com.law.todo.application.command.TodoActionCommands.Actor;
 
 @ExtendWith(MockitoExtension.class)
 class TodoConfigurationQueryServiceTest
 {
     @Mock TodoConfigurationMapper mapper;
+    @Mock TodoBusinessDirectoryAccess directory;
 
     @Test void dashboardUsesTheStableConfigurationCounters()
     {
@@ -203,24 +206,42 @@ class TodoConfigurationQueryServiceTest
 
     @Test void businessObjectLookupIsPagedAndProjectsOnlyStableIdentityFields()
     {
-        when(mapper.selectBusinessObjects(anyMap())).thenReturn(List.of(Map.of(
-                "business_id",31L,"business_no","L-31","business_name","Lead 31","business_type","LEAD")));
-        when(mapper.countBusinessObjects(anyMap())).thenReturn(51L);
+        Actor actor=new Actor(7L,"operator",2L);
+        when(directory.supports("LEAD")).thenReturn(true);
+        when(directory.search("LEAD","31",20,20,actor)).thenReturn(new TodoBusinessDirectoryAccess.DirectoryPage(
+                List.of(new TodoBusinessDirectoryAccess.DirectoryEntry(31L,"L-31","Lead 31","LEAD")),1L));
 
-        BusinessObjectPage page=service().businessObjects("LEAD","31",2,20);
+        BusinessObjectPage page=serviceWithDirectory().businessObjects("LEAD","31",2,20,actor);
 
-        assertEquals(51L,page.total());assertEquals("L-31",page.rows().get(0).businessNo());
-        ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
-        verify(mapper).selectBusinessObjects(query.capture());
-        assertEquals(20,query.getValue().get("offset"));assertEquals(20,query.getValue().get("limit"));
+        assertEquals(1L,page.total());assertEquals("L-31",page.rows().get(0).businessNo());
+        verify(directory).search("LEAD","31",20,20,actor);
     }
 
-    @Test void businessObjectExistenceUsesAStableNotFoundError()
+    @Test void unauthorizedBusinessObjectIsAbsentFromRowsAndTotalAndCannotBeLookedUp()
     {
-        TodoException error=assertThrows(TodoException.class,()->service().requireBusinessObject("CASE",99L));
+        Actor actor=new Actor(7L,"operator",2L);
+        when(directory.supports("CASE")).thenReturn(true);
+        when(directory.search("CASE",null,0,20,actor)).thenReturn(new TodoBusinessDirectoryAccess.DirectoryPage(List.of(),0));
 
+        BusinessObjectPage page=serviceWithDirectory().businessObjects("CASE",null,1,20,actor);
+        TodoException error=assertThrows(TodoException.class,()->serviceWithDirectory().requireBusinessObject("CASE",99L,actor));
+
+        assertEquals(0,page.total());assertEquals(List.of(),page.rows());
         assertEquals("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND",error.getBusinessCode());
     }
 
+    @Test void allFiveBusinessTypesUseTheActorScopedDirectory()
+    {
+        Actor actor=new Actor(7L,"operator",2L);
+        for(String type:List.of("LEAD","CUSTOMER","CONTRACT","CASE","MATTER"))
+        {
+            when(directory.supports(type)).thenReturn(true);
+            when(directory.findVisible(type,9L,actor)).thenReturn(java.util.Optional.of(
+                    new TodoBusinessDirectoryAccess.DirectoryEntry(9L,type+"-9",type+" 9",type)));
+            assertEquals(type,serviceWithDirectory().requireBusinessObject(type,9L,actor).businessType());
+        }
+    }
+
     private TodoConfigurationQueryService service(){return new TodoConfigurationQueryService(mapper);}
+    private TodoConfigurationQueryService serviceWithDirectory(){return new TodoConfigurationQueryService(mapper,List.of(directory));}
 }

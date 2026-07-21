@@ -427,7 +427,7 @@ async function checkSimulationAndReleasePages() {
   requireTokens(releasePage, contents[releasePage], [
     'ConfigPageShell', 'ConfigMetricCard', 'ReleaseRecordDrawer', 'listReleaseRecords',
     'todo:release:list', 'law_todo_version_status', 'dict-tag', 'collectReleasePages',
-    'publisher', 'beginTime', 'endTime', 'exportRelease'
+    'publisher', 'beginTime', 'endTime', 'exportRelease', 'releaseStatusOptions', "['PUBLISHED', 'RETIRED']"
   ])
   requireTokens(releaseDrawer, contents[releaseDrawer], [
     'ConfigDetailDrawer', 'VersionSemanticDiff', 'getReleaseRecord', 'listReleaseVersions', 'diffReleaseRecords',

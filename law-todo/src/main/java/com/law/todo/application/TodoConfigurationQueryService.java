@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationDashboard;
 import com.law.todo.application.view.TodoConfigurationViews.ReleaseRecord;
@@ -19,6 +20,8 @@ import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectItem;
 import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.spi.TodoBusinessDirectoryAccess;
+import com.law.todo.application.command.TodoActionCommands.Actor;
 
 /** Read-only projections for the configuration centre; version and action rows remain authoritative. */
 @Service
@@ -27,8 +30,14 @@ public class TodoConfigurationQueryService
     private static final int DEFAULT_RELEASE_LIMIT=20;
     private static final int MAX_RELEASE_LIMIT=500;
     private final TodoConfigurationMapper mapper;
+    private final List<TodoBusinessDirectoryAccess> businessDirectories;
 
-    public TodoConfigurationQueryService(TodoConfigurationMapper mapper){this.mapper=mapper;}
+    @Autowired
+    public TodoConfigurationQueryService(TodoConfigurationMapper mapper,List<TodoBusinessDirectoryAccess> businessDirectories)
+    {this.mapper=mapper;this.businessDirectories=businessDirectories==null?List.of():List.copyOf(businessDirectories);}
+
+    /** Focused-test compatibility. Business directory APIs deliberately fail closed without an adapter. */
+    public TodoConfigurationQueryService(TodoConfigurationMapper mapper){this(mapper,List.of());}
 
     public ConfigurationDashboard dashboard()
     {return new ConfigurationDashboard(mapper.countPublishedTemplates(),mapper.countDraftTemplates(),
@@ -85,22 +94,21 @@ public class TodoConfigurationQueryService
     public ReleasePage releasePage(Map<String,Object> query){return new ReleasePage(releases(query),mapper.countReleaseRecords(query==null?Map.of():query));}
     public record ReleasePage(List<ReleaseRecord> rows,long total) { }
 
-    public BusinessObjectPage businessObjects(String businessType,String keyword,int pageNum,int pageSize)
+    public BusinessObjectPage businessObjects(String businessType,String keyword,int pageNum,int pageSize,Actor actor)
     {
         requireBusinessType(businessType);
         if(pageNum<1||pageSize<1||pageSize>100)throw invalidPagination("business object page is out of range");
-        Map<String,Object> query=new LinkedHashMap<>();query.put("businessType",businessType);query.put("keyword",keyword);
-        query.put("offset",(pageNum-1)*pageSize);query.put("limit",pageSize);
-        return new BusinessObjectPage(mapper.selectBusinessObjects(query).stream().map(this::businessObject).toList(),
-                mapper.countBusinessObjects(query));
+        TodoBusinessDirectoryAccess.DirectoryPage page=directory(businessType).search(businessType,keyword,
+                (pageNum-1)*pageSize,pageSize,requireActor(actor));
+        return new BusinessObjectPage(page.rows().stream().map(this::businessObject).toList(),page.total());
     }
 
-    public BusinessObjectItem requireBusinessObject(String businessType,Long businessId)
+    public BusinessObjectItem requireBusinessObject(String businessType,Long businessId,Actor actor)
     {
         requireBusinessType(businessType);
-        Map<String,Object> row=businessId==null?null:mapper.selectBusinessObject(businessType,businessId);
-        if(row==null||row.isEmpty())throw new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","Simulation business object does not exist");
-        return businessObject(row);
+        if(businessId==null)throw businessObjectNotFound();
+        return directory(businessType).findVisible(businessType,businessId,requireActor(actor))
+                .map(this::businessObject).orElseThrow(this::businessObjectNotFound);
     }
 
     private Integer paginationInteger(Object value,String field)
@@ -137,6 +145,19 @@ public class TodoConfigurationQueryService
         if(!java.util.Set.of("LEAD","CUSTOMER","CONTRACT","CASE","MATTER").contains(businessType))
             throw new TodoException("TODO_SIMULATION_BUSINESS_TYPE_UNSUPPORTED","Unsupported simulation business type");
     }
+
+    private BusinessObjectItem businessObject(TodoBusinessDirectoryAccess.DirectoryEntry row)
+    {return new BusinessObjectItem(row.businessId(),row.businessNo(),row.businessName(),row.businessType());}
+
+    private TodoBusinessDirectoryAccess directory(String businessType)
+    {return businessDirectories.stream().filter(item->item.supports(businessType)).findFirst().orElseThrow(()->
+            new TodoException("TODO_BUSINESS_DIRECTORY_UNAVAILABLE","Business directory access is not configured"));}
+
+    private Actor requireActor(Actor actor)
+    {if(actor==null||actor.userId()==null)throw new TodoException("TODO_ACCESS_DENIED","Business directory requires an authenticated actor");return actor;}
+
+    private TodoException businessObjectNotFound()
+    {return new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","Simulation business object does not exist or is not accessible");}
 
     private TemplateListItem templateItem(Map<String,Object> row)
     {return new TemplateListItem(requiredNumber(row,"template_id","templateId"),text(row,"template_code","templateCode"),
