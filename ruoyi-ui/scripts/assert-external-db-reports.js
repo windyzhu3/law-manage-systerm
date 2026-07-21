@@ -1,0 +1,40 @@
+const fs = require('node:fs')
+const path = require('node:path')
+
+const reportDir = path.resolve(process.argv[2] || path.join(__dirname, '../../ruoyi-admin/target/surefire-reports'))
+const packageName = 'com.ruoyi.web.migration'
+const requiredClasses = [
+  'FlywayMigrationTest',
+  'FileMaterialEndToEndTest',
+  'HistoricalMigrationPreflightEndToEndTest',
+  'FoundationCollationMigrationTest',
+  'PhaseTwoDatabaseInvariantTest',
+  'TodoPhaseTwoTransactionTest',
+  'TodoRoutingJoinConcurrencyTest',
+  'TodoAutoActionFencingConcurrencyTest',
+  'TodoDefinitionLedgerConcurrencyTest'
+]
+
+function suiteAttributes(xml, className) {
+  const match = xml.match(/<testsuite\b([^>]*)>/)
+  if (!match) throw new Error(`${className}: missing <testsuite> root`)
+  const attributes = {}
+  for (const attribute of match[1].matchAll(/([A-Za-z]+)="([^"]*)"/g)) attributes[attribute[1]] = attribute[2]
+  return attributes
+}
+
+for (const className of requiredClasses) {
+  const report = path.join(reportDir, `TEST-${packageName}.${className}.xml`)
+  if (!fs.existsSync(report)) throw new Error(`${className}: required Surefire report is missing`)
+  const attributes = suiteAttributes(fs.readFileSync(report, 'utf8'), className)
+  const tests = Number(attributes.tests)
+  const skipped = Number(attributes.skipped)
+  const failures = Number(attributes.failures)
+  const errors = Number(attributes.errors)
+  if (!(tests > 0)) throw new Error(`${className}: tests must be greater than zero`)
+  if (!(skipped === 0)) throw new Error(`${className}: skipped tests are forbidden`)
+  if (!(failures === 0)) throw new Error(`${className}: failures are forbidden`)
+  if (!(errors === 0)) throw new Error(`${className}: errors are forbidden`)
+}
+
+console.log(`Verified ${requiredClasses.length} external-database Surefire reports with no skips or failures`)

@@ -17,7 +17,9 @@
     "test:foundation-docs": "node scripts/check-foundation-documentation.js && node scripts/check-foundation-contract-mutations.js",
     "test:foundation-identities": "node scripts/check-foundation-test-identity-ui.js",
     "test:e2e": "node node_modules/@playwright/test/cli.js test",
-    "test:e2e:contract": "node scripts/check-todo-config-real-e2e.js"
+    "test:e2e:server": "node scripts/check-production-e2e-server.js",
+    "test:e2e:db-safety": "node scripts/check-todo-config-db-safety.js",
+    "test:e2e:contract": "node scripts/check-todo-config-real-e2e.js && node scripts/check-external-db-reports-contract.js"
   },
   "keywords": [
     "vue",

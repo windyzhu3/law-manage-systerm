@@ -1,16 +1,20 @@
 const { test, expect } = require('@playwright/test')
-const { execFileSync } = require('node:child_process')
+const { cleanupTodoConfiguration, requireEnv } = require('./support/todo-config-e2e-database')
 
 const realBackend = process.env.TODO_E2E_REAL_BACKEND === 'true'
 const password = process.env.TODO_CONFIG_E2E_PASSWORD
-const templateCode = `E2E_TODO_CONFIG_${Date.now()}`
+const runMarker = realBackend ? requireEnv('TODO_CONFIG_E2E_RUN_MARKER') : 'source-contract'
+const slaCode = realBackend ? requireEnv('TODO_CONFIG_E2E_SLA_CODE') : 'E2E_SLA_source_contract'
+const dodCode = realBackend ? requireEnv('TODO_CONFIG_E2E_DOD_CODE') : 'E2E_DOD_source_contract'
+const leadNo = realBackend ? requireEnv('TODO_CONFIG_E2E_LEAD_NO') : 'E2E_LEAD_source_contract'
+const templateCode = `E2E_TODO_CONFIG_${runMarker}_${Date.now()}`
 
 test.describe('Todo configuration centre with real backend', () => {
   test.skip(!realBackend, 'requires the disposable real-backend E2E environment')
 
   test.afterAll(() => cleanupTodoConfiguration(templateCode))
 
-  test('creates, simulates, publishes, and reviews a template through drawers', async ({ page }) => {
+  test('creates a preflight-valid TASK-to-END definition, simulates all sections, publishes, and reviews it', async ({ page }) => {
     await loginAs(page, 'todo_config_admin', password)
     await page.goto('/todo-template')
 
@@ -24,7 +28,7 @@ test.describe('Todo configuration centre with real backend', () => {
     await selectOption(page, drawer, '业务阶段', 'Lead')
     await selectOption(page, drawer, '模板类型', 'Standard')
     await selectOption(page, drawer, '默认优先级', '普通')
-    await fillTextField(drawer, '变更摘要', '真实后端 E2E 首次发布')
+    await fillTextField(drawer, '变更摘要', `真实后端 E2E 首次发布 ${runMarker}`)
 
     await goStep(drawer, '触发条件')
     await selectOption(page, drawer, '触发事件', 'LEAD_ASSIGNED · v1')
@@ -33,21 +37,54 @@ test.describe('Todo configuration centre with real backend', () => {
     await selectOption(page, drawer, '负责人规则', 'Business owner')
 
     await goStep(drawer, 'SLA')
-    await selectOption(page, drawer, 'SLA 规则', 'E2E_SLA_FIRST_CONTACT_30M')
+    await selectOption(page, drawer, 'SLA 规则', slaCode)
 
     await goStep(drawer, '完成条件')
-    await selectOption(page, drawer, 'DoD 规则', 'E2E_DOD_FIRST_CONTACT')
+    await selectOption(page, drawer, 'DoD 规则', dodCode)
+    const uiFields = drawer.getByTestId('template-ui-fields')
+    await uiFields.locator('input').fill('contactResult')
+    await uiFields.locator('input').press('Enter')
+    await expect(uiFields).toContainText('contactResult')
+
+    // The first save creates the aggregate/version ID required by the TASK start node.
+    await drawer.getByRole('button', { name: '保存草稿' }).click()
+    await expect(page.getByText('模板草稿已保存')).toBeVisible()
+
+    await goStep(drawer, '路由')
+    const routing = drawer.getByTestId('routing-graph-editor')
+    await routing.getByTestId('routing-add-node').click()
+    const nodeRows = routing.locator('.el-table').nth(0).locator('tbody tr')
+    await selectIn(page, nodeRows.nth(0).locator('.el-select').nth(1), '当前定义版本（起点）')
+    await routing.getByTestId('routing-add-node').click()
+    await selectIn(page, nodeRows.nth(1).locator('.el-select').nth(0), 'END')
+    await routing.getByRole('button', { name: '新增连线' }).click()
+    const edgeRow = routing.locator('.el-table').nth(1).locator('tbody tr').first()
+    await selectIn(page, edgeRow.locator('.el-select').nth(1), 'node_2')
+    await expect(routing).toContainText('node_1')
+    await expect(routing).toContainText('node_2')
 
     await drawer.getByRole('button', { name: '保存草稿' }).click()
     await expect(page.getByText('模板草稿已保存')).toBeVisible()
+    await expect(drawer).toContainText(slaCode)
+    await expect(drawer).toContainText(dodCode)
     await drawer.getByRole('button', { name: '发布预检' }).click()
     await expect(page.getByText('发布预检通过')).toBeVisible()
 
     await goStep(drawer, '模拟')
-    await drawer.locator('.el-form-item').filter({ hasText: '业务对象 ID' }).locator('input').fill(await businessLeadId())
-    await drawer.locator('.el-form-item').filter({ hasText: '事件载荷 JSON' }).locator('textarea').fill('{"ownerId":1,"source":"todo-config-real-e2e"}')
+    await expect(drawer.getByText('只读模拟，不创建真实待办', { exact: true })).toBeVisible()
+    await drawer.locator('.el-form-item').filter({ hasText: '业务对象 ID' }).locator('input').fill(businessLeadId())
+    await drawer.locator('.el-form-item').filter({ hasText: '事件载荷 JSON' }).locator('textarea').fill(`{"ownerId":1,"source":"todo-config-real-e2e","runMarker":"${runMarker}","leadNo":"${leadNo}"}`)
     await drawer.getByRole('button', { name: '运行真实模拟' }).click()
-    await expect(drawer.getByText('模拟结果', { exact: true })).toBeVisible()
+    for (const section of [
+      '1. 状态变化',
+      '2. 命中模板',
+      '3. 负责人',
+      '4. SLA',
+      '5. DoD',
+      '6. 下一步路由',
+      '7. 待办卡片预览',
+      '8. 技术日志'
+    ]) await expect(drawer.getByText(section, { exact: true })).toBeVisible()
 
     await drawer.getByRole('button', { name: '发布', exact: true }).click()
     await expect(page.getByText('模板已发布')).toBeVisible()
@@ -75,7 +112,11 @@ async function fillTextField(scope, label, value) {
 
 async function selectOption(page, scope, label, option) {
   const item = scope.locator('.el-form-item').filter({ hasText: label }).first()
-  await item.locator('.el-select').first().click()
+  await selectIn(page, item.locator('.el-select').first(), option)
+}
+
+async function selectIn(page, select, option) {
+  await select.click()
   await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').filter({ hasText: option }).first().click()
 }
 
@@ -83,31 +124,6 @@ async function goStep(drawer, title) {
   await drawer.locator('.el-step__title').filter({ hasText: title }).first().click()
 }
 
-async function businessLeadId() {
-  return process.env.TODO_CONFIG_E2E_BUSINESS_ID || '1'
-}
-
-function cleanupTodoConfiguration(code) {
-  if (!realBackend || !code) return
-  const database = process.env.TODO_E2E_DB_NAME || 'law_todo_config_e2e'
-  const sql = `
-    set @template_id=(select template_id from todo_template where template_code='${sqlLiteral(code)}' limit 1);
-    delete from todo_simulation_record where template_version_id in (select version_id from todo_template_version where template_id=@template_id);
-    delete from todo_template_draft_rule_ref where version_id in (select version_id from todo_template_version where template_id=@template_id);
-    delete from todo_trigger_rule where template_id=@template_id or template_version_id in (select version_id from todo_template_version where template_id=@template_id);
-    delete from todo_definition_action where operator_id=(select user_id from sys_user where user_name='todo_config_admin' and del_flag='0' limit 1);
-    delete from todo_template_version where template_id=@template_id;
-    delete from todo_template where template_id=@template_id;
-    delete from todo_sla_rule where rule_code='E2E_SLA_FIRST_CONTACT_30M';
-    delete from todo_dod_rule where rule_code='E2E_DOD_FIRST_CONTACT';
-  `
-  execFileSync('mysql', ['--protocol=tcp', `-h${process.env.TODO_E2E_DB_HOST || '127.0.0.1'}`, `-P${process.env.TODO_E2E_DB_PORT || '3306'}`, `-u${process.env.TODO_E2E_DB_USER || 'root'}`, database], {
-    env: { ...process.env, MYSQL_PWD: process.env.TODO_E2E_DB_PASSWORD || 'root' },
-    input: sql,
-    stdio: ['pipe', 'inherit', 'inherit']
-  })
-}
-
-function sqlLiteral(value) {
-  return String(value).replace(/'/g, "''")
+function businessLeadId() {
+  return requireEnv('TODO_CONFIG_E2E_BUSINESS_ID')
 }

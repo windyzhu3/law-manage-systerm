@@ -123,12 +123,7 @@ jobs:
           TODO_MIGRATION_DB_PASSWORD: root
         run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest,FileMaterialEndToEndTest,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Assert external-database Todo tests were not skipped
-        shell: bash
-        run: |
-          if grep -R '<skipped' ruoyi-admin/target/surefire-reports/TEST-com.ruoyi.web.migration.Todo*.xml; then
-            echo 'A core external-database Todo test was skipped' >&2
-            exit 1
-          fi
+        run: node ruoyi-ui/scripts/assert-external-db-reports.js ruoyi-admin/target/surefire-reports
       - name: Generate ephemeral Foundation test password
         shell: bash
         run: echo "FOUNDATION_TEST_USER_PASSWORD=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
@@ -220,12 +215,26 @@ jobs:
           # RuoYi rejects login passwords longer than 20 characters before BCrypt validation.
           password="$(openssl rand -hex 9)"
           password_hash="$(htpasswd -bnBC 10 '' "$password" | tr -d ':\n')"
+          run_marker="${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          sla_code="E2E_SLA_${run_marker}"
+          dod_code="E2E_DOD_${run_marker}"
+          lead_no="E2E_LEAD_${run_marker}"
           echo "TODO_CONFIG_E2E_PASSWORD=$password" >> "$GITHUB_ENV"
           echo "TODO_CONFIG_E2E_PASSWORD_HASH=$password_hash" >> "$GITHUB_ENV"
-          sed "s|TODO_CONFIG_E2E_PASSWORD_HASH|$password_hash|g" ruoyi-ui/tests/e2e/bootstrap/todo-config-admin.sql \
+          echo "TODO_CONFIG_E2E_RUN_MARKER=$run_marker" >> "$GITHUB_ENV"
+          echo "TODO_CONFIG_E2E_SLA_CODE=$sla_code" >> "$GITHUB_ENV"
+          echo "TODO_CONFIG_E2E_DOD_CODE=$dod_code" >> "$GITHUB_ENV"
+          echo "TODO_CONFIG_E2E_LEAD_NO=$lead_no" >> "$GITHUB_ENV"
+          sed -e "s|TODO_CONFIG_E2E_PASSWORD_HASH|$password_hash|g" \
+              -e "s|TODO_CONFIG_E2E_DATABASE|$TODO_E2E_DB_NAME|g" \
+              -e "s|TODO_CONFIG_E2E_RUN_MARKER|$run_marker|g" \
+              -e "s|TODO_CONFIG_E2E_SLA_CODE|$sla_code|g" \
+              -e "s|TODO_CONFIG_E2E_DOD_CODE|$dod_code|g" \
+              -e "s|TODO_CONFIG_E2E_LEAD_NO|$lead_no|g" \
+              ruoyi-ui/tests/e2e/bootstrap/todo-config-admin.sql \
             | mysql --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e
           lead_id="$(mysql --batch --skip-column-names --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e \
-            -e "select lead_id from biz_lead where lead_no='E2E-TODO-CONFIG-LEAD' limit 1")"
+            -e "select lead_id from biz_lead where lead_no='$lead_no' and create_by='$run_marker' limit 1")"
           echo "TODO_CONFIG_E2E_BUSINESS_ID=$lead_id" >> "$GITHUB_ENV"
       - name: Build backend
         run: mvn --batch-mode --no-transfer-progress -DskipTests package
@@ -257,6 +266,22 @@ jobs:
       - name: Build production frontend
         working-directory: ruoyi-ui
         run: npm run build:prod
+      - name: Validate production static server and backend proxy
+        working-directory: ruoyi-ui
+        shell: bash
+        run: |
+          TODO_E2E_FRONTEND_PORT=4174 TODO_E2E_BACKEND_URL=http://127.0.0.1:8080 node scripts/serve-e2e-production.js > "$RUNNER_TEMP/todo-config-frontend.log" 2>&1 &
+          frontend_pid=$!
+          trap 'kill "$frontend_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4174/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4174/ >/dev/null
+          curl --fail --silent http://127.0.0.1:4174/prod-api/captchaImage >/dev/null
+          kill "$frontend_pid"
+          wait "$frontend_pid" || true
+          trap - EXIT
       - name: Install the user-selected browser
         working-directory: ruoyi-ui
         run: npx playwright install --with-deps "$TODO_E2E_BROWSER"
