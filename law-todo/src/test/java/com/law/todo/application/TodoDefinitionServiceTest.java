@@ -37,6 +37,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionComman
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.ReleaseDraftCommand;
 import com.law.todo.domain.TodoException;
 import com.law.todo.definition.catalog.TodoDecisionService;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
@@ -524,6 +525,38 @@ class TodoDefinitionServiceTest
 
         assertEquals("TODO_DEFINITION_VERSION_CONFLICT",error.getBusinessCode());
         verify(mapper,never()).completeDefinitionAction(anyString(),anyString(),org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test void releaseRollbackAllocatesTheNextVersionWhileHoldingTheTemplateLock()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","PUBLISHED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
+                new com.law.todo.definition.codec.LegacyDefinitionAdapter().fromLegacy(source)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);templateDraftLedger("release-rollback");
+        when(mapper.selectTemplateForUpdate(1L)).thenReturn(Map.of("template_id",1L));
+        when(mapper.selectNextTemplateVersionNo(1L)).thenReturn(5);
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",15L);return 1;});
+
+        assertEquals(15L,service().rollbackReleaseDraft(9L,new ReleaseDraftCommand("release-rollback"),actor));
+
+        ArgumentCaptor<Map<String,Object>> inserted=ArgumentCaptor.forClass(Map.class);verify(mapper).insertTemplateVersion(inserted.capture());
+        assertEquals(5,inserted.getValue().get("versionNo"));assertEquals(9L,inserted.getValue().get("rollbackSourceVersionId"));
+        org.mockito.InOrder order=org.mockito.Mockito.inOrder(mapper);order.verify(mapper).selectTemplateForUpdate(1L);
+        order.verify(mapper).selectNextTemplateVersionNo(1L);order.verify(mapper).insertTemplateVersion(anyMap());
+    }
+
+    @Test void releaseCopyAllocatesServerVersionAndAReplayReturnsTheSameDraft()
+    {
+        Map<String,Object> source=draft(null,null);source.put("status","RETIRED");source.put("definition_json",new TodoDefinitionCodec().canonicalJson(
+                new com.law.todo.definition.codec.LegacyDefinitionAdapter().fromLegacy(source)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(source);templateDraftLedger("release-copy");
+        when(mapper.selectTemplateForUpdate(1L)).thenReturn(Map.of("template_id",1L));when(mapper.selectNextTemplateVersionNo(1L)).thenReturn(6);
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",16L);return 1;});
+
+        assertEquals(16L,service().copyReleaseDraft(9L,new ReleaseDraftCommand("release-copy"),actor));
+        assertEquals(16L,service().copyReleaseDraft(9L,new ReleaseDraftCommand("release-copy"),actor));
+
+        verify(mapper,org.mockito.Mockito.times(1)).selectTemplateForUpdate(1L);
+        verify(mapper,org.mockito.Mockito.times(1)).insertTemplateVersion(anyMap());
     }
 
     private String rollbackFingerprint(long source,long template,int version,Actor actor)

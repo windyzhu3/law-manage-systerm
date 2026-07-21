@@ -4,7 +4,7 @@
     <div v-loading="loading" class="release-detail">
       <el-descriptions v-if="detail" :column="2" border size="small">
         <el-descriptions-item label="模板">{{ detail.templateName }}（{{ detail.templateCode }}）</el-descriptions-item><el-descriptions-item label="版本">v{{ detail.versionNo }}</el-descriptions-item>
-        <el-descriptions-item label="发布状态">{{ detail.status }}</el-descriptions-item><el-descriptions-item label="发布人">{{ detail.publishedBy || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="发布状态"><dict-tag :options="dict.type.law_todo_version_status" :value="detail.status" /></el-descriptions-item><el-descriptions-item label="发布人">{{ detail.publishedBy || '-' }}</el-descriptions-item>
         <el-descriptions-item label="变更摘要">{{ detail.changeSummary || '-' }}</el-descriptions-item><el-descriptions-item label="影响范围">{{ detail.impactScope || '-' }}</el-descriptions-item>
         <el-descriptions-item label="回滚来源">{{ detail.rollbackSourceVersionId || '-' }}</el-descriptions-item><el-descriptions-item label="发布时间">{{ format(detail.publishedTime || detail.updateTime) }}</el-descriptions-item>
       </el-descriptions>
@@ -15,7 +15,7 @@
           <el-form :inline="true" size="small"><el-form-item label="对比版本"><el-select v-model="compareVersionId" clearable><el-option v-for="item in comparableVersions" :key="versionId(item)" :label="`v${field(item,'versionNo','version_no')} · ${item.status}`" :value="versionId(item)" /></el-select></el-form-item><el-button v-hasPermi="['todo:release:diff']" :disabled="!compareVersionId" :loading="diffLoading" @click="loadDiff">生成差异</el-button></el-form>
           <version-semantic-diff :value="diff" />
         </el-tab-pane>
-        <el-tab-pane label="动作账本" name="action"><pre>{{ pretty(detail.action) }}</pre></el-tab-pane>
+        <el-tab-pane label="发布动作" name="action"><el-alert title="仅展示与当前版本关联的最近发布动作" type="info" :closable="false" /><pre>{{ pretty(detail.action) }}</pre></el-tab-pane>
       </el-tabs>
     </div>
     <template #footer>
@@ -28,20 +28,21 @@
 <script>
 import ConfigDetailDrawer from '../shared/ConfigDetailDrawer'
 import VersionSemanticDiff from './VersionSemanticDiff'
-import { getReleaseRecord, listTemplateVersions, diffReleaseRecords, copyReleaseDraft, rollbackReleaseDraft } from '@/api/todo-config'
+import { getReleaseRecord, listReleaseVersions, diffReleaseRecords, copyReleaseDraft, rollbackReleaseDraft } from '@/api/todo-config'
+import { createActionIdRegistry } from './release-model'
 export default {
   name: 'ReleaseRecordDrawer', components: { ConfigDetailDrawer, VersionSemanticDiff }, props: { value: Boolean, record: { type: Object, default: null } },
-  data() { return { loading: false, mutating: false, detail: null, versions: [], versionDetail: null, tab: 'detail', compareVersionId: null, diff: null, diffLoading: false } },
+  dicts: ['law_todo_version_status'],
+  data() { return { loading: false, mutating: false, detail: null, versions: [], versionDetail: null, tab: 'detail', compareVersionId: null, diff: null, diffLoading: false, actionIds: createActionIdRegistry(action => `release-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}`) } },
   computed: { comparableVersions() { return this.versions.filter(item => this.versionId(item) !== Number(this.detail && this.detail.versionId)) }, ruleSnapshot() { const row = this.versionDetail || {}; return { owner: this.parse(this.field(row,'ownerRuleJson','owner_rule_json')), sla: this.parse(this.field(row,'slaRuleJson','sla_rule_json')), dod: this.parse(this.field(row,'dodRuleJson','dod_rule_json')), routing: this.parse(this.field(row,'nextRuleJson','next_rule_json')), ui: this.parse(this.field(row,'uiSchemaJson','ui_schema_json')) } } },
   watch: { value(opened) { if (opened) this.open() }, record() { if (this.value) this.open() } },
   methods: {
-    field(row, camel, snake) { return row && (row[camel] !== undefined ? row[camel] : row[snake]) }, versionId(row) { return Number(this.field(row,'versionId','version_id')) }, parse(value) { if (!value) return {}; if (typeof value !== 'string') return value; try { return JSON.parse(value) } catch (_) { return { invalidJson: value } } }, pretty(value) { return JSON.stringify(value || {}, null, 2) }, format(value) { return value ? this.parseTime(value, '{y}-{m}-{d} {h}:{i}:{s}') : '-' }, actionId(action) { return `release-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}` },
-    async open() { if (!this.record) return; this.loading = true; try { const response = await getReleaseRecord(this.record.versionId); this.detail = response.data || this.record; const versions = await listTemplateVersions(this.detail.templateId); this.versions = versions.data || []; this.versionDetail = this.versions.find(item => this.versionId(item) === Number(this.detail.versionId)) || null } finally { this.loading = false } },
+    field(row, camel, snake) { return row && (row[camel] !== undefined ? row[camel] : row[snake]) }, versionId(row) { return Number(this.field(row,'versionId','version_id')) }, parse(value) { if (!value) return {}; if (typeof value !== 'string') return value; try { return JSON.parse(value) } catch (_) { return { invalidJson: value } } }, pretty(value) { return JSON.stringify(value || {}, null, 2) }, format(value) { return value ? this.parseTime(value, '{y}-{m}-{d} {h}:{i}:{s}') : '-' },
+    async open() { if (!this.record) return; this.loading = true; try { const response = await getReleaseRecord(this.record.versionId); this.detail = response.data || this.record; const versions = await listReleaseVersions(this.detail.versionId); this.versions = versions.data || []; this.versionDetail = this.versions.find(item => this.versionId(item) === Number(this.detail.versionId)) || null } finally { this.loading = false } },
     async loadDiff() { if (!this.compareVersionId) return; this.diffLoading = true; try { const response = await diffReleaseRecords(this.compareVersionId, this.detail.versionId); this.diff = response.data || null } finally { this.diffLoading = false } },
-    nextVersionNo() { return Math.max(Number(this.detail && this.detail.versionNo) || 0, ...this.versions.map(item => Number(this.field(item,'versionNo','version_no')) || 0)) + 1 },
-    async copyAsNewVersion() { await this.$confirm('将基于此不可变发布版本生成新的可编辑草稿，确认继续吗？','复制为新版本',{type:'warning'}); this.mutating = true; try { await copyReleaseDraft(this.detail.versionId,{ actionId:this.actionId('copy'), newVersionNo:this.nextVersionNo() }); this.$modal.msgSuccess('已生成新版本草稿'); this.$emit('draft-created'); this.$refs.drawer.closeAfterSave() } finally { this.mutating = false } },
-    async rollbackAsDraft() { await this.$confirm('回滚不会修改历史版本，只会以当前版本为来源生成新草稿。确认继续吗？','生成回滚草稿',{type:'warning'}); this.mutating = true; try { await rollbackReleaseDraft(this.detail.versionId,{ actionId:this.actionId('rollback'), newVersionNo:this.nextVersionNo() }); this.$modal.msgSuccess('已生成回滚草稿'); this.$emit('draft-created'); this.$refs.drawer.closeAfterSave() } finally { this.mutating = false } },
-    reset() { this.detail = null; this.versions = []; this.versionDetail = null; this.tab = 'detail'; this.compareVersionId = null; this.diff = null }
+    async copyAsNewVersion() { await this.$confirm('将基于此不可变发布版本生成新的可编辑草稿，确认继续吗？','复制为新版本',{type:'warning'}); this.mutating = true; try { await copyReleaseDraft(this.detail.versionId,{ actionId:this.actionIds.idFor('copy') }); this.actionIds.complete('copy'); this.$modal.msgSuccess('已生成新版本草稿'); this.$emit('draft-created'); this.$refs.drawer.closeAfterSave() } finally { this.mutating = false } },
+    async rollbackAsDraft() { await this.$confirm('回滚不会修改历史版本，只会以当前版本为来源生成新草稿。确认继续吗？','生成回滚草稿',{type:'warning'}); this.mutating = true; try { await rollbackReleaseDraft(this.detail.versionId,{ actionId:this.actionIds.idFor('rollback') }); this.actionIds.complete('rollback'); this.$modal.msgSuccess('已生成回滚草稿'); this.$emit('draft-created'); this.$refs.drawer.closeAfterSave() } finally { this.mutating = false } },
+    reset() { this.detail = null; this.versions = []; this.versionDetail = null; this.tab = 'detail'; this.compareVersionId = null; this.diff = null; this.actionIds.reset() }
   }
 }
 </script>

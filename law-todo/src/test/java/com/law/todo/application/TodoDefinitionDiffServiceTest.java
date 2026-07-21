@@ -100,6 +100,18 @@ class TodoDefinitionDiffServiceTest
         assertEquals("TODO_TEMPLATE_VERSION_DIFF_TEMPLATE_MISMATCH",failure.getBusinessCode());
     }
 
+    @Test void release_diff_rejects_a_mutable_endpoint()
+    {
+        Map<String,Object> left=version("{\"schemaVersion\":1}");left.put("status","DRAFT");
+        Map<String,Object> right=version("{\"schemaVersion\":1}");
+        when(mapper.selectTemplateVersionById(1L)).thenReturn(left);
+        when(mapper.selectTemplateVersionById(2L)).thenReturn(right);
+
+        TodoException failure=assertThrows(TodoException.class,()->new TodoDefinitionDiffService(mapper).diffImmutable(1L,2L));
+
+        assertEquals("TODO_RELEASE_DIFF_IMMUTABLE_REQUIRED",failure.getBusinessCode());
+    }
+
     private String definition(String nodes,String edges,String actions,String decisions,String acceptances)
     {
         return "{\"schemaVersion\":1,\"templateCode\":\"T\",\"event\":{\"eventType\":\"E\",\"payloadVersion\":1,\"condition\":{}},"

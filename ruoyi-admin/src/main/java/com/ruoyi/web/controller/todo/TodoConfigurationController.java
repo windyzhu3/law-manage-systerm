@@ -35,6 +35,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCom
 import com.law.todo.application.command.TodoDefinitionCommands.ImportTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.ReleaseDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCommand;
@@ -117,9 +118,9 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:dod-rule:list')")
     @PostMapping("/dod-rules/{id}/test") public AjaxResult testDodRule(@PathVariable long id,@Valid @RequestBody DodTestCommand value){return success(dod.test(id,value.payload(),value.attachments(),actor()));}
 
-    @PreAuthorize("@ss.hasPermi('todo:template:list')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:simulation:list')")
     @GetMapping("/templates") public TableDataInfo templateList(@Valid @ModelAttribute TemplateListQuery value){var page=query.templatePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
-    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:list,todo:release:publish')")
     @GetMapping("/templates/{id}") public AjaxResult template(@PathVariable Long id){return success(query.template(id));}
     @PreAuthorize("@ss.hasPermi('todo:template:create')")
     @PostMapping("/templates") public AjaxResult createTemplate(@Valid @RequestBody CreateTemplateCommand value){return success(definitions.createTemplateDraft(value,actor()));}
@@ -135,7 +136,7 @@ public class TodoConfigurationController extends BaseController
     @PutMapping("/template-versions/{id}") public AjaxResult updateTemplateDraft(@PathVariable Long id,@Valid @RequestBody UpdateDraftCommand value){requireSame(id,value.versionId());return success(definitions.updateDraft(value,actor()));}
     @PreAuthorize("@ss.hasAnyPermi('todo:release:publish,todo:simulation:simulate')")
     @PostMapping("/template-versions/{id}/preflight") public AjaxResult preflightTemplateDraft(@PathVariable Long id){return success(definitions.preflight(id));}
-    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:list,todo:release:publish')")
     @GetMapping("/template-catalog/events") public AjaxResult templateEventCatalog(){return success(templates.listTemplateEventCatalog());}
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/template-catalog/owners") public AjaxResult templateOwnerCatalog(){return success(query.ownerCatalog());}
@@ -175,21 +176,25 @@ public class TodoConfigurationController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
     @PostMapping({"/simulations","/trigger-rules/simulate"}) public AjaxResult simulate(@Valid @RequestBody ConfigurationSimulationCommand value){return success(simulation.simulate(value,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:simulation:list')")
+    @GetMapping("/business-objects") public TableDataInfo businessObjects(@Valid @ModelAttribute BusinessObjectQuery value){var page=query.businessObjects(value.businessType(),value.keyword(),value.pageNum(),value.pageSize());return new TableDataInfo(page.rows(),page.total());}
 
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){var page=query.releasePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records/{id}") public AjaxResult release(@PathVariable long id){return success(query.release(id));}
-    @PreAuthorize("@ss.hasAnyPermi('todo:release:list,todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @PreAuthorize("@ss.hasPermi('todo:release:list')")
+    @GetMapping("/release-records/{id}/versions") public AjaxResult releaseVersions(@PathVariable long id){return success(query.releaseVersions(id));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:release:list,todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:list,todo:release:publish')")
     @GetMapping("/templates/{id}/versions") public AjaxResult versions(@PathVariable Long id){return success(definitions.versions(id));}
     @PreAuthorize("@ss.hasPermi('todo:release:diff')")
-    @GetMapping("/release-records/{left}/diff/{right}") public AjaxResult releaseDiff(@PathVariable long left,@PathVariable long right){return success(diff.diff(left,right));}
+    @GetMapping("/release-records/{left}/diff/{right}") public AjaxResult releaseDiff(@PathVariable long left,@PathVariable long right){return success(diff.diffImmutable(left,right));}
     @PreAuthorize("@ss.hasPermi('todo:template:copy')")
-    @PostMapping("/release-records/{id}/copy-draft") public AjaxResult copyReleaseDraft(@PathVariable long id,@Valid @RequestBody CopyVersionCommand value){var source=query.release(id);return success(definitions.copyVersion(source.templateId(),source.versionNo(),value,actor()));}
+    @PostMapping("/release-records/{id}/copy-draft") public AjaxResult copyReleaseDraft(@PathVariable long id,@Valid @RequestBody ReleaseDraftCommand value){return success(definitions.copyReleaseDraft(id,value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:release:publish')")
     @PostMapping("/release-records/{id}/publish") public AjaxResult publish(@PathVariable Long id,@Valid @RequestBody PublishDraftCommand value){requireSame(id,value.versionId());return success(definitions.publish(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:release:rollback')")
-    @PostMapping("/release-records/{id}/rollback-draft") public AjaxResult rollbackDraft(@PathVariable Long id,@Valid @RequestBody RollbackDraftCommand value){return success(definitions.rollbackDraft(id,value,actor()));}
+    @PostMapping("/release-records/{id}/rollback-draft") public AjaxResult rollbackDraft(@PathVariable Long id,@Valid @RequestBody ReleaseDraftCommand value){return success(definitions.rollbackReleaseDraft(id,value,actor()));}
 
     private TableDataInfo page(List<?> values,int pageNum,int pageSize)
     {
@@ -217,5 +222,7 @@ public class TodoConfigurationController extends BaseController
     public record DodTestCommand(@NotNull Map<String,Object> payload,List<String> attachments) {public DodTestCommand{payload=payload==null?null:Map.copyOf(payload);attachments=attachments==null?List.of():List.copyOf(attachments);}}
     public record ReleaseListQuery(Long templateId,String templateCode,String keyword,String status,String publisher,LocalDateTime beginTime,LocalDateTime endTime,
             @Min(0) Integer offset,@Min(1) @Max(500) Integer limit)
-    {public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("templateId",templateId);result.put("templateCode",templateCode);result.put("keyword",keyword);result.put("status",status);result.put("publisher",publisher);result.put("beginTime",beginTime);result.put("endTime",endTime);result.put("offset",offset);result.put("limit",limit);return result;}}
+    {public ReleaseListQuery{offset=offset==null?0:offset;limit=limit==null?20:limit;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("templateId",templateId);result.put("templateCode",templateCode);result.put("keyword",keyword);result.put("status",status);result.put("publisher",publisher);result.put("beginTime",beginTime);result.put("endTime",endTime);result.put("offset",offset);result.put("limit",limit);return result;}}
+    public record BusinessObjectQuery(@NotBlank String businessType,String keyword,@Min(1) Integer pageNum,@Min(1) @Max(100) Integer pageSize)
+    {public BusinessObjectQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}}
 }

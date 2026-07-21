@@ -6,7 +6,8 @@ const required = [
   'src/views/todo/config/shared/ConfigPageShell.vue',
   'src/views/todo/config/shared/ConfigMetricCard.vue',
   'src/views/todo/config/shared/ConfigDetailDrawer.vue',
-  'src/views/todo/config/styles/config-center.scss'
+  'src/views/todo/config/styles/config-center.scss',
+  'src/views/todo/config/release/release-model.js'
 ]
 
 const routes = [
@@ -55,8 +56,10 @@ const routes = [
   ['listTriggerTemplateCatalog', '/todo/config/trigger-catalog/templates', 'get'],
   ['listTriggerTemplateVersions', '/todo/config/trigger-catalog/templates/${id}/versions', 'get'],
   ['simulateConfiguration', '/todo/config/simulations', 'post'],
+  ['listBusinessObjects', '/todo/config/business-objects', 'get'],
   ['listReleaseRecords', '/todo/config/release-records', 'get'],
   ['getReleaseRecord', '/todo/config/release-records/${id}', 'get'],
+  ['listReleaseVersions', '/todo/config/release-records/${id}/versions', 'get'],
   ['diffReleaseRecords', '/todo/config/release-records/${left}/diff/${right}', 'get'],
   ['copyReleaseDraft', '/todo/config/release-records/${id}/copy-draft', 'post'],
   ['publishReleaseRecord', '/todo/config/release-records/${id}/publish', 'post'],
@@ -85,7 +88,7 @@ function runNegativeFixture() {
   assert.throws(() => assertRouteContract(wrongPath, 'getTodoConfigDashboard', '/todo/config/dashboard', 'get'), /missing route contract getTodoConfigDashboard/)
 }
 
-function check() {
+async function check() {
   required.forEach(file => {
     if (!fs.existsSync(file)) throw new Error(`missing ${file}`)
   })
@@ -112,7 +115,7 @@ function check() {
   checkRuleLibraryPages()
   checkTriggerRulePage()
   checkTemplatePage()
-  checkSimulationAndReleasePages()
+  await checkSimulationAndReleasePages()
 }
 
 function source(file) {
@@ -390,7 +393,7 @@ function checkTemplatePage() {
   assert.strictEqual(created.versionId, 99, 'create/copy must merge the persisted aggregate identity')
 }
 
-function checkSimulationAndReleasePages() {
+async function checkSimulationAndReleasePages() {
   const simulationPage = 'src/views/todo/config/simulation/index.vue'
   const simulationDrawer = 'src/views/todo/config/simulation/SimulationDrawer.vue'
   const simulationResult = 'src/views/todo/config/simulation/SimulationResult.vue'
@@ -409,7 +412,8 @@ function checkSimulationAndReleasePages() {
   requireTokens(simulationDrawer, contents[simulationDrawer], [
     'ConfigDetailDrawer', 'SimulationResult', 'simulateConfiguration', 'versionId',
     'eventType', 'payloadVersion', 'businessType', 'businessId', 'payload', 'effectiveAt',
-    'expectedDefinitionHash', '只读模拟，不创建真实待办'
+    'expectedDefinitionHash', 'listBusinessObjects', 'listTodoTemplates', 'remote-method',
+    '只读模拟，不创建真实待办'
   ])
   requireTokens(simulationResult, contents[simulationResult], [
     '状态变化', '命中模板', '负责人', 'SLA', 'DoD', '下一步路由', '待办卡片预览', '技术日志',
@@ -422,11 +426,11 @@ function checkSimulationAndReleasePages() {
 
   requireTokens(releasePage, contents[releasePage], [
     'ConfigPageShell', 'ConfigMetricCard', 'ReleaseRecordDrawer', 'listReleaseRecords',
-    'todo:release:list',
+    'todo:release:list', 'law_todo_version_status', 'dict-tag', 'collectReleasePages',
     'publisher', 'beginTime', 'endTime', 'exportRelease'
   ])
   requireTokens(releaseDrawer, contents[releaseDrawer], [
-    'ConfigDetailDrawer', 'VersionSemanticDiff', 'getReleaseRecord', 'diffReleaseRecords',
+    'ConfigDetailDrawer', 'VersionSemanticDiff', 'getReleaseRecord', 'listReleaseVersions', 'diffReleaseRecords',
     'copyReleaseDraft', 'rollbackReleaseDraft', '变更摘要', '影响范围', '规则快照',
     '回滚来源', '生成新草稿', '不可变发布版本', 'todo:release:diff',
     'todo:release:rollback', 'todo:template:copy'
@@ -437,12 +441,33 @@ function checkSimulationAndReleasePages() {
   if (/updateTodoTemplate|updateTemplateDraft|publishReleaseRecord/.test(contents[releaseDrawer])) {
     throw new Error('published release drawer must never mutate or republish an immutable version')
   }
+  if (/nextVersionNo|newVersionNo|listTemplateVersions/.test(contents[releaseDrawer])) {
+    throw new Error('release draft version numbers must be allocated only by the server')
+  }
+  if (contents[releasePage].includes("row.status==='PUBLISHED'?'success':'info'")) {
+    throw new Error('release status must use law_todo_version_status dictionary rendering')
+  }
+
+  const model = require('../src/views/todo/config/release/release-model')
+  const offsets = []
+  const rows = await model.collectReleasePages(({ offset, limit }) => {
+    offsets.push(offset)
+    const all = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }]
+    return { rows: all.slice(offset, offset + limit), total: all.length }
+  }, {}, { pageSize: 2, maxRows: 10 })
+  assert.deepStrictEqual(offsets, [0, 2, 4], 'release export must fetch every page')
+  assert.strictEqual(rows.length, 5, 'release export must include all matching rows')
+  await assert.rejects(() => model.collectReleasePages(() => ({ rows: [], total: 11 }), {}, { pageSize: 2, maxRows: 10 }), /exceeds maximum/)
+  let sequence = 0
+  const registry = model.createActionIdRegistry(() => `action-${++sequence}`)
+  assert.strictEqual(registry.idFor('copy'), registry.idFor('copy'), 'timeout retry must reuse the same action id')
+  registry.complete('copy')
+  assert.strictEqual(registry.idFor('copy'), 'action-2', 'successful mutation may allocate the next action id')
 }
 
 runNegativeFixture()
 runMutationNegativeFixtures()
 runTriggerNegativeFixtures()
-check()
-console.log('todo configuration center contract ok')
+check().then(() => console.log('todo configuration center contract ok')).catch(error => { console.error(error); process.exitCode = 1 })
 
 module.exports = { assertRouteContract, exportedFunctionBody, runNegativeFixture }

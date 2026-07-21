@@ -119,8 +119,8 @@ class TodoConfigurationControllerValidationTest
         assertPermission("importTemplate","todo:template:import");
         assertPermission("toggleTemplate","todo:template:toggle");
         assertPermissionExpression("preflightTemplateDraft","@ss.hasAnyPermi('todo:release:publish,todo:simulation:simulate')");
+        assertPermissionExpression("templateEventCatalog","@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:list,todo:release:publish')");
         String editorRead="@ss.hasAnyPermi('todo:template:list,todo:template:create,todo:template:copy,todo:template:edit,todo:simulation:simulate,todo:release:publish')";
-        assertPermissionExpression("templateEventCatalog",editorRead);
         assertPermissionExpression("templateOwnerCatalog",editorRead);
         assertPermissionExpression("templateRoutingTargetCatalog",editorRead);
     }

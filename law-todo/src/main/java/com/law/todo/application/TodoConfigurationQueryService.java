@@ -15,6 +15,8 @@ import com.law.todo.application.view.TodoConfigurationViews.TemplatePage;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateRuleReference;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
 import com.law.todo.application.view.TodoConfigurationViews.OwnerCatalogEntry;
+import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectItem;
+import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -22,7 +24,8 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 @Service
 public class TodoConfigurationQueryService
 {
-    private static final int DEFAULT_RELEASE_LIMIT=100;
+    private static final int DEFAULT_RELEASE_LIMIT=20;
+    private static final int MAX_RELEASE_LIMIT=500;
     private final TodoConfigurationMapper mapper;
 
     public TodoConfigurationQueryService(TodoConfigurationMapper mapper){this.mapper=mapper;}
@@ -63,24 +66,42 @@ public class TodoConfigurationQueryService
         Map<String,Object> normalized=new LinkedHashMap<>(query==null?Map.of():query);
         Integer offset=paginationInteger(normalized.get("offset"),"offset");
         Integer limit=paginationInteger(normalized.get("limit"),"limit");
-        if(offset!=null)
-        {
-            if(offset<0)throw invalidPagination("offset must be zero or greater");
-            normalized.put("offset",offset);
-        }
-        if(limit!=null)
-        {
-            if(limit<=0)throw invalidPagination("limit must be greater than zero");
-            normalized.put("limit",limit);
-        }
-        else if(offset!=null)normalized.put("limit",DEFAULT_RELEASE_LIMIT);
+        offset=offset==null?0:offset;limit=limit==null?DEFAULT_RELEASE_LIMIT:limit;
+        if(offset<0)throw invalidPagination("offset must be zero or greater");
+        if(limit<=0)throw invalidPagination("limit must be greater than zero");
+        normalized.put("offset",offset);normalized.put("limit",Math.min(limit,MAX_RELEASE_LIMIT));
         return mapper.selectReleaseRecords(normalized).stream().map(this::release).toList();
     }
 
     public ReleaseRecord release(long versionId)
     {return release(require(mapper.selectReleaseRecord(versionId)));}
+    public List<TemplateVersionDetail> releaseVersions(long releaseVersionId)
+    {
+        ReleaseRecord source=release(releaseVersionId);
+        return mapper.selectImmutableTemplateVersions(source.templateId()).stream()
+                .filter(row->java.util.Set.of("PUBLISHED","RETIRED").contains(text(row,"status","status")))
+                .map(this::immutableVersion).toList();
+    }
     public ReleasePage releasePage(Map<String,Object> query){return new ReleasePage(releases(query),mapper.countReleaseRecords(query==null?Map.of():query));}
     public record ReleasePage(List<ReleaseRecord> rows,long total) { }
+
+    public BusinessObjectPage businessObjects(String businessType,String keyword,int pageNum,int pageSize)
+    {
+        requireBusinessType(businessType);
+        if(pageNum<1||pageSize<1||pageSize>100)throw invalidPagination("business object page is out of range");
+        Map<String,Object> query=new LinkedHashMap<>();query.put("businessType",businessType);query.put("keyword",keyword);
+        query.put("offset",(pageNum-1)*pageSize);query.put("limit",pageSize);
+        return new BusinessObjectPage(mapper.selectBusinessObjects(query).stream().map(this::businessObject).toList(),
+                mapper.countBusinessObjects(query));
+    }
+
+    public BusinessObjectItem requireBusinessObject(String businessType,Long businessId)
+    {
+        requireBusinessType(businessType);
+        Map<String,Object> row=businessId==null?null:mapper.selectBusinessObject(businessType,businessId);
+        if(row==null||row.isEmpty())throw new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","Simulation business object does not exist");
+        return businessObject(row);
+    }
 
     private Integer paginationInteger(Object value,String field)
     {
@@ -102,6 +123,19 @@ public class TodoConfigurationQueryService
                 integer(row,"version_no","versionNo"),text(row,"status","status"),text(row,"change_summary","changeSummary"),
                 text(row,"impact_scope","impactScope"),number(row,"rollback_source_version_id","rollbackSourceVersionId"),
                 text(row,"published_by","publishedBy"),time(row,"published_time","publishedTime"),time(row,"update_time","updateTime"),action);
+    }
+
+    private BusinessObjectItem businessObject(Map<String,Object> row)
+    {return new BusinessObjectItem(requiredBusinessNumber(row),text(row,"business_no","businessNo"),
+            text(row,"business_name","businessName"),text(row,"business_type","businessType"));}
+
+    private long requiredBusinessNumber(Map<String,Object> row)
+    {Long value=number(row,"business_id","businessId");if(value==null)throw new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","Simulation business object does not exist");return value;}
+
+    private void requireBusinessType(String businessType)
+    {
+        if(!java.util.Set.of("LEAD","CUSTOMER","CONTRACT","CASE","MATTER").contains(businessType))
+            throw new TodoException("TODO_SIMULATION_BUSINESS_TYPE_UNSUPPORTED","Unsupported simulation business type");
     }
 
     private TemplateListItem templateItem(Map<String,Object> row)
@@ -130,6 +164,19 @@ public class TodoConfigurationQueryService
                 text(row,"detail_change_summary","detailChangeSummary"),text(row,"detail_impact_scope","detailImpactScope"),
                 number(row,"detail_rollback_source_version_id","detailRollbackSourceVersionId"),text(row,"detail_published_by","detailPublishedBy"),
                 time(row,"detail_published_time","detailPublishedTime"),time(row,"detail_create_time","detailCreateTime"));
+    }
+
+    private TemplateVersionDetail immutableVersion(Map<String,Object> row)
+    {
+        return new TemplateVersionDetail(number(row,"version_id","versionId"),integer(row,"version_no","versionNo"),
+                text(row,"status","status"),number(row,"source_version_id","sourceVersionId"),
+                integer(row,"definition_schema_version","definitionSchemaVersion"),text(row,"definition_json","definitionJson"),
+                text(row,"owner_rule_json","ownerRuleJson"),text(row,"dod_rule_json","dodRuleJson"),
+                text(row,"sla_rule_json","slaRuleJson"),text(row,"next_rule_json","nextRuleJson"),
+                text(row,"ui_schema_json","uiSchemaJson"),text(row,"definition_hash","definitionHash"),
+                text(row,"validation_report_json","validationReportJson"),text(row,"change_summary","changeSummary"),
+                text(row,"impact_scope","impactScope"),number(row,"rollback_source_version_id","rollbackSourceVersionId"),
+                text(row,"published_by","publishedBy"),time(row,"published_time","publishedTime"),time(row,"create_time","createTime"));
     }
 
     private TodoException invalidTemplatePagination()

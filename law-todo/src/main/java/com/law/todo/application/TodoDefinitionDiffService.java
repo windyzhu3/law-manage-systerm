@@ -39,6 +39,19 @@ public class TodoDefinitionDiffService
     public TodoDefinitionDiffView diff(long leftVersionId,long rightVersionId)
     {
         Map<String,Object> left=require(leftVersionId),right=require(rightVersionId);
+        return diff(leftVersionId,rightVersionId,left,right);
+    }
+
+    public TodoDefinitionDiffView diffImmutable(long leftVersionId,long rightVersionId)
+    {
+        Map<String,Object> left=require(leftVersionId),right=require(rightVersionId);
+        if(!immutable(left)||!immutable(right))
+            throw new TodoException("TODO_RELEASE_DIFF_IMMUTABLE_REQUIRED","Release diff requires PUBLISHED or RETIRED versions");
+        return diff(leftVersionId,rightVersionId,left,right);
+    }
+
+    private TodoDefinitionDiffView diff(long leftVersionId,long rightVersionId,Map<String,Object> left,Map<String,Object> right)
+    {
         Long leftTemplate=longValue(value(left,"template_id","templateId")),rightTemplate=longValue(value(right,"template_id","templateId"));
         if(leftTemplate==null||rightTemplate==null)throw new TodoException("TODO_TEMPLATE_VERSION_TEMPLATE_MISSING","Template version is missing its template identity");
         if(!leftTemplate.equals(rightTemplate))throw new TodoException("TODO_TEMPLATE_VERSION_DIFF_TEMPLATE_MISMATCH","Definition versions must belong to the same template");
@@ -50,6 +63,9 @@ public class TodoDefinitionDiffService
         Risk overall=changes.stream().map(Change::risk).max(Comparator.comparingInt(Enum::ordinal)).orElse(Risk.NONE);
         return new TodoDefinitionDiffView(leftVersionId,rightVersionId,changes,overall);
     }
+
+    private boolean immutable(Map<String,Object> row)
+    {return Set.of("PUBLISHED","RETIRED").contains(text(value(row,"status","status")));}
 
     private void compare(String path,Object before,Object after,List<Change> changes)
     {

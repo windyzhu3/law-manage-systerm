@@ -20,6 +20,7 @@ import com.law.todo.application.view.TodoConfigurationViews.ConfigurationDashboa
 import com.law.todo.application.view.TodoConfigurationViews.ReleaseRecord;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplatePage;
+import com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -87,7 +88,7 @@ class TodoConfigurationQueryServiceTest
     @Test void releaseProjectionReadsImmutableVersionMetadataAndLedgerAction()
     {
         LocalDateTime published=LocalDateTime.of(2026,7,20,9,0);
-        when(mapper.selectReleaseRecords(Map.of("templateId",7L))).thenReturn(List.of(Map.ofEntries(
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of(Map.ofEntries(
                 Map.entry("version_id",9L),Map.entry("template_id",7L),Map.entry("template_code","T-7"),
                 Map.entry("template_name","Template 7"),Map.entry("version_no",4),Map.entry("status","PUBLISHED"),
                 Map.entry("change_summary","ready"),Map.entry("impact_scope","LEAD"),
@@ -106,7 +107,7 @@ class TodoConfigurationQueryServiceTest
     @Test void releaseProjectionConvertsSqlTimestampToLocalDateTime()
     {
         java.sql.Timestamp timestamp=java.sql.Timestamp.valueOf(LocalDateTime.of(2026,7,21,10,15));
-        when(mapper.selectReleaseRecords(Map.of())).thenReturn(List.of(Map.ofEntries(
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of(Map.ofEntries(
                 Map.entry("version_id",9L),Map.entry("template_id",7L),Map.entry("template_code","T-7"),
                 Map.entry("template_name","Template 7"),Map.entry("status","PUBLISHED"),Map.entry("published_time",timestamp),
                 Map.entry("update_time",timestamp))));
@@ -117,7 +118,7 @@ class TodoConfigurationQueryServiceTest
         assertEquals(timestamp.toLocalDateTime(),release.updateTime());
     }
 
-    @Test void releaseProjectionSuppliesADeterministicLimitWhenOffsetIsRequested()
+    @Test void releaseProjectionSuppliesTheDefaultPageSizeWhenOffsetIsRequested()
     {
         when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
 
@@ -126,10 +127,10 @@ class TodoConfigurationQueryServiceTest
         ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
         verify(mapper).selectReleaseRecords(query.capture());
         assertEquals(20,query.getValue().get("offset"));
-        assertEquals(100,query.getValue().get("limit"));
+        assertEquals(20,query.getValue().get("limit"));
     }
 
-    @Test void releasePaginationPreservesAnAbsentOrNullOffsetWithoutAddingALimit()
+    @Test void releasePaginationAlwaysSuppliesDeterministicDefaults()
     {
         when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
 
@@ -138,8 +139,10 @@ class TodoConfigurationQueryServiceTest
 
         ArgumentCaptor<Map<String,Object>> queries=ArgumentCaptor.forClass(Map.class);
         verify(mapper,org.mockito.Mockito.times(2)).selectReleaseRecords(queries.capture());
-        assertEquals(false,queries.getAllValues().get(0).containsKey("limit"));
-        assertEquals(false,queries.getAllValues().get(1).containsKey("limit"));
+        assertEquals(0,queries.getAllValues().get(0).get("offset"));
+        assertEquals(20,queries.getAllValues().get(0).get("limit"));
+        assertEquals(0,queries.getAllValues().get(1).get("offset"));
+        assertEquals(20,queries.getAllValues().get(1).get("limit"));
     }
 
     @Test void releasePaginationDefaultsAPresentNullLimitWhenOffsetIsProvided()
@@ -150,7 +153,7 @@ class TodoConfigurationQueryServiceTest
         service().releases(query);
 
         ArgumentCaptor<Map<String,Object>> normalized=ArgumentCaptor.forClass(Map.class);verify(mapper).selectReleaseRecords(normalized.capture());
-        assertEquals(100,normalized.getValue().get("limit"));
+        assertEquals(20,normalized.getValue().get("limit"));
     }
 
     @Test void releasePaginationAcceptsZeroOffsetAndAddsTheDefaultLimit()
@@ -161,7 +164,17 @@ class TodoConfigurationQueryServiceTest
 
         ArgumentCaptor<Map<String,Object>> normalized=ArgumentCaptor.forClass(Map.class);verify(mapper).selectReleaseRecords(normalized.capture());
         assertEquals(0,normalized.getValue().get("offset"));
-        assertEquals(100,normalized.getValue().get("limit"));
+        assertEquals(20,normalized.getValue().get("limit"));
+    }
+
+    @Test void releasePaginationClampsOversizedLimits()
+    {
+        when(mapper.selectReleaseRecords(anyMap())).thenReturn(List.of());
+
+        service().releases(Map.of("offset",0,"limit",700));
+
+        ArgumentCaptor<Map<String,Object>> normalized=ArgumentCaptor.forClass(Map.class);verify(mapper).selectReleaseRecords(normalized.capture());
+        assertEquals(500,normalized.getValue().get("limit"));
     }
 
     @Test void releasePaginationRejectsZeroLimitAndNegativeOffset()
@@ -171,6 +184,42 @@ class TodoConfigurationQueryServiceTest
 
         assertEquals("TODO_CONFIGURATION_QUERY_INVALID",zero.getBusinessCode());
         assertEquals("TODO_CONFIGURATION_QUERY_INVALID",negative.getBusinessCode());
+    }
+
+    @Test void releaseVersionCatalogContainsOnlyImmutableVersionsForTheSelectedRelease()
+    {
+        LocalDateTime published=LocalDateTime.of(2026,7,20,9,0);
+        when(mapper.selectReleaseRecord(9L)).thenReturn(Map.ofEntries(Map.entry("version_id",9L),Map.entry("template_id",7L),
+                Map.entry("template_code","T-7"),Map.entry("template_name","Template 7"),Map.entry("version_no",4),
+                Map.entry("status","PUBLISHED"),Map.entry("published_time",published),Map.entry("update_time",published)));
+        when(mapper.selectImmutableTemplateVersions(7L)).thenReturn(List.of(
+                Map.of("version_id",9L,"version_no",4,"status","PUBLISHED"),
+                Map.of("version_id",8L,"version_no",3,"status","RETIRED")));
+
+        var versions=service().releaseVersions(9L);
+
+        assertEquals(List.of("PUBLISHED","RETIRED"),versions.stream().map(item->item.status()).toList());
+    }
+
+    @Test void businessObjectLookupIsPagedAndProjectsOnlyStableIdentityFields()
+    {
+        when(mapper.selectBusinessObjects(anyMap())).thenReturn(List.of(Map.of(
+                "business_id",31L,"business_no","L-31","business_name","Lead 31","business_type","LEAD")));
+        when(mapper.countBusinessObjects(anyMap())).thenReturn(51L);
+
+        BusinessObjectPage page=service().businessObjects("LEAD","31",2,20);
+
+        assertEquals(51L,page.total());assertEquals("L-31",page.rows().get(0).businessNo());
+        ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).selectBusinessObjects(query.capture());
+        assertEquals(20,query.getValue().get("offset"));assertEquals(20,query.getValue().get("limit"));
+    }
+
+    @Test void businessObjectExistenceUsesAStableNotFoundError()
+    {
+        TodoException error=assertThrows(TodoException.class,()->service().requireBusinessObject("CASE",99L));
+
+        assertEquals("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND",error.getBusinessCode());
     }
 
     private TodoConfigurationQueryService service(){return new TodoConfigurationQueryService(mapper);}

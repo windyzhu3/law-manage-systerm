@@ -78,7 +78,8 @@ public final class TodoConfigurationCommands
     }
 
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
-            @NotBlank String eventType,@NotBlank String businessType,@NotNull @Positive Long businessId,
+            @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,
+            @NotBlank String businessType,@NotNull @Positive Long businessId,
             @NotEmpty Map<String,Object> payload,@NotNull LocalDateTime effectiveAt,
             @Valid List<TodoDefinitionCommands.VirtualTaskCompletionSample> taskCompletions,
             @NotBlank String expectedDefinitionHash)
@@ -86,7 +87,11 @@ public final class TodoConfigurationCommands
         public ConfigurationSimulationCommand(String requestId,Long versionId,String eventType,String businessType,
                 Long businessId,Map<String,Object> payload,LocalDateTime effectiveAt,
                 List<TodoDefinitionCommands.VirtualTaskCompletionSample> taskCompletions)
-        {this(requestId,versionId,eventType,businessType,businessId,payload,effectiveAt,taskCompletions,null);}
+        {this(requestId,versionId,eventType,1,businessType,businessId,payload,effectiveAt,taskCompletions,null);}
+        public ConfigurationSimulationCommand(String requestId,Long versionId,String eventType,String businessType,
+                Long businessId,Map<String,Object> payload,LocalDateTime effectiveAt,
+                List<TodoDefinitionCommands.VirtualTaskCompletionSample> taskCompletions,String expectedDefinitionHash)
+        {this(requestId,versionId,eventType,1,businessType,businessId,payload,effectiveAt,taskCompletions,expectedDefinitionHash);}
         public ConfigurationSimulationCommand
         {
             payload=immutableMap(payload);

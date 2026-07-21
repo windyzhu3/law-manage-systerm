@@ -130,6 +130,20 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(lookup.contains("type.status='0'") && lookup.contains("data.status='0'"));
     }
 
+    @Test void releaseVersionDirectoryAndBusinessObjectPickerAreReadOnlyBoundedProjections() throws Exception
+    {
+        String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
+        String versions=statement(xml,"select","selectImmutableTemplateVersions");
+        String objects=statement(xml,"select","selectBusinessObjects");
+
+        assertTrue(versions.contains("status in ('PUBLISHED','RETIRED')"));
+        assertFalse(versions.contains("DRAFT")||versions.contains("BLOCKED"));
+        assertTrue(objects.contains("<choose>")&&objects.contains("biz_lead")&&objects.contains("biz_customer")
+                &&objects.contains("biz_contract")&&objects.contains("biz_case"));
+        assertTrue(objects.contains("business_id")&&objects.contains("business_no")&&objects.contains("business_name"));
+        assertTrue(objects.contains("limit #{limit} offset #{offset}"));
+    }
+
     private String statement(String xml,String tag,String id)
     {
         int start=xml.indexOf("<"+tag+" id=\""+id+"\"");

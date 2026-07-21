@@ -23,15 +23,20 @@ public class TodoConfigurationSimulationService
     private final TodoDefinitionSimulationService definitions;
     private final TodoDefinitionService definitionGates;
     private final TodoConfigurationSimulationAuditService audits;
+    private final TodoConfigurationQueryService businessObjects;
 
     @Autowired
     public TodoConfigurationSimulationService(TodoDefinitionSimulationService definitions,TodoDefinitionService definitionGates,
+            TodoConfigurationSimulationAuditService audits,TodoConfigurationQueryService businessObjects)
+    {this.definitions=definitions;this.definitionGates=definitionGates;this.audits=audits;this.businessObjects=businessObjects;}
+
+    public TodoConfigurationSimulationService(TodoDefinitionSimulationService definitions,TodoDefinitionService definitionGates,
             TodoConfigurationSimulationAuditService audits)
-    {this.definitions=definitions;this.definitionGates=definitionGates;this.audits=audits;}
+    {this(definitions,definitionGates,audits,null);}
 
     /** Focused-test compatibility; production always injects the authoritative definition gate. */
     public TodoConfigurationSimulationService(TodoDefinitionSimulationService definitions,TodoConfigurationSimulationAuditService audits)
-    {this(definitions,null,audits);}
+    {this(definitions,null,audits,null);}
 
     public ConfigurationSimulationResult simulate(ConfigurationSimulationCommand command,Actor actor)
     {
@@ -39,8 +44,10 @@ public class TodoConfigurationSimulationService
         TodoSimulationView simulation;
         try
         {
+            if(businessObjects!=null)businessObjects.requireBusinessObject(command.businessType(),command.businessId());
             if(definitionGates!=null)definitionGates.assertSimulationGate(command.versionId(),command.expectedDefinitionHash());
-            simulation=definitions.simulate(command.versionId(),command.toDefinitionCommand(),command.eventType());
+            simulation=definitions.simulate(command.versionId(),command.toDefinitionCommand(),command.eventType(),
+                    command.payloadVersion(),command.businessType());
             if(command.expectedDefinitionHash()!=null&&!command.expectedDefinitionHash().equals(simulation.definitionHash()))
                 throw new com.law.todo.domain.TodoException("TODO_TEMPLATE_PREFLIGHT_STALE",
                         "Definition or bound rules changed after preflight; run preflight again");

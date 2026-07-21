@@ -27,6 +27,7 @@ public final class TodoDefinitionCommands
         { ruleReferences=ruleReferences==null?List.of():List.copyOf(ruleReferences); }
     }
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
+    public record ReleaseDraftCommand(@NotBlank String actionId) { }
     public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
             String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson,
             String definitionJson,String expectedDefinitionJson,List<@Valid RuleReference> ruleReferences,

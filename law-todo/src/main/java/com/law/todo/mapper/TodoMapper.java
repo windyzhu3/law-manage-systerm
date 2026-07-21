@@ -67,6 +67,7 @@ public interface TodoMapper
     int updateTemplate(Map<String,Object> value);
     int updateTemplateMetadataConditionally(Map<String,Object> value);
     Map<String,Object> selectTemplateForUpdate(Long templateId);
+    int selectNextTemplateVersionNo(Long templateId);
     int updateTemplateStatusConditionally(Map<String,Object> value);
     List<Map<String,Object>> selectAllTriggerRules();
     int insertTriggerRule(Map<String,Object> value);

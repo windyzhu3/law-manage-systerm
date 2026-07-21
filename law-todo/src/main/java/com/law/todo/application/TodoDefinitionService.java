@@ -19,6 +19,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.ImportTemplateCom
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.ReleaseDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RuleReference;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.definition.catalog.TodoDecisionService;
@@ -246,6 +247,53 @@ public class TodoDefinitionService
         Map<String,Object> value=new java.util.TreeMap<>();value.put("actionType","ROLLBACK_DRAFT");
         value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());value.put("actorName",actor.userName());
         value.put("sourceVersionId",sourceVersionId);value.put("targetTemplateId",templateId);value.put("targetVersionNo",targetVersionNo);
+        return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));
+    }
+
+    @Transactional
+    public Long copyReleaseDraft(Long sourceVersionId,ReleaseDraftCommand command,Actor actor)
+    {return createReleaseDraft(sourceVersionId,command,actor,"COPY_RELEASE_DRAFT",false);}
+
+    @Transactional
+    public Long rollbackReleaseDraft(Long sourceVersionId,ReleaseDraftCommand command,Actor actor)
+    {return createReleaseDraft(sourceVersionId,command,actor,"ROLLBACK_RELEASE_DRAFT",true);}
+
+    private Long createReleaseDraft(Long sourceVersionId,ReleaseDraftCommand command,Actor actor,String actionType,boolean rollback)
+    {
+        Map<String,Object> source=requireVersion(sourceVersionId);String status=text(value(source,"status","status"));
+        if(!PUBLISHED.equals(status)&&!"RETIRED".equals(status))
+            throw new TodoException("TODO_RELEASE_SOURCE_IMMUTABLE_REQUIRED","Release draft source must be published or retired");
+        Long templateId=longValue(value(source,"template_id","templateId"));
+        String fingerprint=releaseDraftFingerprint(actionType,sourceVersionId,templateId,actor);
+        Long repeated=claimTemplateDraft(command.actionId(),actionType,sourceVersionId,fingerprint,actor);
+        if(repeated!=null)return repeated;
+        Map<String,Object> locked=mapper.selectTemplateForUpdate(templateId);
+        if(locked==null||locked.isEmpty())throw new TodoException("TODO_TEMPLATE_NOT_FOUND","Todo template not found");
+        int versionNo=mapper.selectNextTemplateVersionNo(templateId);
+        TodoDefinitionDocument copied=definition(source);Map<String,Object> target=new HashMap<>();
+        target.put("templateId",templateId);target.put("versionNo",versionNo);target.put("status",DRAFT);
+        target.put("sourceVersionId",sourceVersionId);target.put("rollbackSourceVersionId",rollback?sourceVersionId:null);
+        target.put("definitionSchemaVersion",copied.schemaVersion());target.put("definitionJson",codec.canonicalJson(copied));
+        target.put("compiledJson",null);target.put("definitionHash",null);target.put("validationReportJson",null);
+        projectLegacyRules(copied,target);
+        try
+        {
+            if(mapper.insertTemplateVersion(target)<=0)
+                throw new TodoException("TODO_RELEASE_DRAFT_CREATE_FAILED","Release draft creation failed");
+        }
+        catch(DuplicateKeyException collision)
+        {throw new TodoException("TODO_DEFINITION_VERSION_CONFLICT","The allocated template version already exists");}
+        Long targetId=longValue(target.get("versionId"));
+        if(mapper.completeDefinitionAction(command.actionId(),fingerprint,targetId)<=0)
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Release draft action could not be completed");
+        return targetId;
+    }
+
+    private String releaseDraftFingerprint(String actionType,Long sourceVersionId,Long templateId,Actor actor)
+    {
+        Map<String,Object> value=new java.util.TreeMap<>();value.put("actionType",actionType);
+        value.put("actorDeptId",actor.deptId());value.put("actorId",actor.userId());value.put("actorName",actor.userName());
+        value.put("sourceVersionId",sourceVersionId);value.put("targetTemplateId",templateId);
         return TodoDefinitionSimulationService.sha256(JSON.toJSONString(value));
     }
 

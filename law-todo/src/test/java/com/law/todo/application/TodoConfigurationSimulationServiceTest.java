@@ -38,6 +38,7 @@ class TodoConfigurationSimulationServiceTest
     @Mock private TodoDefinitionSimulationService definitions;
     @Mock private TodoDefinitionService definitionGates;
     @Mock private TodoConfigurationSimulationAuditService audits;
+    @Mock private TodoConfigurationQueryService businessObjects;
     @InjectMocks private TodoConfigurationSimulationService service;
 
     @Test void simulationIsReadOnlyAndPersistsOnlySanitizedOrderedAudit()
@@ -52,13 +53,14 @@ class TodoConfigurationSimulationServiceTest
         Map<String,Object> ordered=results.getValue();
         assertEquals(List.of("state","template","owner","sla","dod","route","card","log"),
                 List.copyOf(ordered.keySet()));
-        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"));
+        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"));
+        verify(businessObjects).requireBusinessObject("LEAD",3L);
     }
 
     @Test void failedSimulationIsAuditedWithSanitizedFailureThenRethrown()
     {
         TodoException failure=new TodoException("TODO_SIMULATION_FAILED","token top-secret for alice@example.com");
-        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenThrow(failure);
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"))).thenThrow(failure);
 
         TodoException thrown=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 
@@ -124,7 +126,7 @@ class TodoConfigurationSimulationServiceTest
     @Test void failedSimulationKeepsItsOriginalExceptionWhenAuditPersistenceFails()
     {
         TodoException simulationFailure=new TodoException("TODO_SIMULATION_FAILED","simulation failed");
-        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenThrow(simulationFailure);
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"))).thenThrow(simulationFailure);
         org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable")).when(audits)
                 .record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
 
@@ -137,13 +139,13 @@ class TodoConfigurationSimulationServiceTest
 
     @Test void eventTypeMustMatchTheTargetDefinitionSnapshotAndMismatchIsAudited()
     {
-        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED")))
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD")))
                 .thenThrow(new TodoException("TODO_SIMULATION_EVENT_TYPE_MISMATCH","event mismatch"));
 
         TodoException thrown=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 
         assertEquals("TODO_SIMULATION_EVENT_TYPE_MISMATCH",thrown.getBusinessCode());
-        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"));
+        verify(definitions).simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"));
         verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
@@ -168,12 +170,24 @@ class TodoConfigurationSimulationServiceTest
         TodoException error=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
 
         assertSame(stale,error);
-        verify(definitions,never()).simulate(eq(9L),any(),eq("LEAD_CREATED"));
+        verify(definitions,never()).simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"));
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
+    }
+
+    @Test void missingBusinessObjectStopsSimulationAndIsAudited()
+    {
+        TodoException missing=new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND","missing");
+        org.mockito.Mockito.when(businessObjects.requireBusinessObject("LEAD",3L)).thenThrow(missing);
+
+        TodoException error=assertThrows(TodoException.class,()->service.simulate(command(),actor()));
+
+        assertSame(missing,error);
+        verify(definitions,never()).simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"));
         verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
     private void whenSimulationReturns(TodoSimulationView value)
-    {org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"))).thenReturn(value);}
+    {org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD"))).thenReturn(value);}
 
     private Actor actor(){return new Actor(7L,"operator",2L);}
 

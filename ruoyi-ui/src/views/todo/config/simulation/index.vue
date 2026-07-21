@@ -29,7 +29,7 @@
       </el-table>
       <pagination v-show="total>0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="load" />
     </el-card>
-    <simulation-drawer v-model="drawerOpen" :templates="templateCatalog" :events="activeEvents" :initial-template="selected" :initial-event="handoffEvent" @simulated="lastStatus='已完成'" />
+    <simulation-drawer v-model="drawerOpen" :events="activeEvents" :initial-template="selected" :initial-event="handoffEvent" @simulated="lastStatus='已完成'" />
   </config-page-shell>
 </template>
 
@@ -43,11 +43,11 @@ export default {
   name: 'TodoConfigSimulation',
   components: { ConfigPageShell, ConfigMetricCard, SimulationDrawer },
   dicts: ['law_todo_business_type'],
-  data() { return { loading: false, rows: [], total: 0, templateCatalog: [], eventCatalog: [], query: { pageNum: 1, pageSize: 20 }, drawerOpen: false, selected: null, handoffEvent: null, lastStatus: '未运行' } },
+  data() { return { loading: false, rows: [], total: 0, eventCatalog: [], query: { pageNum: 1, pageSize: 20 }, drawerOpen: false, selected: null, handoffEvent: null, lastStatus: '未运行' } },
   computed: { activeEvents() { return this.eventCatalog.filter(item => item.status === 'ACTIVE') } },
   created() { this.loadCatalog().then(() => this.openHandoff()); this.load() },
   methods: {
-    async loadCatalog() { const responses = await Promise.all([listTodoTemplates({ pageNum: 1, pageSize: 200 }), listTemplateEventCatalog()]); this.templateCatalog = responses[0].rows || []; this.eventCatalog = responses[1].data || [] },
+    async loadCatalog() { const response = await listTemplateEventCatalog(); this.eventCatalog = response.data || [] },
     async load() { this.loading = true; try { const response = await listTodoTemplates(this.query); this.rows = response.rows || []; this.total = Number(response.total || 0) } finally { this.loading = false } },
     openHandoff() { const query = this.$route.query || {}; if (!query.eventType) return; this.handoffEvent = this.activeEvents.find(item => item.eventType === query.eventType && Number(item.payloadVersion) === Number(query.payloadVersion || 1)) || null; if (this.handoffEvent) this.openSimulation() },
     openSimulation(row) { this.selected = row || null; if (row) this.handoffEvent = null; this.drawerOpen = true }

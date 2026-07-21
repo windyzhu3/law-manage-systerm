@@ -76,11 +76,17 @@ public class TodoDefinitionSimulationService
 
     @Transactional(readOnly=true)
     public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command)
-    {return simulate(versionId,command,null);}
+    {return simulate(versionId,command,null,null,null);}
 
     /** Executes and validates one immutable version snapshot in the same read-only transaction. */
     @Transactional(readOnly=true)
     public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command,String expectedEventType)
+    {return simulate(versionId,command,expectedEventType,null,null);}
+
+    /** Validates the complete event contract against one immutable definition snapshot and active catalog row. */
+    @Transactional(readOnly=true)
+    public TodoSimulationView simulate(long versionId,SimulateDefinitionCommand command,String expectedEventType,
+            Integer expectedPayloadVersion,String expectedBusinessType)
     {
         Map<String,Object> row=requireVersion(versionId);
         List<SimulationIssue> issues=new ArrayList<>();
@@ -106,6 +112,20 @@ public class TodoDefinitionSimulationService
         }
         if(expectedEventType!=null&&(definition.event()==null||!expectedEventType.equals(definition.event().eventType())))
             throw new TodoException("TODO_SIMULATION_EVENT_TYPE_MISMATCH","Simulation event type does not match the target definition snapshot");
+        if(expectedPayloadVersion!=null&&(definition.event()==null||expectedPayloadVersion!=definition.event().payloadVersion()))
+            throw new TodoException("TODO_SIMULATION_PAYLOAD_VERSION_MISMATCH","Simulation payload version does not match the target definition snapshot");
+        String templateBusinessType=text(value(row,"business_type","businessType"));
+        if(expectedBusinessType!=null&&!expectedBusinessType.equals(templateBusinessType))
+            throw new TodoException("TODO_SIMULATION_BUSINESS_TYPE_MISMATCH","Simulation business type does not match the target template");
+        if(expectedEventType!=null&&expectedPayloadVersion!=null)
+        {
+            Map<String,Object> catalog=mapper.selectEventCatalog(expectedEventType,expectedPayloadVersion);
+            if(catalog==null||catalog.isEmpty()||!"ACTIVE".equals(text(value(catalog,"status","status"))))
+                throw new TodoException("TODO_SIMULATION_EVENT_CATALOG_INACTIVE","Simulation requires an active event catalog contract");
+            String catalogBusinessType=text(value(catalog,"business_object_type","businessObjectType"));
+            if(expectedBusinessType!=null&&!expectedBusinessType.equals(catalogBusinessType))
+                throw new TodoException("TODO_SIMULATION_BUSINESS_TYPE_MISMATCH","Simulation business type does not match the active event catalog");
+        }
         String canonical=codec.canonicalJson(definition),actualHash=sha256(canonical);
         if(!expectedHash.equals(actualHash))
         {

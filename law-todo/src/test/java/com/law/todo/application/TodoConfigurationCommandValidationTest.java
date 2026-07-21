@@ -30,6 +30,12 @@ class TodoConfigurationCommandValidationTest
 {
     private final Validator validator=Validation.buildDefaultValidatorFactory().getValidator();
 
+    @Test void simulationContractIncludesAnExplicitPositivePayloadVersion()
+    {
+        assertTrue(java.util.Arrays.stream(ConfigurationSimulationCommand.class.getRecordComponents())
+                .anyMatch(component->component.getName().equals("payloadVersion")));
+    }
+
     @Test void slaThresholdsMustBeOrdered()
     {
         SlaRuleCommand command=sla(100,80,150,"{}","{}","{}","0");

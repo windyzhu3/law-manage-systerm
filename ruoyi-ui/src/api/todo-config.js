@@ -50,9 +50,11 @@ export function listTriggerTemplateCatalog() { return request({ url: '/todo/conf
 export function listTriggerTemplateVersions(id) { return request({ url: `/todo/config/trigger-catalog/templates/${id}/versions`, method: 'get' }) }
 
 export function simulateConfiguration(data) { return request({ url: '/todo/config/simulations', method: 'post', data }) }
+export function listBusinessObjects(params) { return request({ url: '/todo/config/business-objects', method: 'get', params }) }
 
 export function listReleaseRecords(params) { return request({ url: '/todo/config/release-records', method: 'get', params }) }
 export function getReleaseRecord(id) { return request({ url: `/todo/config/release-records/${id}`, method: 'get' }) }
+export function listReleaseVersions(id) { return request({ url: `/todo/config/release-records/${id}/versions`, method: 'get' }) }
 export function diffReleaseRecords(left, right) { return request({ url: `/todo/config/release-records/${left}/diff/${right}`, method: 'get' }) }
 export function copyReleaseDraft(id, data) { return request({ url: `/todo/config/release-records/${id}/copy-draft`, method: 'post', data }) }
 export function publishReleaseRecord(id, data) { return request({ url: `/todo/config/release-records/${id}/publish`, method: 'post', data }) }

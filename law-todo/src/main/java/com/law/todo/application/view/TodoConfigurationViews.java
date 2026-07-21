@@ -76,6 +76,10 @@ public final class TodoConfigurationViews
         }
     }
 
+    public record BusinessObjectItem(long businessId,String businessNo,String businessName,String businessType) { }
+    public record BusinessObjectPage(List<BusinessObjectItem> rows,long total)
+    { public BusinessObjectPage { rows=rows==null?List.of():List.copyOf(rows); } }
+
     public record ConfigurationSimulationResult(TodoSimulationView simulation,long durationMs) { }
 
     private static Map<String,Object> immutableMap(Map<String,Object> source)

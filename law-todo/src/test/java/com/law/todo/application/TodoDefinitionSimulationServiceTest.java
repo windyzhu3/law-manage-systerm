@@ -39,7 +39,8 @@ class TodoDefinitionSimulationServiceTest
     @BeforeEach void registerEventCatalog()
     {
         org.mockito.Mockito.lenient().when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of(
-                "event_type","LEAD_CREATED","payload_version",1,"payload_schema_json","{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"}}}","status","ACTIVE"));
+                "event_type","LEAD_CREATED","payload_version",1,"business_object_type","LEAD",
+                "payload_schema_json","{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"}}}","status","ACTIVE"));
     }
 
     @Test void simulation_uses_compiled_snapshot_and_performs_no_writes()
@@ -75,6 +76,32 @@ class TodoDefinitionSimulationServiceTest
 
         assertEquals("TODO_SIMULATION_EVENT_TYPE_MISMATCH",error.getBusinessCode());
         verify(mapper,never()).insertInstance(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test void expectedPayloadVersionMustMatchTheDefinitionAndActiveCatalog()
+    {
+        String compiled=new TodoDefinitionCodec().canonicalJson(definition(Map.of("type","USER","value",7L)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));
+
+        com.law.todo.domain.TodoException error=org.junit.jupiter.api.Assertions.assertThrows(com.law.todo.domain.TodoException.class,
+                ()->new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                        new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,LocalDateTime.of(2026,7,17,9,0)),
+                        "LEAD_CREATED",2,"LEAD"));
+
+        assertEquals("TODO_SIMULATION_PAYLOAD_VERSION_MISMATCH",error.getBusinessCode());
+    }
+
+    @Test void expectedBusinessTypeMustMatchTheTargetTemplateAndEventCatalog()
+    {
+        String compiled=new TodoDefinitionCodec().canonicalJson(definition(Map.of("type","USER","value",7L)));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(compiled));
+
+        com.law.todo.domain.TodoException error=org.junit.jupiter.api.Assertions.assertThrows(com.law.todo.domain.TodoException.class,
+                ()->new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                        new SimulateDefinitionCommand(Map.of("stage","READY"),"CONTRACT",3L,LocalDateTime.of(2026,7,17,9,0)),
+                        "LEAD_CREATED",1,"CONTRACT"));
+
+        assertEquals("TODO_SIMULATION_BUSINESS_TYPE_MISMATCH",error.getBusinessCode());
     }
 
     @Test void unknown_owner_context_and_handlers_are_explicit_and_deterministic()
@@ -475,6 +502,7 @@ class TodoDefinitionSimulationServiceTest
     {
         Map<String,Object> row=new HashMap<>();
         row.put("version_id",9L);row.put("status","PUBLISHED");row.put("compiled_json",compiled);
+        row.put("business_type","LEAD");
         row.put("definition_hash",TodoDefinitionSimulationService.sha256(compiled));
         return row;
     }
