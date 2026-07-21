@@ -347,6 +347,7 @@ function checkTriggerRulePage() {
 
   requireTokens(page, contents[page], [
     'ConfigPageShell', 'ConfigMetricCard', 'TriggerRuleDrawer', 'pagination',
+    'ruleName', 'ruleCode', 'ruleIdentityLabel',
     'law_todo_trigger_mode', 'law_todo_condition_operator', 'law_todo_rule_status',
     'listTriggerRules', 'toggleTriggerRule', 'sortTriggerRules',
     'todo:trigger:list', 'todo:trigger:create', 'todo:trigger:edit', 'todo:trigger:toggle',
@@ -361,7 +362,7 @@ function checkTriggerRulePage() {
     `:disabled="effectiveEnabled === 'Y' && !templateActive(item)"`, '启用触发规则必须选择启用状态的待办模板',
     'businessObjectType', 'business_object_type',
     'createTriggerRule', 'updateTriggerRule', 'serverEnabled', 'enabled: this.persisted ? this.form.serverEnabled : this.form.enabled',
-    'actionId', 'expectedVersion', 'conditionJson', '@dirty-change="conditionDraftDirty = $event"'
+    'actionId', 'expectedVersion', 'conditionJson', 'ruleCode', 'ruleName', '^[A-Z][A-Z0-9_]*$', '_COPY', '副本', '@dirty-change="conditionDraftDirty = $event"'
   ])
   requireTokens(builder, contents[builder], [
     'law_todo_condition_operator', 'payloadSchemaJson', 'schemaFields', 'operatorOptions',
@@ -372,7 +373,7 @@ function checkTriggerRulePage() {
   assertTriggerToggleContract(page, contents[page])
   assertTriggerSortContract(page, contents[page])
   requireTokens(page, contents[page], ['loadGlobalSortSnapshot', 'pageSize: 500', 'globalRows', 'handlePagination', 'moveTriggerRows', 'changedTriggerSortItems', 'sortPreparing: false'])
-  assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'actionId', 'expectedVersion'])
+  assertMethodTokens(drawer, contents[drawer], 'save', ['createTriggerRule', 'updateTriggerRule', 'triggerRuleId', 'conditionJson', 'ruleCode', 'ruleName', 'actionId', 'expectedVersion'])
   assertMethodTokens(drawer, contents[drawer], 'validate', ['effectiveEnabled', 'selectedTemplateActive'])
   const saveBody = methodWindow(contents[drawer], 'save')
   if (saveBody.includes('sortOrder:')) throw new Error('trigger save command must not send unsupported sortOrder; use sortTriggerRules')

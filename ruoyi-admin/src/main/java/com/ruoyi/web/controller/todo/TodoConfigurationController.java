@@ -159,7 +159,7 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/template-catalog/calendars") public AjaxResult templateCalendarCatalog(){return success(templates.listTemplateCalendarCatalog());}
 
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
-    @GetMapping("/trigger-rules") public TableDataInfo triggerRules(@Valid @ModelAttribute PageQuery value){return page(templates.listTriggers(),value.pageNum(),value.pageSize());}
+    @GetMapping("/trigger-rules") public TableDataInfo triggerRules(@Valid @ModelAttribute PageQuery value){return page(templates.listTriggers(value.keyword()),value.pageNum(),value.pageSize());}
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
     @GetMapping("/trigger-catalog/events") public AjaxResult triggerEventCatalog(){return success(templates.listEventCatalogs());}
     @PreAuthorize("@ss.hasPermi('todo:trigger:list')")
@@ -206,8 +206,8 @@ public class TodoConfigurationController extends BaseController
     private void requireNew(Long id){if(id!=null)throw new TodoException("TODO_CONFIGURATION_PATH_BODY_MISMATCH","Create requests must not include an identifier");}
     private Actor actor(){return new Actor(SecurityUtils.getUserId(),SecurityUtils.getUsername(),SecurityUtils.getDeptId());}
 
-    public record PageQuery(@Min(1) Integer pageNum,@Min(1) @Max(500) Integer pageSize)
-    {public PageQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}}
+    public record PageQuery(@Min(1) Integer pageNum,@Min(1) @Max(500) Integer pageSize,String keyword)
+    {public PageQuery(Integer pageNum,Integer pageSize){this(pageNum,pageSize,null);}public PageQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}}
     public record TemplateListQuery(String keyword,String businessType,String businessStage,String templateType,
             String publishStatus,String status,@Min(1) Integer pageNum,@Min(1) @Max(200) Integer pageSize)
     {public TemplateListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);result.put("businessType",businessType);result.put("businessStage",businessStage);result.put("templateType",templateType);result.put("publishStatus",publishStatus);result.put("status",status);result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}

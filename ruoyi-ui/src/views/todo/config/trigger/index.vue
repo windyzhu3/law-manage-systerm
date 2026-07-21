@@ -27,10 +27,14 @@
       <config-metric-card label="待保存排序" :value="changedSortCount" :tone="sortDirty ? 'danger' : 'primary'" icon="el-icon-sort" />
     </template>
     <template #filters>
+      <el-input v-model="query.keyword" clearable size="small" placeholder="规则名称 / 规则编码" class="filter-item" style="width: 240px" @keyup.enter.native="search" @clear="search" />
+      <el-button size="small" icon="el-icon-search" @click="search">搜索</el-button>
       <el-alert title="规则按后端 sortOrder 排序；列表接口当前仅支持分页，不展示无效筛选条件。" type="info" :closable="false" show-icon />
     </template>
 
     <el-table v-loading="loading" :data="rows" stripe :row-key="rowId" @row-click="openDetail">
+      <el-table-column label="规则名称" min-width="160"><template slot-scope="{ row }"><strong>{{ field(row, 'ruleName', 'rule_name') || '-' }}</strong></template></el-table-column>
+      <el-table-column label="规则编码" min-width="160"><template slot-scope="{ row }"><code>{{ field(row, 'ruleCode', 'rule_code') || '-' }}</code></template></el-table-column>
       <el-table-column label="来源事件" min-width="190">
         <template slot-scope="{ row }"><strong>{{ sourceEventLabel(row) }}</strong><small class="cell-subtitle">{{ businessSourceLabel(row) }}</small></template>
       </el-table-column>
@@ -49,6 +53,7 @@
       <el-table-column label="操作" fixed="right" width="300">
         <template slot-scope="{ row }">
           <el-button v-hasPermi="['todo:trigger:edit']" type="text" @click.stop="openEdit(row)">编辑</el-button>
+          <el-button v-hasPermi="['todo:trigger:create']" type="text" @click.stop="openCopy(row)">复制</el-button>
           <el-button
             v-hasPermi="['todo:trigger:toggle']"
             type="text"
@@ -86,7 +91,7 @@ export default {
       sortPreparing: false,
       rows: [],
       total: 0,
-      query: { pageNum: 1, pageSize: 20 },
+      query: { pageNum: 1, pageSize: 20, keyword: '' },
       drawerOpen: false,
       drawerMode: 'view',
       selected: null,
@@ -110,7 +115,7 @@ export default {
     async load() {
       this.loading = true
       try {
-        const response = await listTriggerRules({ pageNum: this.query.pageNum, pageSize: this.query.pageSize })
+        const response = await listTriggerRules({ pageNum: this.query.pageNum, pageSize: this.query.pageSize, keyword: this.query.keyword || undefined })
         this.rows = (response.rows || []).map(row => ({ ...row }))
         this.total = Number(response.total || 0)
         this.globalRows = null
@@ -126,8 +131,11 @@ export default {
     openCreate() { this.selected = null; this.drawerMode = 'create'; this.drawerOpen = true },
     openDetail(row) { this.selected = { ...row }; this.drawerMode = 'view'; this.drawerOpen = true },
     openEdit(row) { this.selected = { ...row }; this.drawerMode = 'edit'; this.drawerOpen = true },
+    openCopy(row) { this.selected = { ...row }; this.drawerMode = 'copy'; this.drawerOpen = true },
+    search() { this.query.pageNum = 1; this.globalRows = null; this.initialGlobalSort = {}; this.load() },
     afterSaved() { this.drawerOpen = false; this.load() },
     sourceEventLabel(row) { return `${this.field(row, 'eventType', 'event_type') || '-'} · v${this.field(row, 'payloadVersion', 'payload_version') || 1}` },
+    ruleIdentityLabel(row) { return `${this.field(row, 'ruleName', 'rule_name') || '-'} (${this.field(row, 'ruleCode', 'rule_code') || '-'})` },
     businessSourceLabel(row) { return `业务对象：${this.field(row, 'businessType', 'business_type') || '-'}` },
     targetActionLabel() { return '创建待办' },
     targetTemplateLabel(row) { const name = this.field(row, 'templateName', 'template_name'); const code = this.field(row, 'templateCode', 'template_code'); return code ? `${name || code} (${code})` : (name || '-') },
@@ -192,7 +200,7 @@ export default {
         let pageNum = 1
         let expectedTotal = Number(this.total || 0)
         while (!expectedTotal || all.length < expectedTotal) {
-          const response = await listTriggerRules({ pageNum, pageSize: 500 })
+          const response = await listTriggerRules({ pageNum, pageSize: 500, keyword: this.query.keyword || undefined })
           const batch = response.rows || []
           expectedTotal = Number(response.total || 0)
           batch.forEach(row => { const id = this.rowId(row); if (id && !seen.has(id)) { seen.add(id); all.push({ ...row }) } })

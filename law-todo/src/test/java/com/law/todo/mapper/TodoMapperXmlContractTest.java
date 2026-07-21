@@ -206,6 +206,18 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test void triggerRulesPersistAndReadIdentityMetadata() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(xml.contains("rule_code,rule_name,event_type"));
+            assertTrue(xml.contains("rule_code=#{ruleCode},rule_name=#{ruleName}"));
+            assertTrue(xml.contains("r.rule_code,r.rule_name"));
+            assertTrue(xml.contains("countTriggerRulesByCode"));
+        }
+    }
+
     @Test void triggerWritesAuditTheServerActorAndKeepOptimisticVersionGuards() throws Exception
     {
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))

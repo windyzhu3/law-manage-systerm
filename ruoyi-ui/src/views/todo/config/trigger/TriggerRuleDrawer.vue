@@ -15,6 +15,10 @@
             <el-input :value="triggerModeLabel" disabled />
             <p class="form-help">当前运行时仅支持事件驱动，来源模板为“—（事件触发）”。</p>
           </el-form-item>
+          <el-row :gutter="16">
+            <el-col :span="12"><el-form-item label="规则编码" prop="ruleCode"><el-input v-model.trim="form.ruleCode" :maxlength="64" :disabled="readonly" placeholder="例如 LEAD_ASSIGNED_RULE" /></el-form-item></el-col>
+            <el-col :span="12"><el-form-item label="规则名称" prop="ruleName"><el-input v-model.trim="form.ruleName" :maxlength="128" :disabled="readonly" /></el-form-item></el-col>
+          </el-row>
           <el-form-item label="事件与版本" prop="eventKey">
             <el-select v-model="form.eventKey" filterable :disabled="readonly" class="full-width" @change="eventChanged">
               <el-option v-for="item in selectableEventCatalog" :key="catalogKey(item)" :label="eventLabel(item)" :value="catalogKey(item)" :disabled="!eventActive(item)" />
@@ -98,7 +102,8 @@ import TriggerConditionBuilder from './TriggerConditionBuilder'
 import { createTriggerRule, updateTriggerRule, listTriggerEventCatalog, listTriggerTemplateCatalog, listTriggerTemplateVersions } from '@/api/todo-config'
 
 const valueOf = (row, camel, snake) => row && (row[camel] !== undefined ? row[camel] : row[snake])
-const emptyForm = () => ({ triggerRuleId: null, eventKey: '', eventType: '', payloadVersion: 1, businessType: '', templateId: null, templateVersionId: null, enabled: 'Y', serverEnabled: 'Y', conditionJson: '', sortOrder: 0, version: 0, updateTime: '' })
+const RULE_CODE_PATTERN = '^[A-Z][A-Z0-9_]*$'
+const emptyForm = () => ({ triggerRuleId: null, ruleCode: '', ruleName: '', eventKey: '', eventType: '', payloadVersion: 1, businessType: '', templateId: null, templateVersionId: null, enabled: 'Y', serverEnabled: 'Y', conditionJson: '', sortOrder: 0, version: 0, updateTime: '' })
 
 export default {
   name: 'TriggerRuleDrawer',
@@ -118,6 +123,8 @@ export default {
       conditionValid: true,
       conditionDraftDirty: false,
       rules: {
+        ruleCode: [{ required: true, message: '请输入规则编码', trigger: 'blur' }, { pattern: new RegExp(RULE_CODE_PATTERN), message: '规则编码只能使用大写字母、数字和下划线，且必须以字母开头', trigger: 'blur' }],
+        ruleName: [{ required: true, message: '请输入规则名称', trigger: 'blur' }],
         eventKey: [{ required: true, message: '请选择事件与 Payload 版本', trigger: 'change' }],
         templateId: [{ required: true, message: '请选择目标待办模板', trigger: 'change' }],
         templateVersionId: [{ required: true, message: '请选择已发布的目标模板版本', trigger: 'change' }],
@@ -128,7 +135,7 @@ export default {
   computed: {
     persisted() { return Boolean(this.form.triggerRuleId) },
     readonly() { return this.mode === 'view' },
-    drawerTitle() { return ({ create: '新增触发规则', edit: '编辑触发规则', view: '触发规则详情' })[this.mode] || '触发规则详情' },
+    drawerTitle() { return ({ create: '新增触发规则', copy: '复制触发规则', edit: '编辑触发规则', view: '触发规则详情' })[this.mode] || '触发规则详情' },
     activeEventCatalog() { return this.eventCatalog.filter(item => valueOf(item, 'status', 'status') === 'ACTIVE') },
     selectableEventCatalog() { const active = this.activeEventCatalog.slice(); const selected = this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey); if (selected && !active.some(item => this.catalogKey(item) === this.form.eventKey)) active.push(selected); return active },
     selectedEvent() { return this.eventCatalog.find(item => this.catalogKey(item) === this.form.eventKey) || null },
@@ -170,7 +177,7 @@ export default {
     async hydrate() {
       const source = this.rule || {}
       const form = emptyForm()
-      const keys = ['triggerRuleId', 'eventType', 'payloadVersion', 'businessType', 'templateId', 'templateVersionId', 'enabled', 'conditionJson', 'sortOrder', 'version', 'updateTime']
+      const keys = ['triggerRuleId', 'ruleCode', 'ruleName', 'eventType', 'payloadVersion', 'businessType', 'templateId', 'templateVersionId', 'enabled', 'conditionJson', 'sortOrder', 'version', 'updateTime']
       keys.forEach(key => {
         const snake = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)
         const value = valueOf(source, key, snake)
@@ -183,6 +190,12 @@ export default {
       form.sortOrder = Number(form.sortOrder) || 0
       form.version = Number(form.version) || 0
       form.serverEnabled = form.enabled
+      if (this.mode === 'copy') {
+        form.triggerRuleId = null
+        form.version = 0
+        form.ruleName = `${form.ruleName || '规则'}-副本`
+        form.ruleCode = this.copyRuleCode(form.ruleCode)
+      }
       form.eventKey = form.eventType ? `${form.eventType}@@${form.payloadVersion}` : ''
       this.form = form
       this.conditionValid = true
@@ -193,6 +206,7 @@ export default {
       this.$nextTick(() => this.$refs.form && this.$refs.form.clearValidate())
     },
     reset() { this.form = emptyForm(); this.versions = []; this.initialSnapshot = ''; this.conditionValid = true; this.conditionDraftDirty = false; this.$emit('reset') },
+    copyRuleCode(code) { const base = String(code || 'TRIGGER_RULE').toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/_+$/, ''); return `${base.slice(0, 59) || 'TRIGGER_RULE'}_COPY` },
     snapshot() { return JSON.stringify(this.form) },
     catalogKey(item) { return `${valueOf(item, 'eventType', 'event_type')}@@${Number(valueOf(item, 'payloadVersion', 'payload_version') || 1)}` },
     eventActive(item) { return Boolean(item) && valueOf(item, 'status', 'status') === 'ACTIVE' },
@@ -244,6 +258,8 @@ export default {
         this.saving = true
         const payload = {
           triggerRuleId: this.persisted ? this.form.triggerRuleId : null,
+          ruleCode: this.form.ruleCode,
+          ruleName: this.form.ruleName,
           eventType: this.form.eventType,
           payloadVersion: Number(this.form.payloadVersion),
           templateId: Number(this.form.templateId),

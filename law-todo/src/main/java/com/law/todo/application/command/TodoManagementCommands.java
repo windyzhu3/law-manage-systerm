@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
@@ -41,13 +42,21 @@ public final class TodoManagementCommands
         String conditionJson,
         @Min(1) Integer payloadVersion,
         @NotBlank String actionId,
-        @Min(0) Integer expectedVersion) {
+        @Min(0) Integer expectedVersion,
+        @NotBlank @Size(max=64) @Pattern(regexp="^[A-Z][A-Z0-9_]*$") String ruleCode,
+        @NotBlank @Size(max=128) String ruleName) {
         public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson)
-        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,1,null,null);}
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,1,null,null,compatibilityCode(eventType,templateVersionId),compatibilityName(eventType));}
         public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson,Integer payloadVersion)
-        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,payloadVersion,null,null);}
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,payloadVersion,null,null,compatibilityCode(eventType,templateVersionId),compatibilityName(eventType));}
+        public TriggerCommand(Long triggerRuleId,String eventType,Long templateId,Long templateVersionId,String businessType,String enabled,String conditionJson,Integer payloadVersion,String actionId,Integer expectedVersion)
+        {this(triggerRuleId,eventType,templateId,templateVersionId,businessType,enabled,conditionJson,payloadVersion,actionId,expectedVersion,compatibilityCode(eventType,templateVersionId),compatibilityName(eventType));}
         @AssertTrue(message = "expectedVersion is required for trigger updates")
         public boolean isExpectedVersionPresentForUpdate(){return triggerRuleId==null||expectedVersion!=null;}
+        private static String compatibilityCode(String eventType,Long templateVersionId)
+        {String event=eventType==null?"RULE":eventType.toUpperCase().replaceAll("[^A-Z0-9]+","_").replaceAll("^_+|_+$","");String suffix=templateVersionId==null?"NEW":String.valueOf(templateVersionId);return ("TRIGGER_"+(event.isBlank()?"RULE":event)+"_"+suffix).substring(0,Math.min(64,("TRIGGER_"+(event.isBlank()?"RULE":event)+"_"+suffix).length()));}
+        private static String compatibilityName(String eventType)
+        {String name=(eventType==null||eventType.isBlank()?"Trigger rule":eventType+" trigger rule");return name.substring(0,Math.min(128,name.length()));}
     }
 
     public record TriggerSortCommand(@NotBlank String actionId,@NotEmpty List<@Valid TriggerSortItem> items)

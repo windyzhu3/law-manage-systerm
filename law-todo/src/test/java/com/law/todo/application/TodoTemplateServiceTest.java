@@ -270,6 +270,41 @@ class TodoTemplateServiceTest
         assertEquals("TODO_CONDITION_INVALID",error.getBusinessCode());
     }
 
+    @Test void triggerSavePersistsIdentityMetadataAndRejectsDuplicateRuleCode()
+    {
+        ledger(true);
+        when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(1);
+        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+                "trigger-duplicate",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->new TodoTemplateService(mapper).saveTrigger(duplicate,actor()));
+
+        assertEquals("TODO_TRIGGER_CODE_DUPLICATE",error.getBusinessCode());
+        verify(mapper,never()).insertTriggerRule(anyMap());
+    }
+
+    @Test void triggerSaveTranslatesConcurrentDuplicateRuleCodeWrite()
+    {
+        ledger(true);
+        when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(0);
+        when(mapper.insertTriggerRule(anyMap())).thenThrow(new org.springframework.dao.DuplicateKeyException("rule_code"));
+        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+                "trigger-race",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->new TodoTemplateService(mapper).saveTrigger(duplicate,actor()));
+
+        assertEquals("TODO_TRIGGER_CODE_DUPLICATE",error.getBusinessCode());
+    }
+
+    @Test void legacyTriggerConstructorDerivesValidIdentityMetadata()
+    {
+        TriggerCommand legacy=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null);
+        assertTrue(legacy.ruleCode().matches("^[A-Z][A-Z0-9_]*$"));
+        assertTrue(!legacy.ruleName().isBlank());
+    }
+
     @Test void springConstructorRejectsUnknownOrDisabledBusinessTypeBeforeTriggerWrites()
     {
         TodoDictionaryValidationPort dictionaries=org.mockito.Mockito.mock(TodoDictionaryValidationPort.class);
