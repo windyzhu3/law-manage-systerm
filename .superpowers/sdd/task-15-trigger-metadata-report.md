@@ -91,3 +91,24 @@ No local migration database was supplied, so full Flyway execution is covered by
 ### Follow-up commit
 
 `ci(todo-config): verify trigger metadata upgrade`
+
+## Workflow order contract follow-up
+
+### RED evidence
+
+After adding order and baseline negative fixtures, `node ruoyi-ui/scripts/check-foundation-ci.js` failed with `ReferenceError: verifyTriggerMetadataWorkflow is not defined` before the structural verifier existed.
+
+### GREEN evidence
+
+- `node ruoyi-ui/scripts/check-foundation-ci.js` passed and executes negative fixtures that reject swapped shared-migration/report-gate steps and a twelfth baseline SQL path.
+- `node ruoyi-ui/scripts/check-external-db-reports-contract.js` passed.
+- `npx --yes prettier --parser yaml .github/workflows/ci.yml` completed successfully, confirming YAML parseability.
+- `git diff --check` passed.
+
+### Contract coverage
+
+The CI checker now extracts named workflow steps and verifies strict ordering: dedicated database creation, exact baseline loop, isolated metadata migration, shared migrations, then external report gate. It extracts SQL paths solely from the baseline loop and compares the ordered list exactly to the approved eleven paths, rejecting missing, extra, or reordered entries.
+
+### Follow-up commit
+
+`test(todo-config): harden migration workflow contract`

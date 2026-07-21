@@ -63,9 +63,17 @@ const exactV015Baseline = [
   'sql/case_module_20260611.sql', 'sql/matter_module_20260615.sql', 'sql/matter_menu_patch_20260617.sql',
   'sql/finance_module_20260624.sql', 'sql/customer_tag_assign_permission_fix_20260627.sql'
 ]
-if (!workflow.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do') || exactV015Baseline.some(file => !workflow.includes(file))) {
-  throw new Error('Trigger metadata database must receive the exact eleven-file v0.15 baseline')
-}
+const triggerMetadataWorkflow = verifyTriggerMetadataWorkflow(workflow, exactV015Baseline)
+const reordered = workflow.replace(
+  `${triggerMetadataWorkflow.sharedMigrationStep}\n${triggerMetadataWorkflow.reportGateStep}`,
+  `${triggerMetadataWorkflow.reportGateStep}\n${triggerMetadataWorkflow.sharedMigrationStep}`
+)
+assertWorkflowFixtureFails(reordered, 'reordered external report gate')
+const extraBaseline = workflow.replace(
+  'sql/customer_tag_assign_permission_fix_20260627.sql',
+  'sql/customer_tag_assign_permission_fix_20260627.sql\n              sql/unapproved_twelfth_baseline.sql'
+)
+assertWorkflowFixtureFails(extraBaseline, 'extra baseline file')
 const migrationDatabaseUrls = workflow.match(/TODO_MIGRATION_DB_URL:\s+([^\r\n]+)/g) || []
 if (
   migrationDatabaseUrls.length < 2 ||
@@ -85,3 +93,48 @@ if (passwordMentions.length !== 1 || passwordMentions[0] !== approvedPasswordAss
 }
 
 console.log('Foundation CI contract ok')
+
+function assertWorkflowFixtureFails(candidate, label) {
+  try {
+    verifyTriggerMetadataWorkflow(candidate, exactV015Baseline)
+  } catch (error) {
+    return
+  }
+  throw new Error(`${label} fixture unexpectedly passed`)
+}
+
+function verifyTriggerMetadataWorkflow(source, expectedBaseline) {
+  const createDatabaseStep = workflowStep(source, 'Create isolated Foundation and trigger metadata test databases')
+  const baselineStep = workflowStep(source, 'Initialize v0.15 baseline schemas in empty databases')
+  const isolatedMigrationStep = workflowStep(source, 'Verify isolated trigger metadata migration upgrade')
+  const sharedMigrationStep = workflowStep(source, 'Execute and verify all Flyway migrations')
+  const reportGateStep = workflowStep(source, 'Assert external-database Todo tests were not skipped')
+  const ordered = [createDatabaseStep, baselineStep, isolatedMigrationStep, sharedMigrationStep, reportGateStep]
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index - 1].index >= ordered[index].index) {
+      throw new Error('Trigger metadata workflow steps must be ordered: create database, baseline, isolated migration, shared migrations, report gate')
+    }
+  }
+  if (!baselineStep.text.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do')) {
+    throw new Error('Trigger metadata database must participate in the exact v0.15 baseline loop')
+  }
+  const baselinePaths = Array.from(baselineStep.text.matchAll(/^\s+(sql\/[^\s]+\.sql)\s*(?:\\|;\s+do)?\s*$/gm)).map(match => match[1])
+  if (JSON.stringify(baselinePaths) !== JSON.stringify(expectedBaseline)) {
+    throw new Error(`Trigger metadata baseline SQL files must exactly match the approved ordered eleven-file baseline: ${JSON.stringify(baselinePaths)}`)
+  }
+  if (!isolatedMigrationStep.text.includes('-Dtest=TodoTriggerRuleMetadataMigrationContractTest')) {
+    throw new Error('Trigger metadata migration E2E must run alone against its isolated database')
+  }
+  if (sharedMigrationStep.text.includes('TodoTriggerRuleMetadataMigrationContractTest')) {
+    throw new Error('Trigger metadata migration E2E must not share the law_v017 migration command')
+  }
+  return { createDatabaseStep, baselineStep, isolatedMigrationStep, sharedMigrationStep: sharedMigrationStep.text, reportGateStep: reportGateStep.text }
+}
+
+function workflowStep(source, name) {
+  const marker = `      - name: ${name}`
+  const index = source.indexOf(marker)
+  if (index < 0) throw new Error(`Missing workflow step: ${name}`)
+  const next = source.indexOf('\n      - name:', index + marker.length)
+  return { index, text: source.slice(index, next < 0 ? source.length : next) }
+}
