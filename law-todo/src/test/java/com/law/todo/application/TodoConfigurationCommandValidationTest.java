@@ -21,6 +21,7 @@ import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand
 import com.law.todo.application.command.TodoConfigurationCommands.TemplateDraftRuleCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
+import com.law.todo.application.view.TodoConfigurationViews.TemplateRuleReference;
 
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
@@ -117,19 +118,14 @@ class TodoConfigurationCommandValidationTest
         assertTrue(violations(command).contains("taskCompletions[0].payload"));
     }
 
-    @Test void templateDetailRuleReferencesAreDeeplyImmutable()
+    @Test void templateDetailRuleReferencesAreImmutableTypedProjections()
     {
-        Map<String,Object> nested=new LinkedHashMap<>(Map.of("value","before"));
-        Map<String,Object> reference=new LinkedHashMap<>(Map.of("nested",nested));
-        TemplateConfigurationDetail detail=new TemplateConfigurationDetail(1L,"T","Template","LEAD",1,2L,"DRAFT",
-                List.of(reference));
+        TemplateRuleReference reference=new TemplateRuleReference("DOD",2L,0,"DOD-A","A","0","{}");
+        TemplateConfigurationDetail detail=new TemplateConfigurationDetail(1L,"T","Template","LEAD","0",0,1,
+                2L,"DRAFT",null,null,null,List.of(reference));
 
-        nested.put("value","after");
-        reference.put("other","after");
-
-        Map<?,?> stored=detail.ruleReferences().get(0);
-        assertEquals("before",((Map<?,?>)stored.get("nested")).get("value"));
-        assertThrows(UnsupportedOperationException.class,()->((Map<Object,Object>)stored.get("nested")).put("x","y"));
+        assertEquals("DOD",detail.ruleReferences().get(0).type());
+        assertThrows(UnsupportedOperationException.class,()->detail.ruleReferences().add(reference));
     }
 
     @Test void validConfigurationCommandsHaveNoViolations()

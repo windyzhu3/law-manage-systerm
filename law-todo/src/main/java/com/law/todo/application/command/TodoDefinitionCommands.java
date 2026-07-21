@@ -18,6 +18,14 @@ public final class TodoDefinitionCommands
 
     public record CopyTemplateCommand(@NotBlank String actionId,@NotBlank String newTemplateCode,@NotBlank String newTemplateName) { }
     public record CreateTemplateCommand(@NotBlank String actionId,@NotBlank String templateCode,@NotBlank String templateName,@NotBlank String businessType) { }
+    public record ImportTemplateCommand(@NotBlank String actionId,@NotNull @Min(1) Integer schemaVersion,
+            @NotBlank String templateCode,@NotBlank String templateName,@NotBlank String businessType,
+            @NotBlank String definitionJson,List<@Valid RuleReference> ruleReferences,
+            String changeSummary,String impactScope)
+    {
+        public ImportTemplateCommand
+        { ruleReferences=ruleReferences==null?List.of():List.copyOf(ruleReferences); }
+    }
     public record CopyVersionCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
     public record UpdateDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
             String ownerRuleJson,String dodRuleJson,String slaRuleJson,String nextRuleJson,String uiSchemaJson,

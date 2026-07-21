@@ -116,7 +116,26 @@
 
   <select id="selectTemplateConfiguration" resultType="java.util.Map">
     select t.*,draft.version_id draft_version_id,draft.status draft_status,draft.version_no draft_version_no,
-      published.version_id published_version_id,published.version_no published_version_no,published.published_time
+      published.version_id published_version_id,published.version_no published_version_no,published.published_time,
+      coalesce(draft.version_id,published.version_id) detail_version_id,
+      coalesce(draft.version_no,published.version_no) detail_version_no,
+      coalesce(draft.status,published.status) detail_version_status,
+      coalesce(draft.source_version_id,published.source_version_id) detail_source_version_id,
+      coalesce(draft.definition_schema_version,published.definition_schema_version) detail_definition_schema_version,
+      coalesce(draft.definition_json,published.definition_json) detail_definition_json,
+      coalesce(draft.owner_rule_json,published.owner_rule_json) detail_owner_rule_json,
+      coalesce(draft.dod_rule_json,published.dod_rule_json) detail_dod_rule_json,
+      coalesce(draft.sla_rule_json,published.sla_rule_json) detail_sla_rule_json,
+      coalesce(draft.next_rule_json,published.next_rule_json) detail_next_rule_json,
+      coalesce(draft.ui_schema_json,published.ui_schema_json) detail_ui_schema_json,
+      coalesce(draft.definition_hash,published.definition_hash) detail_definition_hash,
+      coalesce(draft.validation_report_json,published.validation_report_json) detail_validation_report_json,
+      coalesce(draft.change_summary,published.change_summary) detail_change_summary,
+      coalesce(draft.impact_scope,published.impact_scope) detail_impact_scope,
+      coalesce(draft.rollback_source_version_id,published.rollback_source_version_id) detail_rollback_source_version_id,
+      coalesce(draft.published_by,published.published_by) detail_published_by,
+      coalesce(draft.published_time,published.published_time) detail_published_time,
+      coalesce(draft.create_time,published.create_time) detail_create_time
     from todo_template t
     left join todo_template_version draft on draft.version_id=(
       select candidate.version_id from todo_template_version candidate
@@ -127,6 +146,51 @@
       where candidate.template_id=t.template_id and candidate.status='PUBLISHED'
       order by candidate.version_no desc,candidate.version_id desc limit 1)
     where t.template_id=#{templateId}
+  </select>
+  <sql id="templateConfigurationFrom">
+    from todo_template t
+    left join todo_template_version draft on draft.version_id=(
+      select candidate.version_id from todo_template_version candidate where candidate.template_id=t.template_id
+        and candidate.status in ('DRAFT','BLOCKED') order by candidate.version_no desc,candidate.version_id desc limit 1)
+    left join todo_template_version published on published.version_id=(
+      select candidate.version_id from todo_template_version candidate where candidate.template_id=t.template_id
+        and candidate.status='PUBLISHED' order by candidate.version_no desc,candidate.version_id desc limit 1)
+  </sql>
+  <sql id="templateConfigurationWhere">
+    <where>
+      <if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if>
+      <if test="businessType != null and businessType != ''">and t.business_type=#{businessType}</if>
+      <if test="status != null and status != ''">and t.status=#{status}</if>
+      <if test="businessStage != null and businessStage != ''">and json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage'))=#{businessStage}</if>
+      <if test="templateType != null and templateType != ''">and json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.templateType'))=#{templateType}</if>
+      <if test="publishStatus != null and publishStatus != ''">and (case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end)=#{publishStatus}</if>
+    </where>
+  </sql>
+  <select id="selectTemplateConfigurations" resultType="java.util.Map">
+    select t.template_id,t.template_code,t.template_name,t.business_type,t.status,t.version,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage')) business_stage,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.templateType')) template_type,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.priority')) priority,
+      case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end publish_status,
+      draft.version_id draft_version_id,draft.version_no draft_version_no,
+      published.version_id published_version_id,published.version_no published_version_no,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.event.eventType')) event_type,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.owner.config.type')) owner_summary,
+      coalesce(t.update_time,t.create_time) update_time
+    <include refid="templateConfigurationFrom"/><include refid="templateConfigurationWhere"/>
+    order by coalesce(t.update_time,t.create_time) desc,t.template_id desc
+    limit #{limit} offset #{offset}
+  </select>
+  <select id="countTemplateConfigurations" resultType="long">
+    select count(*) <include refid="templateConfigurationFrom"/><include refid="templateConfigurationWhere"/>
+  </select>
+  <select id="selectTemplateOwnerCatalog" resultType="java.util.Map">
+    select 'USER' type,cast(u.user_id as char) value,coalesce(u.nick_name,u.user_name) label,u.user_name secondary_label
+      from sys_user u where u.status='0' and u.del_flag='0'
+    union all select 'ROLE',r.role_key,r.role_name,r.role_key from sys_role r where r.status='0' and r.del_flag='0'
+    union all select 'DEPT',d.dept_code,d.dept_name,d.dept_code from sys_dept d where d.status='0' and d.del_flag='0' and d.dept_code is not null
+    union all select 'POST',p.post_code,p.post_name,p.post_code from sys_post p where p.status='0'
+    order by type,label,value
   </select>
   <select id="selectReleaseRecords" resultType="java.util.Map">
     select v.*,coalesce(v.published_time,v.create_time) update_time,t.template_code,t.template_name,t.business_type,

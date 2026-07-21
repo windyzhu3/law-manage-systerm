@@ -26,6 +26,9 @@ public interface TodoConfigurationMapper
     int insertDraftRuleRef(Map<String,Object> row);
     List<Map<String,Object>> selectDraftRuleRefs(Long versionId);
     Map<String,Object> selectTemplateConfiguration(Long templateId);
+    List<Map<String,Object>> selectTemplateConfigurations(Map<String,Object> query);
+    long countTemplateConfigurations(Map<String,Object> query);
+    List<Map<String,Object>> selectTemplateOwnerCatalog();
     List<Map<String,Object>> selectReleaseRecords(Map<String,Object> query);
     long countReleaseRecords(Map<String,Object> query);
     Map<String,Object> selectReleaseRecord(Long versionId);

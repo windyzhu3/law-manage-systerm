@@ -21,6 +21,12 @@ public final class TodoManagementCommands
         @NotBlank String businessType,
         @Pattern(regexp = "0|1") String status) { }
 
+    public record TemplateMetadataCommand(Long templateId,@NotBlank String templateCode,@NotBlank String templateName,
+            @NotBlank String businessType,@NotBlank String actionId,@NotNull @Min(0) Integer expectedVersion) { }
+
+    public record TemplateToggleCommand(@NotBlank @Pattern(regexp="0|1") String status,
+            @NotBlank String actionId,@NotNull @Min(0) Integer expectedVersion) { }
+
     public record TriggerCommand(
         Long triggerRuleId,
         @NotBlank String eventType,

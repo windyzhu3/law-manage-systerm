@@ -69,8 +69,16 @@
   <select id="selectUserDeptId" resultType="java.lang.Long">select dept_id from sys_user where user_id=#{userId} and status='0' and del_flag='0'</select>
   <select id="selectTemplates" resultType="java.util.Map">select * from todo_template order by template_id</select>
   <select id="selectPublishedTemplateVersionCatalog" resultType="java.util.Map">select v.version_id,v.version_no,v.status from todo_template_version v where v.template_id=#{templateId} and v.status='PUBLISHED' order by v.version_no desc,v.version_id desc</select>
+  <select id="selectRoutingTargetCatalog" resultType="java.util.Map">
+    select t.template_id,t.template_code,t.template_name,t.business_type,v.version_id,v.version_no,v.status
+    from todo_template t join todo_template_version v on v.template_id=t.template_id and v.status='PUBLISHED'
+    where t.status='0' order by t.template_code,v.version_no desc,v.version_id desc
+  </select>
   <insert id="insertTemplate" useGeneratedKeys="true" keyProperty="templateId">insert into todo_template(template_code,template_name,business_type,current_version,status,create_by) values(#{templateCode},#{templateName},#{businessType},0,coalesce(#{status},'0'),#{createBy})</insert>
-  <update id="updateTemplate">update todo_template set template_name=#{templateName},business_type=#{businessType},status=#{status},update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId}</update>
+  <update id="updateTemplate">update todo_template set template_name=#{templateName},business_type=#{businessType},status=#{status},version=version+1,update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId}</update>
+  <update id="updateTemplateMetadataConditionally">update todo_template set template_name=#{templateName},business_type=#{businessType},version=version+1,update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId} and version=#{expectedVersion}</update>
+  <select id="selectTemplateForUpdate" resultType="java.util.Map">select * from todo_template where template_id=#{templateId} for update</select>
+  <update id="updateTemplateStatusConditionally">update todo_template set status=#{status},version=version+1,update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId} and version=#{expectedVersion}</update>
   <select id="selectAllTriggerRules" resultType="java.util.Map">select r.*,t.template_code,t.template_name from todo_trigger_rule r join todo_template t on t.template_id=r.template_id order by r.sort_order,r.trigger_rule_id</select>
   <insert id="insertTriggerRule" useGeneratedKeys="true" keyProperty="triggerRuleId">insert into todo_trigger_rule(event_type,payload_version,template_id,template_version_id,business_type,enabled,condition_json,create_by,update_by,update_time) values(#{eventType},coalesce(#{payloadVersion},1),#{templateId},#{templateVersionId},#{businessType},coalesce(#{enabled},'Y'),#{conditionJson},#{createBy},#{updateBy},sysdate())</insert>
   <update id="updateTriggerRule">update todo_trigger_rule set event_type=#{eventType},payload_version=coalesce(#{payloadVersion},1),template_id=#{templateId},template_version_id=#{templateVersionId},business_type=#{businessType},enabled=#{enabled},condition_json=#{conditionJson},update_by=#{updateBy},update_time=sysdate(),version=version+1 where trigger_rule_id=#{triggerRuleId} and version=#{expectedVersion}</update>

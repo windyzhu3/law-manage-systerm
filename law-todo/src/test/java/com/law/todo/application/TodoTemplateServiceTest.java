@@ -27,11 +27,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoDictionaryValidationPort;
 import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
+import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness=Strictness.LENIENT)
@@ -52,6 +55,71 @@ class TodoTemplateServiceTest
                 new TodoTemplateService(mapper).listPublishedVersionCatalog(1L));
         verify(mapper).selectPublishedTemplateVersionCatalog(1L);
         verify(mapper,never()).selectTemplateVersions(1L);
+    }
+
+    @Test void routingTargetCatalogReturnsOnlyActiveTemplatesWithPublishedVersions()
+    {
+        when(mapper.selectRoutingTargetCatalog()).thenReturn(List.of(Map.of(
+                "template_id",1L,"template_code","NEXT-A","template_name","Next A","business_type","CASE",
+                "version_id",2L,"version_no",7,"status","PUBLISHED")));
+        assertEquals(List.of(new RoutingTargetCatalogEntry(1L,"NEXT-A","Next A","CASE",2L,7,"PUBLISHED")),
+                new TodoTemplateService(mapper).listRoutingTargetCatalog());
+        verify(mapper).selectRoutingTargetCatalog();
+    }
+
+    @Test void templateToggleUsesAnAuditedStatusOnlyOptimisticMutation()
+    {
+        ledger(true);
+        when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
+                "template_id",5L,"business_type","LEAD","status","0","version",3));
+        when(mapper.updateTemplateStatusConditionally(anyMap())).thenReturn(1);
+
+        new TodoTemplateService(mapper).toggleTemplate(5L,
+                new TemplateToggleCommand("1","template-toggle-5",3),actor());
+
+        verify(mapper).updateTemplateStatusConditionally(org.mockito.ArgumentMatchers.argThat(row ->
+                row.size()==4&&Long.valueOf(5L).equals(row.get("templateId"))&&"1".equals(row.get("status"))
+                        &&Integer.valueOf(3).equals(row.get("expectedVersion"))&&"alice".equals(row.get("updateBy"))));
+    }
+
+    @Test void templateMetadataEditIsAuditedIdempotentAndOptimisticWithoutStatusMutation()
+    {
+        Ledger ledger=ledger(true);
+        when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
+                "template_id",5L,"business_type","LEAD","status","0","version",3));
+        when(mapper.updateTemplateMetadataConditionally(anyMap())).thenReturn(1);
+        TemplateMetadataCommand command=new TemplateMetadataCommand(5L,"T-5","Template 5","LEAD","metadata-5",3);
+
+        new TodoTemplateService(mapper).updateTemplateMetadata(command,actor());
+        new TodoTemplateService(mapper).updateTemplateMetadata(command,actor());
+
+        verify(mapper,times(1)).updateTemplateMetadataConditionally(org.mockito.ArgumentMatchers.argThat(row ->
+                row.size()==6&&!row.containsKey("status")&&Long.valueOf(5L).equals(row.get("templateId"))
+                        &&Integer.valueOf(3).equals(row.get("expectedVersion"))&&"alice".equals(row.get("updateBy"))));
+        assertEquals("UPDATE_TEMPLATE",ledger.claim.get().get("actionType"));
+    }
+
+    @Test void templateMetadataEditRejectsStaleVersion()
+    {
+        ledger(true);when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
+                "template_id",5L,"business_type","LEAD","status","0","version",4));
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).updateTemplateMetadata(
+                new TemplateMetadataCommand(5L,"T-5","Template 5","LEAD","metadata-stale",3),actor()));
+        assertEquals("TODO_TEMPLATE_VERSION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateMetadataConditionally(anyMap());
+    }
+
+    @Test void templateToggleRejectsAStaleVersionWithoutMutatingStatus()
+    {
+        ledger(true);
+        when(mapper.selectTemplateForUpdate(5L)).thenReturn(Map.of(
+                "template_id",5L,"business_type","LEAD","status","0","version",4));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).toggleTemplate(5L,
+                new TemplateToggleCommand("1","template-toggle-stale",3),actor()));
+
+        assertEquals("TODO_TEMPLATE_VERSION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateStatusConditionally(anyMap());
     }
 
     @Test void springConstructorExplicitlyInjectsConditionValidationDependencies() throws Exception

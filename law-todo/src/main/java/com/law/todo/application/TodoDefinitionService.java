@@ -14,6 +14,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.ImportTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
@@ -89,6 +90,37 @@ public class TodoDefinitionService
         if(mapper.insertTemplate(template)<=0)throw new TodoException("TODO_TEMPLATE_CREATE_FAILED","Template creation failed");
         Map<String,Object> draft=emptyDraft(longValue(template.get("templateId")));if(mapper.insertTemplateVersion(draft)<=0)throw new TodoException("TODO_TEMPLATE_DRAFT_CREATE_FAILED","Template draft creation failed");
         Long versionId=longValue(draft.get("versionId"));if(mapper.completeDefinitionAction(command.actionId(),fingerprint,versionId)<=0)throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template draft action could not be completed");return new TemplateDraftResult(longValue(template.get("templateId")),versionId);
+    }
+
+    /** Imports the versioned interchange envelope into a new template and editable draft only. */
+    @Transactional
+    public TemplateDraftResult importTemplateDraft(ImportTemplateCommand command,Actor actor)
+    {
+        if(!Integer.valueOf(1).equals(command.schemaVersion()))
+            throw new TodoException("TODO_TEMPLATE_IMPORT_SCHEMA_UNSUPPORTED","Unsupported template import schema version");
+        validateBusinessType(command.businessType());
+        TodoDefinitionDocument definition;
+        try{definition=codec.read(command.definitionJson());}
+        catch(RuntimeException invalid){throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Invalid canonical template JSON");}
+        if(!command.templateCode().equals(definition.templateCode()))
+            throw new TodoException("TODO_TEMPLATE_CODE_MISMATCH","Definition templateCode does not match the import envelope");
+        validateDefinition(definition);
+        String fingerprint=templateFingerprint("IMPORT_TEMPLATE_DRAFT",null,command,actor);
+        Long repeated=claimTemplateDraft(command.actionId(),"IMPORT_TEMPLATE_DRAFT",null,fingerprint,actor);
+        if(repeated!=null)return resultForVersion(repeated);
+        Map<String,Object> template=new HashMap<>();template.put("templateCode",command.templateCode());
+        template.put("templateName",command.templateName());template.put("businessType",command.businessType());
+        template.put("status","0");template.put("createBy",actor.userName());
+        if(mapper.insertTemplate(template)<=0)throw new TodoException("TODO_TEMPLATE_IMPORT_FAILED","Template import failed");
+        Long templateId=longValue(template.get("templateId"));Map<String,Object> draft=emptyDraft(templateId);
+        draft.put("definitionSchemaVersion",definition.schemaVersion());draft.put("definitionJson",codec.canonicalJson(definition));
+        draft.put("changeSummary",command.changeSummary());draft.put("impactScope",command.impactScope());projectLegacyRules(definition,draft);
+        if(mapper.insertTemplateVersion(draft)<=0)throw new TodoException("TODO_TEMPLATE_DRAFT_CREATE_FAILED","Imported draft creation failed");
+        Long versionId=longValue(draft.get("versionId"));
+        if(command.ruleReferences()!=null&&!command.ruleReferences().isEmpty())replaceDraftRuleReferences(versionId,command.ruleReferences());
+        if(mapper.completeDefinitionAction(command.actionId(),fingerprint,versionId)<=0)
+            throw new TodoException("TODO_DEFINITION_ACTION_CONFLICT","Template import action could not be completed");
+        return new TemplateDraftResult(templateId,versionId);
     }
 
     @Transactional
@@ -622,11 +654,14 @@ public class TodoDefinitionService
         if (sla != null && !sla.isBlank())
         {
             JSONObject rule = JSON.parseObject(sla);
-            String code = rule.getString("calendarCode");
-            if (code == null || mapper.selectCalendarByCode(code) == null)
-                throw new TodoException("TODO_SLA_CALENDAR_NOT_FOUND", "SLA calendar not found");
-            if (rule.getLongValue("minutes") <= 0)
-                throw new TodoException("TODO_SLA_MINUTES_INVALID", "SLA minutes must be positive");
+            if(!rule.isEmpty())
+            {
+                String code = rule.getString("calendarCode");
+                if (code == null || mapper.selectCalendarByCode(code) == null)
+                    throw new TodoException("TODO_SLA_CALENDAR_NOT_FOUND", "SLA calendar not found");
+                if (rule.getLongValue("minutes") <= 0)
+                    throw new TodoException("TODO_SLA_MINUTES_INVALID", "SLA minutes must be positive");
+            }
         }
         if (next != null && !next.isBlank())
         {

@@ -10,6 +10,11 @@ import org.springframework.stereotype.Service;
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationDashboard;
 import com.law.todo.application.view.TodoConfigurationViews.ReleaseRecord;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
+import com.law.todo.application.view.TodoConfigurationViews.TemplateListItem;
+import com.law.todo.application.view.TodoConfigurationViews.TemplatePage;
+import com.law.todo.application.view.TodoConfigurationViews.TemplateRuleReference;
+import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
+import com.law.todo.application.view.TodoConfigurationViews.OwnerCatalogEntry;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -32,9 +37,26 @@ public class TodoConfigurationQueryService
         Long draft=number(row,"draft_version_id","draftVersionId");
         return new TemplateConfigurationDetail(requiredNumber(row,"template_id","templateId"),text(row,"template_code","templateCode"),
                 text(row,"template_name","templateName"),text(row,"business_type","businessType"),
-                integer(row,"current_version","currentVersion"),draft,text(row,"draft_status","draftStatus"),
-                draft==null?List.of():mapper.selectDraftRuleRefs(draft));
+                text(row,"status","status"),integer(row,"version","version"),integer(row,"current_version","currentVersion"),
+                draft,text(row,"draft_status","draftStatus"),number(row,"published_version_id","publishedVersionId"),
+                integer(row,"published_version_no","publishedVersionNo"),version(row),
+                draft==null?List.of():mapper.selectDraftRuleRefs(draft).stream().map(this::ruleReference).toList());
     }
+
+    public TemplatePage templatePage(Map<String,Object> query)
+    {
+        Map<String,Object> normalized=new LinkedHashMap<>(query==null?Map.of():query);
+        int offset=paginationInteger(normalized.get("offset"),"offset")==null?0:paginationInteger(normalized.get("offset"),"offset");
+        int limit=paginationInteger(normalized.get("limit"),"limit")==null?20:paginationInteger(normalized.get("limit"),"limit");
+        if(offset<0||limit<=0||limit>200)throw invalidTemplatePagination();
+        normalized.put("offset",offset);normalized.put("limit",limit);
+        List<TemplateListItem> rows=mapper.selectTemplateConfigurations(normalized).stream().map(this::templateItem).toList();
+        return new TemplatePage(rows,mapper.countTemplateConfigurations(normalized));
+    }
+
+    public List<OwnerCatalogEntry> ownerCatalog()
+    {return mapper.selectTemplateOwnerCatalog().stream().map(row->new OwnerCatalogEntry(text(row,"type","type"),
+            text(row,"value","value"),text(row,"label","label"),text(row,"secondary_label","secondaryLabel"))).toList();}
 
     public List<ReleaseRecord> releases(Map<String,Object> query)
     {
@@ -81,6 +103,37 @@ public class TodoConfigurationQueryService
                 text(row,"impact_scope","impactScope"),number(row,"rollback_source_version_id","rollbackSourceVersionId"),
                 text(row,"published_by","publishedBy"),time(row,"published_time","publishedTime"),time(row,"update_time","updateTime"),action);
     }
+
+    private TemplateListItem templateItem(Map<String,Object> row)
+    {return new TemplateListItem(requiredNumber(row,"template_id","templateId"),text(row,"template_code","templateCode"),
+            text(row,"template_name","templateName"),text(row,"business_type","businessType"),text(row,"status","status"),
+            integer(row,"version","version"),text(row,"business_stage","businessStage"),text(row,"template_type","templateType"),
+            text(row,"priority","priority"),text(row,"publish_status","publishStatus"),number(row,"draft_version_id","draftVersionId"),
+            integer(row,"draft_version_no","draftVersionNo"),number(row,"published_version_id","publishedVersionId"),
+            integer(row,"published_version_no","publishedVersionNo"),text(row,"event_type","eventType"),
+            text(row,"owner_summary","ownerSummary"),time(row,"update_time","updateTime"));}
+
+    private TemplateRuleReference ruleReference(Map<String,Object> row)
+    {return new TemplateRuleReference(text(row,"ref_type","refType"),number(row,"ref_id_value","refIdValue"),
+            integer(row,"sort_order","sortOrder"),text(row,"rule_code","ruleCode"),text(row,"rule_name","ruleName"),
+            text(row,"rule_status","ruleStatus"),text(row,"config_json","configJson"));}
+
+    private TemplateVersionDetail version(Map<String,Object> row)
+    {
+        Long id=number(row,"detail_version_id","detailVersionId");if(id==null)return null;
+        return new TemplateVersionDetail(id,integer(row,"detail_version_no","detailVersionNo"),text(row,"detail_version_status","detailVersionStatus"),
+                number(row,"detail_source_version_id","detailSourceVersionId"),integer(row,"detail_definition_schema_version","detailDefinitionSchemaVersion"),
+                text(row,"detail_definition_json","detailDefinitionJson"),text(row,"detail_owner_rule_json","detailOwnerRuleJson"),
+                text(row,"detail_dod_rule_json","detailDodRuleJson"),text(row,"detail_sla_rule_json","detailSlaRuleJson"),
+                text(row,"detail_next_rule_json","detailNextRuleJson"),text(row,"detail_ui_schema_json","detailUiSchemaJson"),
+                text(row,"detail_definition_hash","detailDefinitionHash"),text(row,"detail_validation_report_json","detailValidationReportJson"),
+                text(row,"detail_change_summary","detailChangeSummary"),text(row,"detail_impact_scope","detailImpactScope"),
+                number(row,"detail_rollback_source_version_id","detailRollbackSourceVersionId"),text(row,"detail_published_by","detailPublishedBy"),
+                time(row,"detail_published_time","detailPublishedTime"),time(row,"detail_create_time","detailCreateTime"));
+    }
+
+    private TodoException invalidTemplatePagination()
+    {return new TodoException("TODO_CONFIGURATION_QUERY_INVALID","Template pagination must use offset >= 0 and 1 <= limit <= 200");}
 
     private Map<String,Object> require(Map<String,Object> row)
     {if(row==null||row.isEmpty())throw new TodoException("TODO_TEMPLATE_NOT_FOUND","Todo template not found");return row;}

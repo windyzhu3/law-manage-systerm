@@ -31,8 +31,17 @@ const routes = [
   ['createTodoTemplate', '/todo/config/templates', 'post'],
   ['updateTodoTemplate', '/todo/config/templates/${id}', 'put'],
   ['copyTodoTemplate', '/todo/config/templates/${id}/copy', 'post'],
+  ['importTodoTemplate', '/todo/config/templates/import', 'post'],
+  ['toggleTodoTemplate', '/todo/config/templates/${id}/toggle', 'post'],
   ['listTemplateVersions', '/todo/config/templates/${id}/versions', 'get'],
   ['updateTemplateDraft', '/todo/config/template-versions/${id}', 'put'],
+  ['preflightTemplateDraft', '/todo/config/template-versions/${id}/preflight', 'post'],
+  ['listTemplateEventCatalog', '/todo/config/template-catalog/events', 'get'],
+  ['listTemplateOwnerCatalog', '/todo/config/template-catalog/owners', 'get'],
+  ['listTemplateHandlerCatalog', '/todo/config/template-catalog/handlers', 'get'],
+  ['listTemplateValidatorCatalog', '/todo/config/template-catalog/validators', 'get'],
+  ['listTemplateAutoActionCatalog', '/todo/config/template-catalog/auto-actions', 'get'],
+  ['listTemplateRoutingTargetCatalog', '/todo/config/template-catalog/routing-targets', 'get'],
   ['listTriggerRules', '/todo/config/trigger-rules', 'get'],
   ['createTriggerRule', '/todo/config/trigger-rules', 'post'],
   ['updateTriggerRule', '/todo/config/trigger-rules/${id}', 'put'],
@@ -98,6 +107,7 @@ function check() {
 
   checkRuleLibraryPages()
   checkTriggerRulePage()
+  checkTemplatePage()
 }
 
 function source(file) {
@@ -274,6 +284,91 @@ function checkTriggerRulePage() {
   assert.strictEqual(model.pageTriggerRows(moved.rows, 2, 500)[0].triggerRuleId, 500, 'dirty pagination must slice the global snapshot')
   assert.strictEqual(model.changedTriggerSortItems(moved.rows, baseline).length, 501, 'sort payload must include every globally changed row')
   assert.deepStrictEqual(Object.keys(model.buildTriggerToggleCommand('N', 7, 'toggle-1')).sort(), ['actionId', 'enabled', 'expectedVersion'])
+}
+
+function checkTemplatePage() {
+  const page = 'src/views/todo/config/template/index.vue'
+  const drawer = 'src/views/todo/config/template/TemplateDrawer.vue'
+  const summary = 'src/views/todo/config/template/TemplateSummaryPanel.vue'
+  const stepNames = ['basic', 'trigger', 'owner', 'sla', 'dod', 'routing', 'preview', 'versions']
+  const stepFiles = [
+    'TemplateBasicStep.vue', 'TemplateTriggerStep.vue', 'TemplateOwnerStep.vue', 'TemplateSlaStep.vue',
+    'TemplateDodStep.vue', 'TemplateRoutingStep.vue', 'TemplatePreviewStep.vue', 'TemplateVersionStep.vue'
+  ].map(name => `src/views/todo/config/template/steps/${name}`)
+  const files = [page, drawer, summary, 'src/views/todo/config/template/template-draft-model.js', ...stepFiles]
+  const contents = Object.fromEntries(files.map(file => [file, source(file)]))
+  const workflow = files.map(file => contents[file]).join('\n')
+
+  requireTokens(page, contents[page], [
+    'ConfigPageShell', 'ConfigMetricCard', 'TemplateDrawer', 'TemplateSummaryPanel', 'pagination',
+    'law_todo_business_stage', 'law_todo_business_type', 'law_todo_template_type', 'law_todo_publish_status',
+    'listTodoTemplates', 'getTodoTemplate', 'importTodoTemplate', 'toggleTodoTemplate',
+    'todo:template:list', 'todo:template:create', 'todo:template:import', 'todo:template:edit',
+    'todo:template:copy', 'todo:template:toggle', 'todo:simulation:simulate', 'todo:release:publish',
+    '@row-click="openDetail"', '@click.stop="toggleRow(row)"'
+  ])
+  stepNames.forEach(name => {
+    if (!contents[drawer].includes(`name: '${name}'`)) throw new Error(`template drawer missing ${name} step`)
+  })
+  requireTokens(drawer, contents[drawer], [
+    'size="78%"', 'ConfigDetailDrawer', 'hydrateTemplateDraft', 'toTemplateDraftPayload',
+    'createTodoTemplate', 'copyTodoTemplate', 'updateTemplateDraft', 'listTemplateVersions',
+    'preflightTemplateDraft', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken',
+    'expectedDefinitionJson', 'ruleReferences', 'changeSummary', 'impactScope',
+    'TODO_DEFINITION_CANONICAL_INVALID', 'definitionError', 'publishedReadOnly', 'validateAllSteps'
+  ])
+  requireTokens(summary, contents[summary], ['触发事件', '负责人规则', 'SLA', 'DoD', '下一步规则', '版本摘要'])
+  requireTokens('template workflow', workflow, [
+    'listTemplateEventCatalog', 'listTemplateOwnerCatalog', 'listTemplateHandlerCatalog',
+    'listTemplateValidatorCatalog', 'listTemplateAutoActionCatalog', 'listSlaRules', 'listDodRules',
+    'SlaRuleDrawer', 'DodRuleDrawer', 'simulateConfiguration', 'RoutingGraphEditor',
+    'law_todo_owner_rule_type', 'law_todo_condition_operator', 'law_todo_rule_status',
+    'actionId', 'expectedVersion', 'expectedDefinitionJson'
+  ])
+  requireTokens('routing workflow', workflow, ['listTemplateRoutingTargetCatalog', 'TriggerConditionBuilder', 'payloadSchemaJson', 'termination'])
+  requireTokens('simulation freshness', workflow, ['definitionReady', 'sourceToken', '当前草稿已变更，请先保存并完成发布预检'])
+  requireTokens(summary, contents[summary], ['待办卡片预览', 'priority', 'owner'])
+  assertMethodTokens(page, contents[page], 'toggleRow', ['toggleTodoTemplate', 'actionId:', 'expectedVersion:', 'rowToggleLoading', '$confirm', 'this.load()'])
+  assertMethodTokens(drawer, contents[drawer], 'saveDraft', ['toTemplateDraftPayload', 'updateTemplateDraft', 'expectedDefinitionJson', 'ruleReferences', 'refreshSavedDraft'])
+  assertMethodTokens(drawer, contents[drawer], 'runPreflight', ['preflightTemplateDraft', 'preflightGate', 'definitionSourceToken'])
+  assertMethodTokens(drawer, contents[drawer], 'publish', ['runPreflight', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken'])
+  if (contents[drawer].includes("this.mode = 'view'")) throw new Error('template drawer must not mutate the mode prop')
+  if (workflow.includes('<el-dialog')) throw new Error('template operations may not use el-dialog')
+
+  const model = require('../src/views/todo/config/template/template-draft-model')
+  assert.throws(() => model.hydrateTemplateDraft({ editableVersion: { definitionJson: '{broken' } }),
+    error => error && error.code === 'TODO_DEFINITION_CANONICAL_INVALID', 'malformed canonical template data must fail closed')
+  const fixture = {
+    templateId: 7, templateCode: 'T-7', templateName: '模板七', businessType: 'LEAD', status: '0', version: 3,
+    editableVersion: { versionId: 9, versionNo: 4, status: 'DRAFT', definitionJson: JSON.stringify({
+      schemaVersion: 1, templateCode: 'T-7', event: { eventType: 'LEAD_ASSIGNED', payloadVersion: 1, condition: {} },
+      owner: { config: { type: 'ROLE', roleKey: 'lawyer' } }, dod: { config: {} }, sla: { config: {} },
+      ui: { config: { businessStage: 'LEAD', templateType: 'STANDARD', priority: 'HIGH' } },
+      routing: { config: { nodes: [], edges: [] } }, autoActions: [], decisionRefs: [], acceptanceRefs: []
+    }), changeSummary: '变更', impactScope: '线索' },
+    ruleReferences: [
+      { type: 'DOD', id: 12, order: 2 }, { type: 'SLA', id: 8, order: 0 }, { type: 'DOD', id: 11, order: 1 }
+    ]
+  }
+  const hydrated = model.hydrateTemplateDraft(fixture)
+  const payload = model.toTemplateDraftPayload(hydrated, 'save-9')
+  assert.deepStrictEqual(payload.ruleReferences.map(ref => `${ref.type}:${ref.id}:${ref.order}`), ['SLA:8:0', 'DOD:11:1', 'DOD:12:2'], 'rule references must retain explicit order')
+  assert.strictEqual(JSON.parse(payload.definitionJson).ui.config.priority, 'HIGH', 'canonical metadata must survive save payload generation')
+  const gate = model.createPreflightGate(9, hydrated.sourceDefinitionJson, 'hash-9')
+  assert.strictEqual(model.canPublishFromGate(gate, 9, hydrated.sourceDefinitionJson, false), true, 'matching saved definition may publish')
+  assert.strictEqual(model.canPublishFromGate(gate, 9, hydrated.sourceDefinitionJson, true), false, 'dirty draft must invalidate publish gate')
+  assert.strictEqual(model.invalidatePreflightGate(), null, 'gate invalidation must be explicit')
+  const unsaved = model.emptyDraft()
+  unsaved.event = { eventType: 'LEAD_ASSIGNED', payloadVersion: 1, condition: { field: 'ownerId' } }
+  unsaved.owner.config = { type: 'ROLE', candidates: ['lawyer'] }
+  unsaved.slaRuleId = 8
+  unsaved.dodRuleIds = [11, 12]
+  unsaved.routing.config = { start: 'a', nodes: [{ key: 'a', type: 'TASK' }], edges: [] }
+  const created = model.mergeCreatedAggregate(unsaved, { templateId: 77, versionId: 99, versionNo: 1 }, { sourceDefinitionJson: '{"saved":true}', templateVersion: 0 })
+  assert.strictEqual(created.event.eventType, 'LEAD_ASSIGNED', 'create/copy must retain the unsaved event')
+  assert.deepStrictEqual(created.owner.config.candidates, ['lawyer'], 'create/copy must retain the unsaved owner')
+  assert.deepStrictEqual(created.dodRuleIds, [11, 12], 'create/copy must retain ordered DoD references')
+  assert.strictEqual(created.versionId, 99, 'create/copy must merge the persisted aggregate identity')
 }
 
 runNegativeFixture()

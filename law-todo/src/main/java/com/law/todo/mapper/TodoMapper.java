@@ -62,8 +62,12 @@ public interface TodoMapper
     Long selectDepartmentIdByCode(String departmentCode);
     List<Map<String,Object>> selectTemplates();
     List<Map<String,Object>> selectPublishedTemplateVersionCatalog(Long templateId);
+    List<Map<String,Object>> selectRoutingTargetCatalog();
     int insertTemplate(Map<String,Object> value);
     int updateTemplate(Map<String,Object> value);
+    int updateTemplateMetadataConditionally(Map<String,Object> value);
+    Map<String,Object> selectTemplateForUpdate(Long templateId);
+    int updateTemplateStatusConditionally(Map<String,Object> value);
     List<Map<String,Object>> selectAllTriggerRules();
     int insertTriggerRule(Map<String,Object> value);
     int updateTriggerRule(Map<String,Object> value);

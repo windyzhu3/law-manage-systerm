@@ -32,6 +32,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.ImportTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
@@ -107,6 +108,35 @@ class TodoDefinitionServiceTest
 
         assertEquals(new TodoDefinitionService.TemplateDraftResult(12L,22L),first);assertEquals(first,replay);
         verify(mapper,org.mockito.Mockito.times(1)).insertTemplate(anyMap());verify(mapper,org.mockito.Mockito.times(1)).insertTemplateVersion(anyMap());
+    }
+
+    @Test void importCreatesOnlyANewDraftAndPersistsTheCanonicalDefinition()
+    {
+        templateDraftLedger("import-template");
+        when(mapper.insertTemplate(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("templateId",12L);return 1;});
+        when(mapper.insertTemplateVersion(anyMap())).thenAnswer(invocation->{Map<String,Object> row=invocation.getArgument(0);row.put("versionId",22L);return 1;});
+        ImportTemplateCommand command=new ImportTemplateCommand("import-template",1,"LEAD_IMPORTED","Imported lead",
+                "LEAD",canonical("LEAD_IMPORTED"),List.of(),"Imported for review","LEAD");
+
+        TodoDefinitionService.TemplateDraftResult result=service().importTemplateDraft(command,actor);
+
+        assertEquals(new TodoDefinitionService.TemplateDraftResult(12L,22L),result);
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> version=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertTemplateVersion(version.capture());
+        assertEquals("DRAFT",version.getValue().get("status"));
+        assertEquals("LEAD_IMPORTED",new TodoDefinitionCodec().read(String.valueOf(version.getValue().get("definitionJson"))).templateCode());
+        verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
+    }
+
+    @Test void importRejectsAnEnvelopeWhoseTemplateCodeDoesNotMatchTheCanonicalDocument()
+    {
+        ImportTemplateCommand command=new ImportTemplateCommand("import-mismatch",1,"LEAD_IMPORTED","Imported lead",
+                "LEAD",canonical("OTHER_CODE"),List.of(),null,null);
+
+        TodoException error=assertThrows(TodoException.class,()->service().importTemplateDraft(command,actor));
+
+        assertEquals("TODO_TEMPLATE_CODE_MISMATCH",error.getBusinessCode());
+        verify(mapper,never()).insertTemplate(anyMap());
     }
 
     @Test void aggregateClaimRejectsDifferentCreateRequestAndLeavesNoSecondWrite()

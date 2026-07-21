@@ -11,11 +11,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.application.command.TodoManagementCommands.TemplateCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerSortCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
+import com.law.todo.application.view.TodoConfigurationViews.EventCatalogEntry;
+import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.expression.ConditionValidator;
@@ -33,10 +37,50 @@ public class TodoTemplateService
     @Autowired public TodoTemplateService(TodoMapper mapper,TodoEventCatalogService eventCatalog,ConditionValidator conditionValidator,TodoDictionaryValidationPort dictionaries){this.mapper=mapper;this.eventCatalog=eventCatalog;this.conditionValidator=conditionValidator;this.dictionaries=dictionaries;}
     public List<Map<String,Object>> listTemplates(){return mapper.selectTemplates();}
     public List<Map<String,Object>> listEventCatalogs(){return eventCatalog.entries();}
+    public List<EventCatalogEntry> listTemplateEventCatalog()
+    {return eventCatalog.entries().stream().map(row->new EventCatalogEntry(text(value(row,"event_type","eventType")),
+            integer(value(row,"payload_version","payloadVersion")),text(value(row,"business_object_type","businessObjectType")),
+            text(value(row,"payload_schema_json","payloadSchemaJson")),text(value(row,"status","status")))).toList();}
     public List<TriggerTemplateVersionCatalogView> listPublishedVersionCatalog(Long templateId)
     {List<Map<String,Object>> rows=mapper.selectPublishedTemplateVersionCatalog(templateId);if(rows==null)return List.of();return rows.stream().map(row->new TriggerTemplateVersionCatalogView(number(value(row,"version_id","versionId")),integer(value(row,"version_no","versionNo")),text(value(row,"status","status")))).toList();}
+    public List<RoutingTargetCatalogEntry> listRoutingTargetCatalog()
+    {List<Map<String,Object>> rows=mapper.selectRoutingTargetCatalog();if(rows==null)return List.of();return rows.stream().map(row->new RoutingTargetCatalogEntry(
+            number(value(row,"template_id","templateId")),text(value(row,"template_code","templateCode")),
+            text(value(row,"template_name","templateName")),text(value(row,"business_type","businessType")),
+            number(value(row,"version_id","versionId")),integer(value(row,"version_no","versionNo")),
+            text(value(row,"status","status")))).toList();}
     @Transactional public int saveTemplate(TemplateCommand command,String operator){validateBusinessType(command.businessType());Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());value.put("templateName",command.templateName());value.put("businessType",command.businessType());value.put("status",command.status()==null?"0":command.status());value.put("createBy",operator);value.put("updateBy",operator);return saveTemplate(value);}
+    @Transactional public int updateTemplateMetadata(TemplateMetadataCommand command,Actor actor)
+    {
+        validateBusinessType(command.businessType());String fingerprint=fingerprint("UPDATE_TEMPLATE",command.templateId(),command.expectedVersion(),command,actor);
+        if(claimTemplateAction(command.actionId(),"UPDATE_TEMPLATE",command.templateId(),fingerprint,actor,command)!=null)return 1;
+        Map<String,Object> current=mapper.selectTemplateForUpdate(command.templateId());
+        if(current==null||current.isEmpty())throw new TodoException("TODO_TEMPLATE_NOT_FOUND","Todo template not found");
+        if(!Objects.equals(command.expectedVersion(),integer(value(current,"version","version"))))
+            throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
+        Map<String,Object> value=new HashMap<>();value.put("templateId",command.templateId());value.put("templateCode",command.templateCode());
+        value.put("templateName",command.templateName());value.put("businessType",command.businessType());
+        value.put("expectedVersion",command.expectedVersion());value.put("updateBy",actor.userName());
+        if(mapper.updateTemplateMetadataConditionally(value)<=0)
+            throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
+        complete(command.actionId(),fingerprint,command.templateId(),"TODO_TEMPLATE_ACTION_CONFLICT");return 1;
+    }
     @Transactional public int saveTemplate(Map<String,Object> value){required(value,"templateCode");required(value,"templateName");required(value,"businessType");return value.get("templateId")==null?mapper.insertTemplate(value):mapper.updateTemplate(value);}
+    @Transactional public void toggleTemplate(long templateId,TemplateToggleCommand command,Actor actor)
+    {
+        String fingerprint=fingerprint("TOGGLE_TEMPLATE",templateId,command.expectedVersion(),command,actor);
+        if(claimTemplateAction(command.actionId(),"TOGGLE_TEMPLATE",templateId,fingerprint,actor,command)!=null)return;
+        Map<String,Object> locked=mapper.selectTemplateForUpdate(templateId);
+        if(locked==null||locked.isEmpty())throw new TodoException("TODO_TEMPLATE_NOT_FOUND","Todo template not found");
+        if(!Objects.equals(command.expectedVersion(),integer(value(locked,"version","version"))))
+            throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
+        validateBusinessType(text(value(locked,"business_type","businessType")));
+        Map<String,Object> row=new HashMap<>();row.put("templateId",templateId);row.put("status",command.status());
+        row.put("expectedVersion",command.expectedVersion());row.put("updateBy",actor.userName());
+        if(mapper.updateTemplateStatusConditionally(row)<=0)
+            throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT","Template changed; refresh before retrying");
+        complete(command.actionId(),fingerprint,templateId,"TODO_TEMPLATE_ACTION_CONFLICT");
+    }
     public List<Map<String,Object>> listTriggers(){return mapper.selectAllTriggerRules();}
     @Transactional public int saveTrigger(TriggerCommand command){return saveTrigger(command,new Actor(0L,"system",0L));}
     @Transactional public int saveTrigger(TriggerCommand command,Actor actor){validateBusinessType(command.businessType());requireExpectedVersion(command.triggerRuleId(),command.expectedVersion());String type=command.triggerRuleId()==null?"CREATE_TRIGGER":"UPDATE_TRIGGER";String fingerprint=fingerprint(type,command.triggerRuleId(),command.expectedVersion(),command,actor);Long replay=claim(command.actionId(),type,command.triggerRuleId(),fingerprint,actor,command);if(replay!=null)return 1;Map<String,Object> value=new HashMap<>();value.put("triggerRuleId",command.triggerRuleId());value.put("eventType",command.eventType());value.put("templateId",command.templateId());value.put("templateVersionId",command.templateVersionId());value.put("businessType",command.businessType());value.put("enabled",command.enabled()==null?"Y":command.enabled());value.put("conditionJson",command.conditionJson());value.put("payloadVersion",command.payloadVersion()==null?1:command.payloadVersion());value.put("expectedVersion",command.expectedVersion()==null?0:command.expectedVersion());value.put("createBy",actor.userName());value.put("updateBy",actor.userName());int saved=saveTrigger(value);Long id=command.triggerRuleId()==null?Long.valueOf(String.valueOf(value.get("triggerRuleId"))):command.triggerRuleId();complete(command.actionId(),fingerprint,id,"TODO_TRIGGER_ACTION_CONFLICT");return saved;}
@@ -131,6 +175,27 @@ public class TodoTemplateService
         }
         if(inserted<=0||!"CLAIMED".equals(status))
             throw new TodoException("TODO_TRIGGER_ACTION_CONFLICT","recorded action is incomplete");
+        return null;
+    }
+    private Long claimTemplateAction(String actionId,String actionType,Long source,String fingerprint,Actor actor,Object command)
+    {
+        if(actionId==null||actionId.isBlank())throw new TodoException("TODO_TEMPLATE_ACTION_REQUIRED","actionId is required");
+        Map<String,Object> action=new HashMap<>();action.put("actionId",actionId);action.put("actionType",actionType);
+        action.put("entityType","TEMPLATE");action.put("sourceEntityId",source);action.put("operatorId",actor.userId());
+        action.put("operatorName",actor.userName());action.put("operatorDeptId",actor.deptId());action.put("requestFingerprint",fingerprint);
+        action.put("payloadJson",JSON.toJSONString(command));int inserted=mapper.insertDefinitionActionClaim(action);
+        Map<String,Object> locked=mapper.selectDefinitionActionForUpdate(actionId);
+        if(locked==null||!actionType.equals(text(value(locked,"action_type","actionType")))
+                ||!"TEMPLATE".equals(text(value(locked,"entity_type","entityType")))
+                ||!fingerprint.equals(text(value(locked,"request_fingerprint","requestFingerprint")))
+                ||!Objects.equals(source,number(value(locked,"source_entity_id","sourceEntityId")))
+                ||!Objects.equals(actor.userId(),number(value(locked,"operator_id","operatorId")))
+                ||!Objects.equals(actor.userName(),text(value(locked,"operator_name","operatorName")))
+                ||!Objects.equals(actor.deptId(),number(value(locked,"operator_dept_id","operatorDeptId"))))
+            throw new TodoException("TODO_TEMPLATE_ACTION_CONFLICT","action id conflicts");
+        Long entity=number(value(locked,"entity_id","entityId"));String status=text(value(locked,"action_status","actionStatus"));
+        if(entity!=null){if(!"APPLIED".equals(status))throw new TodoException("TODO_TEMPLATE_ACTION_CONFLICT","action incomplete");return entity;}
+        if(inserted<=0||!"CLAIMED".equals(status))throw new TodoException("TODO_TEMPLATE_ACTION_CONFLICT","recorded action is incomplete");
         return null;
     }
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}

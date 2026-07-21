@@ -24,8 +24,17 @@ export function getTodoTemplate(id) { return request({ url: `/todo/config/templa
 export function createTodoTemplate(data) { return request({ url: '/todo/config/templates', method: 'post', data }) }
 export function updateTodoTemplate(id, data) { return request({ url: `/todo/config/templates/${id}`, method: 'put', data }) }
 export function copyTodoTemplate(id, data) { return request({ url: `/todo/config/templates/${id}/copy`, method: 'post', data }) }
+export function importTodoTemplate(data) { return request({ url: '/todo/config/templates/import', method: 'post', data }) }
+export function toggleTodoTemplate(id, data) { return request({ url: `/todo/config/templates/${id}/toggle`, method: 'post', data }) }
 export function listTemplateVersions(id) { return request({ url: `/todo/config/templates/${id}/versions`, method: 'get' }) }
 export function updateTemplateDraft(id, data) { return request({ url: `/todo/config/template-versions/${id}`, method: 'put', data }) }
+export function preflightTemplateDraft(id) { return request({ url: `/todo/config/template-versions/${id}/preflight`, method: 'post' }) }
+export function listTemplateEventCatalog() { return request({ url: '/todo/config/template-catalog/events', method: 'get' }) }
+export function listTemplateOwnerCatalog() { return request({ url: '/todo/config/template-catalog/owners', method: 'get' }) }
+export function listTemplateHandlerCatalog() { return request({ url: '/todo/config/template-catalog/handlers', method: 'get' }) }
+export function listTemplateValidatorCatalog() { return request({ url: '/todo/config/template-catalog/validators', method: 'get' }) }
+export function listTemplateAutoActionCatalog() { return request({ url: '/todo/config/template-catalog/auto-actions', method: 'get' }) }
+export function listTemplateRoutingTargetCatalog() { return request({ url: '/todo/config/template-catalog/routing-targets', method: 'get' }) }
 
 export function listTriggerRules(params) { return request({ url: '/todo/config/trigger-rules', method: 'get', params }) }
 export function createTriggerRule(data) { return request({ url: '/todo/config/trigger-rules', method: 'post', data }) }

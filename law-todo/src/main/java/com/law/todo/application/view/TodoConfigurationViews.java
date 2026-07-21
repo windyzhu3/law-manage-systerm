@@ -32,13 +32,37 @@ public final class TodoConfigurationViews
             String errorMessagesJson,String status,Integer version,long referenceCount,String createBy,
             LocalDateTime createTime,String updateBy,LocalDateTime updateTime) { }
 
+    public record TemplateListItem(long templateId,String templateCode,String templateName,String businessType,String status,
+            Integer version,String businessStage,String templateType,String priority,String publishStatus,
+            Long draftVersionId,Integer draftVersionNo,Long publishedVersionId,Integer publishedVersionNo,
+            String eventType,String ownerSummary,LocalDateTime updateTime) { }
+
+    public record TemplatePage(List<TemplateListItem> rows,long total)
+    { public TemplatePage { rows=rows==null?List.of():List.copyOf(rows); } }
+
+    public record TemplateRuleReference(String type,Long id,Integer order,String ruleCode,String ruleName,
+            String ruleStatus,String configJson) { }
+
+    public record TemplateVersionDetail(Long versionId,Integer versionNo,String status,Long sourceVersionId,
+            Integer definitionSchemaVersion,String definitionJson,String ownerRuleJson,String dodRuleJson,
+            String slaRuleJson,String nextRuleJson,String uiSchemaJson,String definitionHash,
+            String validationReportJson,String changeSummary,String impactScope,Long rollbackSourceVersionId,
+            String publishedBy,LocalDateTime publishedTime,LocalDateTime createTime) { }
+
+    public record OwnerCatalogEntry(String type,String value,String label,String secondaryLabel) { }
+    public record EventCatalogEntry(String eventType,Integer payloadVersion,String businessObjectType,
+            String payloadSchemaJson,String status) { }
+    public record RoutingTargetCatalogEntry(Long templateId,String templateCode,String templateName,String businessType,
+            Long versionId,Integer versionNo,String status) { }
+
     public record TemplateConfigurationDetail(long templateId,String templateCode,String templateName,String businessType,
-            Integer currentVersion,Long draftVersionId,String draftStatus,List<Map<String,Object>> ruleReferences)
+            String status,Integer version,Integer currentVersion,Long draftVersionId,String draftStatus,
+            Long publishedVersionId,Integer publishedVersionNo,TemplateVersionDetail editableVersion,
+            List<TemplateRuleReference> ruleReferences)
     {
         public TemplateConfigurationDetail
         {
-            ruleReferences=ruleReferences==null?List.of():ruleReferences.stream()
-                    .map(TodoConfigurationViews::immutableMap).toList();
+            ruleReferences=ruleReferences==null?List.of():List.copyOf(ruleReferences);
         }
     }
 

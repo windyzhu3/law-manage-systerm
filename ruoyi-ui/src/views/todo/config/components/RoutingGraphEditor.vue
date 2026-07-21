@@ -54,7 +54,8 @@
           <el-checkbox v-model="row.default" :disabled="readonly" @change="commit">默认</el-checkbox>
           <el-input v-if="nodeType(row.from) !== 'LOOP'" v-model.trim="row.branchKey" :disabled="readonly" placeholder="branchKey" @change="commit" />
           <el-select v-else v-model="row.branchKey" :disabled="readonly" clearable placeholder="LOOP 分支" @change="commit"><el-option label="BODY" value="BODY" /><el-option label="EXIT" value="EXIT" /></el-select>
-          <el-input :value="json(row.condition)" :disabled="readonly" placeholder="条件 JSON" @change="setJson(row, 'condition', $event)" />
+          <trigger-condition-builder v-if="nodeType(row.from) === 'DECISION'" :value="conditionJson(row)" :payload-schema-json="payloadSchemaJson" :readonly="readonly" @input="setEdgeCondition(row,$event)" />
+          <span v-else class="condition-note">仅 DECISION 连线需要条件；END 节点表示流程 termination。</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="65"><template slot-scope="{ $index }"><el-button type="text" :disabled="readonly" @click="removeEdge($index)">删除</el-button></template></el-table-column>
@@ -65,6 +66,7 @@
 </template>
 
 <script>
+import TriggerConditionBuilder from '../trigger/TriggerConditionBuilder'
 const NODE_TYPES = Object.freeze(['TASK', 'DECISION', 'FORK', 'JOIN', 'LOOP', 'END'])
 
 function clone(value) { return JSON.parse(JSON.stringify(value == null ? {} : value)) }
@@ -75,7 +77,8 @@ function normalize(value) {
 
 export default {
   name: 'RoutingGraphEditor',
-  props: { value: { type: Object, default: () => ({}) }, readonly: Boolean, currentVersionId: [Number, String], versions: { type: Array, default: () => [] } },
+  components: { TriggerConditionBuilder },
+  props: { value: { type: Object, default: () => ({}) }, readonly: Boolean, currentVersionId: [Number, String], versions: { type: Array, default: () => [] }, routingTargets: { type: Array, default: () => [] }, payloadSchemaJson: { type: String, default: '{}' } },
   data() { return { nodeTypes: NODE_TYPES, graph: normalize(this.value), jsonError: '' } },
   computed: {
     localErrors() {
@@ -116,9 +119,11 @@ export default {
     versionOptions(node) {
       const current = Number(this.currentVersionId)
       if (node.key === this.graph.start) return current ? [{ id: current, label: '当前定义版本（起点）' }] : []
-      const options = this.versions.filter(row => row.status === 'PUBLISHED').map(row => ({ id: Number(row.version_id || row.versionId), label: `v${row.version_no || row.versionNo} · 已发布` }))
+      const options = this.routingTargets.map(row => ({ id: Number(row.versionId || row.version_id), label: `${row.templateName || row.template_name} · v${row.versionNo || row.version_no} · 已发布` }))
       return options
     },
+    conditionJson(row) { return row.condition && Object.keys(row.condition).length ? JSON.stringify(row.condition) : '' },
+    setEdgeCondition(row, value) { try { this.$set(row, 'condition', value ? JSON.parse(value) : {}); this.jsonError = ''; this.commit() } catch (_) { this.jsonError = '连线条件不是有效 JSON' } },
     joinBranches(node) { return Array.isArray(node.branches) ? node.branches.join(',') : '' },
     setBranches(node, value) { this.$set(node, 'branches', String(value || '').split(',').map(item => item.trim()).filter(Boolean)); this.commit() },
     setJson(target, field, value) {
@@ -134,7 +139,7 @@ export default {
     },
     addNode() {
       const index = this.graph.nodes.length + 1
-      const published = this.versions.find(row => row.status === 'PUBLISHED')
+      const published = this.routingTargets[0]
       const node = { key: `node_${index}`, type: 'TASK', templateVersionId: published ? Number(published.version_id || published.versionId) : null }
       this.graph.nodes.push(node)
       if (!this.graph.start) this.graph.start = node.key

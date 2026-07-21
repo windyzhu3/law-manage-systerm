@@ -36,6 +36,8 @@ import com.law.todo.application.TodoTemplateService;
 import com.law.todo.application.view.TriggerTemplateVersionCatalogView;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateCommand;
+import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.domain.TodoException;
 import com.ruoyi.common.core.domain.entity.SysUser;
@@ -76,6 +78,16 @@ class TodoConfigurationControllerValidationTest
         assertEquals("TODO_CONFIGURATION_PATH_BODY_MISMATCH",failure.getBusinessCode());
     }
 
+    @Test void rejectsTemplateMetadataEditWithoutConcurrencyAndActionTokens() throws Exception
+    {
+        MockMvcBuilders.standaloneSetup(controller()).setValidator(validator()).build()
+                .perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/todo/config/templates/5")
+                        .contentType("application/json").content("""
+                        {"templateId":5,"templateCode":"T-5","templateName":"Template 5","businessType":"LEAD"}
+                        """))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void rejectsMalformedReleasePaginationThroughTypedQueryContract() throws Exception
     {
@@ -94,6 +106,12 @@ class TodoConfigurationControllerValidationTest
         assertPermission("triggerEventCatalog","todo:trigger:list");
         assertPermission("triggerTemplateCatalog","todo:trigger:list");
         assertPermission("triggerTemplateVersions","todo:trigger:list");
+        assertPermission("importTemplate","todo:template:import");
+        assertPermission("toggleTemplate","todo:template:toggle");
+        assertPermissionExpression("preflightTemplateDraft","@ss.hasAnyPermi('todo:release:publish,todo:simulation:simulate')");
+        assertPermission("templateEventCatalog","todo:template:list");
+        assertPermission("templateOwnerCatalog","todo:template:list");
+        assertPermission("templateRoutingTargetCatalog","todo:template:list");
     }
 
     @Test
@@ -159,10 +177,21 @@ class TodoConfigurationControllerValidationTest
         assertFalse(Arrays.stream(configuration.value()).anyMatch("/todo/template"::equals));
     }
 
+    @Test void keepsLegacyTemplateWriteContractSeparateFromConfigurationMetadataConcurrencyContract() throws Exception
+    {
+        assertEquals(TemplateCommand.class,TodoTemplateController.class.getDeclaredMethod("update",TemplateCommand.class).getParameterTypes()[0]);
+        assertEquals(TemplateMetadataCommand.class,TodoConfigurationController.class.getDeclaredMethod("updateTemplate",Long.class,TemplateMetadataCommand.class).getParameterTypes()[1]);
+    }
+
     private void assertPermission(String methodName,String expected) throws Exception
     {
         Method method=Arrays.stream(TodoConfigurationController.class.getDeclaredMethods()).filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
         assertEquals("@ss.hasPermi('"+expected+"')",method.getAnnotation(PreAuthorize.class).value());
+    }
+    private void assertPermissionExpression(String methodName,String expected) throws Exception
+    {
+        Method method=Arrays.stream(TodoConfigurationController.class.getDeclaredMethods()).filter(candidate -> candidate.getName().equals(methodName)).findFirst().orElseThrow();
+        assertEquals(expected,method.getAnnotation(PreAuthorize.class).value());
     }
 
     private LocalValidatorFactoryBean validator(){LocalValidatorFactoryBean validator=new LocalValidatorFactoryBean();validator.afterPropertiesSet();return validator;}

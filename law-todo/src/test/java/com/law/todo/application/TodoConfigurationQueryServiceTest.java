@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationDashboard;
 import com.law.todo.application.view.TodoConfigurationViews.ReleaseRecord;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
+import com.law.todo.application.view.TodoConfigurationViews.TemplatePage;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -51,7 +52,29 @@ class TodoConfigurationQueryServiceTest
 
         assertEquals(7L,detail.templateId());
         assertEquals(9L,detail.draftVersionId());
-        assertEquals(List.of("DOD","SLA","DOD"),detail.ruleReferences().stream().map(ref->ref.get("ref_type")).toList());
+        assertEquals(List.of("DOD","SLA","DOD"),detail.ruleReferences().stream().map(ref->ref.type()).toList());
+    }
+
+    @Test void templatePageUsesDatabasePaginationAndPreservesOnlySupportedFilters()
+    {
+        Map<String,Object> row=Map.ofEntries(Map.entry("template_id",7L),Map.entry("template_code","T-7"),
+                Map.entry("template_name","Template 7"),Map.entry("business_type","LEAD"),Map.entry("status","0"),
+                Map.entry("version",2),Map.entry("business_stage","LEAD"),Map.entry("template_type","STANDARD"),
+                Map.entry("priority","HIGH"),Map.entry("publish_status","DRAFT"),Map.entry("draft_version_id",9L),
+                Map.entry("draft_version_no",4),Map.entry("event_type","LEAD_ASSIGNED"),Map.entry("owner_summary","ROLE"));
+        when(mapper.selectTemplateConfigurations(anyMap())).thenReturn(List.of(row));
+        when(mapper.countTemplateConfigurations(anyMap())).thenReturn(23L);
+
+        TemplatePage page=service().templatePage(Map.of("keyword","T-7","businessType","LEAD",
+                "businessStage","LEAD","templateType","STANDARD","publishStatus","DRAFT","status","0",
+                "offset",20,"limit",10));
+
+        assertEquals(23L,page.total());assertEquals(1,page.rows().size());
+        assertEquals("LEAD_ASSIGNED",page.rows().get(0).eventType());
+        ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).selectTemplateConfigurations(query.capture());
+        assertEquals(20,query.getValue().get("offset"));assertEquals(10,query.getValue().get("limit"));
+        assertEquals("STANDARD",query.getValue().get("templateType"));
     }
 
     @Test void missingTemplateHasTheStableNotFoundError()
