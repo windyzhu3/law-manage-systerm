@@ -146,10 +146,10 @@
 - Consumes: event schemas and enriched business-object directory.
 - Produces: object-backed, schema-driven, read-only simulation with ordered results.
 
-- [ ] Write failing backend tests for sample isolation and ordered diagnostics.
-- [ ] Write failing frontend contracts for remote object search, sample fallback, selected object card, typed payload form, and ordered result steps.
-- [ ] Implement the workspace using existing read-only simulation APIs.
-- [ ] Run focused backend, frontend, and no-side-effect regression tests.
+- [x] Write failing backend tests for sample isolation and ordered diagnostics.
+- [x] Write failing frontend contracts for remote object search, sample fallback, selected object card, typed payload form, and ordered result steps.
+- [x] Implement the workspace using existing read-only simulation APIs.
+- [x] Run focused backend, frontend, and no-side-effect regression tests.
 
 ### Task 8: Publish guards, E2E, and acceptance audit
 

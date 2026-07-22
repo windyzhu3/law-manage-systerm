@@ -523,11 +523,13 @@ async function checkSimulationAndReleasePages() {
   const simulationPage = 'src/views/todo/config/simulation/index.vue'
   const simulationDrawer = 'src/views/todo/config/simulation/SimulationDrawer.vue'
   const simulationResult = 'src/views/todo/config/simulation/SimulationResult.vue'
+  const businessPicker = 'src/views/todo/config/simulation/BusinessObjectPicker.vue'
+  const schemaPayloadForm = 'src/views/todo/config/simulation/SchemaPayloadForm.vue'
   const releasePage = 'src/views/todo/config/release/index.vue'
   const releaseDrawer = 'src/views/todo/config/release/ReleaseRecordDrawer.vue'
   const semanticDiff = 'src/views/todo/config/release/VersionSemanticDiff.vue'
   const contents = Object.fromEntries([
-    simulationPage, simulationDrawer, simulationResult, releasePage, releaseDrawer, semanticDiff
+    simulationPage, simulationDrawer, simulationResult, businessPicker, schemaPayloadForm, releasePage, releaseDrawer, semanticDiff
   ].map(file => [file, source(file)]))
 
   requireTokens(simulationPage, contents[simulationPage], [
@@ -538,15 +540,18 @@ async function checkSimulationAndReleasePages() {
   requireTokens(simulationDrawer, contents[simulationDrawer], [
     'ConfigDetailDrawer', 'SimulationResult', 'simulateConfiguration', 'versionId',
     'eventType', 'payloadVersion', 'businessType', 'businessId', 'payload', 'effectiveAt',
-    'expectedDefinitionHash', 'listBusinessObjects', 'listTodoTemplates', 'remote-method',
+    'expectedDefinitionHash', 'BusinessObjectPicker', 'SchemaPayloadForm', 'listTodoTemplates', 'remote-method',
     '只读模拟，不创建真实待办'
   ])
+  requireTokens(businessPicker, contents[businessPicker], ['listBusinessObjects', 'sampleFallback', 'emptyReason', 'remote-method'])
+  requireTokens(schemaPayloadForm, contents[schemaPayloadForm], ['schema.properties', 'requiredFields', 'samplePayloadJson', 'validate'])
   requireTokens(simulationResult, contents[simulationResult], [
-    '状态变化', '命中模板', '负责人', 'SLA', 'DoD', '下一步路由', '待办卡片预览', '技术日志',
+    '事件匹配', '模板预检', '负责人解析', 'SLA 计算', '完成条件', '下一步路由', '待办卡片预览', '技术诊断',
     'simulation.trigger', 'simulation.owner', 'simulation.sla', 'simulation.form', 'simulation.routes'
   ])
-  const ordered = ['状态变化', '命中模板', '负责人', 'SLA', 'DoD', '下一步路由', '待办卡片预览', '技术日志']
-    .map(token => contents[simulationResult].indexOf(token))
+  const orderedSource = contents[simulationResult].slice(contents[simulationResult].indexOf('orderedSteps()'))
+  const ordered = ['事件匹配', '模板预检', '负责人解析', 'SLA 计算', '完成条件', '下一步路由', '待办卡片预览']
+    .map(token => orderedSource.indexOf(token))
   assert(ordered.every(index => index >= 0) && ordered.every((index, position) => position === 0 || ordered[position - 1] < index),
     'simulation result sections must follow execution order')
 
