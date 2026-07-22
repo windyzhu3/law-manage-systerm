@@ -23,6 +23,7 @@ import com.law.todo.application.TodoDefinitionCatalogService;
 import com.law.todo.application.TodoAutoActionCapabilityCatalogService;
 import com.law.todo.application.TodoDefinitionService;
 import com.law.todo.application.TodoDodRuleManagementService;
+import com.law.todo.application.TodoEventResourceService;
 import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -37,6 +38,8 @@ import com.law.todo.application.command.TodoDefinitionCommands.PublishDraftComma
 import com.law.todo.application.command.TodoDefinitionCommands.RollbackDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.ReleaseDraftCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
+import com.law.todo.application.command.TodoResourceCommands.EventResourceCommand;
+import com.law.todo.application.command.TodoResourceCommands.EventResourceStatusCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
@@ -69,22 +72,42 @@ public class TodoConfigurationController extends BaseController
     private final TodoConfigurationSimulationService simulation;
     private final TodoDefinitionCatalogService catalogs;
     private final TodoAutoActionCapabilityCatalogService autoActions;
+    private final TodoEventResourceService eventResources;
 
     @Autowired
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation,
-            TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions)
-    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;}
+            TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions,
+            TodoEventResourceService eventResources)
+    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;}
 
     /** Focused-test compatibility; production uses the fully injected catalogue constructor. */
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation)
-    {this(query,sla,dod,templates,definitions,diff,simulation,null,null);}
+    {this(query,sla,dod,templates,definitions,diff,simulation,null,null,null);}
 
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/dashboard") public AjaxResult dashboard(){return success(query.dashboard());}
+
+    @PreAuthorize("@ss.hasPermi('todo:resource:list')")
+    @GetMapping("/resources/events") public TableDataInfo eventResources(@Valid @ModelAttribute EventResourceListQuery value)
+    {var result=eventResources.list(value.toMap());return new TableDataInfo(result.rows(),result.total());}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query')")
+    @GetMapping("/resources/events/{id}") public AjaxResult eventResource(@PathVariable long id){return success(eventResources.detail(id));}
+    @PreAuthorize("@ss.hasPermi('todo:resource:add')")
+    @PostMapping("/resources/events") public AjaxResult createEventResource(@Valid @RequestBody EventResourceCommand value)
+    {requireNew(value.eventCatalogId());return success(eventResources.save(value,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:resource:edit')")
+    @PutMapping("/resources/events/{id}") public AjaxResult updateEventResource(@PathVariable Long id,@Valid @RequestBody EventResourceCommand value)
+    {requireSame(id,value.eventCatalogId());return success(eventResources.save(value,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:resource:add')")
+    @PostMapping("/resources/events/{id}/versions") public AjaxResult createEventResourceVersion(@PathVariable long id,@Valid @RequestBody ActionIdCommand value)
+    {return success(eventResources.createNextVersion(id,value.actionId(),actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:resource:status')")
+    @PostMapping("/resources/events/{id}/status") public AjaxResult changeEventResourceStatus(@PathVariable long id,@Valid @RequestBody EventResourceStatusCommand value)
+    {eventResources.changeStatus(id,value,actor());return success();}
 
     @PreAuthorize("@ss.hasPermi('todo:sla-rule:list')")
     @GetMapping("/sla-rules") public TableDataInfo slaRules(@Valid @ModelAttribute RuleListQuery value){return page(sla.list(value.toMap()),value.pageNum(),value.pageSize());}
@@ -227,4 +250,11 @@ public class TodoConfigurationController extends BaseController
     {public ReleaseListQuery{offset=offset==null?0:offset;limit=limit==null?20:limit;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("templateId",templateId);result.put("templateCode",templateCode);result.put("keyword",keyword);result.put("status",status);result.put("publisher",publisher);result.put("beginTime",beginTime);result.put("endTime",endTime);result.put("offset",offset);result.put("limit",limit);return result;}}
     public record BusinessObjectQuery(@NotBlank String businessType,String keyword,@Min(1) Integer pageNum,@Min(1) @Max(100) Integer pageSize)
     {public BusinessObjectQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}}
+    public record EventResourceListQuery(String keyword,String businessObjectType,String schemaStatus,String status,
+            @Min(1) Integer pageNum,@Min(1) @Max(200) Integer pageSize)
+    {public EventResourceListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}
+        public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);
+            result.put("businessObjectType",businessObjectType);result.put("schemaStatus",schemaStatus);result.put("status",status);
+            result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
+    public record ActionIdCommand(@NotBlank String actionId) { }
 }

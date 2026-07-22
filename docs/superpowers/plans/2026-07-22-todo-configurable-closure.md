@@ -50,9 +50,9 @@
 **Interfaces:**
 - Produces: paged event resources, detail, create v1, create next draft version, update draft, activate/disable, dependency view.
 
-- [ ] Write failing tests for schema validation, immutable active versions, optimistic locking, sample validation, and activation guards.
-- [ ] Implement commands, views, mapper methods, service, stable errors, and controller endpoints under `/todo/config/resources/events`.
-- [ ] Run focused service/controller contract tests and the existing definition compiler suite.
+- [x] Write failing tests for schema validation, immutable active versions, optimistic locking, sample validation, and activation guards.
+- [x] Implement commands, views, mapper methods, service, stable errors, and controller endpoints under `/todo/config/resources/events`.
+- [x] Run focused service/controller contract tests and the existing definition compiler suite.
 
 ### Task 3: Validator, field, material, and recipe catalogues
 

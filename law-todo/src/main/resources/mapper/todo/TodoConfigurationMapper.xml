@@ -240,4 +240,63 @@
     values(#{requestId},#{templateVersionId},#{eventType},#{businessType},#{businessId},cast(#{inputSummaryJson} as json),
       cast(#{resultJson} as json),#{durationMs},#{operatorId})
   </insert>
+
+  <sql id="eventResourceWhere">
+    <where>
+      <if test="keyword != null and keyword != ''">and (event_type like concat('%',#{keyword},'%') or event_name like concat('%',#{keyword},'%'))</if>
+      <if test="businessObjectType != null and businessObjectType != ''">and business_object_type=#{businessObjectType}</if>
+      <if test="schemaStatus != null and schemaStatus != ''">and schema_status=#{schemaStatus}</if>
+      <if test="status != null and status != ''">and status=#{status}</if>
+    </where>
+  </sql>
+  <select id="selectEventResources" resultType="java.util.Map">
+    select c.*,(select count(*) from todo_trigger_rule r where r.event_type=c.event_type
+      and r.payload_version=c.payload_version) reference_count
+    from todo_event_catalog c <include refid="eventResourceWhere"/>
+    order by c.event_type,c.payload_version desc,c.event_catalog_id desc
+    <if test="limit != null">limit #{limit}<if test="offset != null"> offset #{offset}</if></if>
+  </select>
+  <select id="countEventResources" resultType="long">
+    select count(*) from todo_event_catalog <include refid="eventResourceWhere"/>
+  </select>
+  <select id="selectEventResource" resultType="java.util.Map">
+    select c.*,(select count(*) from todo_trigger_rule r where r.event_type=c.event_type
+      and r.payload_version=c.payload_version) reference_count
+    from todo_event_catalog c where c.event_catalog_id=#{id}
+  </select>
+  <select id="selectEventResourceByTypeVersion" resultType="java.util.Map">
+    select * from todo_event_catalog where event_type=#{eventType} and payload_version=#{payloadVersion}
+  </select>
+  <select id="selectNextEventPayloadVersion" resultType="int">
+    select coalesce(max(payload_version),0)+1 from todo_event_catalog where event_type=#{eventType}
+  </select>
+  <insert id="insertEventResource" useGeneratedKeys="true" keyProperty="eventCatalogId">
+    insert into todo_event_catalog(event_type,event_name,description,payload_version,business_object_type,
+      payload_schema_json,producer,source_module,sample_payload_json,schema_status,status,version,create_by)
+    values(#{eventType},#{eventName},#{description},#{payloadVersion},#{businessObjectType},
+      cast(#{payloadSchemaJson} as json),#{producer},#{sourceModule},cast(#{samplePayloadJson} as json),
+      #{schemaStatus},#{status},0,#{createBy})
+  </insert>
+  <update id="updateEventResourceConditionally">
+    update todo_event_catalog set event_name=#{eventName},description=#{description},business_object_type=#{businessObjectType},
+      payload_schema_json=cast(#{payloadSchemaJson} as json),source_module=#{sourceModule},
+      sample_payload_json=cast(#{samplePayloadJson} as json),schema_status=#{schemaStatus},status=#{status},
+      update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where event_catalog_id=#{eventCatalogId} and status='DRAFT' and version=#{expectedVersion}
+  </update>
+  <update id="updateEventResourceStatusConditionally">
+    update todo_event_catalog set status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where event_catalog_id=#{eventCatalogId} and version=#{expectedVersion}
+  </update>
+  <select id="selectEventResourceReferences" resultType="java.util.Map">
+    select 'TRIGGER_RULE' reference_type,r.trigger_rule_id reference_id,r.rule_code reference_code,
+      r.rule_name reference_name,case when r.enabled='Y' then 'ENABLED' else 'DISABLED' end reference_status
+    from todo_trigger_rule r where r.event_type=#{eventType} and r.payload_version=#{payloadVersion}
+    union all
+    select 'TEMPLATE_VERSION',v.version_id,t.template_code,t.template_name,v.status
+    from todo_template_version v join todo_template t on t.template_id=v.template_id
+    where json_unquote(json_extract(v.definition_json,'$.event.eventType'))=#{eventType}
+      and coalesce(cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned),1)=#{payloadVersion}
+    order by reference_type,reference_id
+  </select>
 </mapper>

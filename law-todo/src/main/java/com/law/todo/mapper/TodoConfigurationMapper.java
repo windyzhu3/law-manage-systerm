@@ -34,4 +34,13 @@ public interface TodoConfigurationMapper
     Map<String,Object> selectReleaseRecord(Long versionId);
     List<Map<String,Object>> selectImmutableTemplateVersions(Long templateId);
     int insertSimulationRecord(Map<String,Object> row);
+    List<Map<String,Object>> selectEventResources(Map<String,Object> query);
+    long countEventResources(Map<String,Object> query);
+    Map<String,Object> selectEventResource(Long id);
+    Map<String,Object> selectEventResourceByTypeVersion(@Param("eventType") String eventType,@Param("payloadVersion") Integer payloadVersion);
+    int selectNextEventPayloadVersion(String eventType);
+    int insertEventResource(Map<String,Object> row);
+    int updateEventResourceConditionally(Map<String,Object> row);
+    int updateEventResourceStatusConditionally(Map<String,Object> row);
+    List<Map<String,Object>> selectEventResourceReferences(@Param("eventType") String eventType,@Param("payloadVersion") Integer payloadVersion);
 }

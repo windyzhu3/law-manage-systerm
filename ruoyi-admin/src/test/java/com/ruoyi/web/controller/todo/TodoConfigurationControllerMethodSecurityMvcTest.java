@@ -81,6 +81,22 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
           """))
           .andExpect(status().isForbidden());
     }
+    @Test void eventResourcesUseDedicatedReadAndWritePermissions() throws Exception {
+      String body="""
+          {"eventType":"LEAD_ASSIGNED","payloadVersion":1,"eventName":"线索已分配",
+           "businessObjectType":"LEAD","sourceModule":"lead",
+           "payloadSchemaJson":"{\\"type\\":\\"object\\",\\"properties\\":{\\"ownerId\\":{\\"type\\":\\"integer\\",\\"title\\":\\"负责人\\"}}}",
+           "samplePayloadJson":"{\\"ownerId\\":11}","status":"DRAFT","actionId":"evt-1","expectedVersion":0}
+          """;
+      authenticate("todo:resource:list");
+      mvc().perform(get("/todo/config/resources/events")).andExpect(status().isOk());
+      mvc().perform(post("/todo/config/resources/events").contentType("application/json").content(body))
+          .andExpect(status().isForbidden());
+      authenticate("todo:resource:add");
+      mvc().perform(get("/todo/config/resources/events")).andExpect(status().isForbidden());
+      mvc().perform(post("/todo/config/resources/events").contentType("application/json").content(body))
+          .andExpect(status().isOk());
+    }
     @Test void registersEveryConfigurationEndpointAsOneUniqueHandler(){long count=handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).count();org.junit.jupiter.api.Assertions.assertTrue(count>=20);org.junit.jupiter.api.Assertions.assertEquals(count,handlerMapping.getHandlerMethods().entrySet().stream().filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class).map(entry->entry.getKey().toString()).distinct().count());}
     private MockMvc mvc(){return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new Denied()).build();}
     private void authenticate(String permission){
@@ -99,7 +115,15 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
         org.mockito.Mockito.when(query.businessObjects(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class),
             org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.any())).thenReturn(
             new com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage(java.util.List.of(),0));
-        return new TodoConfigurationController(query,org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),org.mockito.Mockito.mock(TodoConfigurationSimulationService.class));
+        TodoEventResourceService eventResources=org.mockito.Mockito.mock(TodoEventResourceService.class);
+        org.mockito.Mockito.when(eventResources.list(org.mockito.ArgumentMatchers.anyMap())).thenReturn(
+            new com.law.todo.application.view.TodoResourceViews.EventResourcePage(java.util.List.of(),0));
+        org.mockito.Mockito.when(eventResources.save(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(9L);
+        return new TodoConfigurationController(query,org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),
+            org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),
+            org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),
+            org.mockito.Mockito.mock(TodoConfigurationSimulationService.class),org.mockito.Mockito.mock(TodoDefinitionCatalogService.class),
+            org.mockito.Mockito.mock(TodoAutoActionCapabilityCatalogService.class),eventResources);
       }
     }
     static class PermissionProbe {public boolean hasPermi(String permission){return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals(permission));}public boolean hasAnyPermi(String permissions){return java.util.Arrays.stream(permissions.split(",")).anyMatch(this::hasPermi);}}
