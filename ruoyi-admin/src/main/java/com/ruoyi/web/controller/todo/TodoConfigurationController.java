@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.law.todo.application.TodoConfigurationQueryService;
@@ -24,6 +25,7 @@ import com.law.todo.application.TodoAutoActionCapabilityCatalogService;
 import com.law.todo.application.TodoDefinitionService;
 import com.law.todo.application.TodoDodRuleManagementService;
 import com.law.todo.application.TodoEventResourceService;
+import com.law.todo.application.TodoConfigurationResourceCatalogService;
 import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -40,6 +42,7 @@ import com.law.todo.application.command.TodoDefinitionCommands.ReleaseDraftComma
 import com.law.todo.application.command.TodoDefinitionCommands.UpdateDraftCommand;
 import com.law.todo.application.command.TodoResourceCommands.EventResourceCommand;
 import com.law.todo.application.command.TodoResourceCommands.EventResourceStatusCommand;
+import com.law.todo.application.command.TodoResourceCommands.SimpleDodRuleCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateMetadataCommand;
 import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
@@ -73,20 +76,21 @@ public class TodoConfigurationController extends BaseController
     private final TodoDefinitionCatalogService catalogs;
     private final TodoAutoActionCapabilityCatalogService autoActions;
     private final TodoEventResourceService eventResources;
+    private final TodoConfigurationResourceCatalogService resourceCatalog;
 
     @Autowired
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation,
             TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions,
-            TodoEventResourceService eventResources)
-    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;}
+            TodoEventResourceService eventResources,TodoConfigurationResourceCatalogService resourceCatalog)
+    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;this.resourceCatalog=resourceCatalog;}
 
     /** Focused-test compatibility; production uses the fully injected catalogue constructor. */
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation)
-    {this(query,sla,dod,templates,definitions,diff,simulation,null,null,null);}
+    {this(query,sla,dod,templates,definitions,diff,simulation,null,null,null,null);}
 
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/dashboard") public AjaxResult dashboard(){return success(query.dashboard());}
@@ -108,6 +112,18 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:resource:status')")
     @PostMapping("/resources/events/{id}/status") public AjaxResult changeEventResourceStatus(@PathVariable long id,@Valid @RequestBody EventResourceStatusCommand value)
     {eventResources.changeStatus(id,value,actor());return success();}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:template:create,todo:template:edit,todo:simulation:list')")
+    @GetMapping("/resources/validators") public AjaxResult validatorResources(@RequestParam(required=false) String businessType)
+    {return success(resourceCatalog.validators(businessType));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:template:create,todo:template:edit,todo:simulation:list')")
+    @GetMapping("/resources/fields") public AjaxResult fieldResources(@RequestParam String businessType)
+    {return success(resourceCatalog.fields(businessType));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:template:create,todo:template:edit,todo:simulation:list')")
+    @GetMapping("/resources/materials") public AjaxResult materialResources(@RequestParam String businessType)
+    {return success(resourceCatalog.materials(businessType));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:template:create,todo:template:edit,todo:simulation:list')")
+    @GetMapping("/resources/dod-recipes") public AjaxResult dodRecipeResources(@RequestParam String businessType)
+    {return success(resourceCatalog.recipes(businessType));}
 
     @PreAuthorize("@ss.hasPermi('todo:sla-rule:list')")
     @GetMapping("/sla-rules") public TableDataInfo slaRules(@Valid @ModelAttribute RuleListQuery value){return page(sla.list(value.toMap()),value.pageNum(),value.pageSize());}
@@ -130,8 +146,12 @@ public class TodoConfigurationController extends BaseController
     @GetMapping("/dod-rules/{id}") public AjaxResult dodRule(@PathVariable long id){return success(dod.detail(id));}
     @PreAuthorize("@ss.hasPermi('todo:dod-rule:create')")
     @PostMapping("/dod-rules") public AjaxResult createDodRule(@Valid @RequestBody DodRuleCommand value){requireNew(value.dodRuleId());return success(dod.save(value,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:dod-rule:create')")
+    @PostMapping("/dod-rules/simple") public AjaxResult createSimpleDodRule(@Valid @RequestBody SimpleDodRuleCommand value){requireNew(value.dodRuleId());return success(dod.saveSimple(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:dod-rule:edit')")
     @PutMapping("/dod-rules/{id}") public AjaxResult updateDodRule(@PathVariable Long id,@Valid @RequestBody DodRuleCommand value){requireSame(id,value.dodRuleId());return success(dod.save(value,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:dod-rule:edit')")
+    @PutMapping("/dod-rules/{id}/simple") public AjaxResult updateSimpleDodRule(@PathVariable Long id,@Valid @RequestBody SimpleDodRuleCommand value){requireSame(id,value.dodRuleId());return success(dod.saveSimple(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:dod-rule:copy')")
     @PostMapping("/dod-rules/{id}/copy") public AjaxResult copyDodRule(@PathVariable long id,@Valid @RequestBody RuleCopyCommand value){return success(dod.copy(id,value.newRuleCode(),value.actionId(),actor()));}
     @PreAuthorize("@ss.hasPermi('todo:dod-rule:toggle')")

@@ -9,5 +9,8 @@ public interface TodoBusinessValidator
     void validate(TodoInstance todo,Map<String,Object> payload);
     default boolean supports(String businessType){return true;}
     default String catalogCode(){return getClass().getSimpleName();}
+    default String catalogName(){return catalogCode();}
     default String catalogDescription(){return "Server-side business completion validator";}
+    default String parameterSchemaJson(){return "{\"type\":\"object\",\"properties\":{}}";}
+    default String exampleParametersJson(){return "{}";}
 }

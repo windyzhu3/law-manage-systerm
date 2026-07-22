@@ -299,4 +299,21 @@
       and coalesce(cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned),1)=#{payloadVersion}
     order by reference_type,reference_id
   </select>
+  <select id="selectValidatorMetadata" resultType="java.util.Map">
+    select metadata.*,(select count(*) from todo_dod_rule rule
+      where json_contains(rule.validator_refs_json,json_quote(metadata.validator_code))) reference_count
+    from todo_validator_metadata metadata order by metadata.validator_name,metadata.validator_code
+  </select>
+  <select id="selectActiveEventResourceSchemas" resultType="java.util.Map">
+    select event_type,event_name,business_object_type,payload_schema_json
+    from todo_event_catalog where status='ACTIVE' and schema_status='READY'
+      and business_object_type=#{businessType}
+    order by event_type,payload_version desc
+  </select>
+  <select id="selectConfigurationResourceItems" resultType="java.util.Map">
+    select * from todo_configuration_resource_item
+    where resource_type=#{resourceType} and status='ACTIVE'
+      and (business_type=#{businessType} or business_type='ALL')
+    order by sort_order,resource_name,resource_code
+  </select>
 </mapper>

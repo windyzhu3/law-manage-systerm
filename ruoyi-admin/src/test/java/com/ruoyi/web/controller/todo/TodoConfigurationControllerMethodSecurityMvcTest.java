@@ -62,6 +62,11 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       authenticate("todo:dod-rule:list");
       mvc().perform(get("/todo/config/template-catalog/validators")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/template-catalog/calendars")).andExpect(status().isForbidden());
+      authenticate("todo:dod-rule:create");
+      mvc().perform(get("/todo/config/resources/validators?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/fields?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/materials?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/dod-recipes?businessType=LEAD")).andExpect(status().isOk());
     }
     @Test void releaseListPermissionCanReadOnlyTheImmutableVersionDirectory() throws Exception {
       authenticate("todo:release:list");
@@ -90,6 +95,10 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
           """;
       authenticate("todo:resource:list");
       mvc().perform(get("/todo/config/resources/events")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/validators?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/fields?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/materials?businessType=LEAD")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/resources/dod-recipes?businessType=LEAD")).andExpect(status().isOk());
       mvc().perform(post("/todo/config/resources/events").contentType("application/json").content(body))
           .andExpect(status().isForbidden());
       authenticate("todo:resource:add");
@@ -123,7 +132,8 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
             org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),
             org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),
             org.mockito.Mockito.mock(TodoConfigurationSimulationService.class),org.mockito.Mockito.mock(TodoDefinitionCatalogService.class),
-            org.mockito.Mockito.mock(TodoAutoActionCapabilityCatalogService.class),eventResources);
+            org.mockito.Mockito.mock(TodoAutoActionCapabilityCatalogService.class),eventResources,
+            org.mockito.Mockito.mock(TodoConfigurationResourceCatalogService.class));
       }
     }
     static class PermissionProbe {public boolean hasPermi(String permission){return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals(permission));}public boolean hasAnyPermi(String permissions){return java.util.Arrays.stream(permissions.split(",")).anyMatch(this::hasPermi);}}

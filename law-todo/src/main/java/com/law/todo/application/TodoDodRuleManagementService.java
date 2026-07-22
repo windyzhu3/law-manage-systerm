@@ -13,10 +13,12 @@ import java.util.TreeMap;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
+import com.law.todo.application.command.TodoResourceCommands.SimpleDodRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleDetail;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleListItem;
 import com.law.todo.definition.validation.TodoFormValidator;
@@ -37,15 +39,22 @@ public class TodoDodRuleManagementService
     private final TodoMapper todoMapper;
     private final TodoDictionaryValidationPort dictionaries;
     private final Map<String,TodoBusinessValidator> validators;
+    private final TodoConfigurationResourceCatalogService resources;
     private final TodoFormValidator formValidator=new TodoFormValidator();
 
+    @Autowired
     public TodoDodRuleManagementService(TodoConfigurationMapper mapper,TodoMapper todoMapper,
-            TodoDictionaryValidationPort dictionaries,List<TodoBusinessValidator> validators)
+            TodoDictionaryValidationPort dictionaries,List<TodoBusinessValidator> validators,
+            TodoConfigurationResourceCatalogService resources)
     {
         this.mapper=mapper;this.todoMapper=todoMapper;this.dictionaries=dictionaries;Map<String,TodoBusinessValidator> catalogue=new LinkedHashMap<>();
         for(TodoBusinessValidator validator:validators==null?List.<TodoBusinessValidator>of():validators)
-        {String code=validator.catalogCode();if(code!=null&&!code.isBlank())catalogue.putIfAbsent(code,validator);}this.validators=Map.copyOf(catalogue);
+        {String code=validator.catalogCode();if(code!=null&&!code.isBlank())catalogue.putIfAbsent(code,validator);}this.validators=Map.copyOf(catalogue);this.resources=resources;
     }
+
+    public TodoDodRuleManagementService(TodoConfigurationMapper mapper,TodoMapper todoMapper,
+            TodoDictionaryValidationPort dictionaries,List<TodoBusinessValidator> validators)
+    {this(mapper,todoMapper,dictionaries,validators,null);}
 
     @Transactional(readOnly=true)
     public List<DodRuleListItem> list(Map<String,Object> query)
@@ -70,6 +79,29 @@ public class TodoDodRuleManagementService
         Long id=command.dodRuleId()==null?number(row.get("dodRuleId")):command.dodRuleId();
         if(id==null)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule identifier was not generated");
         complete(command.actionId(),fingerprint,id);return id;
+    }
+
+    @Transactional
+    public long saveSimple(SimpleDodRuleCommand command,Actor actor)
+    {
+        if(command==null||resources==null)throw new TodoException("TODO_DOD_RESOURCE_CATALOG_UNAVAILABLE","DoD resource catalogue is unavailable");
+        for(String field:command.requiredFields())if(!resources.isKnownField(field,command.businessType()))
+            throw new TodoException("TODO_DOD_FIELD_NOT_FOUND","DoD field is unavailable: "+field);
+        for(String material:command.requiredAttachments())if(!resources.isKnownMaterial(material,command.businessType()))
+            throw new TodoException("TODO_DOD_MATERIAL_NOT_FOUND","DoD material is unavailable: "+material);
+        for(String validator:command.validatorRefs())if(!resources.isSelectableValidator(validator,command.businessType()))
+            throw new TodoException("TODO_DOD_VALIDATOR_NOT_SELECTABLE","DoD validator is unavailable for this business type: "+validator);
+        for(Map<String,Object> conditional:command.conditionalRules())
+        {
+            String field=conditional.get("field")==null?null:String.valueOf(conditional.get("field"));
+            Object whenRaw=conditional.get("when");String source=whenRaw instanceof Map<?,?> when&&when.get("field")!=null?String.valueOf(when.get("field")):null;
+            if(field==null||!resources.isKnownField(field,command.businessType())||source==null||!resources.isKnownField(source,command.businessType()))
+                throw new TodoException("TODO_DOD_FIELD_NOT_FOUND","Conditional DoD field is unavailable");
+        }
+        DodRuleCommand advanced=new DodRuleCommand(command.dodRuleId(),command.ruleCode(),command.ruleName(),command.ruleType(),
+                JSON.toJSONString(command.requiredFields()),JSON.toJSONString(command.requiredAttachments()),JSON.toJSONString(command.conditionalRules()),
+                JSON.toJSONString(command.validatorRefs()),"{}",command.status(),command.actionId(),command.expectedVersion());
+        return save(advanced,actor);
     }
 
     @Transactional

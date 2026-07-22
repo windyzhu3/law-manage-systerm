@@ -43,4 +43,7 @@ public interface TodoConfigurationMapper
     int updateEventResourceConditionally(Map<String,Object> row);
     int updateEventResourceStatusConditionally(Map<String,Object> row);
     List<Map<String,Object>> selectEventResourceReferences(@Param("eventType") String eventType,@Param("payloadVersion") Integer payloadVersion);
+    List<Map<String,Object>> selectValidatorMetadata();
+    List<Map<String,Object>> selectActiveEventResourceSchemas(String businessType);
+    List<Map<String,Object>> selectConfigurationResourceItems(@Param("resourceType") String resourceType,@Param("businessType") String businessType);
 }

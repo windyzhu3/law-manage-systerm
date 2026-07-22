@@ -30,6 +30,7 @@ import org.springframework.dao.DuplicateKeyException;
 import com.law.todo.application.TodoDodRuleManagementService.DodTestResult;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
+import com.law.todo.application.command.TodoResourceCommands.SimpleDodRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.DodRuleDetail;
 import com.law.todo.definition.validation.TodoFormValidator;
 import com.law.todo.domain.TodoException;
@@ -46,12 +47,26 @@ class TodoDodRuleManagementServiceTest
     @Mock TodoMapper todoMapper;
     @Mock TodoDictionaryValidationPort dictionaries;
     @Mock TodoBusinessValidator validator;
+    @Mock TodoConfigurationResourceCatalogService resourceCatalog;
     private TodoDodRuleManagementService service;
     private final Actor actor=new Actor(7L,"alice",2L);
 
     @BeforeEach void setUp()
     {
         service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator));
+    }
+
+    @Test void simpleEditorRejectsFieldsOutsideTheGovernedCatalogue()
+    {
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator),resourceCatalog);
+        when(resourceCatalog.isKnownField("unknownField","LEAD")).thenReturn(false);
+        SimpleDodRuleCommand command=new SimpleDodRuleCommand(null,"DOD-SIMPLE","简易完成条件","TASK","LEAD",
+                List.of("unknownField"),List.of(),List.of(),List.of(),"0","simple-1",0);
+
+        TodoException error=assertThrows(TodoException.class,()->service.saveSimple(command,actor));
+
+        assertEquals("TODO_DOD_FIELD_NOT_FOUND",error.getBusinessCode());
+        verify(mapper,never()).insertDodRule(anyMap());
     }
 
     @Test void rejectsUnknownExternalValidator()

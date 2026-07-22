@@ -68,10 +68,10 @@
 **Interfaces:**
 - Produces: `/resources/validators`, `/resources/fields`, `/resources/materials`, `/resources/dod-recipes`.
 
-- [ ] Write failing tests for registered/unavailable validators, business-type filtering, typed fields, and recipe expansion.
-- [ ] Implement governed metadata merging without permitting database-defined executable code.
-- [ ] Enforce that new DoD references only selectable validators and known resource codes.
-- [ ] Run focused tests plus all DoD management and compiler tests.
+- [x] Write failing tests for registered/unavailable validators, business-type filtering, typed fields, and recipe expansion.
+- [x] Implement governed metadata merging without permitting database-defined executable code.
+- [x] Enforce that new simple-mode DoD references only selectable validators and known resource codes; preserve the advanced JSON endpoint for compatibility.
+- [x] Run focused tests plus all DoD management and compiler tests, plus the baseline-to-0.20.37 MySQL migration gate.
 
 ### Task 4: Real and sample business-object directory
 
