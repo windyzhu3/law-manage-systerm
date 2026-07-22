@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.39", current.getVersion().getVersion());
+        assertEquals("0.20.41", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -72,7 +72,43 @@ class FlywayMigrationTest
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
         verifyTodoConfigurationCenterSchema(url);
         verifyTodoConfigurationResourceSchema(url);
+        verifyTodoPhaseOneAssetClosure(url);
         verifyReadableNavigationMenuNames(url);
+    }
+
+    private void verifyTodoPhaseOneAssetClosure(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(4L, count(connection,"select count(*) from todo_sla_rule where status='0'"));
+            assertEquals(15L, count(connection,"select count(*) from todo_dod_rule where status='0'"));
+            assertEquals(15L, count(connection,
+                "select count(*) from todo_template t join todo_template_version v on v.template_id=t.template_id "
+                    + "where v.status='PUBLISHED' and t.template_code not like 'TD-%'"));
+            assertEquals(30L, count(connection,
+                "select count(*) from todo_template_draft_rule_ref ref join todo_template_version v "
+                    + "on v.version_id=ref.version_id where v.status='PUBLISHED'"));
+            assertEquals(0L, count(connection,
+                "select count(*) from (select t.template_id from todo_template t join todo_template_version v "
+                    + "on v.template_id=t.template_id where v.status='PUBLISHED' and t.template_code not like 'TD-%' "
+                    + "group by t.template_id having count(*)<>1) invalid"));
+            assertEquals(0L, count(connection,
+                "select count(*) from todo_template t join todo_template_version v on v.template_id=t.template_id "
+                    + "where t.template_code='LEAD_FIRST_CONTACT' and v.status='PUBLISHED' "
+                    + "and json_unquote(json_extract(v.definition_json,'$.owner.config.operand'))<>'ownerId'"));
+            assertEquals(0L, count(connection,
+                "select count(*) from todo_template t join todo_template_version v on v.template_id=t.template_id "
+                    + "where t.template_code='CASE_ACCEPT' and v.status='PUBLISHED' "
+                    + "and json_unquote(json_extract(v.definition_json,'$.owner.config.operand'))<>'lawyerId'"));
+            assertEquals(16L, count(connection,
+                "select count(*) from todo_trigger_rule r join todo_template_version v "
+                    + "on v.version_id=r.template_version_id where r.enabled='Y' and v.status='PUBLISHED'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Todo phase-one asset closure invariants failed", exception);
+        }
     }
 
     private void verifyReadableNavigationMenuNames(String url)

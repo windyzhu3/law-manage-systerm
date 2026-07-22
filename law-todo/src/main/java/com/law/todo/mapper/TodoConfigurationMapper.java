@@ -46,4 +46,5 @@ public interface TodoConfigurationMapper
     List<Map<String,Object>> selectValidatorMetadata();
     List<Map<String,Object>> selectActiveEventResourceSchemas(String businessType);
     List<Map<String,Object>> selectConfigurationResourceItems(@Param("resourceType") String resourceType,@Param("businessType") String businessType);
+    List<Map<String,Object>> selectPublishedSimulationCandidates();
 }

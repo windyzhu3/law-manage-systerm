@@ -535,7 +535,7 @@ async function checkSimulationAndReleasePages() {
   requireTokens(simulationPage, contents[simulationPage], [
     'ConfigPageShell', 'ConfigMetricCard', 'SimulationDrawer',
     'todo:simulation:simulate', '只读模拟，不创建真实待办', 'listTemplateEventCatalog',
-    'listTodoTemplates', 'law_todo_business_type', '$route.query', ':initial-event="handoffEvent"'
+    'listTodoTemplates', 'diagnosePublishedConfigurations', '批量健康检查', 'law_todo_business_type', '$route.query', ':initial-event="handoffEvent"'
   ])
   requireTokens(simulationDrawer, contents[simulationDrawer], [
     'ConfigDetailDrawer', 'SimulationResult', 'simulateConfiguration', 'versionId',

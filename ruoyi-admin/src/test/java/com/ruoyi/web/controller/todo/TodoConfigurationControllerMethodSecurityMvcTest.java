@@ -88,6 +88,13 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
           """))
           .andExpect(status().isForbidden());
     }
+    @Test void publishedDiagnosticsRequireSimulationExecutionPermission() throws Exception {
+      authenticate("todo:simulation:list");
+      mvc().perform(post("/todo/config/simulations/published-diagnostics")).andExpect(status().isForbidden());
+      authenticate("todo:simulation:simulate");
+      mvc().perform(post("/todo/config/simulations/published-diagnostics")).andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.total").value(0));
+    }
     @Test void eventResourcesUseDedicatedReadAndWritePermissions() throws Exception {
       String body="""
           {"eventType":"LEAD_ASSIGNED","payloadVersion":1,"eventName":"线索已分配",
@@ -130,12 +137,16 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
         org.mockito.Mockito.when(eventResources.list(org.mockito.ArgumentMatchers.anyMap())).thenReturn(
             new com.law.todo.application.view.TodoResourceViews.EventResourcePage(java.util.List.of(),0));
         org.mockito.Mockito.when(eventResources.save(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(9L);
+        TodoPublishedSimulationDiagnosticService diagnostics=org.mockito.Mockito.mock(TodoPublishedSimulationDiagnosticService.class);
+        org.mockito.Mockito.when(diagnostics.diagnose(org.mockito.ArgumentMatchers.any())).thenReturn(
+            new com.law.todo.application.view.TodoConfigurationViews.PublishedSimulationDiagnosticSummary(
+                0,0,0,0,java.util.List.of(),java.time.LocalDateTime.of(2026,7,23,9,0)));
         return new TodoConfigurationController(query,org.mockito.Mockito.mock(TodoSlaRuleManagementService.class),
             org.mockito.Mockito.mock(TodoDodRuleManagementService.class),org.mockito.Mockito.mock(TodoTemplateService.class),
             org.mockito.Mockito.mock(TodoDefinitionService.class),org.mockito.Mockito.mock(TodoDefinitionDiffService.class),
             org.mockito.Mockito.mock(TodoConfigurationSimulationService.class),org.mockito.Mockito.mock(TodoDefinitionCatalogService.class),
             org.mockito.Mockito.mock(TodoAutoActionCapabilityCatalogService.class),eventResources,
-            org.mockito.Mockito.mock(TodoConfigurationResourceCatalogService.class));
+            org.mockito.Mockito.mock(TodoConfigurationResourceCatalogService.class),diagnostics);
       }
     }
     static class PermissionProbe {public boolean hasPermi(String permission){return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream().anyMatch(a->a.getAuthority().equals(permission));}public boolean hasAnyPermi(String permissions){return java.util.Arrays.stream(permissions.split(",")).anyMatch(this::hasPermi);}}

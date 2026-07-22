@@ -46,6 +46,15 @@ class CompositeOwnerResolverTest
     }
 
     @Test
+    void simulationKeepsAValidPayloadOwnerEvenWhenTheSampleUserIsNotInTheRuntimeDirectory()
+    {
+        organization.unavailable.add(12L);
+
+        assertEquals(null,resolver.resolve(rule("PAYLOAD","operand","assigneeId"),context()).ownerId());
+        assertEquals(12L,resolver.resolveForSimulation(rule("PAYLOAD","operand","assigneeId"),context()).ownerId());
+    }
+
+    @Test
     void missingRequiredValueDoesNotCreateSyntheticZeroOwner()
     {
         OwnerResolutionResult result = resolve(new OwnerRule(Map.of("type", "USER")));

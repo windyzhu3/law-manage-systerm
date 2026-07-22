@@ -114,6 +114,23 @@
     order by ref.sort_order,ref.ref_id_value,ref.ref_type
   </select>
 
+  <select id="selectPublishedSimulationCandidates" resultType="java.util.Map">
+    select v.version_id,t.template_id,t.template_code,t.template_name,t.business_type,
+      json_unquote(json_extract(v.definition_json,'$.event.eventType')) event_type,
+      cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned) payload_version,
+      v.definition_hash,c.sample_payload_json
+    from todo_template t
+    join todo_template_version v on v.version_id=(
+      select candidate.version_id from todo_template_version candidate
+      where candidate.template_id=t.template_id and candidate.status='PUBLISHED'
+      order by candidate.version_no desc,candidate.version_id desc limit 1)
+    left join todo_event_catalog c on c.event_type=json_unquote(json_extract(v.definition_json,'$.event.eventType'))
+      and c.payload_version=cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned)
+      and c.status='ACTIVE'
+    where t.status='0'
+    order by t.template_code,t.template_id
+  </select>
+
   <select id="selectTemplateConfiguration" resultType="java.util.Map">
     select t.*,draft.version_id draft_version_id,draft.status draft_status,draft.version_no draft_version_no,
       published.version_id published_version_id,published.version_no published_version_no,published.published_time,

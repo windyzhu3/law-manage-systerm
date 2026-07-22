@@ -52,6 +52,7 @@ export function listTriggerTemplateCatalog() { return request({ url: '/todo/conf
 export function listTriggerTemplateVersions(id) { return request({ url: `/todo/config/trigger-catalog/templates/${id}/versions`, method: 'get' }) }
 
 export function simulateConfiguration(data) { return request({ url: '/todo/config/simulations', method: 'post', data }) }
+export function diagnosePublishedConfigurations() { return request({ url: '/todo/config/simulations/published-diagnostics', method: 'post' }) }
 export function listBusinessObjects(params) { return request({ url: '/todo/config/business-objects', method: 'get', params }) }
 
 export function listReleaseRecords(params) { return request({ url: '/todo/config/release-records', method: 'get', params }) }

@@ -4,6 +4,7 @@ import com.law.todo.mapper.TodoHistoricalMigrationReadinessMapper;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.routing.RoutingGraphValidator;
 import com.law.todo.routing.TodoRoutingEngine;
+import com.law.todo.spi.TodoOrganizationPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -25,6 +26,7 @@ class SpringMultiConstructorBeanContextTest
             context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("test", Map.of(
                 "todo.migration-export.temp-dir", exportRoot.toString())));
             context.registerBean(TodoMapper.class, () -> mock(TodoMapper.class));
+            context.registerBean(TodoOrganizationPort.class, () -> mock(TodoOrganizationPort.class));
             context.registerBean(TodoHistoricalMigrationReadinessMapper.class,
                 () -> mock(TodoHistoricalMigrationReadinessMapper.class));
             context.register(HistoricalMigrationExportArchiveWriter.class, TodoAssignmentResolver.class,

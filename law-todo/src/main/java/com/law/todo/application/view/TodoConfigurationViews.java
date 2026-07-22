@@ -86,6 +86,15 @@ public final class TodoConfigurationViews
 
     public record ConfigurationSimulationResult(TodoSimulationView simulation,long durationMs) { }
 
+    public record PublishedSimulationDiagnostic(long versionId,long templateId,String templateCode,
+            String templateName,String eventType,Integer payloadVersion,String businessType,String status,
+            String ownerStatus,List<String> issueCodes,String message,TodoSimulationView simulation)
+    { public PublishedSimulationDiagnostic { issueCodes=issueCodes==null?List.of():List.copyOf(issueCodes); } }
+
+    public record PublishedSimulationDiagnosticSummary(int total,int passed,int warning,int failed,
+            List<PublishedSimulationDiagnostic> items,LocalDateTime generatedAt)
+    { public PublishedSimulationDiagnosticSummary { items=items==null?List.of():List.copyOf(items); } }
+
     private static Map<String,Object> immutableMap(Map<String,Object> source)
     {
         if(source==null)return Map.of();

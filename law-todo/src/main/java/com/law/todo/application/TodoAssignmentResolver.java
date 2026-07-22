@@ -19,12 +19,12 @@ public class TodoAssignmentResolver
     public record Assignment(Long ownerId, String candidateType, Long candidateValue) { }
 
     /** Preserves direct construction used by existing event and routing callers. */
-    @Autowired
     public TodoAssignmentResolver()
     {
         this(TodoOrganizationPort.legacyCompatible());
     }
 
+    @Autowired
     public TodoAssignmentResolver(TodoOrganizationPort organization)
     {
         this(new CompositeOwnerResolver(organization));

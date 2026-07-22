@@ -58,6 +58,10 @@ public interface TodoMapper
     int countSupervisorAccess(@Param("todoId") Long todoId,@Param("userId") Long userId);
     List<Long> selectGovernedSupervisors(@Param("ownerId") Long ownerId,@Param("ownerDeptId") Long ownerDeptId);
     Long selectUserDeptId(Long userId);
+    List<Long> selectActiveUserIdsForRole(Long roleId);
+    List<Long> selectActiveUserIdsForDepartment(Long departmentId);
+    List<Long> selectActiveUserIdsForPost(Long postId);
+    int countActiveUser(Long userId);
     Long selectRoleIdByKey(String roleKey);
     Long selectDepartmentIdByCode(String departmentCode);
     List<Map<String,Object>> selectTemplates();

@@ -108,7 +108,7 @@ public final class CompositeOwnerResolver
     private OwnerResolutionResult compose(OwnerResolutionResult raw, Map<String, Object> config,
             OwnerResolutionContext context, int depth, Set<Object> active,boolean simulation)
     {
-        boolean skipUnavailable = bool(config.get("skipUnavailable"), true);
+        boolean skipUnavailable = !simulation && bool(config.get("skipUnavailable"), true);
         boolean useDelegation = bool(config.get("useDelegation"), true);
         List<String> trace = new ArrayList<>(raw.trace());
         Long owner = availablePrimary(raw.ownerId(), skipUnavailable, useDelegation, context, trace);
