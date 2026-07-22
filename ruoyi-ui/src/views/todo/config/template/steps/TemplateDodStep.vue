@@ -35,7 +35,7 @@
         <template slot-scope="{ $index }"><el-button type="text" :disabled="$index===0" @click="move($index,-1)">上移</el-button><el-button type="text" :disabled="$index===selectedRules.length-1" @click="move($index,1)">下移</el-button></template>
       </el-table-column>
     </el-table>
-    <dod-rule-drawer :visible.sync="nestedOpen" mode="create" :rule="null" :provided-validators="validatorCatalog" @saved="nestedSaved" />
+    <dod-rule-drawer :visible.sync="nestedOpen" mode="create" :rule="null" :provided-validators="validatorCatalog" :business-type="businessType" @saved="nestedSaved" />
   </section>
 </template>
 
@@ -53,6 +53,7 @@ export default {
     composition: { type: String, default: 'ALL' },
     uiFields: { type: Array, default: () => [] },
     systemDerivedFields: { type: Array, default: () => [] },
+    businessType: { type: String, default: 'LEAD' },
     readonly: Boolean
   },
   data() {

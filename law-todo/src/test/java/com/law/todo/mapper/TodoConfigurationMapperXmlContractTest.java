@@ -75,9 +75,11 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(slaInsert.contains("pause_policy_json") && slaInsert.contains("escalation_policy_json")
                 && slaInsert.contains("auto_action_json") && slaInsert.contains("cast(#{pausePolicyJson} as json)"));
         assertTrue(slaUpdate.contains("where sla_rule_id=#{slaRuleId} and version=#{expectedVersion}"));
-        assertTrue(dodInsert.contains("required_fields_json") && dodInsert.contains("validator_refs_json")
+        assertTrue(dodInsert.contains("business_type") && dodInsert.contains("coalesce(#{businessType},'ALL')")
+                && dodInsert.contains("required_fields_json") && dodInsert.contains("validator_refs_json")
                 && dodInsert.contains("error_messages_json") && dodInsert.contains("cast(#{requiredFieldsJson} as json)"));
-        assertTrue(dodUpdate.contains("where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}"));
+        assertTrue(dodUpdate.contains("business_type=coalesce(#{businessType},business_type)")
+                && dodUpdate.contains("where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}"));
         assertTrue(dodStatusUpdate.contains("status=#{status}") && dodStatusUpdate.contains("update_by=#{updateBy}")
                 && dodStatusUpdate.contains("update_time=sysdate()") && dodStatusUpdate.contains("version=version+1"));
         assertTrue(dodStatusUpdate.contains("where dod_rule_id=#{dodRuleId} and version=#{expectedVersion}"));

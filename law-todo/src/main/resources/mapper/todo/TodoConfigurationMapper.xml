@@ -72,14 +72,14 @@
     from todo_dod_rule r where r.dod_rule_id=#{id}
   </select>
   <insert id="insertDodRule" useGeneratedKeys="true" keyProperty="dodRuleId">
-    insert into todo_dod_rule(rule_code,rule_name,rule_type,required_fields_json,required_attachments_json,
+    insert into todo_dod_rule(rule_code,rule_name,rule_type,business_type,required_fields_json,required_attachments_json,
       conditional_rules_json,validator_refs_json,error_messages_json,status,create_by)
-    values(#{ruleCode},#{ruleName},#{ruleType},cast(#{requiredFieldsJson} as json),cast(#{requiredAttachmentsJson} as json),
+    values(#{ruleCode},#{ruleName},#{ruleType},coalesce(#{businessType},'ALL'),cast(#{requiredFieldsJson} as json),cast(#{requiredAttachmentsJson} as json),
       cast(#{conditionalRulesJson} as json),cast(#{validatorRefsJson} as json),cast(#{errorMessagesJson} as json),
       coalesce(#{status},'0'),#{createBy})
   </insert>
   <update id="updateDodRuleConditionally">
-    update todo_dod_rule set rule_code=#{ruleCode},rule_name=#{ruleName},rule_type=#{ruleType},
+    update todo_dod_rule set rule_code=#{ruleCode},rule_name=#{ruleName},rule_type=#{ruleType},business_type=coalesce(#{businessType},business_type),
       required_fields_json=cast(#{requiredFieldsJson} as json),required_attachments_json=cast(#{requiredAttachmentsJson} as json),
       conditional_rules_json=cast(#{conditionalRulesJson} as json),validator_refs_json=cast(#{validatorRefsJson} as json),
       error_messages_json=cast(#{errorMessagesJson} as json),status=#{status},update_by=#{updateBy},update_time=sysdate(),version=version+1

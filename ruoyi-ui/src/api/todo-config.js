@@ -14,6 +14,8 @@ export function listDodRules(params) { return request({ url: '/todo/config/dod-r
 export function getDodRule(id) { return request({ url: `/todo/config/dod-rules/${id}`, method: 'get' }) }
 export function createDodRule(data) { return request({ url: '/todo/config/dod-rules', method: 'post', data }) }
 export function updateDodRule(id, data) { return request({ url: `/todo/config/dod-rules/${id}`, method: 'put', data }) }
+export function createSimpleDodRule(data) { return request({ url: '/todo/config/dod-rules/simple', method: 'post', data }) }
+export function updateSimpleDodRule(id, data) { return request({ url: `/todo/config/dod-rules/${id}/simple`, method: 'put', data }) }
 export function copyDodRule(id, data) { return request({ url: `/todo/config/dod-rules/${id}/copy`, method: 'post', data }) }
 export function toggleDodRule(id, data) { return request({ url: `/todo/config/dod-rules/${id}/toggle`, method: 'post', data }) }
 export function getDodRuleReferenceCount(id) { return request({ url: `/todo/config/dod-rules/${id}/reference-count`, method: 'get' }) }

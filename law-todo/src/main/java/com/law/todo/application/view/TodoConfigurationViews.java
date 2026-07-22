@@ -24,11 +24,11 @@ public final class TodoConfigurationViews
     public record SlaCalculationResult(LocalDateTime createdAt,LocalDateTime remind80At,LocalDateTime overdue100At,
             LocalDateTime escalate150At) { }
 
-    public record DodRuleListItem(long dodRuleId,String ruleCode,String ruleName,String ruleType,String status,
+    public record DodRuleListItem(long dodRuleId,String ruleCode,String ruleName,String ruleType,String businessType,String status,
             Integer version,long referenceCount,LocalDateTime updateTime,String requiredFieldsJson,
             String requiredAttachmentsJson,String conditionalRulesJson) { }
 
-    public record DodRuleDetail(long dodRuleId,String ruleCode,String ruleName,String ruleType,
+    public record DodRuleDetail(long dodRuleId,String ruleCode,String ruleName,String ruleType,String businessType,
             String requiredFieldsJson,String requiredAttachmentsJson,String conditionalRulesJson,String validatorRefsJson,
             String errorMessagesJson,String status,Integer version,long referenceCount,String createBy,
             LocalDateTime createTime,String updateBy,LocalDateTime updateTime) { }

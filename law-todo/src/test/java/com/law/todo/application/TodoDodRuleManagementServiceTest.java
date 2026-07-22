@@ -69,6 +69,19 @@ class TodoDodRuleManagementServiceTest
         verify(mapper,never()).insertDodRule(anyMap());
     }
 
+    @Test void simpleEditorPersistsTheSelectedBusinessType()
+    {
+        ledger(true);enabledDictionaries();
+        service=new TodoDodRuleManagementService(mapper,todoMapper,dictionaries,List.of(validator),resourceCatalog);
+        when(mapper.insertDodRule(anyMap())).thenAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("dodRuleId",12L);return 1;});
+        SimpleDodRuleCommand command=new SimpleDodRuleCommand(null,"DOD-CONTRACT","合同完成条件","TASK","CONTRACT",
+                List.of(),List.of(),List.of(),List.of(),"0","simple-contract",0);
+
+        assertEquals(12L,service.saveSimple(command,actor));
+
+        verify(mapper).insertDodRule(argThat(row->"CONTRACT".equals(row.get("businessType"))));
+    }
+
     @Test void rejectsUnknownExternalValidator()
     {
         ledger(true);enabledDictionaries();

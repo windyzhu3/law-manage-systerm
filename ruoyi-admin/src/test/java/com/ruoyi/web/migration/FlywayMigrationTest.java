@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.37", current.getVersion().getVersion());
+        assertEquals("0.20.38", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -97,6 +97,9 @@ class FlywayMigrationTest
             assertEquals(5L, count(connection,
                 "select count(distinct perms) from sys_menu where perms in ('todo:resource:list',"
                     + "'todo:resource:query','todo:resource:add','todo:resource:edit','todo:resource:status')"));
+            assertEquals(1L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='todo_dod_rule' and column_name='business_type'"));
         }
         catch (SQLException exception)
         {

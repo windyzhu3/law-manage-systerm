@@ -317,13 +317,13 @@ function checkRuleLibraryPages() {
     'listDodRules', 'getDodRule'
   ])
   requireTokens('DoD workflow', dod, ['todo:dod-rule:create', 'todo:dod-rule:edit', 'todo:dod-rule:copy',
-    'todo:dod-rule:toggle', 'createDodRule', 'updateDodRule', 'copyDodRule', 'toggleDodRule',
+    'todo:dod-rule:toggle', 'createDodRule', 'updateDodRule', 'createSimpleDodRule', 'updateSimpleDodRule', 'copyDodRule', 'toggleDodRule',
     'getDodRuleReferenceCount', 'testDodRule', 'actionId', 'expectedVersion'])
   requireTokens(dodDrawer, contents[dodDrawer], [
-    'ConfigDetailDrawer', 'listTemplateValidatorCatalog', 'requiredFieldsJson',
+    'ConfigDetailDrawer', 'DodSimpleEditor', 'requiredFieldsJson',
     'requiredAttachmentsJson', 'conditionalRulesJson', 'validatorRefsJson', 'errorMessagesJson',
-    'missingFields', 'missingAttachments', 'validatorIssues', 'payload', 'attachments',
-    'actionId', 'expectedVersion'
+    'createSimpleDodRule', 'updateSimpleDodRule', 'advancedMode',
+    'actionId', 'expectedVersion', 'businessType'
   ])
   assertDirectToggleContract(dodPage, contents[dodPage], 'toggleDodRule')
   assertMethodTokens(dodPage, contents[dodPage], 'toggleRow', ['getDodRuleReferenceCount', '$confirm'])

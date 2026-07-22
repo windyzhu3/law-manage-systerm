@@ -126,10 +126,10 @@
 - Consumes: typed fields, materials, validators, recipes.
 - Produces: existing `todo_dod_rule` JSON without business-user JSON/code entry.
 
-- [ ] Add failing codec and structure tests for recipe loading, simple-to-legacy JSON, round-trip edit, and advanced compatibility.
-- [ ] Implement the four guided sections and collapse advanced mode.
-- [ ] Add inline human-readable summary and rule test action.
-- [ ] Run frontend contracts and DoD backend regression tests.
+- [x] Add failing codec and structure tests for recipe loading, simple-to-legacy JSON, round-trip edit, and advanced compatibility.
+- [x] Implement the four guided sections and collapse advanced mode.
+- [x] Add inline human-readable summary and rule test action.
+- [x] Run frontend contracts and DoD backend regression tests.
 
 ### Task 7: Simulation workspace closure
 

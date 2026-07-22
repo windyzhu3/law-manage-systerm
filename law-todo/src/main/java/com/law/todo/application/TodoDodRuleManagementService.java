@@ -66,12 +66,16 @@ public class TodoDodRuleManagementService
 
     @Transactional
     public long save(DodRuleCommand command,Actor actor)
+    {return save(command,actor,null);}
+
+    private long save(DodRuleCommand command,Actor actor,String businessType)
     {
         String type=command.dodRuleId()==null?"CREATE_DOD_RULE":"UPDATE_DOD_RULE";
-        String fingerprint=fingerprint(type,command.dodRuleId(),command.expectedVersion(),command,actor);
+        Object request=businessType==null?command:Map.of("command",command,"businessType",businessType);
+        String fingerprint=fingerprint(type,command.dodRuleId(),command.expectedVersion(),request,actor);
         Long replay=claim(command.actionId(),type,command.dodRuleId(),fingerprint,actor,command);if(replay!=null)return replay;
         validate(command);
-        Map<String,Object> row=row(command,actor);
+        Map<String,Object> row=row(command,actor,businessType);
         int changed;
         try{changed=command.dodRuleId()==null?mapper.insertDodRule(row):mapper.updateDodRuleConditionally(row);}
         catch(DuplicateKeyException duplicate){throw new TodoException("TODO_DOD_RULE_CODE_CONFLICT","DoD rule code already exists");}
@@ -101,7 +105,7 @@ public class TodoDodRuleManagementService
         DodRuleCommand advanced=new DodRuleCommand(command.dodRuleId(),command.ruleCode(),command.ruleName(),command.ruleType(),
                 JSON.toJSONString(command.requiredFields()),JSON.toJSONString(command.requiredAttachments()),JSON.toJSONString(command.conditionalRules()),
                 JSON.toJSONString(command.validatorRefs()),"{}",command.status(),command.actionId(),command.expectedVersion());
-        return save(advanced,actor);
+        return save(advanced,actor,command.businessType());
     }
 
     @Transactional
@@ -116,7 +120,7 @@ public class TodoDodRuleManagementService
                 text(source,"required_fields_json","requiredFieldsJson"),text(source,"required_attachments_json","requiredAttachmentsJson"),
                 text(source,"conditional_rules_json","conditionalRulesJson"),text(source,"validator_refs_json","validatorRefsJson"),
                 text(source,"error_messages_json","errorMessagesJson"),text(source,"status","status"),actionId,0);
-        validate(copy);Map<String,Object> row=row(copy,actor);
+        validate(copy);Map<String,Object> row=row(copy,actor,text(source,"business_type","businessType"));
         int changed;try{changed=mapper.insertDodRule(row);}catch(DuplicateKeyException duplicate){throw new TodoException("TODO_DOD_RULE_CODE_CONFLICT","DoD rule code already exists");}
         if(changed<=0)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule copy could not be saved");
         Long id=number(row.get("dodRuleId"));if(id==null)throw new TodoException("TODO_DOD_RULE_VERSION_CONFLICT","DoD rule identifier was not generated");
@@ -220,21 +224,21 @@ public class TodoDodRuleManagementService
     }
     private void complete(String actionId,String fingerprint,Long entityId)
     {if(entityId==null||todoMapper.completeDefinitionAction(actionId,fingerprint,entityId)<=0)throw new TodoException("TODO_DOD_RULE_ACTION_CONFLICT","DoD rule action could not be completed");}
-    private Map<String,Object> row(DodRuleCommand command,Actor actor)
+    private Map<String,Object> row(DodRuleCommand command,Actor actor,String businessType)
     {
         Map<String,Object> row=new HashMap<>();row.put("dodRuleId",command.dodRuleId());row.put("ruleCode",command.ruleCode());row.put("ruleName",command.ruleName());
-        row.put("ruleType",command.ruleType());row.put("requiredFieldsJson",command.requiredFieldsJson());row.put("requiredAttachmentsJson",command.requiredAttachmentsJson());
+        row.put("ruleType",command.ruleType());row.put("businessType",businessType);row.put("requiredFieldsJson",command.requiredFieldsJson());row.put("requiredAttachmentsJson",command.requiredAttachmentsJson());
         row.put("conditionalRulesJson",command.conditionalRulesJson());row.put("validatorRefsJson",command.validatorRefsJson());row.put("errorMessagesJson",command.errorMessagesJson());
         row.put("status",command.status());row.put("actionId",command.actionId());row.put("expectedVersion",command.expectedVersion());row.put("updateAllFields",true);
         row.put("createBy",actor.userName());row.put("updateBy",actor.userName());return row;
     }
     private DodRuleListItem listItem(Map<String,Object> row)
     {return new DodRuleListItem(number(value(row,"dod_rule_id","dodRuleId")),text(row,"rule_code","ruleCode"),text(row,"rule_name","ruleName"),
-            text(row,"rule_type","ruleType"),text(row,"status","status"),integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")),
+            text(row,"rule_type","ruleType"),text(row,"business_type","businessType"),text(row,"status","status"),integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")),
             text(row,"required_fields_json","requiredFieldsJson"),text(row,"required_attachments_json","requiredAttachmentsJson"),text(row,"conditional_rules_json","conditionalRulesJson"));}
     private DodRuleDetail detail(Map<String,Object> row)
     {return new DodRuleDetail(number(value(row,"dod_rule_id","dodRuleId")),text(row,"rule_code","ruleCode"),text(row,"rule_name","ruleName"),
-            text(row,"rule_type","ruleType"),text(row,"required_fields_json","requiredFieldsJson"),text(row,"required_attachments_json","requiredAttachmentsJson"),
+            text(row,"rule_type","ruleType"),text(row,"business_type","businessType"),text(row,"required_fields_json","requiredFieldsJson"),text(row,"required_attachments_json","requiredAttachmentsJson"),
             text(row,"conditional_rules_json","conditionalRulesJson"),text(row,"validator_refs_json","validatorRefsJson"),text(row,"error_messages_json","errorMessagesJson"),
             text(row,"status","status"),integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),text(row,"create_by","createBy"),
             date(value(row,"create_time","createTime")),text(row,"update_by","updateBy"),date(value(row,"update_time","updateTime")));}
