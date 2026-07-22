@@ -28,13 +28,13 @@
 - Modify: `law-todo/src/test/java/com/law/todo/integration/V02PrdDefinitionManifestTest.java`
 
 **Interfaces:**
-- Produces: enriched `todo_event_catalog`, `todo_validator_metadata`, resource permissions/menu, 36 READY event schemas.
+- Produces: enriched `todo_event_catalog` reusing its existing `sample_payload_json`, `todo_validator_metadata`, resource permissions/menu, 36 READY event schemas.
 
-- [ ] Add a failing migration contract asserting new columns, validator metadata constraints, resource permissions, and all known event update statements.
-- [ ] Run `mvn -pl law-todo -Dtest=TodoConfigurableClosureMigrationContractTest test` and confirm failure because `V0_20_36` is absent.
-- [ ] Add the forward-only migration with event metadata and typed schemas for every active v1 event.
-- [ ] Add a manifest test that rejects an active event with no schema properties.
-- [ ] Run both tests and confirm they pass.
+- [x] Add a failing migration contract asserting new columns, validator metadata constraints, resource permissions, and all known event update statements.
+- [x] Run `mvn -pl law-todo -Dtest=TodoConfigurableClosureMigrationContractTest test` and confirm failure because `V0_20_36` is absent.
+- [x] Add the forward-only migration with event metadata and typed schemas for every active v1 event.
+- [x] Add a real Flyway invariant that rejects an active event with no schema properties or sample payload.
+- [x] Run the focused contract and full baseline-to-`0.20.36` Flyway test against MySQL 8 and confirm they pass.
 
 ### Task 2: Versioned event resource service and API
 
@@ -167,4 +167,3 @@
 - [ ] Add Chrome E2E for event resource maintenance, trigger field selection, simple DoD, sample/real object simulation, and publish.
 - [ ] Run `mvn verify`, real MySQL Flyway, all Todo/frontend contract scripts, `npm run build:prod`, and the real-backend E2E.
 - [ ] Audit each design acceptance criterion against fresh command, database, API, and browser evidence; record only proven results.
-

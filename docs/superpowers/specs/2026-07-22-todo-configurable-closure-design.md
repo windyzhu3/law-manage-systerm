@@ -75,7 +75,7 @@ DoD 简易模式 ──→ 字段/材料/校验器目录
 扩展 `todo_event_catalog`：
 
 - `event_name`、`description`、`source_module`
-- `example_payload_json`
+- 复用现有 `sample_payload_json`
 - `schema_status`：`INCOMPLETE`、`READY`
 - `version`、更新审计字段
 
@@ -160,4 +160,3 @@ JSON Schema 是唯一机器事实。前端字段设计器维护：
 - 五类业务对象真实目录与示例对象隔离测试。
 - 真实 MySQL 验证 36 个 ACTIVE 事件全部 `READY` 且存在字段。
 - Chrome E2E 覆盖事件维护、触发条件、简易 DoD、示例对象模拟和发布。
-

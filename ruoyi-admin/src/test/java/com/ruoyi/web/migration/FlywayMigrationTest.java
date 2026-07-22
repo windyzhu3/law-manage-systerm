@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.35", current.getVersion().getVersion());
+        assertEquals("0.20.36", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -71,6 +71,31 @@ class FlywayMigrationTest
         verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
         verifyTodoConfigurationCenterSchema(url);
+        verifyTodoConfigurationResourceSchema(url);
+    }
+
+    private void verifyTodoConfigurationResourceSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(36L, count(connection,
+                "select count(*) from todo_event_catalog where status='ACTIVE' and schema_status='READY' "
+                    + "and json_length(json_extract(payload_schema_json,'$.properties'))>0 "
+                    + "and sample_payload_json is not null"));
+            assertEquals(5L, count(connection,
+                "select count(*) from todo_validator_metadata where status='ACTIVE'"));
+            assertEquals(1L, count(connection,
+                "select count(*) from sys_menu where component='todo/config/resource/index' "
+                    + "and perms='todo:resource:list'"));
+            assertEquals(5L, count(connection,
+                "select count(distinct perms) from sys_menu where perms in ('todo:resource:list',"
+                    + "'todo:resource:query','todo:resource:add','todo:resource:edit','todo:resource:status')"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Todo configuration resource database invariants failed", exception);
+        }
     }
 
     private void verifyTodoConfigurationCenterSchema(String url)
