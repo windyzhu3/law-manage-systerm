@@ -39,6 +39,7 @@
             :readonly="readonly"
             @validity-change="conditionValid = $event"
             @dirty-change="conditionDraftDirty = $event"
+            @open-resource-center="openResourceCenter"
           />
         </el-collapse-item>
 
@@ -285,7 +286,8 @@ export default {
       } catch (error) { this.showError(error, '保存触发规则失败') } finally { this.saving = false }
     },
     format(value) { return value ? this.parseTime(value, '{y}-{m}-{d} {h}:{i}:{s}') : '-' },
-    showError(error, fallback) { if (error && error !== 'cancel') this.$modal.msgError((error && (error.msg || error.message)) || fallback) }
+    showError(error, fallback) { if (error && error !== 'cancel') this.$modal.msgError((error && (error.msg || error.message)) || fallback) },
+    openResourceCenter() { this.$emit('update:visible', false); this.$router.push('/todo/config/resource') }
   }
 }
 </script>

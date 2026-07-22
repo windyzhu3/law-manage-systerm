@@ -20,6 +20,18 @@
         </el-radio-group>
       </div>
 
+      <el-alert
+        v-if="!schemaError && !schemaFields.length"
+        title="当前事件尚未维护 Payload 字段，无法配置可视化触发条件。"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <template #default>
+          <el-button v-if="!readonly" type="text" @click="openResourceCenter">前往事件目录维护</el-button>
+        </template>
+      </el-alert>
+
       <el-empty v-if="!conditions.length" description="未设置条件，事件到达后直接触发" :image-size="64" />
       <div v-for="(condition, index) in conditions" :key="condition.key" class="condition-builder__row">
         <el-select
@@ -31,6 +43,7 @@
         >
           <el-option v-for="field in schemaFields" :key="field.path" :label="field.label" :value="field.path" />
         </el-select>
+        <span class="condition-builder__field-type">字段类型：{{ fieldTypeLabel(selectedField(condition)) }}</span>
         <el-select
           v-model="condition.operator"
           :disabled="readonly"
@@ -39,17 +52,34 @@
         >
           <el-option v-for="item in operatorOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-input
-          v-if="requiresValue(condition.operator)"
+        <el-select
+          v-if="requiresValue(condition.operator) && enumOptions(condition).length"
           v-model="condition.valueJson"
           :disabled="readonly"
-          placeholder='比较值，如 READY、10 或 ["A","B"]'
+          filterable
+          allow-create
+          placeholder="选择或输入比较值"
+          @change="emitBuilderValue"
+        ><el-option v-for="item in enumOptions(condition)" :key="String(item)" :label="String(item)" :value="JSON.stringify(item)" /></el-select>
+        <el-select
+          v-else-if="requiresValue(condition.operator) && selectedField(condition) && selectedField(condition).type === 'boolean'"
+          v-model="condition.valueJson"
+          :disabled="readonly"
+          placeholder="请选择"
+          @change="emitBuilderValue"
+        ><el-option label="是" value="true" /><el-option label="否" value="false" /></el-select>
+        <el-input
+          v-else-if="requiresValue(condition.operator)"
+          v-model="condition.valueJson"
+          :disabled="readonly"
+          :type="inputType(condition)"
+          :placeholder="valuePlaceholder(condition)"
           @input="emitBuilderValue"
         />
         <span v-else class="condition-builder__no-value">无需比较值</span>
         <el-button v-if="!readonly" type="text" class="danger-text" @click="removeCondition(index)">删除</el-button>
       </div>
-      <el-button v-if="!readonly" plain size="small" icon="el-icon-plus" @click="addCondition">添加条件</el-button>
+      <el-button v-if="!readonly" plain size="small" icon="el-icon-plus" :disabled="!schemaFields.length" @click="addCondition">添加条件</el-button>
       <el-button v-if="value" type="text" size="small" @click="showRawJson">查看原始 JSON</el-button>
     </template>
 
@@ -119,7 +149,8 @@ export default {
         const definition = properties[name] || {}
         const path = prefix ? `${prefix}.${name}` : name
         const types = Array.isArray(definition.type) ? definition.type : [definition.type].filter(Boolean)
-        result.push({ path, label: `${path}${types.length ? ` (${types.join('|')})` : ''}` })
+        const type = types[0] || 'string'
+        result.push({ path, title: definition.title || name, type, enumValues: Array.isArray(definition.enum) ? definition.enum : [], label: `${definition.title || path} · ${path}` })
         if (definition.properties) result.push(...this.flattenSchema(definition.properties, path))
         return result
       }, [])
@@ -172,6 +203,12 @@ export default {
     addCondition() { this.conditions.push(emptyCondition()); this.emitBuilderValue() },
     removeCondition(index) { this.conditions.splice(index, 1); this.emitBuilderValue() },
     requiresValue(operator) { return !['EXISTS', 'NOT_EXISTS', 'EMPTY', 'NOT_EMPTY'].includes(operator) },
+    openResourceCenter() { this.$emit('open-resource-center') },
+    selectedField(condition) { return this.schemaFields.find(field => field.path === condition.fieldPath) || null },
+    enumOptions(condition) { const field = this.selectedField(condition); return field ? field.enumValues : [] },
+    inputType(condition) { const field = this.selectedField(condition); return field && ['integer', 'number'].includes(field.type) ? 'number' : 'text' },
+    valuePlaceholder(condition) { const field = this.selectedField(condition); if (!field) return '请先选择字段'; if (field.type === 'array') return '["A","B"]'; if (field.type === 'object') return '{"key":"value"}'; if (['integer', 'number'].includes(field.type)) return '请输入数字'; return `请输入${field.title || '比较值'}` },
+    fieldTypeLabel(field) { return field ? ({ string: '文本', integer: '整数', number: '数字', boolean: '是/否', array: '数组', object: '对象' })[field.type] || field.type : '—' },
     operatorChanged(condition) { if (!this.requiresValue(condition.operator)) condition.valueJson = ''; this.emitBuilderValue() },
     parseValue(text, operator) {
       if (!this.requiresValue(operator)) return null
@@ -248,7 +285,9 @@ export default {
 .condition-builder { padding: 4px 0; }
 .condition-builder__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .condition-builder__hint { margin-left: 10px; color: #94a3b8; font-size: 12px; }
-.condition-builder__row { display: grid; grid-template-columns: minmax(150px,1.2fr) 120px minmax(160px,1fr) auto; align-items: center; gap: 8px; margin-bottom: 8px; }
+.condition-builder__row { display: grid; grid-template-columns: minmax(170px,1.2fr) 92px 120px minmax(160px,1fr) auto; align-items: center; gap: 8px; margin-bottom: 8px; }
+.condition-builder__field-type { color: #64748b; font-size: 12px; }
+.condition-builder > .el-alert { margin-bottom: 12px; }
 .condition-builder__no-value { padding: 8px 12px; border-radius: 4px; color: #94a3b8; background: #f8fafc; font-size: 12px; }
 .condition-builder__raw .el-alert { margin-bottom: 10px; }
 .condition-builder__raw-actions { margin-top: 10px; }

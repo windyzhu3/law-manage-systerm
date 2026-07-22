@@ -108,10 +108,10 @@
 - Consumes: Tasks 2–3 resource APIs.
 - Produces: event maintenance, payload field design, validator governance, actionable empty states.
 
-- [ ] Add a failing Node contract test for routes, permissions, APIs, typed controls, and no-raw-code common flow.
-- [ ] Implement resource pages and Schema designer with existing configuration-center components/styles.
-- [ ] Replace trigger builder's generic empty dropdown with typed fields and actionable schema errors.
-- [ ] Run the contract, encoding, and production build checks.
+- [x] Add a failing Node contract test for routes, permissions, APIs, typed controls, and no-raw-code common flow.
+- [x] Implement resource pages and Schema designer with existing configuration-center components/styles.
+- [x] Replace trigger builder's generic empty dropdown with typed fields and actionable schema errors.
+- [x] Run the contract, encoding, and production build checks.
 
 ### Task 6: Guided DoD simple mode
 
