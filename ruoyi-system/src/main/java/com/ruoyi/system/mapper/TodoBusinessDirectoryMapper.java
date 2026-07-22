@@ -7,5 +7,6 @@ public interface TodoBusinessDirectoryMapper
 {
     List<Map<String,Object>> selectVisibleBusinessObjects(Map<String,Object> query);
     long countVisibleBusinessObjects(Map<String,Object> query);
+    long countUnscopedBusinessObjects(Map<String,Object> query);
     Map<String,Object> selectVisibleBusinessObject(Map<String,Object> query);
 }

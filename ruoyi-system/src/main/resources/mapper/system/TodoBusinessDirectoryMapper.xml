@@ -83,6 +83,9 @@
     <select id="countVisibleBusinessObjects" resultType="long">
         select count(*) from (<include refid="visibleDirectorySource"/>) authorized_directory
     </select>
+    <select id="countUnscopedBusinessObjects" resultType="long">
+        select count(*) from (<include refid="visibleDirectorySource"/>) unscoped_directory
+    </select>
     <select id="selectVisibleBusinessObject" resultType="java.util.Map">
         <include refid="visibleDirectorySource"/> limit 1
     </select>

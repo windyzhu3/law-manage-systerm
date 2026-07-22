@@ -221,7 +221,7 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
     @PostMapping({"/simulations","/trigger-rules/simulate"}) public AjaxResult simulate(@Valid @RequestBody ConfigurationSimulationCommand value){return success(simulation.simulate(value,actor()));}
     @PreAuthorize("@ss.hasPermi('todo:simulation:list')")
-    @GetMapping("/business-objects") public TableDataInfo businessObjects(@Valid @ModelAttribute BusinessObjectQuery value){var page=query.businessObjects(value.businessType(),value.keyword(),value.pageNum(),value.pageSize(),actor());return new TableDataInfo(page.rows(),page.total());}
+    @GetMapping("/business-objects") public TableDataInfo businessObjects(@Valid @ModelAttribute BusinessObjectQuery value){var page=query.businessObjects(value.businessType(),value.keyword(),value.pageNum(),value.pageSize(),actor());return new BusinessObjectTableDataInfo(page.rows(),page.total(),page.emptyReason(),page.sampleFallback());}
 
     @PreAuthorize("@ss.hasPermi('todo:release:list')")
     @GetMapping("/release-records") public TableDataInfo releases(@Valid @ModelAttribute ReleaseListQuery value){var page=query.releasePage(value.toMap());return new TableDataInfo(page.rows(),page.total());}
@@ -277,4 +277,13 @@ public class TodoConfigurationController extends BaseController
             result.put("businessObjectType",businessObjectType);result.put("schemaStatus",schemaStatus);result.put("status",status);
             result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
     public record ActionIdCommand(@NotBlank String actionId) { }
+
+    public static final class BusinessObjectTableDataInfo extends TableDataInfo
+    {
+        private static final long serialVersionUID=1L;private final String emptyReason;private final boolean sampleFallback;
+        public BusinessObjectTableDataInfo(List<?> rows,long total,String emptyReason,boolean sampleFallback)
+        {super(rows,total);this.emptyReason=emptyReason;this.sampleFallback=sampleFallback;}
+        public String getEmptyReason(){return emptyReason;}
+        public boolean isSampleFallback(){return sampleFallback;}
+    }
 }

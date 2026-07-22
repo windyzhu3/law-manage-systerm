@@ -31,7 +31,16 @@ public class RuoYiTodoBusinessDirectoryAccess implements TodoBusinessDirectoryAc
     {
         Map<String,Object> query=query(type,actor);query.put("keyword",keyword);query.put("offset",offset);query.put("limit",limit);
         List<DirectoryEntry> rows=mapper.selectVisibleBusinessObjects(query).stream().map(this::entry).toList();
-        return new DirectoryPage(rows,mapper.countVisibleBusinessObjects(query));
+        long total=mapper.countVisibleBusinessObjects(query);if(total>0||!rows.isEmpty())return new DirectoryPage(rows,total,null,"BUSINESS_DATA");
+        Map<String,Object> unscoped=new LinkedHashMap<>(query);unscoped.put("dataScope",false);
+        long matching=mapper.countUnscopedBusinessObjects(unscoped);String reason;
+        if(matching>0)reason="NO_PERMISSION";
+        else
+        {
+            unscoped.remove("keyword");unscoped.remove("businessId");
+            reason=mapper.countUnscopedBusinessObjects(unscoped)>0?"NO_MATCH":"NO_DATA";
+        }
+        return new DirectoryPage(rows,0,reason,"BUSINESS_DATA");
     }
 
     @Override public Optional<DirectoryEntry> findVisible(String type,Long id,Actor actor)

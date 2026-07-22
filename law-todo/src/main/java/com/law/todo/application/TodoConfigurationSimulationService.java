@@ -44,7 +44,7 @@ public class TodoConfigurationSimulationService
         TodoSimulationView simulation;
         try
         {
-            if(businessObjects!=null)businessObjects.requireBusinessObject(command.businessType(),command.businessId(),actor);
+            if(businessObjects!=null)businessObjects.requireSimulationBusinessObject(command.businessType(),command.businessId(),actor);
             if(definitionGates!=null)definitionGates.assertSimulationGate(command.versionId(),command.expectedDefinitionHash());
             simulation=definitions.simulate(command.versionId(),command.toDefinitionCommand(),command.eventType(),
                     command.payloadVersion(),command.businessType());

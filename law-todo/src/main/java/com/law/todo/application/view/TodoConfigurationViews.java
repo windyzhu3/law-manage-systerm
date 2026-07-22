@@ -77,9 +77,12 @@ public final class TodoConfigurationViews
         }
     }
 
-    public record BusinessObjectItem(long businessId,String businessNo,String businessName,String businessType) { }
-    public record BusinessObjectPage(List<BusinessObjectItem> rows,long total)
-    { public BusinessObjectPage { rows=rows==null?List.of():List.copyOf(rows); } }
+    public record BusinessObjectItem(long businessId,String businessNo,String businessName,String businessType,String source,boolean sample)
+    {public BusinessObjectItem(long businessId,String businessNo,String businessName,String businessType)
+        {this(businessId,businessNo,businessName,businessType,"BUSINESS_DATA",false);}}
+    public record BusinessObjectPage(List<BusinessObjectItem> rows,long total,String emptyReason,boolean sampleFallback)
+    { public BusinessObjectPage { rows=rows==null?List.of():List.copyOf(rows); }
+      public BusinessObjectPage(List<BusinessObjectItem> rows,long total){this(rows,total,null,false);} }
 
     public record ConfigurationSimulationResult(TodoSimulationView simulation,long durationMs) { }
 

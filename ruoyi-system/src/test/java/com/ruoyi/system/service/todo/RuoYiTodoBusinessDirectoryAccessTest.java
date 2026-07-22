@@ -46,4 +46,20 @@ class RuoYiTodoBusinessDirectoryAccessTest
         verify(mapper).selectVisibleBusinessObjects(query.capture());
         assertEquals(false,query.getValue().get("dataScope"));
     }
+
+    @Test void distinguishesNoDataNoMatchAndNoPermission()
+    {
+        Actor actor=new Actor(7L,"operator",2L);RuoYiTodoBusinessDirectoryAccess service=new RuoYiTodoBusinessDirectoryAccess(mapper);
+        when(mapper.selectVisibleBusinessObjects(anyMap())).thenReturn(List.of());
+        when(mapper.countVisibleBusinessObjects(anyMap())).thenReturn(0L);
+        when(mapper.countUnscopedBusinessObjects(anyMap())).thenReturn(4L);
+
+        assertEquals("NO_PERMISSION",service.search("CASE",null,0,20,actor).emptyReason());
+
+        when(mapper.countUnscopedBusinessObjects(anyMap())).thenReturn(0L,4L);
+        assertEquals("NO_MATCH",service.search("CASE","missing",0,20,actor).emptyReason());
+
+        when(mapper.countUnscopedBusinessObjects(anyMap())).thenReturn(0L,0L);
+        assertEquals("NO_DATA",service.search("CASE",null,0,20,actor).emptyReason());
+    }
 }

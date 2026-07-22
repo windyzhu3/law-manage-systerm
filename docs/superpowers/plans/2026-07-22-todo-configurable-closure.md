@@ -87,10 +87,10 @@
 **Interfaces:**
 - Produces: paged entries with `source`, `sample`, and diagnostic empty state; sample IDs accepted only by simulation.
 
-- [ ] Write failing tests for five types, no-data samples, no-permission diagnosis, and rejection of sample IDs outside simulation.
-- [ ] Implement the enriched directory response and sample catalogue.
-- [ ] Add deterministic test fixtures without mutating production business tables.
-- [ ] Run both modules' focused tests.
+- [x] Write failing tests for five types, no-data samples, no-permission diagnosis, and rejection of sample IDs outside simulation.
+- [x] Implement the enriched directory response and sample catalogue.
+- [x] Add deterministic in-memory sample fixtures without mutating production business tables.
+- [x] Run both modules' focused tests and the controller response contract.
 
 ### Task 5: Configuration resource frontend
 

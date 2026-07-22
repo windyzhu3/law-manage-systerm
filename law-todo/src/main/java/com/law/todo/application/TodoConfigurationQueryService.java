@@ -31,10 +31,15 @@ public class TodoConfigurationQueryService
     private static final int MAX_RELEASE_LIMIT=500;
     private final TodoConfigurationMapper mapper;
     private final List<TodoBusinessDirectoryAccess> businessDirectories;
+    private final TodoSimulationSampleCatalog samples;
 
     @Autowired
+    public TodoConfigurationQueryService(TodoConfigurationMapper mapper,List<TodoBusinessDirectoryAccess> businessDirectories,
+            TodoSimulationSampleCatalog samples)
+    {this.mapper=mapper;this.businessDirectories=businessDirectories==null?List.of():List.copyOf(businessDirectories);this.samples=samples;}
+
     public TodoConfigurationQueryService(TodoConfigurationMapper mapper,List<TodoBusinessDirectoryAccess> businessDirectories)
-    {this.mapper=mapper;this.businessDirectories=businessDirectories==null?List.of():List.copyOf(businessDirectories);}
+    {this(mapper,businessDirectories,new TodoSimulationSampleCatalog());}
 
     /** Focused-test compatibility. Business directory APIs deliberately fail closed without an adapter. */
     public TodoConfigurationQueryService(TodoConfigurationMapper mapper){this(mapper,List.of());}
@@ -100,15 +105,29 @@ public class TodoConfigurationQueryService
         if(pageNum<1||pageSize<1||pageSize>100)throw invalidPagination("business object page is out of range");
         TodoBusinessDirectoryAccess.DirectoryPage page=directory(businessType).search(businessType,keyword,
                 (pageNum-1)*pageSize,pageSize,requireActor(actor));
-        return new BusinessObjectPage(page.rows().stream().map(this::businessObject).toList(),page.total());
+        if(page.total()==0&&page.rows().isEmpty()&&"NO_DATA".equals(page.emptyReason()))
+        {
+            TodoBusinessDirectoryAccess.DirectoryPage samplePage=samples.search(businessType,keyword,(pageNum-1)*pageSize,pageSize);
+            return new BusinessObjectPage(samplePage.rows().stream().map(this::businessObject).toList(),samplePage.total(),
+                    "NO_DATA",!samplePage.rows().isEmpty());
+        }
+        return new BusinessObjectPage(page.rows().stream().map(this::businessObject).toList(),page.total(),page.emptyReason(),false);
     }
 
     public BusinessObjectItem requireBusinessObject(String businessType,Long businessId,Actor actor)
     {
         requireBusinessType(businessType);
         if(businessId==null)throw businessObjectNotFound();
+        if(businessId<0)throw new TodoException("TODO_SAMPLE_BUSINESS_OBJECT_NOT_ALLOWED","Sample business objects are allowed only in simulation");
         return directory(businessType).findVisible(businessType,businessId,requireActor(actor))
                 .map(this::businessObject).orElseThrow(this::businessObjectNotFound);
+    }
+
+    public BusinessObjectItem requireSimulationBusinessObject(String businessType,Long businessId,Actor actor)
+    {
+        requireBusinessType(businessType);requireActor(actor);if(businessId==null)throw businessObjectNotFound();
+        if(businessId<0)return samples.find(businessType,businessId).map(this::businessObject).orElseThrow(this::businessObjectNotFound);
+        return requireBusinessObject(businessType,businessId,actor);
     }
 
     private Integer paginationInteger(Object value,String field)
@@ -147,7 +166,7 @@ public class TodoConfigurationQueryService
     }
 
     private BusinessObjectItem businessObject(TodoBusinessDirectoryAccess.DirectoryEntry row)
-    {return new BusinessObjectItem(row.businessId(),row.businessNo(),row.businessName(),row.businessType());}
+    {return new BusinessObjectItem(row.businessId(),row.businessNo(),row.businessName(),row.businessType(),row.source(),row.sample());}
 
     private TodoBusinessDirectoryAccess directory(String businessType)
     {return businessDirectories.stream().filter(item->item.supports(businessType)).findFirst().orElseThrow(()->

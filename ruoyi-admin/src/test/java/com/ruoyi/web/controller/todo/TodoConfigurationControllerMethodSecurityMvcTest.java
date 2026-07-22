@@ -3,6 +3,7 @@ package com.ruoyi.web.controller.todo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.util.Set;
 
@@ -78,7 +79,8 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
       mvc().perform(get("/todo/config/templates/7")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/templates/7/versions")).andExpect(status().isOk());
       mvc().perform(get("/todo/config/template-catalog/events")).andExpect(status().isOk());
-      mvc().perform(get("/todo/config/business-objects?businessType=LEAD&pageNum=1&pageSize=20")).andExpect(status().isOk());
+      mvc().perform(get("/todo/config/business-objects?businessType=LEAD&pageNum=1&pageSize=20")).andExpect(status().isOk())
+          .andExpect(jsonPath("$.emptyReason").value("NO_DATA")).andExpect(jsonPath("$.sampleFallback").value(true));
       mvc().perform(post("/todo/config/simulations").contentType("application/json").content("""
           {"requestId":"r-1","versionId":7,"eventType":"LEAD_CREATED","payloadVersion":1,
            "businessType":"LEAD","businessId":1,"payload":{"stage":"READY"},
@@ -123,7 +125,7 @@ class TodoConfigurationControllerMethodSecurityMvcTest {
             new com.law.todo.application.view.TodoConfigurationViews.TemplatePage(java.util.List.of(),0));
         org.mockito.Mockito.when(query.businessObjects(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.nullable(String.class),
             org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.any())).thenReturn(
-            new com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage(java.util.List.of(),0));
+            new com.law.todo.application.view.TodoConfigurationViews.BusinessObjectPage(java.util.List.of(),0,"NO_DATA",true));
         TodoEventResourceService eventResources=org.mockito.Mockito.mock(TodoEventResourceService.class);
         org.mockito.Mockito.when(eventResources.list(org.mockito.ArgumentMatchers.anyMap())).thenReturn(
             new com.law.todo.application.view.TodoResourceViews.EventResourcePage(java.util.List.of(),0));
