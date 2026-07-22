@@ -115,6 +115,9 @@ public class TodoEventResourceService
         Actor user=requireActor(actor);Map<String,Object> current=require(id);
         if("ACTIVE".equals(command.status())&&!"READY".equals(text(current,"schema_status","schemaStatus")))
             throw new TodoException("TODO_EVENT_RESOURCE_SCHEMA_INCOMPLETE","Only READY event schemas can be activated");
+        if("ACTIVE".equals(command.status()))
+            validate(text(current,"payload_schema_json","payloadSchemaJson"),
+                    text(current,"sample_payload_json","samplePayloadJson"));
         Map<String,Object> request=new TreeMap<>();request.put("status",command.status());request.put("expectedVersion",command.expectedVersion());
         String fingerprint=fingerprint("CHANGE_EVENT_RESOURCE_STATUS",id,command.expectedVersion(),request,user);
         if(claim(command.actionId(),"CHANGE_EVENT_RESOURCE_STATUS",id,fingerprint,user,request)!=null)return;

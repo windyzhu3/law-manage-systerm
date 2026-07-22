@@ -10,9 +10,11 @@
     </el-table>
     <pagination v-show="total>0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="load"/>
 
-    <config-detail-drawer :visible.sync="summaryOpen" title="模板详情" size="720px"><template-summary-panel :draft="summaryDraft" :definition-error="summaryError"/></config-detail-drawer>
-    <template-drawer :visible.sync="drawerOpen" :detail="selected" :mode="drawerMode" :initial-step="drawerStep" @saved="afterDraftSaved" @published="afterPublished"/>
-    <config-detail-drawer ref="importDrawer" :visible.sync="importOpen" title="导入模板草稿" size="680px" :dirty="Boolean(importText)"><el-alert title="仅支持 schemaVersion=1 的规范 JSON。导入会新建模板和 DRAFT 版本，不会覆盖或自动发布。" type="info" :closable="false" show-icon/><el-input v-model="importText" type="textarea" :rows="20" class="import-text" placeholder="粘贴导出包 JSON"/><template #footer><el-button @click="$refs.importDrawer.requestProgrammaticClose()">取消</el-button><el-button v-hasPermi="['todo:template:import']" type="primary" :loading="importing" @click="submitImport">校验并导入</el-button></template></config-detail-drawer>
+    <template #persistent>
+      <config-detail-drawer :visible.sync="summaryOpen" title="模板详情" size="720px"><template-summary-panel :draft="summaryDraft" :definition-error="summaryError"/></config-detail-drawer>
+      <template-drawer :visible.sync="drawerOpen" :detail="selected" :mode="drawerMode" :initial-step="drawerStep" @saved="afterDraftSaved" @published="afterPublished"/>
+      <config-detail-drawer ref="importDrawer" :visible.sync="importOpen" title="导入模板草稿" size="680px" :dirty="Boolean(importText)"><el-alert title="仅支持 schemaVersion=1 的规范 JSON。导入会新建模板和 DRAFT 版本，不会覆盖或自动发布。" type="info" :closable="false" show-icon/><el-input v-model="importText" type="textarea" :rows="20" class="import-text" placeholder="粘贴导出包 JSON"/><template #footer><el-button @click="$refs.importDrawer.requestProgrammaticClose()">取消</el-button><el-button v-hasPermi="['todo:template:import']" type="primary" :loading="importing" @click="submitImport">校验并导入</el-button></template></config-detail-drawer>
+    </template>
   </config-page-shell>
 </template>
 

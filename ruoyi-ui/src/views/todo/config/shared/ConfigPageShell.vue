@@ -22,6 +22,8 @@
       <slot v-else-if="empty" name="empty"><el-empty :description="emptyText" :image-size="88" /></slot>
       <slot v-else />
     </main>
+    <!-- Drawers/dialogs must stay mounted even when an empty-state replaces the list. -->
+    <slot name="persistent" />
   </section>
 </template>
 

@@ -29,7 +29,7 @@
       </el-table>
       <pagination v-show="total>0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="load" />
     </el-card>
-    <simulation-drawer v-model="drawerOpen" :events="activeEvents" :initial-template="selected" :initial-event="handoffEvent" @simulated="lastStatus='已完成'" />
+    <template #persistent><simulation-drawer v-model="drawerOpen" :events="activeEvents" :initial-template="selected" :initial-event="handoffEvent" @simulated="lastStatus='已完成'" /></template>
   </config-page-shell>
 </template>
 

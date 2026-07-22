@@ -22,6 +22,13 @@ assert.ok(drawer.includes('DodSimpleEditor'))
 assert.ok(drawer.includes('createSimpleDodRule'))
 assert.ok(drawer.includes('updateSimpleDodRule'))
 
+// Empty configuration lists must keep creation drawers mounted. Otherwise a
+// first-time user can click "新增规则" but no editor can appear.
+const shell = file('src/views/todo/config/shared/ConfigPageShell.vue')
+const dodIndex = file('src/views/todo/config/dod/index.vue')
+assert.ok(shell.includes('<slot name="persistent" />'), 'config page shell must expose an always-mounted persistent slot')
+assert.ok(dodIndex.includes('<template #persistent>'), 'DoD drawer must remain mounted when the rule list is empty')
+
 const step = file('src/views/todo/config/template/steps/TemplateDodStep.vue')
 assert.ok(step.includes('business-type'))
 console.log('todo DoD simple editor contract passed')

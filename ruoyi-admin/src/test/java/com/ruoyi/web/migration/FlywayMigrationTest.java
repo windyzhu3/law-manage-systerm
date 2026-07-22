@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.38", current.getVersion().getVersion());
+        assertEquals("0.20.39", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -72,6 +72,22 @@ class FlywayMigrationTest
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
         verifyTodoConfigurationCenterSchema(url);
         verifyTodoConfigurationResourceSchema(url);
+        verifyReadableNavigationMenuNames(url);
+    }
+
+    private void verifyReadableNavigationMenuNames(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(0L, count(connection,
+                "select count(*) from sys_menu where menu_type in ('M','C') and menu_name <> '' "
+                    + "and menu_name not regexp '[^?]'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Navigation menu names must not contain bootstrap replacement characters", exception);
+        }
     }
 
     private void verifyTodoConfigurationResourceSchema(String url)

@@ -69,7 +69,7 @@
     </el-table>
     <pagination v-show="total > 0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="handlePagination" />
 
-    <trigger-rule-drawer :visible.sync="drawerOpen" :rule="selected" :mode="drawerMode" @edit="openEdit" @saved="afterSaved" />
+    <template #persistent><trigger-rule-drawer :visible.sync="drawerOpen" :rule="selected" :mode="drawerMode" @edit="openEdit" @saved="afterSaved" /></template>
   </config-page-shell>
 </template>
 

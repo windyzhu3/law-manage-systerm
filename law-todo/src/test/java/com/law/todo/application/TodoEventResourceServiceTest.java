@@ -105,6 +105,19 @@ class TodoEventResourceServiceTest
                 &&Integer.valueOf(3).equals(value.get("expectedVersion"))));
     }
 
+    @Test void activationRevalidatesPersistedSchemaAndSample()
+    {
+        Map<String,Object> draft=row(9L,"DRAFT",3,1);draft.put("schema_status","READY");
+        draft.put("payload_schema_json","{\"type\":\"object\",\"properties\":{}}");
+        when(mapper.selectEventResource(9L)).thenReturn(draft);
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->service.changeStatus(9L,new EventResourceStatusCommand("ACTIVE","status-invalid-event",3),actor));
+
+        assertEquals("TODO_EVENT_RESOURCE_SCHEMA_INVALID",error.getBusinessCode());
+        verify(mapper,never()).updateEventResourceStatusConditionally(anyMap());
+    }
+
     @Test void detailIncludesReferencesAndTypedMetadata()
     {
         when(mapper.selectEventResource(9L)).thenReturn(row(9L,"ACTIVE",3,1));
