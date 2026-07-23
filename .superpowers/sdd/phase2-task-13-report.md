@@ -146,3 +146,41 @@ GREEN: mvn -pl law-todo test
 ```text
 npm run test:e2e -- tests/e2e/todo-config-journey.spec.js
 ```
+
+## 最终 E2E 审查修复：精确版本与真实失败重跑
+
+最终审查发现上一轮两个场景的断言虽然严格，但业务路径不成立，本节结论取代上一节中对应场景的描述：
+
+1. 原 Schema 场景从启用中的 `eventType@v1` 创建并保存了 `v2`，却没有启用 `v2`，模板也仍绑定 `v1`。刷新后的字段目录可能造成页面看似健康，但实际编译和模拟仍指向不完整版本。
+2. 原失败场景通过不存在的日历制造错误；该错误会在发布预检阶段提前返回，因此模拟引擎不会运行，页面也不会产生六段模拟轨迹。
+
+修复后的确定性路径：
+
+- Schema 场景先从数据库读取模板实际绑定的事件类型、Payload 版本、Schema 状态和资源状态，并确认初始版本为 `ACTIVE / INCOMPLETE`。
+- 用户在真实资源抽屉中创建下一版本，补充整数型 `ownerId` 字段、生成样例并保存；测试等待真实创建版本接口和版本元数据显示完成，避免抽屉异步加载竞态。
+- 保存后的新版本必须由数据库确认是 `DRAFT / READY`，随后通过已认证的真实状态接口将该精确资源 ID 启用。
+- 回到旅程后，用户选择新启用的 Payload 版本并保存模板。数据库使用 `definition_json.event.eventType + payloadVersion` 精确连接资源目录，断言模板已绑定新的 `ACTIVE / READY` 版本且字段数大于零；页面同时断言版本号、健康状态和 `ownerId`。
+- 最终使用事件资源自身的只读样例对象运行六段模拟，并确认不存在阻塞轨迹。
+- 失败模拟 Fixture 改为 Schema 合法、日历合法的规范化条件 `ownerId == -999999999`。发布预检通过后，真实业务对象会得到 `NOT_MATCHED` 模拟结果、完整六段轨迹和禁用的发布按钮。
+- `SimulationTrace` 将 `NOT_MATCHED` 明确显示为阻塞状态。用户返回触发条件步骤删除该条件并保存，再次选择同一真实业务对象运行模拟；第二次六段轨迹无阻塞，发布按钮恢复可用。
+
+源码契约 TDD：
+
+```text
+RED: npm run test:e2e:contract
+     Todo journey real E2E spec must include loadJourneyEventBinding
+
+GREEN: npm run test:e2e:contract
+       Todo configuration real-backend E2E source contract passed
+       External-database Surefire report gate negative contract passed
+```
+
+本轮额外验证：
+
+- 三个相关 JavaScript 文件通过 `node --check`；
+- Playwright `--list` 识别且仅识别 7 个固定旅程场景；
+- `npm run test:todo-phase-two`：42 个模型检查、25 个 UX 检查通过；
+- `npm run test:todo-config`、`npm run test:encoding` 通过；
+- `npm run build:prod` 成功，只有仓库既有的资源体积警告。
+
+真实浏览器执行条件仍未出现：本机 `8080`、`3306` 未监听，且不存在 `TODO_*` 环境变量。本轮没有以源码契约替代真实运行结论；Task14 仍需在一次性 E2E 数据库和后端启动后执行完整 Playwright 旅程。

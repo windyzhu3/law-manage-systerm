@@ -201,7 +201,8 @@ select target.template_id,1,'DRAFT',source.version_id,source.owner_rule_json,sou
     when @repair_template_code then json_set(source.definition_json,'$.templateCode',target.template_code,
       '$.event.eventType',@repair_event_type,'$.event.payloadVersion',1)
     when @failed_template_code then json_set(source.definition_json,'$.templateCode',target.template_code,
-      '$.sla.config.calendarCode',concat('E2E_MISSING_CALENDAR_',@run_marker),'$.sla.config.minutes',30)
+      '$.event.condition',json_object('$expression',json_object('version',1,'root',
+        json_object('field','ownerId','operator','EQ','value',-999999999))))
     else json_set(source.definition_json,'$.templateCode',target.template_code,
       '$.decisionRefs',json_array(@warning_decision_code))
   end,

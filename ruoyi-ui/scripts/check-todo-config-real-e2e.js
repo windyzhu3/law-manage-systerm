@@ -10,6 +10,7 @@ const productionServerPath = path.join(root, 'scripts/serve-e2e-production.js')
 const productionServerContractPath = path.join(root, 'scripts/check-production-e2e-server.js')
 const mysqlRunnerPath = path.join(root, 'tests/e2e/support/mysql-e2e-runner.js')
 const databaseFixturePath = path.join(root, 'tests/e2e/support/todo-config-e2e-database.js')
+const simulationTracePath = path.join(root, 'src/views/todo/config/journey/components/SimulationTrace.vue')
 const externalReportGatePath = path.join(root, 'scripts/assert-external-db-reports.js')
 const externalReportContractPath = path.join(root, 'scripts/check-external-db-reports-contract.js')
 const workflowPath = path.resolve(root, '../.github/workflows/ci.yml')
@@ -31,6 +32,7 @@ const spec = read(specPath)
 const journeySpec = read(journeySpecPath)
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
+const simulationTrace = read(simulationTracePath)
 for (const required of [
   'TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL execution path is available',
   '--init-command=SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci'
@@ -42,6 +44,8 @@ for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
 forbidText(journeySpec, 'if (await', 'Todo journey deterministic E2E scenarios')
 forbidText(journeySpec, 'TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID', 'Todo journey deterministic E2E fixtures')
 forbidText(journeySpec, 'TODO_CONFIG_E2E_AUDITOR_USER', 'Todo journey deterministic E2E identities')
+forbidText(journeySpec, 'SCENARIO_SCHEMA_REPAIR_RERUN', 'Todo journey exact-version repair scenario')
+forbidText(journeySpec, 'SCENARIO_FAILED_SIMULATION_BLOCKS_PUBLISH', 'Todo journey repair-and-rerun scenario')
 const journeySkips = journeySpec.match(/test\.skip\(/g) || []
 if (journeySkips.length !== 1 || !journeySpec.includes("test.skip(!realBackend, 'requires the disposable real-backend E2E environment')")) {
   throw new Error('Todo journey E2E must have exactly one environment-only skip and no optional scenario skips')
@@ -84,8 +88,10 @@ for (const required of [
 requireText(spec, "require('./support/todo-config-e2e-database')", 'Todo configuration real E2E spec')
 for (const required of [
   'loadJourneyFixture',
-  'SCENARIO_SCHEMA_REPAIR_RERUN',
-  'SCENARIO_FAILED_SIMULATION_BLOCKS_PUBLISH',
+  'loadJourneyEventBinding',
+  'loadRepairEventResource',
+  'SCENARIO_SCHEMA_REPAIR_ACTIVATE_BIND_RERUN',
+  'SCENARIO_FAILED_SIMULATION_REPAIR_RERUN',
   'SCENARIO_WARNING_REASON_REQUIRED',
   'SCENARIO_SAMPLE_NO_RUNTIME_WRITES',
   'SCENARIO_BUSINESS_ADMIN_BOUNDARY',
@@ -105,7 +111,15 @@ for (const required of [
   'todo_publisher',
   'todo_auditor',
   'snapshotSimulationPersistence',
-  'assertSimulationPersistenceUnchanged'
+  'assertSimulationPersistenceUnchanged',
+  '/prod-api/todo/config/resources/events/${resource.eventCatalogId}/status',
+  "schemaStatus === 'READY'",
+  "resourceStatus === 'ACTIVE'",
+  'payloadVersion > originalBinding.payloadVersion',
+  "page.locator('.event-option').filter({ hasText: `v${repairedResource.payloadVersion}` })",
+  "page.locator('.condition-row .is-danger').click()",
+  'resources\\/events\\/\\d+\\/versions$',
+  "'.event-resource-meta'"
 ]) requireText(journeySpec, required, 'Todo journey real E2E spec')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
@@ -114,15 +128,20 @@ for (const required of [
   'todo_instance', 'todo_route_token', 'todo_route_join', 'todo_sla_record', 'todo_sla_policy_version', 'todo_cycle_occurrence',
   'todo.e2e.captcha.restore.',
   'loadJourneyFixture',
+  'loadJourneyEventBinding',
+  'loadRepairEventResource',
   'snapshotSimulationPersistence',
   'assertSimulationPersistenceUnchanged',
   'todo_relation',
   'businessFingerprint'
 ]) requireText(databaseFixture, required, 'Todo configuration database fixture')
+requireText(simulationTrace, "'NOT_MATCHED'", 'Journey simulation blocked-trace rendering')
 forbidText(spec, "delete from todo_definition_action where operator_id=", 'Todo configuration real E2E cleanup')
 forbidText(databaseFixture, "delete from todo_definition_action where operator_id=(select", 'Todo configuration database fixture')
 
 const bootstrap = read(bootstrapPath)
+forbidText(bootstrap, 'E2E_MISSING_CALENDAR_', 'Deterministic failed-simulation fixture')
+requireText(bootstrap, "'$.event.condition',json_object('$expression'", 'Deterministic failed-simulation fixture')
 for (const required of [
   'todo_config_admin',
   'todo_business_admin',

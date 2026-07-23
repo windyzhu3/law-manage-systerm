@@ -2,7 +2,9 @@ const { test, expect } = require('@playwright/test')
 const {
   assertSimulationPersistenceUnchanged,
   cleanupTodoConfiguration,
+  loadJourneyEventBinding,
   loadJourneyFixture,
+  loadRepairEventResource,
   snapshotSimulationPersistence
 } = require('./support/todo-config-e2e-database')
 
@@ -29,44 +31,108 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     cleanupTodoConfiguration(fixtures.warning.templateCode)
   })
 
-  test('SCENARIO_SCHEMA_REPAIR_RERUN repairs the actual event schema, returns and reruns', async ({ page }) => {
+  test('SCENARIO_SCHEMA_REPAIR_ACTIVATE_BIND_RERUN repairs, activates and binds the exact event version before rerun', async ({ page }) => {
     await loginAs(page, 'todo_config_admin', password)
+    const originalBinding = loadJourneyEventBinding('REPAIR')
+    expect(originalBinding.schemaStatus === 'INCOMPLETE').toBeTruthy()
+    expect(originalBinding.resourceStatus === 'ACTIVE').toBeTruthy()
     await openJourney(page, fixtures.repair, 'EVENT')
 
     const eventDetail = page.locator('.event-detail')
+    await expect(eventDetail.locator('.event-detail__facts')).toContainText(`v${originalBinding.payloadVersion}`)
+    await expect(eventDetail.locator('.event-detail__heading .el-tag')).toHaveClass(/el-tag--danger/)
     await expect(eventDetail.getByRole('button', { name: '维护事件字段' })).toBeVisible()
     await eventDetail.getByRole('button', { name: '维护事件字段' }).click()
 
     const drawer = page.locator('.el-drawer__wrapper:visible')
     await expect(drawer).toBeVisible()
+    const versionCreation = page.waitForResponse(response =>
+      response.request().method() === 'POST' &&
+      /\/prod-api\/todo\/config\/resources\/events\/\d+\/versions$/.test(new URL(response.url()).pathname)
+    )
     await drawer.getByRole('button', { name: '创建新版本' }).click()
+    await expectSuccessfulApiResponse(await versionCreation)
+    await expect(drawer.locator('.event-resource-meta')).toContainText(`v${originalBinding.payloadVersion + 1}`)
     await expect(drawer.locator('.schema-designer')).toBeVisible()
     await drawer.locator('.schema-designer').getByRole('button', { name: '添加第一个字段' }).click()
     const field = drawer.locator('.schema-designer__row:not(.schema-designer__row--header)').first()
     await field.locator('input').nth(0).fill('ownerId')
     await field.locator('input').nth(1).fill('负责人')
-    await field.locator('input').nth(2).fill('11')
+    await field.locator('.el-select').click()
+    await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').nth(1).click()
+    await field.locator('.el-input input').last().fill('11')
+    await drawer.locator('button:has(.el-icon-magic-stick)').click()
     await drawer.getByRole('button', { name: '保存草稿' }).click()
     await expect(drawer).toBeHidden()
 
-    await expect(page).toHaveURL(/step=EVENT/)
+    const repairedDraft = loadRepairEventResource('DRAFT')
+    expect(repairedDraft.eventType === originalBinding.eventType).toBeTruthy()
+    expect(repairedDraft.payloadVersion > originalBinding.payloadVersion).toBeTruthy()
+    expect(repairedDraft.schemaStatus === 'READY').toBeTruthy()
+    expect(repairedDraft.schemaFieldCount > 0).toBeTruthy()
+    await activateEventResource(page, repairedDraft)
+    const repairedResource = loadRepairEventResource('ACTIVE')
+    expect(repairedResource.eventCatalogId === repairedDraft.eventCatalogId).toBeTruthy()
+
+    await openJourney(page, fixtures.repair, 'EVENT')
+    const repairedOption = page.locator('.event-option').filter({ hasText: `v${repairedResource.payloadVersion}` })
+      .filter({ hasText: 'E2E schema repair' }).first()
+    await expect(repairedOption).toBeVisible()
+    const templateSave = page.waitForResponse(response =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname === `/prod-api/todo/config/template-versions/${fixtures.repair.versionId}`
+    )
+    await repairedOption.click()
+    await page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true }).click()
+    await expectSuccessfulApiResponse(await templateSave)
+
+    await expect(eventDetail.locator('.event-detail__facts')).toContainText(`v${repairedResource.payloadVersion}`)
+    await expect(eventDetail.locator('.event-detail__heading .el-tag')).toHaveClass(/el-tag--success/)
     await expect(eventDetail.locator('.event-detail__field-list')).toContainText('ownerId')
+    const repairedBinding = loadJourneyEventBinding('REPAIR')
+    expect(repairedBinding.eventType === repairedResource.eventType).toBeTruthy()
+    expect(repairedBinding.payloadVersion === repairedResource.payloadVersion).toBeTruthy()
+    expect(repairedBinding.payloadVersion > originalBinding.payloadVersion).toBeTruthy()
+    expect(repairedBinding.schemaStatus === 'READY').toBeTruthy()
+    expect(repairedBinding.resourceStatus === 'ACTIVE').toBeTruthy()
+    expect(repairedBinding.schemaFieldCount > 0).toBeTruthy()
+
     await openJourney(page, fixtures.repair, 'SIMULATION_PUBLISH')
     const step = page.getByTestId('simulation-publish-step')
+    await selectBusinessObject(page, step, 'DEMO-L-001')
+    await step.getByTestId('run-journey-simulation').click()
+    await expectFixedTrace(step)
+    await expect(step.locator('.simulation-trace li.is-blocked')).toHaveCount(0)
+  })
+
+  test('SCENARIO_FAILED_SIMULATION_REPAIR_RERUN blocks publish, repairs the trigger and reruns successfully', async ({ page }) => {
+    await loginAs(page, 'todo_config_admin', password)
+    await openJourney(page, fixtures.failed, 'SIMULATION_PUBLISH')
+    let step = page.getByTestId('simulation-publish-step')
+    await selectBusinessObject(page, step, process.env.TODO_CONFIG_E2E_LEAD_NO)
+
+    await step.getByTestId('run-journey-simulation').click()
+    await expectFixedTrace(step)
+    await expect(step.locator('.simulation-trace li').first()).toHaveClass(/is-blocked/)
+    await expect(step.getByTestId('publish-current-draft')).toBeDisabled()
+
+    await openJourney(page, fixtures.failed, 'TRIGGER')
+    await expect(page.locator('.condition-row')).toHaveCount(1)
+    const templateSave = page.waitForResponse(response =>
+      response.request().method() === 'PUT' &&
+      new URL(response.url()).pathname === `/prod-api/todo/config/template-versions/${fixtures.failed.versionId}`
+    )
+    await page.locator('.condition-row .is-danger').click()
+    await page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true }).click()
+    await expectSuccessfulApiResponse(await templateSave)
+
+    await openJourney(page, fixtures.failed, 'SIMULATION_PUBLISH')
+    step = page.getByTestId('simulation-publish-step')
     await selectBusinessObject(page, step, process.env.TODO_CONFIG_E2E_LEAD_NO)
     await step.getByTestId('run-journey-simulation').click()
     await expectFixedTrace(step)
-  })
-
-  test('SCENARIO_FAILED_SIMULATION_BLOCKS_PUBLISH deliberately fails simulation and keeps publish blocked', async ({ page }) => {
-    await loginAs(page, 'todo_config_admin', password)
-    await openJourney(page, fixtures.failed, 'SIMULATION_PUBLISH')
-    const step = page.getByTestId('simulation-publish-step')
-    await selectBusinessObject(page, step, process.env.TODO_CONFIG_E2E_LEAD_NO)
-
-    await step.getByTestId('run-journey-simulation').click()
-    await expect(step.locator('.simulation-trace li.is-blocked')).toBeVisible()
-    await expect(step.getByTestId('publish-current-draft')).toBeDisabled()
+    await expect(step.locator('.simulation-trace li.is-blocked')).toHaveCount(0)
+    await expect(step.getByTestId('publish-current-draft')).toBeEnabled()
   })
 
   test('SCENARIO_WARNING_REASON_REQUIRED and SCENARIO_SAMPLE_NO_RUNTIME_WRITES publish only after review', async ({ page }) => {
@@ -184,6 +250,34 @@ async function expectForbidden(page, method, path, body) {
     return { status: response.status, code: payload.code }
   }, { method, path, body })
   expect(result.status === 403 || Number(result.code) === 403).toBeTruthy()
+}
+
+async function activateEventResource(page, resource) {
+  const path = `/prod-api/todo/config/resources/events/${resource.eventCatalogId}/status`
+  const result = await authenticatedApi(page, 'POST', path, {
+    status: 'ACTIVE',
+    actionId: `e2e-activate-event-${resource.eventCatalogId}-${Date.now()}`,
+    expectedVersion: resource.version
+  })
+  expect(result.status).toBe(200)
+  expect(Number(result.code)).toBe(200)
+}
+
+async function authenticatedApi(page, method, path, body) {
+  return page.evaluate(async ({ method, path, body }) => {
+    const token = document.cookie.split(';').map(item => item.trim()).find(item => item.startsWith('Admin-Token='))
+    if (!token) throw new Error('Authenticated Todo E2E API call requires Admin-Token')
+    const response = await fetch(path, {
+      method,
+      headers: {
+        Authorization: `Bearer ${decodeURIComponent(token.split('=').slice(1).join('='))}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    const payload = await response.json()
+    return { status: response.status, code: payload.code, message: payload.msg, data: payload.data }
+  }, { method, path, body })
 }
 
 async function expectSuccessfulApiResponse(response) {

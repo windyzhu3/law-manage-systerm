@@ -49,6 +49,58 @@ function loadJourneyFixture(scenario, expectedStatus = 'DRAFT') {
   return { ...row, templateId: Number(row.templateId), versionId: Number(row.versionId) }
 }
 
+function loadJourneyEventBinding(scenario) {
+  const suffix = JOURNEY_FIXTURES[String(scenario || '').toUpperCase()]
+  if (!suffix) throw new Error(`Unknown Todo journey E2E fixture: ${scenario}`)
+  const database = requireEnv('TODO_E2E_DB_NAME')
+  const runMarker = requireEnv('TODO_CONFIG_E2E_RUN_MARKER')
+  assertSafeE2eDatabase(database)
+  const templateCode = `E2E_TODO_CONFIG_${runMarker}_${suffix}`
+  const row = parseRow(executeSql(`
+    select json_unquote(json_extract(v.definition_json,'$.event.eventType')),
+      cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned),
+      coalesce(c.schema_status,'MISSING'),coalesce(c.status,'MISSING'),
+      coalesce(json_length(json_extract(c.payload_schema_json,'$.properties')),0)
+    from todo_template t
+    join todo_template_version v on v.template_id=t.template_id
+    left join todo_event_catalog c
+      on c.event_type=json_unquote(json_extract(v.definition_json,'$.event.eventType'))
+      and c.payload_version=cast(json_unquote(json_extract(v.definition_json,'$.event.payloadVersion')) as unsigned)
+    where t.template_code='${sqlLiteral(templateCode)}' and t.create_by='todo_config_admin'
+    order by v.version_no desc,v.version_id desc limit 1;
+  `, database), ['eventType', 'payloadVersion', 'schemaStatus', 'resourceStatus', 'schemaFieldCount'])
+  return {
+    ...row,
+    payloadVersion: Number(row.payloadVersion),
+    schemaFieldCount: Number(row.schemaFieldCount)
+  }
+}
+
+function loadRepairEventResource(expectedStatus) {
+  const database = requireEnv('TODO_E2E_DB_NAME')
+  const runMarker = requireEnv('TODO_CONFIG_E2E_RUN_MARKER')
+  assertSafeE2eDatabase(database)
+  const eventType = `E2E_SCHEMA_REPAIR_${runMarker}`
+  const row = parseRow(executeSql(`
+    select event_catalog_id,event_type,payload_version,schema_status,status,version,
+      coalesce(json_length(json_extract(payload_schema_json,'$.properties')),0)
+    from todo_event_catalog
+    where event_type='${sqlLiteral(eventType)}'
+      and create_by in ('${sqlLiteral(runMarker)}','todo_config_admin')
+    order by payload_version desc,event_catalog_id desc limit 1;
+  `, database), ['eventCatalogId', 'eventType', 'payloadVersion', 'schemaStatus', 'resourceStatus', 'version', 'schemaFieldCount'])
+  if (expectedStatus && row.resourceStatus !== expectedStatus) {
+    throw new Error(`Todo repair event ${eventType}@${row.payloadVersion} must be ${expectedStatus}, got ${row.resourceStatus}`)
+  }
+  return {
+    ...row,
+    eventCatalogId: Number(row.eventCatalogId),
+    payloadVersion: Number(row.payloadVersion),
+    version: Number(row.version),
+    schemaFieldCount: Number(row.schemaFieldCount)
+  }
+}
+
 function snapshotSimulationPersistence(templateId, businessType, businessId) {
   const database = requireEnv('TODO_E2E_DB_NAME')
   const leadNo = requireEnv('TODO_CONFIG_E2E_LEAD_NO')
@@ -200,7 +252,9 @@ module.exports = {
   assertSafeE2eDatabase,
   assertSimulationPersistenceUnchanged,
   cleanupTodoConfiguration,
+  loadJourneyEventBinding,
   loadJourneyFixture,
+  loadRepairEventResource,
   requireEnv,
   snapshotSimulationPersistence
 }

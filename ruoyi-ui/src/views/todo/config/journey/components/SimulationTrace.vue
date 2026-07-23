@@ -50,7 +50,7 @@ export default {
       return String(item.message || item.summary || (this.needsRepair(item) ? '需要修复后重新试运行' : '验证通过'))
     },
     needsRepair(item) {
-      return ['BLOCKED', 'FAILED', 'ERROR'].includes(String(item.status || item.state || '').toUpperCase())
+      return ['BLOCKED', 'FAILED', 'ERROR', 'NOT_MATCHED'].includes(String(item.status || item.state || '').toUpperCase())
     },
     statusClass(item) { return this.needsRepair(item) ? 'is-blocked' : 'is-success' }
   }
