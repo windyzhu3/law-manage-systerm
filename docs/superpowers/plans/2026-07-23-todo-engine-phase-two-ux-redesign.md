@@ -116,8 +116,8 @@ public record TodoConfigurationJourneyView(
         issues=issues==null?List.of():List.copyOf(issues);
     }
     public record TemplateSummary(long templateId,long versionId,int versionNo,int lockVersion,
-            String templateName,String businessType,String businessStage,String publishStatus,
-            String definitionHash,String definitionJson) { }
+            String templateCode,String templateName,String businessType,String businessStage,String publishStatus,
+            String definitionHash) { }
     public record JourneyStep(String code,String title,String state,int issueCount,Map<String,Object> value) { }
     public record CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
             List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
@@ -849,7 +849,7 @@ git commit -m "feat(todo-config): expose secured journey endpoints"
 - Modify: `ruoyi-ui/package.json`
 
 **Interfaces:**
-- Consumes: Task 7 journey JSON and existing `template-draft-model.js` draft payload contract.
+- Consumes: Task 7 structured journey JSON (`steps[].value`) and existing `template-draft-model.js` draft payload contract; the API does not return raw `definitionJson`.
 - Produces: `hydrateJourney`, `applyStepPatch`, `derivePrimaryAction`, `mergeSaveResult`, `toSimulationCommand`, and `canLeave`.
 
 - [ ] **Step 1: Write the failing CommonJS model check**
@@ -880,6 +880,20 @@ Expected: FAIL because the model and UX contract script do not exist.
 - [ ] **Step 3: Implement immutable model transformations**
 
 ```js
+function hydrateJourney(payload) {
+  const byCode = new Map((payload.steps || []).map(step => [step.code, step]))
+  const definition = {
+    schemaVersion: 1,
+    templateCode: payload.template.templateCode,
+    event: clone((byCode.get('EVENT') || {}).value || { eventType: '', payloadVersion: 1 }),
+    owner: clone((byCode.get('OWNER') || {}).value || { config: {} }),
+    dod: clone((byCode.get('DOD') || {}).value || { config: {} }),
+    sla: clone((byCode.get('SLA') || {}).value || { config: {} }),
+    routing: clone((byCode.get('ROUTING') || {}).value || { config: { nodes: [], edges: [] } })
+  }
+  return { ...clone(payload), definition, dirty: false, saveState: 'SAVED', payload: { manualOverrides: {} } }
+}
+
 function applyStepPatch(journey, stepCode, value) {
   const steps = journey.steps.map(step => step.code === stepCode ? { ...step, value: clone(value), state: 'IN_PROGRESS' } : step)
   return { ...journey, steps, dirty: true, saveState: 'IDLE', preflightGate: null }
