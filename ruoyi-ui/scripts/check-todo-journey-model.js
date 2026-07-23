@@ -1080,6 +1080,57 @@ check('preserves conditional DoD metadata across the employee editor path', () =
   assert(!Object.prototype.hasOwnProperty.call(removed.config, 'conditionalRules'))
 })
 
+check('isolates a new unkeyed DoD condition from an identical governed rule', () => {
+  const existing = {
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: true },
+    message: 'existing metadata only',
+    severity: 'BLOCKER',
+    source: 'policy-library',
+    version: 7
+  }
+  const current = { config: { conditionalRequired: [existing] } }
+  const hydrated = steps.hydrateDodConditions(current.config)
+  const added = steps.createDodCondition('contactResult')
+  added.when = { field: 'contactRequired', equals: true }
+  const canonicalAdded = {
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: true }
+  }
+  const created = steps.updateGovernedDod(current, {
+    conditionalRules: [hydrated[0], added]
+  })
+  assert.deepStrictEqual(created.config.conditionalRequired, [existing, canonicalAdded])
+
+  const editedExisting = { ...hydrated[0], when: { ...hydrated[0].when, equals: false } }
+  const editedAdded = { ...added, when: { ...added.when, equals: false } }
+  const edited = steps.updateGovernedDod(current, {
+    conditionalRules: [editedExisting, editedAdded]
+  })
+  assert.deepStrictEqual(edited.config.conditionalRequired, [{
+    ...existing,
+    when: { field: 'contactRequired', equals: false }
+  }, {
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: false }
+  }])
+
+  const removeExisting = steps.updateGovernedDod(current, {
+    conditionalRules: [editedAdded]
+  })
+  assert.deepStrictEqual(removeExisting.config.conditionalRequired, [{
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: false }
+  }])
+  const removeAdded = steps.updateGovernedDod(current, {
+    conditionalRules: [editedExisting]
+  })
+  assert.deepStrictEqual(removeAdded.config.conditionalRequired, [{
+    ...existing,
+    when: { field: 'contactRequired', equals: false }
+  }])
+})
+
 check('builds natural-language SLA patches and four semantic timeline points with repair blockers', () => {
   const patch = steps.buildSlaPatch({
     durationValue: 2,

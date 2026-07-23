@@ -400,6 +400,9 @@ function canonicalDodConditions(config) {
 }
 
 const DOD_CONDITION_IDENTITY = '__dodConditionIdentity'
+const DOD_HYDRATED_IDENTITY_PREFIX = 'hydrated:'
+const DOD_NEW_IDENTITY_PREFIX = 'new:'
+let nextDodConditionSequence = 0
 
 function stableConditionValue(value) {
   if (Array.isArray(value)) return value.map(stableConditionValue)
@@ -427,8 +430,18 @@ function hydrateDodConditions(config) {
     ...clone(rule),
     field: rule.field || '',
     when: { field: '', equals: '', ...clone(rule.when || {}) },
-    [DOD_CONDITION_IDENTITY]: dodConditionIdentity(rule)
+    [DOD_CONDITION_IDENTITY]: `${DOD_HYDRATED_IDENTITY_PREFIX}${dodConditionIdentity(rule)}`
   }))
+}
+
+function createDodCondition(fieldCode) {
+  nextDodConditionSequence += 1
+  const field = String(fieldCode || '')
+  return {
+    field,
+    when: { field, equals: '' },
+    [DOD_CONDITION_IDENTITY]: `${DOD_NEW_IDENTITY_PREFIX}${Date.now().toString(36)}:${nextDodConditionSequence.toString(36)}`
+  }
 }
 
 function canonicalConditionalRule(rule) {
@@ -442,8 +455,10 @@ function mergeDodConditions(existingConfig, incomingRules) {
   const existingByIdentity = new Map(existing.map(rule => [dodConditionIdentity(rule), rule]))
   return list(incomingRules).map(rule => {
     const source = object(rule)
-    const identity = source[DOD_CONDITION_IDENTITY] || dodConditionIdentity(source)
-    const previous = existingByIdentity.get(identity)
+    const identity = String(source[DOD_CONDITION_IDENTITY] || '')
+    const previous = identity.startsWith(DOD_HYDRATED_IDENTITY_PREFIX)
+      ? existingByIdentity.get(identity.slice(DOD_HYDRATED_IDENTITY_PREFIX.length))
+      : null
     const incoming = canonicalConditionalRule(source)
     if (!previous) return incoming
     return {
@@ -865,6 +880,7 @@ module.exports = {
   rankDodRecipes,
   normalizeDodConfig,
   hydrateDodConditions,
+  createDodCondition,
   materializeDodRecipe,
   updateGovernedDod,
   projectEmployeePreview,

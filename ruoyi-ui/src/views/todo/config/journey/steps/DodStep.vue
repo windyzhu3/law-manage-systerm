@@ -120,6 +120,7 @@ import {
   rankDodRecipes,
   normalizeDodConfig,
   hydrateDodConditions,
+  createDodCondition,
   materializeDodRecipe,
   updateGovernedDod
 } from '../journey-step-model'
@@ -194,7 +195,7 @@ export default {
     commitConditions() { this.commitGoverned() },
     addCondition() {
       const first = this.activeFields[0]
-      this.conditionalRules.push({ field: first ? first.code : '', when: { field: first ? first.code : '', equals: '' } })
+      this.conditionalRules.push(createDodCondition(first ? first.code : ''))
       this.commitConditions()
     },
     removeCondition(index) {
