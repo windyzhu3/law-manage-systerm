@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -61,6 +62,41 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.step("SIMULATION_PUBLISH").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::severity)
                 .containsSubsequence("WARNING","BLOCKER");
+    }
+
+    @Test void projectsExactDeepSafeValuesForAllSevenJourneySteps()
+    {
+        Map<String,Object> condition=Map.of("all",List.of(
+                Map.of("field","lead.owner.id","operator","EQ","value",7),
+                Map.of("field","lead.tags","operator","CONTAINS","value","VIP")));
+        Map<String,Object> owner=Map.of("type","USER","value",7,"fallback",Map.of("type","SUPERVISOR"));
+        Map<String,Object> dod=Map.of("requiredFields",List.of("leadId","contactedAt"),
+                "evidence",Map.of("types",List.of("NOTE","FILE")));
+        Map<String,Object> sla=Map.of("calendarCode","DEFAULT","minutes",60,"reminders",List.of(15,30));
+        Map<String,Object> routing=Map.of("start","review","nodes",List.of(Map.of("key","review","label","复核")),
+                "edges",List.of(Map.of("from","review","to","done","condition",Map.of("present",true))));
+        Map<String,Object> ui=Map.of("businessStage","QUALIFY","simulationStatus","SUCCESS",
+                "simulationDefinitionHash","hash-42","panels",List.of(Map.of("code","summary")));
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",new EventRule("LEAD_ASSIGNED",2,condition),
+                new OwnerRule(owner),new DodRule(dod),new SlaRule(sla),new UiSchema(ui),new RoutingGraph(routing),
+                List.of(),List.of(),List.of());
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.steps()).extracting(step->step.code()).containsExactly(
+                "EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
+        assertThat(result.step("EVENT").value()).isEqualTo(Map.of("eventType","LEAD_ASSIGNED","payloadVersion",2));
+        assertThat(result.step("TRIGGER").value()).isEqualTo(Map.of("condition",condition));
+        assertThat(result.step("OWNER").value()).isEqualTo(Map.of("config",owner));
+        assertThat(result.step("DOD").value()).isEqualTo(Map.of("config",dod));
+        assertThat(result.step("SLA").value()).isEqualTo(Map.of("config",sla));
+        assertThat(result.step("ROUTING").value()).isEqualTo(Map.of("config",routing));
+        assertThat(result.step("SIMULATION_PUBLISH").value()).isEqualTo(Map.of("config",ui));
+        assertThatThrownBy(()->result.step("TRIGGER").value().put("condition",Map.of()))
+                .isInstanceOf(UnsupportedOperationException.class);
+        @SuppressWarnings("unchecked") List<Object> clauses=(List<Object>)((Map<String,Object>)result.step("TRIGGER").value()
+                .get("condition")).get("all");
+        assertThatThrownBy(()->clauses.add(Map.of())).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test void blocksUnresolvedOwnerWithoutFallback()

@@ -2,6 +2,8 @@ package com.law.todo.application;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,24 +47,26 @@ public class TodoConfigurationJourneyEvaluator
     private JourneyStep evaluateEvent(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
         String event=definition==null||definition.event()==null?null:definition.event().eventType();
-        if(blank(event))return step("EVENT","Event",List.of(),false,false);
+        Map<String,Object> value=eventValue(definition);
+        if(blank(event))return step("EVENT","Event",List.of(),false,false,value);
         List<JourneyIssue> local=new ArrayList<>();
         if(definition.event().payloadVersion()<=0)
             local.add(blocker("TODO_JOURNEY_EVENT_VERSION_REQUIRED","EVENT","event.payloadVersion","Select an active event version","Select an active event version"));
         else if(resources!=null&&!hasUsableSchema(detail,event))
             local.add(blocker("TODO_JOURNEY_EVENT_SCHEMA_REQUIRED","EVENT","event","The selected event has no usable business fields","Maintain an active event schema"));
-        append(issues,local);return step("EVENT","Event",local,true,local.isEmpty());
+        append(issues,local);return step("EVENT","Event",local,true,local.isEmpty(),value);
     }
 
     private JourneyStep evaluateTrigger(TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
+        Map<String,Object> value=fieldValue("condition",definition==null||definition.event()==null?Map.of():definition.event().condition());
         if(definition==null||definition.event()==null||blank(definition.event().eventType()))
-            return step("TRIGGER","Trigger",List.of(),false,false);
+            return step("TRIGGER","Trigger",List.of(),false,false,value);
         List<JourneyIssue> local=new ArrayList<>();
         if(definition.event().condition().isEmpty())
             local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
                     "This todo will start for every matching event","Add a business condition if this should be more selective"));
-        append(issues,local);return step("TRIGGER","Trigger",local,true,true);
+        append(issues,local);return step("TRIGGER","Trigger",local,true,true,value);
     }
 
     private JourneyStep evaluateOwner(TodoDefinitionDocument definition,List<JourneyIssue> issues)
@@ -72,7 +76,7 @@ public class TodoConfigurationJourneyEvaluator
         if(!configured)
             local.add(blocker("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED","OWNER","owner.config",
                     "The owner cannot be resolved and has no fallback","Select an owner or configure a fallback"));
-        append(issues,local);return step("OWNER","Owner",local,configured,configured);
+        append(issues,local);return step("OWNER","Owner",local,configured,configured,fieldValue("config",owner));
     }
 
     private JourneyStep evaluateDod(TodoDefinitionDocument definition,List<JourneyIssue> issues)
@@ -82,12 +86,13 @@ public class TodoConfigurationJourneyEvaluator
         if(!dod.isEmpty()&&!configured)
             local.add(warning("TODO_JOURNEY_DOD_RECOMMENDATION","DOD","dod.config",
                     "No required completion evidence is configured","Add the fields or materials employees must provide"));
-        append(issues,local);return step("DOD","Definition of done",local,configured,configured);
+        append(issues,local);return step("DOD","Definition of done",local,configured,configured,fieldValue("config",dod));
     }
 
     private JourneyStep evaluateSla(TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
-        Map<String,Object> sla=config(definition==null?null:definition.sla());if(sla.isEmpty())return step("SLA","Service level agreement",List.of(),false,false);
+        Map<String,Object> sla=config(definition==null?null:definition.sla());
+        if(sla.isEmpty())return step("SLA","Service level agreement",List.of(),false,false,fieldValue("config",sla));
         List<JourneyIssue> local=new ArrayList<>();String calendar=text(sla.get("calendarCode"));
         if(blank(calendar)||templates!=null&&!calendarAvailable(calendar))
             local.add(blocker("TODO_JOURNEY_CALENDAR_REQUIRED","SLA","sla.calendarCode",
@@ -95,17 +100,18 @@ public class TodoConfigurationJourneyEvaluator
         if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue")))
             local.add(blocker("TODO_JOURNEY_SLA_DURATION_REQUIRED","SLA","sla",
                     "A positive service-level duration is required","Set a duration for this todo"));
-        append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty());
+        append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty(),fieldValue("config",sla));
     }
 
     private JourneyStep evaluateRouting(TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
-        Map<String,Object> routing=config(definition==null?null:definition.routing());if(routing.isEmpty())return step("ROUTING","Routing",List.of(),true,true);
+        Map<String,Object> routing=config(definition==null?null:definition.routing());
+        if(routing.isEmpty())return step("ROUTING","Routing",List.of(),true,true,fieldValue("config",routing));
         List<JourneyIssue> local=new ArrayList<>();
         if(definition.routing()==null||!new RoutingGraphValidator(new com.law.todo.expression.ConditionValidator()).validate(definition.routing()).isEmpty())
             local.add(blocker("TODO_JOURNEY_ROUTING_INVALID","ROUTING","routing",
                     "The routing path is incomplete or invalid","Repair the routing path"));
-        append(issues,local);return step("ROUTING","Routing",local,true,local.isEmpty());
+        append(issues,local);return step("ROUTING","Routing",local,true,local.isEmpty(),fieldValue("config",routing));
     }
 
     private JourneyStep evaluateSimulation(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
@@ -118,15 +124,23 @@ public class TodoConfigurationJourneyEvaluator
         success=success&&!blank(simulatedHash)&&simulatedHash.equals(currentHash);
         if(!success)local.add(blocker("TODO_JOURNEY_SIMULATION_REQUIRED","SIMULATION_PUBLISH","ui.simulationStatus",
                 "A successful simulation of this editable definition is required","Run a successful simulation before publishing"));
-        append(issues,local);return step("SIMULATION_PUBLISH","Simulation and publish",local,success,success);
+        append(issues,local);return step("SIMULATION_PUBLISH","Simulation and publish",local,success,success,fieldValue("config",ui));
     }
 
     private boolean hasUsableSchema(TemplateConfigurationDetail detail,String event)
     {return resources.fields(detail==null?null:detail.businessType()).stream().anyMatch(field->field.sourceEvents().contains(event));}
     private boolean calendarAvailable(String code)
     {return templates.listTemplateCalendarCatalog().stream().anyMatch(row->code.equals(text(row.get("calendarCode"))));}
-    private JourneyStep step(String code,String title,List<JourneyIssue> local,boolean started,boolean complete)
-    {return new JourneyStep(code,title,JourneyState.from(local,started,complete).name(),local.size(),Map.of());}
+    private JourneyStep step(String code,String title,List<JourneyIssue> local,boolean started,boolean complete,Map<String,Object> value)
+    {return new JourneyStep(code,title,JourneyState.from(local,started,complete).name(),local.size(),value);}
+    private Map<String,Object> eventValue(TodoDefinitionDocument definition)
+    {
+        TodoDefinitionDocument.EventRule event=definition==null?null:definition.event();Map<String,Object> value=new LinkedHashMap<>();
+        value.put("eventType",event==null?null:event.eventType());value.put("payloadVersion",event==null?0:event.payloadVersion());
+        return Collections.unmodifiableMap(value);
+    }
+    private Map<String,Object> fieldValue(String name,Object value)
+    {return Collections.singletonMap(name,value);}
     private void append(List<JourneyIssue> target,List<JourneyIssue> source)
     {source.stream().filter(issue->"BLOCKER".equals(issue.severity())).forEach(target::add);source.stream().filter(issue->"WARNING".equals(issue.severity())).forEach(target::add);}
     private JourneyIssue blocker(String code,String step,String path,String message,String repair)

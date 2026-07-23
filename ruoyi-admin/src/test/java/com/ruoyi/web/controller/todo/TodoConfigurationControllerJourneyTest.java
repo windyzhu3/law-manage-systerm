@@ -94,7 +94,23 @@ class TodoConfigurationControllerJourneyTest
         mvc().perform(get("/todo/config/templates/42/journey"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.steps.length()").value(7))
-                .andExpect(jsonPath("$.data.template.templateId").value(42));
+                .andExpect(jsonPath("$.data.template.templateId").value(42))
+                .andExpect(jsonPath("$.data.template.definitionJson").doesNotExist())
+                .andExpect(jsonPath("$.data.steps[0].code").value("EVENT"))
+                .andExpect(jsonPath("$.data.steps[0].value.eventType").value("LEAD_ASSIGNED"))
+                .andExpect(jsonPath("$.data.steps[0].value.payloadVersion").value(2))
+                .andExpect(jsonPath("$.data.steps[1].code").value("TRIGGER"))
+                .andExpect(jsonPath("$.data.steps[1].value.condition.all[0].field").value("lead.source"))
+                .andExpect(jsonPath("$.data.steps[2].code").value("OWNER"))
+                .andExpect(jsonPath("$.data.steps[2].value.config.fallback.type").value("SUPERVISOR"))
+                .andExpect(jsonPath("$.data.steps[3].code").value("DOD"))
+                .andExpect(jsonPath("$.data.steps[3].value.config.evidence.types[1]").value("FILE"))
+                .andExpect(jsonPath("$.data.steps[4].code").value("SLA"))
+                .andExpect(jsonPath("$.data.steps[4].value.config.reminders[1]").value(30))
+                .andExpect(jsonPath("$.data.steps[5].code").value("ROUTING"))
+                .andExpect(jsonPath("$.data.steps[5].value.config.nodes[0].key").value("review"))
+                .andExpect(jsonPath("$.data.steps[6].code").value("SIMULATION_PUBLISH"))
+                .andExpect(jsonPath("$.data.steps[6].value.config.panels[0].code").value("summary"));
         ArgumentCaptor<Actor> actor=ArgumentCaptor.forClass(Actor.class);
         verify(journeys).load(org.mockito.ArgumentMatchers.eq(42L),actor.capture());
         assertActor(actor.getValue());
@@ -320,11 +336,29 @@ class TodoConfigurationControllerJourneyTest
     private static TodoConfigurationJourneyView journey()
     {
         List<JourneyStep> steps=List.of("EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH")
-                .stream().map(code->new JourneyStep(code,code,"COMPLETED",0,Map.of())).toList();
+                .stream().map(code->new JourneyStep(code,code,"COMPLETED",0,stepValue(code))).toList();
         return new TodoConfigurationJourneyView(
                 new TemplateSummary(42L,9L,1,4,"LEAD-FIRST","首联待办","LEAD","FIRST_CONTACT","DRAFT","hash"),
                 steps,new CurrentResources(List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of()),
                 new EmployeeTodoPreview("首联","张律师",List.of(),List.of(),List.of(),"30分钟"),
                 List.of(),new JourneyPermissions(true,true,true,true,true,true));
+    }
+
+    private static Map<String,Object> stepValue(String code)
+    {
+        return switch(code)
+        {
+            case "EVENT" -> Map.of("eventType","LEAD_ASSIGNED","payloadVersion",2);
+            case "TRIGGER" -> Map.of("condition",Map.of("all",List.of(
+                    Map.of("field","lead.source","operator","EQ","value","WEB"))));
+            case "OWNER" -> Map.of("config",Map.of("type","BUSINESS_OWNER","fallback",Map.of("type","SUPERVISOR")));
+            case "DOD" -> Map.of("config",Map.of("requiredFields",List.of("contactedAt"),
+                    "evidence",Map.of("types",List.of("NOTE","FILE"))));
+            case "SLA" -> Map.of("config",Map.of("calendarCode","DEFAULT","minutes",60,"reminders",List.of(15,30)));
+            case "ROUTING" -> Map.of("config",Map.of("start","review","nodes",List.of(Map.of("key","review")),"edges",List.of()));
+            case "SIMULATION_PUBLISH" -> Map.of("config",Map.of("businessStage","QUALIFY",
+                    "panels",List.of(Map.of("code","summary"))));
+            default -> throw new IllegalArgumentException("Unknown journey step: "+code);
+        };
     }
 }

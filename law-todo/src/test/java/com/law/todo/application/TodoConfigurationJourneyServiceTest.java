@@ -53,6 +53,14 @@ class TodoConfigurationJourneyServiceTest
                 .map(component->component.getName())).doesNotContain("definitionJson");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::code)
                 .containsExactly("EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
+        assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::value).containsExactly(
+                Map.of("eventType","LEAD_CREATED","payloadVersion",1),
+                Map.of("condition",Map.of("all",List.of(Map.of("field","lead.source","operator","EQ","value","WEB")))),
+                Map.of("config",Map.of("type","BUSINESS_OWNER","fallback",Map.of("type","SUPERVISOR"))),
+                Map.of("config",Map.of("requiredFields",List.of("contactedAt"),"evidence",Map.of("types",List.of("NOTE","FILE")))),
+                Map.of("config",Map.of("calendarCode","DEFAULT","minutes",60,"reminders",List.of(15,30))),
+                Map.of("config",Map.of("start","review","nodes",List.of(Map.of("key","review")),"edges",List.of())),
+                Map.of("config",Map.of("businessStage","QUALIFY","panels",List.of(Map.of("code","summary")))));
         assertThat(view.permissions().canEdit()).isTrue();
     }
 
@@ -90,9 +98,14 @@ class TodoConfigurationJourneyServiceTest
     private String definitionJson()
     {
         return """
-                {"schemaVersion":1,"templateCode":"TODO-42","event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
-                "owner":{"config":{}},"dod":{"config":{}},"sla":{"config":{}},"ui":{"config":{"businessStage":"QUALIFY"}},
-                "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                {"schemaVersion":1,"templateCode":"TODO-42","event":{"eventType":"LEAD_CREATED","payloadVersion":1,
+                 "condition":{"all":[{"field":"lead.source","operator":"EQ","value":"WEB"}]}},
+                "owner":{"config":{"type":"BUSINESS_OWNER","fallback":{"type":"SUPERVISOR"}}},
+                "dod":{"config":{"requiredFields":["contactedAt"],"evidence":{"types":["NOTE","FILE"]}}},
+                "sla":{"config":{"calendarCode":"DEFAULT","minutes":60,"reminders":[15,30]}},
+                "ui":{"config":{"businessStage":"QUALIFY","panels":[{"code":"summary"}]}},
+                "routing":{"config":{"start":"review","nodes":[{"key":"review"}],"edges":[]}},
+                "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """;
     }
 }
