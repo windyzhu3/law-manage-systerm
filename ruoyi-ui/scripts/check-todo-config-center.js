@@ -418,12 +418,10 @@ function checkTemplatePage() {
   const nestedDrawers = source('src/views/todo/config/sla/SlaRuleDrawer.vue') + '\n' + source('src/views/todo/config/dod/DodRuleDrawer.vue')
 
   requireTokens(page, contents[page], [
-    'ConfigPageShell', 'ConfigMetricCard', 'TemplateDrawer', 'TemplateSummaryPanel', 'pagination',
-    'law_todo_business_stage', 'law_todo_business_type', 'law_todo_template_type', 'law_todo_publish_status',
-    'listTodoTemplates', 'getTodoTemplate', 'importTodoTemplate', 'toggleTodoTemplate',
-    'todo:template:list', 'todo:template:create', 'todo:template:import', 'todo:template:edit',
-    'todo:template:copy', 'todo:template:toggle', 'todo:simulation:simulate', 'todo:release:publish',
-    '@row-click="openDetail"', '@click.stop="toggleRow(row)"'
+    'TemplateDrawer', 'TemplateProblemSummary', 'TemplateProgressCell', 'pagination',
+    'law_todo_business_stage', 'law_todo_business_type', 'listTodoTemplateWorkbench',
+    'todo:template:list', 'todo:template:create', 'data-testid="template-workbench"',
+    '待办配置工作台', '继续配置', '查看已发布版本', 'todo-template-journey'
   ])
   stepNames.forEach(name => {
     if (!contents[drawer].includes(`name: '${name}'`)) throw new Error(`template drawer missing ${name} step`)
@@ -450,8 +448,8 @@ function checkTemplatePage() {
     ['const isStart = this.graph.nodes.length === 0', 'isStart ? this.currentDefinitionVersionId()', "toUpperCase() === 'DRAFT'"])
   requireTokens('simulation freshness', workflow, ['definitionReady', 'sourceToken', '当前草稿已变更，请先保存并完成发布预检'])
   requireTokens(summary, contents[summary], ['待办卡片预览', 'priority', 'owner'])
-  assertMethodTokens(page, contents[page], 'toggleRow', ['toggleTodoTemplate', 'actionId:', 'expectedVersion:', 'rowToggleLoading', '$confirm', 'this.load()'])
-  assertMethodTokens(page, contents[page], 'afterDraftSaved', ['loadDashboard', 'this.load(true)'])
+  assertMethodTokens(page, contents[page], 'load', ['listTodoTemplateWorkbench', 'response.rows', 'response.total'])
+  assertMethodTokens(page, contents[page], 'openJourney', ['templateId:', 'todo-template-journey', 'VIEW_PUBLISHED'])
   assertMethodTokens(drawer, contents[drawer], 'saveDraft', ['toTemplateDraftPayload', 'updateTemplateDraft', 'expectedDefinitionJson', 'ruleReferences', 'refreshSavedDraft'])
   assertMethodTokens(drawer, contents[drawer], 'runPreflight', ['preflightTemplateDraft', 'preflightGate', 'definitionSourceToken'])
   assertMethodTokens(drawer, contents[drawer], 'publish', ['runPreflight', 'publishReleaseRecord', 'preflightGate', 'definitionSourceToken', 'expectedDefinitionHash'])

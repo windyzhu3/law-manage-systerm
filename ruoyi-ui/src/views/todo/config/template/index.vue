@@ -1,45 +1,272 @@
 <template>
-  <config-page-shell title="待办模板配置" subtitle="统一管理触发、负责人、SLA、完成条件、路由和发布版本" :loading="loading" :empty="!loading && !rows.length" empty-text="暂无待办模板">
-    <template #metrics><config-metric-card label="模板总数" :value="total" icon="el-icon-files"/><config-metric-card label="已发布" :value="dashboard.publishedTemplateCount || 0" tone="success" icon="el-icon-circle-check"/><config-metric-card label="草稿" :value="dashboard.draftTemplateCount || 0" tone="warning" icon="el-icon-edit-outline"/><config-metric-card label="今日触发待办" :value="dashboard.todayTriggeredTodoCount || 0" tone="primary" icon="el-icon-alarm-clock"/></template>
-    <template #filters>
-      <div class="filters"><el-input v-model.trim="query.keyword" clearable placeholder="搜索模板编码或名称" @keyup.enter.native="search"/><el-select v-model="query.businessType" clearable placeholder="业务类型" @change="search"><el-option v-for="item in dict.type.law_todo_business_type" :key="item.value" :label="item.label" :value="item.value" /></el-select><el-select v-model="query.businessStage" clearable placeholder="业务阶段" @change="search"><el-option v-for="item in dict.type.law_todo_business_stage" :key="item.value" :label="item.label" :value="item.value" /></el-select><el-select v-model="query.templateType" clearable placeholder="模板类型" @change="search"><el-option v-for="item in dict.type.law_todo_template_type" :key="item.value" :label="item.label" :value="item.value" /></el-select><el-select v-model="query.publishStatus" clearable placeholder="发布状态" @change="search"><el-option v-for="item in dict.type.law_todo_publish_status" :key="item.value" :label="item.label" :value="item.value" /></el-select><el-button type="primary" icon="el-icon-search" @click="search">查询</el-button><el-button @click="resetQuery">重置</el-button><el-button v-hasPermi="['todo:template:create']" type="primary" icon="el-icon-plus" @click="openCreate">新建模板</el-button><el-button v-hasPermi="['todo:template:import']" icon="el-icon-upload2" @click="openImport">导入</el-button></div>
-    </template>
-    <el-table v-loading="loading" :data="rows" stripe @row-click="openDetail">
-      <el-table-column prop="templateCode" label="模板编码" min-width="150"/><el-table-column prop="templateName" label="模板名称" min-width="180"/><el-table-column label="业务类型" width="120"><template slot-scope="{row}"><dict-tag :options="dict.type.law_todo_business_type" :value="field(row,'businessType','business_type')"/></template></el-table-column><el-table-column label="业务阶段" width="120"><template slot-scope="{row}"><dict-tag :options="dict.type.law_todo_business_stage" :value="field(row,'businessStage','business_stage')"/></template></el-table-column><el-table-column label="模板类型" width="120"><template slot-scope="{row}"><dict-tag :options="dict.type.law_todo_template_type" :value="field(row,'templateType','template_type')"/></template></el-table-column><el-table-column label="触发事件" min-width="160"><template slot-scope="{row}">{{ field(row,'eventType','event_type') || '-' }}</template></el-table-column><el-table-column label="负责人规则" min-width="150"><template slot-scope="{row}">{{ field(row,'ownerSummary','owner_summary') || '-' }}</template></el-table-column><el-table-column label="发布状态" width="110"><template slot-scope="{row}"><dict-tag :options="dict.type.law_todo_publish_status" :value="field(row,'publishStatus','publish_status')"/></template></el-table-column><el-table-column label="状态" width="90"><template slot-scope="{row}">{{ field(row,'status','status') === '0' ? '启用' : '停用' }}</template></el-table-column><el-table-column label="更新时间" width="170"><template slot-scope="{row}">{{ format(field(row,'updateTime','update_time')) }}</template></el-table-column>
-      <el-table-column label="操作" fixed="right" width="350"><template slot-scope="{row}"><el-button v-hasPermi="['todo:template:list']" type="text" @click.stop="openDetail(row)">详情</el-button><el-button v-hasPermi="['todo:template:edit']" type="text" @click.stop="openEdit(row)">编辑</el-button><el-button v-hasPermi="['todo:template:copy']" type="text" @click.stop="openCopy(row)">复制</el-button><el-button v-hasPermi="['todo:simulation:simulate']" type="text" @click.stop="openWorkflow(row,'simulate','preview')">模拟</el-button><el-button v-hasPermi="['todo:release:publish']" type="text" @click.stop="openWorkflow(row,'publish','versions')">发布</el-button><el-button v-hasPermi="['todo:release:list']" type="text" @click.stop="openWorkflow(row,'view','versions')">版本</el-button><el-button v-hasPermi="['todo:template:toggle']" type="text" :loading="Boolean(rowToggleLoading[id(row)])" @click.stop="toggleRow(row)">{{ field(row,'status','status') === '0' ? '停用' : '启用' }}</el-button></template></el-table-column>
-    </el-table>
-    <pagination v-show="total>0" :total="total" :page.sync="query.pageNum" :limit.sync="query.pageSize" @pagination="load"/>
+  <section class="template-workbench" data-testid="template-workbench">
+    <header class="workbench-header">
+      <div class="workbench-header__copy">
+        <span class="workbench-header__eyebrow">TODO ENGINE</span>
+        <h1>待办配置工作台</h1>
+        <p>按业务旅程完成配置、模拟与发布</p>
+      </div>
+      <el-button
+        v-hasPermi="['todo:template:create']"
+        class="workbench-header__action"
+        type="primary"
+        icon="el-icon-plus"
+        @click="createDraft"
+      >
+        新建配置
+      </el-button>
+    </header>
 
-    <template #persistent>
-      <config-detail-drawer :visible.sync="summaryOpen" title="模板详情" size="720px"><template-summary-panel :draft="summaryDraft" :definition-error="summaryError"/></config-detail-drawer>
-      <template-drawer :visible.sync="drawerOpen" :detail="selected" :mode="drawerMode" :initial-step="drawerStep" @saved="afterDraftSaved" @published="afterPublished"/>
-      <config-detail-drawer ref="importDrawer" :visible.sync="importOpen" title="导入模板草稿" size="680px" :dirty="Boolean(importText)"><el-alert title="仅支持 schemaVersion=1 的规范 JSON。导入会新建模板和 DRAFT 版本，不会覆盖或自动发布。" type="info" :closable="false" show-icon/><el-input v-model="importText" type="textarea" :rows="20" class="import-text" placeholder="粘贴导出包 JSON"/><template #footer><el-button @click="$refs.importDrawer.requestProgrammaticClose()">取消</el-button><el-button v-hasPermi="['todo:template:import']" type="primary" :loading="importing" @click="submitImport">校验并导入</el-button></template></config-detail-drawer>
-    </template>
-  </config-page-shell>
+    <template-problem-summary
+      :summary="problemSummary"
+      :active-filter="query.issueType"
+      @filter="applyIssueFilter"
+    />
+
+    <section class="template-workbench__table-section">
+      <div class="workbench-toolbar">
+        <div class="workbench-toolbar__title">
+          <h2>配置任务</h2>
+          <span>共 {{ total }} 项</span>
+        </div>
+        <div class="workbench-filters">
+          <el-input
+            v-model.trim="query.keyword"
+            class="workbench-filters__search"
+            clearable
+            prefix-icon="el-icon-search"
+            placeholder="搜索业务场景或模板编码"
+            @keyup.enter.native="search"
+            @clear="search"
+          />
+          <el-select v-model="query.businessType" clearable placeholder="业务类型" @change="search">
+            <el-option
+              v-for="item in dict.type.law_todo_business_type"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-select v-model="query.businessStage" clearable placeholder="业务阶段" @change="search">
+            <el-option
+              v-for="item in dict.type.law_todo_business_stage"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-select v-model="query.publishStatus" clearable placeholder="配置状态" @change="search">
+            <el-option label="配置中" value="DRAFT" />
+            <el-option label="已发布" value="PUBLISHED" />
+          </el-select>
+          <el-select v-model="query.issueType" clearable placeholder="健康状态" @change="search">
+            <el-option label="存在阻塞" value="BLOCKER" />
+            <el-option label="存在警告" value="WARNING" />
+            <el-option label="可继续" value="READY" />
+          </el-select>
+          <el-button @click="resetQuery">重置</el-button>
+        </div>
+      </div>
+
+      <el-table
+        v-loading="loading"
+        :data="rows"
+        class="template-workbench__table"
+        empty-text="暂无待办配置任务"
+        row-key="templateId"
+        @row-click="continueConfiguration"
+      >
+        <el-table-column label="业务场景" min-width="280">
+          <template slot-scope="{ row }">
+            <div class="template-scenario">
+              <strong>{{ row.templateName || '未命名配置' }}</strong>
+              <span>
+                {{ businessTypeLabel(row.businessType) }}
+                <i aria-hidden="true" />
+                {{ businessStageLabel(row.businessStage) }}
+              </span>
+              <small v-if="row.templateCode" class="template-code">{{ row.templateCode }}</small>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="配置进度" min-width="220">
+          <template slot-scope="{ row }">
+            <template-progress-cell :row="row" />
+          </template>
+        </el-table-column>
+        <el-table-column label="健康状态" min-width="180">
+          <template slot-scope="{ row }">
+            <div class="template-health">
+              <el-tag v-if="number(row.blockerCount)" size="small" type="danger">
+                {{ number(row.blockerCount) }} 项阻塞
+              </el-tag>
+              <el-tag v-else-if="number(row.warningCount)" size="small" type="warning">
+                {{ number(row.warningCount) }} 项警告
+              </el-tag>
+              <el-tag v-else size="small" type="success">可继续</el-tag>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近修改" min-width="190">
+          <template slot-scope="{ row }">
+            <div class="template-updated">
+              <strong>{{ row.lastEditor || '系统' }}</strong>
+              <span>{{ formatTime(row.updateTime) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="170" align="right">
+          <template slot-scope="{ row }">
+            <el-button
+              v-hasPermi="['todo:template:list']"
+              class="template-primary-action"
+              type="text"
+              icon="el-icon-right"
+              @click.stop="continueConfiguration(row)"
+            >
+              {{ row.primaryAction === 'VIEW_PUBLISHED' ? '查看已发布版本' : '继续配置' }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <pagination
+        v-show="total > 0"
+        :total="total"
+        :page.sync="query.pageNum"
+        :limit.sync="query.pageSize"
+        @pagination="load"
+      />
+    </section>
+
+    <template-drawer
+      :visible.sync="createDrawerOpen"
+      :detail="null"
+      mode="create"
+      initial-step="basic"
+      @saved="afterDraftCreated"
+    />
+  </section>
 </template>
 
 <script>
-import ConfigPageShell from '../shared/ConfigPageShell'
-import ConfigMetricCard from '../shared/ConfigMetricCard'
-import ConfigDetailDrawer from '../shared/ConfigDetailDrawer'
 import TemplateDrawer from './TemplateDrawer'
-import TemplateSummaryPanel from './TemplateSummaryPanel'
-import { getTodoConfigDashboard, listTodoTemplates, getTodoTemplate, importTodoTemplate, toggleTodoTemplate } from '@/api/todo-config'
-import { hydrateTemplateDraft } from './template-draft-model'
+import TemplateProblemSummary from './TemplateProblemSummary'
+import TemplateProgressCell from './TemplateProgressCell'
+import { listTodoTemplateWorkbench } from '@/api/todo-config'
+
+const emptyQuery = () => ({
+  pageNum: 1,
+  pageSize: 20,
+  keyword: '',
+  businessType: '',
+  businessStage: '',
+  publishStatus: '',
+  issueType: ''
+})
+
 export default {
-  name: 'TodoTemplateConfig', components: { ConfigPageShell, ConfigMetricCard, ConfigDetailDrawer, TemplateDrawer, TemplateSummaryPanel },
-  dicts: ['law_todo_business_stage', 'law_todo_business_type', 'law_todo_template_type', 'law_todo_publish_status'],
-  data() { return { loading: false, dashboard: {}, rows: [], total: 0, query: { pageNum: 1, pageSize: 20, keyword: '', businessType: '', businessStage: '', templateType: '', publishStatus: '', status: '' }, rowToggleLoading: {}, summaryOpen: false, summaryDraft: null, summaryError: '', drawerOpen: false, drawerMode: 'view', drawerStep: 'basic', selected: null, importOpen: false, importText: '', importing: false } },
-  created() { this.loadDashboard(); this.load() },
+  name: 'TodoTemplateConfig',
+  components: {
+    TemplateDrawer,
+    TemplateProblemSummary,
+    TemplateProgressCell
+  },
+  dicts: ['law_todo_business_stage', 'law_todo_business_type'],
+  data() {
+    return {
+      loading: false,
+      rows: [],
+      total: 0,
+      query: emptyQuery(),
+      createDrawerOpen: false
+    }
+  },
+  computed: {
+    problemSummary() {
+      return this.rows.reduce((summary, row) => {
+        if (this.number(row.blockerCount)) summary.blockerTemplates += 1
+        else if (this.number(row.warningCount)) summary.warningTemplates += 1
+        else summary.readyTemplates += 1
+        return summary
+      }, { blockerTemplates: 0, warningTemplates: 0, readyTemplates: 0 })
+    }
+  },
+  created() {
+    this.load()
+  },
   methods: {
-    field(row, camel, snake) { return row && (row[camel] !== undefined ? row[camel] : row[snake]) }, id(row) { return Number(this.field(row,'templateId','template_id')) }, format(value) { return value ? this.parseTime(value, '{y}-{m}-{d} {h}:{i}:{s}') : '-' }, actionId(action) { return `template-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}` },
-    async loadDashboard() { try { const response = await getTodoConfigDashboard(); this.dashboard = response.data || {} } catch (_) { this.dashboard = {} } }, async load(silent = false) { if (!silent) this.loading = true; try { const response = await listTodoTemplates(this.query); this.rows = response.rows || []; this.total = Number(response.total || 0) } catch (error) { this.rows = []; this.total = 0; this.$modal.msgError((error && (error.msg || error.message)) || '加载模板失败') } finally { if (!silent) this.loading = false } }, search() { this.query.pageNum = 1; this.load() }, resetQuery() { this.query = { pageNum: 1, pageSize: 20, keyword: '', businessType: '', businessStage: '', templateType: '', publishStatus: '', status: '' }; this.load() },
-    async detail(row) { const response = await getTodoTemplate(this.id(row)); return response.data || row }, async openDetail(row) { try { const detail = await this.detail(row); this.summaryError = ''; try { this.summaryDraft = hydrateTemplateDraft(detail) } catch (error) { this.summaryDraft = null; this.summaryError = error.code === 'TODO_DEFINITION_CANONICAL_INVALID' ? '模板规范定义 JSON 损坏，已阻止编辑。' : error.message } this.summaryOpen = true } catch (error) { this.$modal.msgError((error && (error.msg || error.message)) || '加载模板详情失败') } },
-    openCreate() { this.selected = null; this.drawerMode = 'create'; this.drawerStep = 'basic'; this.drawerOpen = true }, async openEdit(row) { await this.openWorkflow(row, 'edit', 'basic') }, async openCopy(row) { await this.openWorkflow(row, 'copy', 'basic') }, async openWorkflow(row, mode, step) { try { this.selected = await this.detail(row); this.drawerMode = mode; this.drawerStep = step; this.drawerOpen = true } catch (error) { this.$modal.msgError((error && (error.msg || error.message)) || '加载模板失败') } },
-    openImport() { this.importText = ''; this.importOpen = true }, async submitImport() { let value; try { value = JSON.parse(this.importText); if (!value || Array.isArray(value)) throw new Error(); if (Number(value.schemaVersion) !== 1 || !value.templateCode || !value.templateName || !value.businessType || !value.definitionJson) throw new Error('导入包缺少 schemaVersion、模板信息或 definitionJson') } catch (error) { this.$modal.msgError(error.message || '导入内容必须是有效 JSON 对象'); return } this.importing = true; try { await importTodoTemplate({ actionId: this.actionId('import'), schemaVersion: 1, templateCode: value.templateCode, templateName: value.templateName, businessType: value.businessType, definitionJson: typeof value.definitionJson === 'string' ? value.definitionJson : JSON.stringify(value.definitionJson), ruleReferences: value.ruleReferences || [], changeSummary: value.changeSummary || '模板导入', impactScope: value.impactScope || '' }); this.$modal.msgSuccess('模板已导入为草稿'); this.importText = ''; this.$refs.importDrawer.closeAfterSave(); this.loadDashboard(); this.load() } catch (error) { this.$modal.msgError((error && (error.msg || error.message)) || '导入失败') } finally { this.importing = false } },
-    async toggleRow(row) { const templateId = this.id(row); if (!templateId || this.rowToggleLoading[templateId]) return; const targetStatus = this.field(row,'status','status') === '0' ? '1' : '0'; this.$set(this.rowToggleLoading, templateId, true); try { await this.$confirm(`确认${targetStatus === '0' ? '启用' : '停用'}模板“${this.field(row,'templateName','template_name')}”吗？`, '确认操作', { type: 'warning' }); await toggleTodoTemplate(templateId, { status: targetStatus, actionId: this.actionId('toggle'), expectedVersion: Number(this.field(row,'version','version') || 0) }); this.$modal.msgSuccess('模板状态已更新'); this.loadDashboard(); this.load() } catch (error) { if (error !== 'cancel') this.$modal.msgError((error && (error.msg || error.message)) || '更新状态失败') } finally { this.$set(this.rowToggleLoading, templateId, false) } },
-    afterDraftSaved() { this.loadDashboard(); this.load(true) }, afterPublished() { this.drawerOpen = false; this.loadDashboard(); this.load() }
+    number(value) {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : 0
+    },
+    async load() {
+      this.loading = true
+      try {
+        const response = await listTodoTemplateWorkbench(this.query)
+        this.rows = Array.isArray(response.rows) ? response.rows : []
+        this.total = this.number(response.total)
+      } catch (error) {
+        this.rows = []
+        this.total = 0
+        this.$modal.msgError((error && (error.msg || error.message)) || '加载配置任务失败')
+      } finally {
+        this.loading = false
+      }
+    },
+    search() {
+      this.query.pageNum = 1
+      this.load()
+    },
+    resetQuery() {
+      this.query = emptyQuery()
+      this.load()
+    },
+    applyIssueFilter(issueType) {
+      this.query.issueType = this.query.issueType === issueType ? '' : issueType
+      this.search()
+    },
+    createDraft() {
+      this.createDrawerOpen = true
+    },
+    afterDraftCreated(templateId) {
+      this.createDrawerOpen = false
+      if (templateId) {
+        this.openJourney(templateId, 'CONTINUE_CONFIGURATION')
+      } else {
+        this.load()
+      }
+    },
+    continueConfiguration(row) {
+      this.openJourney(row && row.templateId, row && row.primaryAction)
+    },
+    openJourney(templateId, primaryAction) {
+      if (!templateId) return
+      this.$router.push({
+        path: '/todo-engine/todo-template-journey',
+        query: {
+          templateId: String(templateId),
+          view: primaryAction === 'VIEW_PUBLISHED' ? 'published' : 'draft'
+        }
+      })
+    },
+    businessTypeLabel(value) {
+      return this.dictLabel(this.dict.type.law_todo_business_type, value, '未设置业务类型')
+    },
+    businessStageLabel(value) {
+      return this.dictLabel(this.dict.type.law_todo_business_stage, value, '未设置业务阶段')
+    },
+    dictLabel(options, value, fallback) {
+      const item = (options || []).find(option => String(option.value) === String(value || ''))
+      return item ? item.label : (value || fallback)
+    },
+    formatTime(value) {
+      return value ? this.parseTime(value, '{y}-{m}-{d} {h}:{i}') : '暂无记录'
+    }
   }
 }
 </script>
-<style scoped lang="scss">@import '../styles/config-center.scss';.filters{display:flex;flex-wrap:wrap;gap:8px}.filters .el-input{width:220px}.filters .el-select{width:140px}.import-text{margin-top:16px}</style>
+
+<style scoped lang="scss">
+@import '../styles/config-center.scss';
+</style>
