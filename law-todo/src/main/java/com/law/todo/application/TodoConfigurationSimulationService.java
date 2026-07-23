@@ -39,6 +39,14 @@ public class TodoConfigurationSimulationService
     {this(definitions,null,audits,null);}
 
     public ConfigurationSimulationResult simulate(ConfigurationSimulationCommand command,Actor actor)
+    {return simulateInternal(command,actor,null);}
+
+    ConfigurationSimulationResult simulate(ConfigurationSimulationCommand command,Actor actor,
+            TodoSensitiveDataPolicy sensitiveData)
+    {return simulateInternal(command,actor,sensitiveData==null?TodoSensitiveDataPolicy.heuristicOnly():sensitiveData);}
+
+    private ConfigurationSimulationResult simulateInternal(ConfigurationSimulationCommand command,Actor actor,
+            TodoSensitiveDataPolicy sensitiveData)
     {
         long started=System.nanoTime();
         TodoSimulationView simulation;
@@ -54,13 +62,20 @@ public class TodoConfigurationSimulationService
         }
         catch(RuntimeException failure)
         {
-            try{audits.record(command,actor,duration(started),failedResult(command,failure));}
+            try{recordAudit(command,actor,duration(started),failedResult(command,failure),sensitiveData);}
             catch(RuntimeException auditFailure){failure.addSuppressed(auditFailure);}
             throw failure;
         }
         long duration=duration(started);
-        audits.record(command,actor,duration,orderedResult(simulation));
+        recordAudit(command,actor,duration,orderedResult(simulation),sensitiveData);
         return new ConfigurationSimulationResult(simulation,duration);
+    }
+
+    private void recordAudit(ConfigurationSimulationCommand command,Actor actor,long duration,
+            Map<String,Object> result,TodoSensitiveDataPolicy sensitiveData)
+    {
+        if(sensitiveData==null)audits.record(command,actor,duration,result);
+        else audits.record(command,actor,duration,result,sensitiveData);
     }
 
     /** Keeps persisted result sections in the configured reader order. */

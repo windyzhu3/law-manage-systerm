@@ -137,6 +137,28 @@ class TodoConfigurationSimulationServiceTest
         verify(audits,times(1)).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any());
     }
 
+    @Test void governedPolicyReachesSuccessAndFailureAuditWrites()
+    {
+        TodoSensitiveDataPolicy policy=TodoSensitiveDataPolicy.from(Map.of("opaque",94736251L),
+                List.of(new com.law.todo.spi.TodoBusinessPayloadAccess.PayloadFieldSource(
+                        "opaque",94736251L,"BUSINESS_OBJECT",true,false,null,true)));
+        whenSimulationReturns(sampleSimulation());
+
+        service.simulate(command(),actor(),policy);
+
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any(),
+                org.mockito.ArgumentMatchers.same(policy));
+        org.mockito.Mockito.reset(audits,definitions);
+        TodoException failure=new TodoException("TODO_SIMULATION_FAILED","failed");
+        org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD")))
+                .thenThrow(failure);
+
+        assertThrows(TodoException.class,()->service.simulate(command(),actor(),policy));
+
+        verify(audits).record(any(),any(),org.mockito.ArgumentMatchers.anyLong(),any(),
+                org.mockito.ArgumentMatchers.same(policy));
+    }
+
     @Test void eventTypeMustMatchTheTargetDefinitionSnapshotAndMismatchIsAudited()
     {
         org.mockito.Mockito.when(definitions.simulate(eq(9L),any(),eq("LEAD_CREATED"),eq(1),eq("LEAD")))

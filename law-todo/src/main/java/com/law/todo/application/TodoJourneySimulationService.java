@@ -1,16 +1,9 @@
 package com.law.todo.application;
 
-import java.lang.reflect.Array;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +13,10 @@ import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.view.TodoConfigurationJourneyView;
+import com.law.todo.application.view.TodoConfigurationJourneyView.EmployeeTodoPreview;
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyIssue;
+import com.law.todo.application.view.TodoConfigurationJourneyView.PreviewField;
+import com.law.todo.application.view.TodoConfigurationJourneyView.PreviewMaterial;
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationSimulationResult;
 import com.law.todo.application.view.TodoJourneySimulationResult;
 import com.law.todo.application.view.TodoJourneySimulationResult.HydratedPayload;
@@ -36,7 +32,6 @@ import com.law.todo.application.view.TodoSimulationView.SimulationIssue;
 import com.law.todo.application.view.TodoSimulationView.SlaTrace;
 import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.domain.TodoException;
-import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadFieldSource;
 import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadHydration;
 
 /**
@@ -71,17 +66,18 @@ public class TodoJourneySimulationService
                 "journey-"+UUID.randomUUID(),command.versionId(),command.eventType(),command.payloadVersion(),
                 command.businessType(),command.businessId(),execution.payload(),command.effectiveAt(),
                 command.taskCompletions(),command.expectedDefinitionHash());
-        ConfigurationSimulationResult simulation=simulations.simulate(engineCommand,actor);
         PayloadHydration publicPayload=execution.publicView();
-        Redactor redactor=new Redactor(execution.payload(),publicPayload.fields());
-        TodoSimulationView engine=redactor.engine(simulation.simulation());
+        TodoSensitiveDataPolicy policy=TodoSensitiveDataPolicy.from(execution.payload(),publicPayload.fields());
+        ConfigurationSimulationResult simulation=simulations.simulate(engineCommand,actor,policy);
+        TodoSimulationView engine=sanitizeEngine(simulation.simulation(),policy);
+        EmployeeTodoPreview preview=sanitizePreview(journey.employeePreview(),policy);
         boolean successful=successful(engine,command.expectedDefinitionHash());
-        List<JourneyIssue> issues=issues(journey.issues(),engine,successful,redactor);
-        HydratedPayload payload=new HydratedPayload(redactor.map(publicPayload.payload()),
-                redactor.fields(publicPayload.fields()),
+        List<JourneyIssue> issues=issues(journey.issues(),engine,successful,policy);
+        HydratedPayload payload=new HydratedPayload(policy.redactMap(publicPayload.payload()),
+                policy.redactFields(publicPayload.fields()),
                 publicPayload.coveragePercent());
-        return new TodoJourneySimulationResult(payload,engine,trace(engine,journey,redactor),
-                journey.employeePreview(),issues,issues.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())));
+        return new TodoJourneySimulationResult(payload,engine,trace(engine,preview,policy),
+                preview,issues,issues.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())));
     }
 
     private boolean successful(TodoSimulationView engine,String expectedHash)
@@ -91,17 +87,19 @@ public class TodoJourneySimulationService
     }
 
     private List<JourneyIssue> issues(List<JourneyIssue> journeyIssues,TodoSimulationView engine,
-            boolean successful,Redactor redactor)
+            boolean successful,TodoSensitiveDataPolicy policy)
     {
         List<JourneyIssue> result=new ArrayList<>();
         for(JourneyIssue issue:journeyIssues)
-            if(!successful||!"TODO_JOURNEY_SIMULATION_REQUIRED".equals(issue.code()))result.add(issue);
+            if(!successful||!"TODO_JOURNEY_SIMULATION_REQUIRED".equals(issue.code()))
+                result.add(new JourneyIssue(issue.code(),issue.severity(),issue.stepCode(),issue.fieldPath(),
+                        policy.redactText(issue.message()),policy.redactText(issue.repairAction())));
         for(SimulationIssue issue:engine.issues())
         {
             String severity="ERROR".equals(issue.severity())?"BLOCKER":
                     "WARNING".equals(issue.severity())?"WARNING":null;
             if(severity!=null)result.add(new JourneyIssue(issue.code(),severity,step(issue.path()),issue.path(),
-                    redactor.text(issue.message()),"Review the highlighted simulation trace"));
+                    policy.redactText(issue.message()),"Review the highlighted simulation trace"));
         }
         if(!successful&&result.stream().noneMatch(issue->"TODO_JOURNEY_SIMULATION_REQUIRED".equals(issue.code())))
             result.add(new JourneyIssue("TODO_JOURNEY_SIMULATION_REQUIRED","BLOCKER","SIMULATION_PUBLISH",
@@ -121,167 +119,95 @@ public class TodoJourneySimulationService
         return "SIMULATION_PUBLISH";
     }
 
-    private List<TraceSection> trace(TodoSimulationView engine,TodoConfigurationJourneyView journey,Redactor redactor)
+    private List<TraceSection> trace(TodoSimulationView engine,EmployeeTodoPreview preview,
+            TodoSensitiveDataPolicy policy)
     {
         List<TraceSection> trace=new ArrayList<>();
         trace.add(new TraceSection("EVENT","Event",engine.trigger().status(),
                 engine.trigger().eventType(),List.of(
-                detail("Event",engine.trigger().eventType(),"DEFINITION",engine.trigger().status()),
+                detail("Event",engine.trigger().eventType(),"DEFINITION",engine.trigger().status(),policy),
                 detail("Payload version",String.valueOf(engine.trigger().payloadVersion()),"EVENT_SCHEMA",
-                        engine.trigger().status()))));
+                        engine.trigger().status(),policy))));
         trace.add(new TraceSection("OWNER","Owner",engine.owner().status(),
                 engine.owner().ownerId()==null?"No single owner resolved":"Owner resolved",
-                List.of(detail("Owner",text(engine.owner().ownerId()),"OWNER_RULE",engine.owner().status()),
+                List.of(detail("Owner",text(engine.owner().ownerId()),"OWNER_RULE",engine.owner().status(),policy),
                         detail("Fallback",String.valueOf(engine.owner().fallbackUsed()),"OWNER_RULE",
-                                engine.owner().status()))));
+                                engine.owner().status(),policy))));
         trace.add(new TraceSection("DOD","Definition of done","EVALUATED","Completion requirements evaluated",
-                mapDetails(engine.form().dod(),"DOD_RULE",redactor)));
+                mapDetails(engine.form().dod(),"DOD_RULE",policy)));
         trace.add(new TraceSection("SLA","Service level agreement",engine.sla().status(),
                 engine.sla().dueAt()==null?"No due time calculated":"Due time calculated",
-                List.of(detail("Calendar",engine.sla().calendarCode(),"SLA_RULE",engine.sla().status()),
-                        detail("Due at",text(engine.sla().dueAt()),"SLA_CALCULATION",engine.sla().status()))));
+                List.of(detail("Calendar",engine.sla().calendarCode(),"SLA_RULE",engine.sla().status(),policy),
+                        detail("Due at",text(engine.sla().dueAt()),"SLA_CALCULATION",engine.sla().status(),policy))));
         trace.add(new TraceSection("ROUTING","Routing",routeStatus(engine.routes()),
                 engine.routes().isEmpty()?"No follow-up route selected":engine.routes().size()+" route steps evaluated",
                 engine.routes().stream().map(route->detail(route.nodeKey(),
-                        route.nodeType()+" / "+route.status(),"ROUTING_RULE",route.status())).toList()));
+                        route.nodeType()+" / "+route.status(),"ROUTING_RULE",route.status(),policy)).toList()));
         trace.add(new TraceSection("TODO_PREVIEW","Todo preview","READY",
-                journey.employeePreview().title(),List.of(
-                detail("Assignee",journey.employeePreview().assigneeSummary(),"PREVIEW","READY"),
-                detail("Due",journey.employeePreview().dueSummary(),"PREVIEW","READY"))));
+                preview.title(),List.of(
+                detail("Assignee",preview.assigneeSummary(),"PREVIEW","READY",policy),
+                detail("Due",preview.dueSummary(),"PREVIEW","READY",policy))));
         return List.copyOf(trace);
     }
 
-    private List<TraceDetail> mapDetails(Map<String,Object> values,String source,Redactor redactor)
+    private List<TraceDetail> mapDetails(Map<String,Object> values,String source,TodoSensitiveDataPolicy policy)
     {
         List<TraceDetail> result=new ArrayList<>();
-        values.forEach((key,value)->result.add(detail(key,redactor.text(String.valueOf(value)),source,"EVALUATED")));
+        values.forEach((key,value)->result.add(detail(key,String.valueOf(value),source,"EVALUATED",policy)));
         return List.copyOf(result);
     }
 
     private String routeStatus(List<RouteTrace> routes)
     {return routes.stream().anyMatch(route->route.status().contains("INVALID")||route.status().contains("UNKNOWN"))?"WARNING":"EVALUATED";}
-    private TraceDetail detail(String label,String value,String source,String status)
-    {return new TraceDetail(label,value,source,status);}
+    private TraceDetail detail(String label,String value,String source,String status,TodoSensitiveDataPolicy policy)
+    {return new TraceDetail(policy.redactText(label),policy.redactText(value),source,status);}
     private String text(Object value){return value==null?null:String.valueOf(value);}
 
-    private static final class Redactor
+    private TodoSimulationView sanitizeEngine(TodoSimulationView value,TodoSensitiveDataPolicy policy)
     {
-        private static final String REDACTED="[REDACTED]";
-        private static final Pattern PERSONAL=Pattern.compile("(?i)(?:\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b|(?<!\\d)(?:\\+?\\d[ -]?){8,18}(?!\\d)|\\b\\d{17}[0-9X]\\b)");
-        private final Set<String> sensitiveValues=new LinkedHashSet<>();
-
-        private Redactor(Map<String,Object> raw,List<PayloadFieldSource> fields)
-        {
-            collect(raw);
-            for(PayloadFieldSource field:fields)
-            {
-                if(!field.sensitive())continue;
-                Object value=valueAt(raw,field.path());
-                if(value!=null&&!String.valueOf(value).isBlank())sensitiveValues.add(String.valueOf(value));
-            }
-        }
-
-        private void collect(Map<String,Object> values)
-        {
-            values.forEach((key,value)->
-            {
-                if(sensitiveKey(key)&&value!=null)sensitiveValues.add(String.valueOf(value));
-                if(value instanceof Map<?,?> nested)
-                {
-                    Map<String,Object> child=new LinkedHashMap<>();
-                    nested.forEach((nestedKey,nestedValue)->child.put(String.valueOf(nestedKey),nestedValue));
-                    collect(child);
-                }
-                else if(value instanceof String text&&PERSONAL.matcher(text).find())sensitiveValues.add(text);
-            });
-        }
-
-        private List<PayloadFieldSource> fields(List<PayloadFieldSource> values)
-        {
-            return values.stream().map(field->
-            {
-                boolean sensitive=field.sensitive()||sensitiveKey(field.path())
-                        ||field.value()!=null&&sensitiveValues.contains(String.valueOf(field.value()));
-                return sensitive&&!field.missing()?new PayloadFieldSource(field.path(),REDACTED,field.source(),
-                        field.required(),false,null,true):field;
-            }).toList();
-        }
-
-        private TodoSimulationView engine(TodoSimulationView value)
-        {
-            TriggerTrace trigger=new TriggerTrace(value.trigger().status(),value.trigger().eventType(),
-                    value.trigger().payloadVersion(),texts(value.trigger().trace()));
-            OwnerTrace owner=new OwnerTrace(value.owner().status(),value.owner().ownerId(),value.owner().candidates(),
-                    value.owner().ccUsers(),value.owner().fallbackUsed(),texts(value.owner().trace()));
-            SlaTrace sla=new SlaTrace(value.sla().status(),value.sla().calendarCode(),value.sla().startAt(),
-                    value.sla().dueAt(),value.sla().remind80At(),value.sla().overdue100At(),
-                    value.sla().escalate150At(),texts(value.sla().trace()));
-            List<RouteTrace> routes=value.routes().stream().map(route->new RouteTrace(route.order(),route.nodeKey(),
-                    route.nodeType(),route.status(),route.branchKey(),route.occurrence(),route.templateVersionId(),
-                    route.effectiveAt(),texts(route.trace()))).toList();
-            List<AutoActionTrace> actions=value.autoActions().stream().map(action->new AutoActionTrace(action.ruleKey(),
-                    action.actionType(),action.triggerAt(),action.scheduledAt(),action.status(),text(action.reason()))).toList();
-            List<HandlerTrace> handlers=value.handlers().stream().map(handler->new HandlerTrace(handler.code(),
-                    handler.status(),handler.simulatable(),text(handler.reason()))).toList();
-            List<SimulationIssue> issues=value.issues().stream().map(issue->new SimulationIssue(issue.code(),issue.path(),
-                    issue.severity(),text(issue.message()))).toList();
-            return new TodoSimulationView(value.versionId(),value.definitionHash(),trigger,owner,sla,
-                    new FormTrace(map(value.form().ui()),map(value.form().dod())),routes,actions,handlers,issues);
-        }
-
-        private Map<String,Object> map(Map<String,Object> values)
-        {
-            Map<String,Object> result=new LinkedHashMap<>();
-            values.forEach((key,value)->result.put(key,sensitiveKey(key)?REDACTED:value(value)));
-            return result;
-        }
-
-        private Object value(Object value)
-        {
-            if(value instanceof Map<?,?> source)
-            {
-                Map<String,Object> nested=new LinkedHashMap<>();
-                source.forEach((key,item)->nested.put(String.valueOf(key),
-                        sensitiveKey(String.valueOf(key))?REDACTED:value(item)));
-                return nested;
-            }
-            if(value instanceof Iterable<?> source)
-            {
-                List<Object> result=new ArrayList<>();source.forEach(item->result.add(value(item)));return result;
-            }
-            if(value!=null&&value.getClass().isArray())
-            {
-                List<Object> result=new ArrayList<>();
-                for(int index=0;index<Array.getLength(value);index++)result.add(value(Array.get(value,index)));
-                return result;
-            }
-            return value instanceof String string?text(string):value;
-        }
-
-        private List<String> texts(List<String> values){return values.stream().map(this::text).toList();}
-        private String text(String value)
-        {
-            if(value==null)return null;
-            String result=value;
-            for(String sensitive:sensitiveValues)result=result.replace(sensitive,REDACTED);
-            return PERSONAL.matcher(result).find()?REDACTED:result;
-        }
-        private boolean sensitiveKey(String value)
-        {
-            String key=value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]","");
-            return key.contains("secret")||key.contains("token")||key.contains("password")||key.contains("phone")
-                    ||key.contains("mobile")||key.contains("email")||key.contains("idcard")
-                    ||key.contains("identity")||key.contains("passport")||key.contains("fileurl");
-        }
-        private static Object valueAt(Map<String,Object> values,String path)
-        {
-            Object cursor=values;
-            for(String segment:path.split("\\."))
-            {
-                if(!(cursor instanceof Map<?,?> map))return null;
-                cursor=map.get(segment);
-            }
-            return cursor;
-        }
+        TriggerTrace trigger=new TriggerTrace(policy.redactText(value.trigger().status()),
+                policy.redactText(value.trigger().eventType()),
+                value.trigger().payloadVersion(),texts(value.trigger().trace(),policy));
+        OwnerTrace owner=new OwnerTrace(policy.redactText(value.owner().status()),
+                policy.protects(value.owner().ownerId())?null:value.owner().ownerId(),
+                value.owner().candidates().stream().filter(candidate->!policy.protects(candidate)).toList(),
+                value.owner().ccUsers().stream().filter(candidate->!policy.protects(candidate)).toList(),
+                value.owner().fallbackUsed(),texts(value.owner().trace(),policy));
+        SlaTrace sla=new SlaTrace(policy.redactText(value.sla().status()),
+                policy.redactText(value.sla().calendarCode()),value.sla().startAt(),
+                value.sla().dueAt(),value.sla().remind80At(),value.sla().overdue100At(),
+                value.sla().escalate150At(),texts(value.sla().trace(),policy));
+        List<RouteTrace> routes=value.routes().stream().map(route->new RouteTrace(route.order(),
+                policy.redactText(route.nodeKey()),policy.redactText(route.nodeType()),
+                policy.redactText(route.status()),policy.redactText(route.branchKey()),route.occurrence(),
+                policy.protects(route.templateVersionId())?null:route.templateVersionId(),
+                route.effectiveAt(),texts(route.trace(),policy))).toList();
+        List<AutoActionTrace> actions=value.autoActions().stream().map(action->new AutoActionTrace(
+                policy.redactText(action.ruleKey()),policy.redactText(action.actionType()),
+                policy.redactText(action.triggerAt()),action.scheduledAt(),policy.redactText(action.status()),
+                policy.redactText(action.reason()))).toList();
+        List<HandlerTrace> handlers=value.handlers().stream().map(handler->new HandlerTrace(
+                policy.redactText(handler.code()),policy.redactText(handler.status()),handler.simulatable(),
+                policy.redactText(handler.reason()))).toList();
+        List<SimulationIssue> issues=value.issues().stream().map(issue->new SimulationIssue(
+                policy.redactText(issue.code()),policy.redactText(issue.path()),policy.redactText(issue.severity()),
+                policy.redactText(issue.message()))).toList();
+        return new TodoSimulationView(value.versionId(),value.definitionHash(),trigger,owner,sla,
+                new FormTrace(policy.redactMap(value.form().ui()),policy.redactMap(value.form().dod())),
+                routes,actions,handlers,issues);
     }
+
+    private EmployeeTodoPreview sanitizePreview(EmployeeTodoPreview preview,TodoSensitiveDataPolicy policy)
+    {
+        List<PreviewField> fields=preview.fields().stream().map(field->new PreviewField(
+                policy.redactText(field.code()),policy.redactText(field.label()),policy.redactText(field.type()),
+                field.required())).toList();
+        List<PreviewMaterial> materials=preview.materials().stream().map(material->new PreviewMaterial(
+                policy.redactText(material.code()),policy.redactText(material.label()),material.required())).toList();
+        return new EmployeeTodoPreview(policy.redactText(preview.title()),policy.redactText(preview.assigneeSummary()),
+                fields,materials,texts(preview.completionInstructions(),policy),policy.redactText(preview.dueSummary()));
+    }
+
+    private List<String> texts(List<String> values,TodoSensitiveDataPolicy policy)
+    {return values.stream().map(policy::redactText).toList();}
 }

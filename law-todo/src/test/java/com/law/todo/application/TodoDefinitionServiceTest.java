@@ -413,6 +413,34 @@ class TodoDefinitionServiceTest
         verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
     }
 
+    @Test void warningPublicationStoresTrimmedReasonAfterPersistingFreshPreflight()
+    {
+        Map<String,Object> current=draft(null,null);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        TodoDefinitionCompiler warningCompiler=org.mockito.Mockito.mock(TodoDefinitionCompiler.class);
+        when(warningCompiler.compile(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.law.todo.definition.compiler.DefinitionValidationReport(List.of(),
+                        List.of(new com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue(
+                                "TODO_WARNING","event.condition","Review the broad trigger")),
+                        canonical("TD-001"),"a".repeat(64)));
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        when(mapper.insertDefinitionActionIfAbsent(anyMap())).thenReturn(1);
+        when(mapper.publishTemplateVersionConditionally(9L,"a".repeat(64),"alice")).thenReturn(1);
+        TodoDefinitionService service=new TodoDefinitionService(mapper,warningCompiler);
+
+        assertEquals(9L,service.publish(new PublishDraftCommand(
+                "pub-warning-reason",9L,"a".repeat(64),"  Reviewed with operations  "),actor));
+
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String,Object>> action=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertDefinitionActionIfAbsent(action.capture());
+        assertEquals("Reviewed with operations",
+                JSON.parseObject(String.valueOf(action.getValue().get("payloadJson"))).getString("warningReason"));
+        org.mockito.InOrder order=org.mockito.Mockito.inOrder(mapper);
+        order.verify(mapper).updateDefinitionCompilation(anyMap());
+        order.verify(mapper).insertDefinitionActionIfAbsent(anyMap());
+        order.verify(mapper).publishTemplateVersionConditionally(9L,"a".repeat(64),"alice");
+    }
+
     @Test void prdCatalogueBlocksPublishingTemplatesWhoseBusinessHandlersAreMissing()
     {
         Map<String,Object> invalidReview=blockedPrdDraft(20L,"TD-002");

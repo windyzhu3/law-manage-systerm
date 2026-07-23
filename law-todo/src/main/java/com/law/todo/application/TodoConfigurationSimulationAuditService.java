@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -23,23 +21,24 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 public class TodoConfigurationSimulationAuditService
 {
     private static final int MAX_AUDIT_TEXT=512;
-    private static final Pattern EMAIL=Pattern.compile("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b");
-    private static final Pattern PHONE=Pattern.compile("(?<!\\d)(?:\\+?\\d[ -]?){8,15}(?!\\d)");
-    private static final Pattern IDENTITY=Pattern.compile("(?i)\\b(?:\\d{15}|\\d{17}[0-9X]|\\d{3}-\\d{2}-\\d{4})\\b");
-    private static final Pattern FILE_URL=Pattern.compile("(?i)(?:file://|https?://\\S*(?:/file(?:/|[?#]|$)|fileurl))");
-    private static final Pattern SECRET_VALUE=Pattern.compile("(?i)(?:bearer\\s+|(?:secret|token|password|passwd|credential|authorization|api[-_ ]?key)\\s*[=:]?\\s*)\\S+");
     private final TodoConfigurationMapper mapper;
 
     public TodoConfigurationSimulationAuditService(TodoConfigurationMapper mapper){this.mapper=mapper;}
 
     @Transactional(propagation=Propagation.REQUIRES_NEW)
     public void record(ConfigurationSimulationCommand command,Actor actor,long duration,Map<String,Object> result)
+    {record(command,actor,duration,result,TodoSensitiveDataPolicy.heuristicOnly());}
+
+    @Transactional(propagation=Propagation.REQUIRES_NEW)
+    public void record(ConfigurationSimulationCommand command,Actor actor,long duration,Map<String,Object> result,
+            TodoSensitiveDataPolicy policy)
     {
+        TodoSensitiveDataPolicy effective=policy==null?TodoSensitiveDataPolicy.heuristicOnly():policy;
         Map<String,Object> row=new LinkedHashMap<>();
         row.put("requestId",command.requestId());row.put("templateVersionId",command.versionId());
         row.put("eventType",command.eventType());row.put("businessType",command.businessType());row.put("businessId",command.businessId());
         row.put("inputSummaryJson",JSON.toJSONString(inputSummary(command.payload())));
-        row.put("resultJson",JSON.toJSONString(sanitize(jsonTree(result))));
+        row.put("resultJson",JSON.toJSONString(effective.redact(jsonTree(result))));
         row.put("durationMs",duration);row.put("operatorId",actor.userId());mapper.insertSimulationRecord(row);
     }
 
@@ -74,7 +73,8 @@ public class TodoConfigurationSimulationAuditService
 
     private String safePathSegment(String key,int[] redacted)
     {
-        if(sensitiveKey(key)||!key.matches("[A-Za-z][A-Za-z0-9_-]{0,63}"))return "redacted"+(++redacted[0]);
+        if(TodoSensitiveDataPolicy.sensitiveKey(key)||!key.matches("[A-Za-z][A-Za-z0-9_-]{0,63}"))
+            return "redacted"+(++redacted[0]);
         return key;
     }
 
@@ -90,49 +90,6 @@ public class TodoConfigurationSimulationAuditService
     {
         try{return JSON.parse(JSON.toJSONString(value));}
         catch(RuntimeException ignored){return value;}
-    }
-
-    private Object sanitize(Object value)
-    {
-        if(value==null)return null;
-        if(value instanceof Map<?,?> source)
-        {
-            Map<String,Object> clean=new LinkedHashMap<>();int redacted=0;
-            for(Map.Entry<?,?> entry:source.entrySet())
-            {
-                String rawKey=String.valueOf(entry.getKey());String key=bounded(rawKey);
-                if(sensitiveKey(rawKey))clean.put("redacted_"+(++redacted),"[REDACTED]");
-                else clean.put(key,sanitize(entry.getValue()));
-            }
-            return clean;
-        }
-        if(value instanceof Iterable<?> source)
-        {
-            List<Object> clean=new ArrayList<>();for(Object entry:source)clean.add(sanitize(entry));return clean;
-        }
-        if(value.getClass().isArray())
-        {
-            List<Object> clean=new ArrayList<>();for(int i=0;i<Array.getLength(value);i++)clean.add(sanitize(Array.get(value,i)));return clean;
-        }
-        if(value instanceof Number||value instanceof Boolean)return value;
-        return sanitizedText(String.valueOf(value));
-    }
-
-    private boolean sensitiveKey(String value)
-    {
-        String key=value.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]","");
-        return key.contains("secret")||key.contains("token")||key.contains("password")||key.contains("passwd")
-                ||key.contains("credential")||key.contains("authorization")||key.contains("apikey")||key.contains("accesskey")
-                ||key.contains("fileurl")||key.contains("phone")||key.contains("mobile")||key.contains("email")
-                ||key.contains("idcard")||key.contains("identity")||key.contains("ssn")||key.contains("passport")
-                ||key.contains("naturalperson")||key.contains("personname")||key.contains("fullname");
-    }
-
-    private String sanitizedText(String value)
-    {
-        if(EMAIL.matcher(value).find()||PHONE.matcher(value).find()||IDENTITY.matcher(value).find()
-                ||FILE_URL.matcher(value).find()||SECRET_VALUE.matcher(value).find())return "[REDACTED]";
-        return bounded(value);
     }
 
     private String bounded(String value)

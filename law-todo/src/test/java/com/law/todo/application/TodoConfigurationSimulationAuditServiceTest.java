@@ -25,6 +25,7 @@ import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadFieldSource;
 
 @ExtendWith(MockitoExtension.class)
 class TodoConfigurationSimulationAuditServiceTest
@@ -59,6 +60,35 @@ class TodoConfigurationSimulationAuditServiceTest
         assertFalse(result.contains("alice@example.com"));
         assertFalse(result.contains("file:///private/evidence.pdf"));
         assertFalse(result.contains("top-secret"));
+    }
+
+    @Test void governedNeutralSensitiveNodesNeverReachPersistedResultJson()
+    {
+        Map<String,Object> raw=Map.of(
+                "opaqueAlpha","neutral-secret",
+                "opaqueBeta",94736251L,
+                "opaqueGamma",true,
+                "opaqueDelta",List.of("list-secret",73),
+                "opaqueEpsilon",Map.of("inner","deep-secret","amount",91));
+        List<PayloadFieldSource> fields=raw.keySet().stream()
+                .map(path->new PayloadFieldSource(path,raw.get(path),"BUSINESS_OBJECT",true,false,null,true)).toList();
+        TodoSensitiveDataPolicy policy=TodoSensitiveDataPolicy.from(raw,fields);
+        TodoConfigurationSimulationAuditService audit=new TodoConfigurationSimulationAuditService(mapper);
+
+        audit.record(command(),actor(),4L,Map.of("trace",Map.of(
+                "aliasText","neutral-secret","aliasNumber",94736251L,"aliasBoolean",true,
+                "aliasList",List.of("list-secret",73),
+                "aliasObject",Map.of("inner","deep-secret","amount",91))),policy);
+
+        ArgumentCaptor<Map<String,Object>> rows=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertSimulationRecord(rows.capture());
+        Map<String,Object> result=JSON.parseObject(String.valueOf(rows.getValue().get("resultJson")));
+        Map<?,?> trace=(Map<?,?>)result.get("trace");
+        for(String key:List.of("aliasText","aliasNumber","aliasBoolean","aliasList","aliasObject"))
+            assertTrue("[REDACTED]".equals(trace.get(key)));
+        String persisted=String.valueOf(rows.getValue().get("resultJson"));
+        for(String value:List.of("neutral-secret","94736251","list-secret","deep-secret"))
+            assertFalse(persisted.contains(value));
     }
 
     @Test void recordUsesRequiresNewTransactionThroughASpringProxy()
