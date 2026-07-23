@@ -70,6 +70,7 @@ class TodoConfigurationResourceCatalogServiceTest
     {
         when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(Map.of(
                 "event_type","LEAD_ASSIGNED",
+                "payload_version",2,
                 "payload_schema_json","""
                 {"type":"object","properties":{"ownerId":{"type":"integer","title":"负责人"},
                  "source":{"type":"string","title":"来源"}},"required":["ownerId"]}
@@ -81,6 +82,7 @@ class TodoConfigurationResourceCatalogServiceTest
         var owner=fields.stream().filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
         assertTrue(owner.required());
         assertTrue(owner.operators().containsAll(List.of("EQ","GT","LTE","IN")));
+        assertEquals(List.of("LEAD_ASSIGNED@2"),owner.sourceEventVersions());
     }
 
     @Test void mergesGovernedFieldsWithEventSchemasWithoutLeakingSensitiveExamples()

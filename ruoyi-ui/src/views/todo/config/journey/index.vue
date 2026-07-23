@@ -141,6 +141,7 @@ import {
 import {
   eventSchemaHealth,
   ownerBlocker,
+  scopeOwnerFields,
   createRepairRequest,
   completeResourceRepair as completeRepair
 } from './journey-step-model'
@@ -311,9 +312,13 @@ export default {
         }
       }
       if (this.activeStep === 'OWNER') {
+        const eventFields = scopeOwnerFields(
+          resources.fields || [],
+          this.journey.definition.event || {}
+        )
         const blocker = ownerBlocker(
           (this.activeValue && this.activeValue.config) || {},
-          resources.fields || []
+          eventFields
         )
         return blocker && { ...blocker, stepCode: 'OWNER', fieldPath: 'owner.config', repairAction: '设置负责人或兜底' }
       }

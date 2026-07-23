@@ -230,11 +230,24 @@ check('keeps normal journey editors free of raw JSON and code-entry controls', (
 
 check('guards owner and condition controls against unsupported runtime values', () => {
   const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  const ownerModel = read('src/views/todo/config/journey/journey-step-model.js')
   const conditions = read('src/views/todo/config/journey/components/TypedConditionBuilder.vue')
-  assert(owner.includes('isOwnerField'), 'event-owner choices must use governed numeric user references')
+  assert(ownerModel.includes('isOwnerField'), 'event-owner choices must use governed numeric user references')
   assert(owner.includes("value: 'CANDIDATE_POOL'") && owner.includes('disabled: true'),
     'candidate-pool must remain visibly unavailable until runtime claim semantics are implemented')
   assert(conditions.includes('precision: integer ? 0'), 'integer conditions must not accept decimals')
+  assert(owner.includes('scopeOwnerFields'), 'event-owner fields must be scoped to the selected event version')
+  assert(owner.includes('ownerSelectionStillValid'), 'stale owner-field selections must be cleared and blocked')
+})
+
+check('restores visible focus after contextual event repair', () => {
+  const event = read('src/views/todo/config/journey/steps/EventStep.vue')
+  assert(event.includes('ref="eventSearch"'), 'event selection control needs a stable focus ref')
+  assert(event.includes('ref="schemaRepair"'), 'schema repair area needs a stable focus ref')
+  assert(event.includes('repairFocusTarget'), 'focus path must be resolved by the tested behavior model')
+  assert(event.includes('scrollIntoView') && event.includes('.focus()'),
+    'repair return must scroll and focus a real control')
+  assert(event.includes('is-focus-restored'), 'repair return must visibly highlight the repaired area')
 })
 
 check('keeps event sample JSON behind an explicit advanced section', () => {

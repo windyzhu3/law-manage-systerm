@@ -81,7 +81,8 @@ public class TodoConfigurationResourceCatalogService
             String sourceEvent=text(event,"event_type");
             if(eventType!=null&&!eventType.isBlank()&&!eventType.equals(sourceEvent))continue;
             for(PayloadFieldDescriptor descriptor:payloadSchemas.describe(text(event,"payload_schema_json"),businessType))
-                fields.computeIfAbsent(descriptor.path(),MutableField::new).merge(descriptor,sourceEvent);
+                fields.computeIfAbsent(descriptor.path(),MutableField::new)
+                        .merge(descriptor,sourceEvent,integer(event.get("payload_version")));
         }
         return fields.values().stream().map(MutableField::view).sorted(Comparator.comparing(FieldResource::name).thenComparing(FieldResource::code)).toList();
     }
@@ -135,6 +136,7 @@ public class TodoConfigurationResourceCatalogService
         private final String code;private String name="业务字段";private boolean governedName;private String type="string";private boolean required;
         private Object example;private boolean sensitive;private final Set<String> operators=new LinkedHashSet<>();
         private final Set<String> events=new LinkedHashSet<>();private final Set<Object> options=new LinkedHashSet<>();
+        private final Set<String> eventVersions=new LinkedHashSet<>();
         private Long resourceItemId;private int version;private String source="EVENT_SCHEMA";
         private String description;private String businessType;private String status;private int sortOrder;
         private MutableField(String code){this.code=code;}
@@ -149,35 +151,40 @@ public class TodoConfigurationResourceCatalogService
             sensitive|=Boolean.TRUE.equals(value.getBoolean("sensitive"))||Boolean.TRUE.equals(value.getBoolean("x-sensitive"));
             operators.addAll(strings(value.get("operators")));options.addAll(objects(value.get("options")));
         }
-        private void merge(PayloadFieldDescriptor descriptor,String event)
+        private void merge(PayloadFieldDescriptor descriptor,String event,int payloadVersion)
         {
             if(!governedName&&businessLabel(descriptor.label()))name=descriptor.label().trim();
             if(descriptor.type()!=null&&!descriptor.type().isBlank())type=descriptor.type();required|=descriptor.required();
             if(example==null)example=descriptor.example();sensitive|=descriptor.sensitive();operators.addAll(descriptor.operators());
-            options.addAll(descriptor.options());if(event!=null&&!event.isBlank())events.add(event);
+            options.addAll(descriptor.options());if(event!=null&&!event.isBlank())
+            {
+                events.add(event);if(payloadVersion>0)eventVersions.add(event+"@"+payloadVersion);
+            }
         }
         private FieldResource view()
         {return new FieldResource(code,name,type,required,sensitive?null:example,sensitive,
                 operators.isEmpty()?operators(type):List.copyOf(operators),List.copyOf(events),List.copyOf(options),
-                resourceItemId,version,source,description,businessType,status,sortOrder);}
+                resourceItemId,version,source,description,businessType,status,sortOrder,List.copyOf(eventVersions));}
     }
     public record ValidatorResource(String code,String name,String description,List<String> businessTypes,
             String configuredStatus,String effectiveStatus,boolean selectable,long referenceCount) { }
     public record FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
             List<String> operators,List<String> sourceEvents,List<Object> options,
-            Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder)
+            Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder,
+            List<String> sourceEventVersions)
     {
         public FieldResource
         {
             name=businessLabel(name)?name.trim():"业务字段";operators=operators==null?List.of():List.copyOf(operators);
             sourceEvents=sourceEvents==null?List.of():List.copyOf(sourceEvents);options=options==null?List.of():List.copyOf(options);
+            sourceEventVersions=sourceEventVersions==null?List.of():List.copyOf(sourceEventVersions);
             if(sensitive)example=null;
         }
         public FieldResource(String code,String name,String type,boolean required,List<String> operators,List<String> sourceEvents)
-        {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0);}
+        {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0,List.of());}
         public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
                 List<String> operators,List<String> sourceEvents,List<Object> options)
-        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0);}
+        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0,List.of());}
     }
     public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder,
             Long resourceItemId,int version,String source)

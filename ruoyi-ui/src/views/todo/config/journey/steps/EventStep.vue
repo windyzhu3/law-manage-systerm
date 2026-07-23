@@ -8,7 +8,9 @@
 
     <div class="event-step__filters">
       <el-input
+        ref="eventSearch"
         v-model.trim="filters.keyword"
+        :class="{ 'is-focus-restored': focusRestoredTarget === 'eventSearch' }"
         clearable
         prefix-icon="el-icon-search"
         placeholder="搜索事件名称、说明或来源"
@@ -78,7 +80,12 @@
             <strong>示例业务对象</strong>
             <p>{{ sampleSummary }}</p>
           </div>
-          <div class="event-detail__fields">
+          <div
+            ref="schemaRepair"
+            class="event-detail__fields"
+            :class="{ 'is-focus-restored': focusRestoredTarget === 'schemaRepair' }"
+            tabindex="-1"
+          >
             <strong>可用于后续配置的字段</strong>
             <div v-if="selectedFields.length" class="event-detail__field-list">
               <span v-for="field in selectedFields.slice(0, 8)" :key="field.code">
@@ -111,7 +118,7 @@
 
 <script>
 import { listEventResources, getEventResource } from '@/api/todo-resources'
-import { buildEventPatch, eventSchemaHealth } from '../journey-step-model'
+import { buildEventPatch, eventSchemaHealth, repairFocusTarget } from '../journey-step-model'
 
 export default {
   name: 'EventStep',
@@ -128,6 +135,8 @@ export default {
       loading: false,
       events: [],
       detail: null,
+      focusRestoredTarget: '',
+      focusTimer: null,
       filters: { keyword: '', source: '', status: '' }
     }
   },
@@ -190,6 +199,7 @@ export default {
     }
   },
   created() { this.loadEvents() },
+  beforeDestroy() { if (this.focusTimer) clearTimeout(this.focusTimer) },
   methods: {
     async loadEvents() {
       if (!this.canReadRichCatalog) {
@@ -269,7 +279,22 @@ export default {
     statusLabel(value) {
       return ({ ACTIVE: '已启用', DRAFT: '草稿', DISABLED: '已停用' })[value] || value
     },
-    focusField() {}
+    focusField(fieldPath) {
+      const target = repairFocusTarget(fieldPath)
+      this.$nextTick(() => {
+        const reference = this.$refs[target]
+        const element = reference && (reference.$el || reference)
+        if (!element) return
+        if (typeof reference.focus === 'function') reference.focus()
+        else if (typeof element.focus === 'function') element.focus()
+        if (typeof element.scrollIntoView === 'function') {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        this.focusRestoredTarget = target
+        if (this.focusTimer) clearTimeout(this.focusTimer)
+        this.focusTimer = setTimeout(() => { this.focusRestoredTarget = '' }, 1800)
+      })
+    }
   }
 }
 </script>
@@ -304,6 +329,12 @@ export default {
   grid-template-columns: minmax(220px, 1fr) 150px 130px;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.is-focus-restored {
+  outline: 3px solid rgba(200, 154, 61, 0.34);
+  outline-offset: 3px;
+  transition: outline-color 180ms ease;
 }
 
 .event-step__layout {

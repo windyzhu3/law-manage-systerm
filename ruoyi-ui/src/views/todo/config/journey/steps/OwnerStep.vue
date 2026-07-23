@@ -31,6 +31,15 @@
       </button>
     </div>
 
+    <el-alert
+      v-if="strategy === 'EVENT_OWNER' && !ownerFields.length"
+      title="当前事件版本没有可用的负责人字段"
+      description="请返回事件步骤维护当前 Payload 版本的数值型人员 ID 字段，或改用其他负责人策略。"
+      type="error"
+      :closable="false"
+      show-icon
+    />
+
     <section v-if="strategy" class="owner-config">
       <div class="owner-config__main">
         <h3>负责人来源</h3>
@@ -128,7 +137,8 @@ import {
   buildOwnerConfig,
   ownerStrategy,
   ownerBlocker,
-  isOwnerField
+  scopeOwnerFields,
+  ownerSelectionStillValid
 } from '../journey-step-model'
 
 const KNOWN_STRATEGIES = ['EVENT_OWNER', 'BUSINESS_OWNER', 'ROLE', 'USER', 'CANDIDATE_POOL']
@@ -138,6 +148,7 @@ export default {
   props: {
     value: { type: Object, default: () => ({}) },
     resources: { type: Object, default: () => ({}) },
+    event: { type: Object, default: () => ({}) },
     preview: { type: Object, default: () => ({}) },
     readonly: Boolean
   },
@@ -165,14 +176,15 @@ export default {
     roleOptions() { return this.owners.filter(item => item.type === 'ROLE') },
     userOptions() { return this.owners.filter(item => item.type === 'USER') },
     ownerFields() {
-      const fields = this.resources.fields || []
-      return fields.filter(isOwnerField)
+      return scopeOwnerFields(this.resources.fields || [], this.event)
     },
+    ownerFieldKeys() { return this.ownerFields.map(field => field.code).join('|') },
+    eventKey() { return `${this.event.eventType || ''}@${Number(this.event.payloadVersion || 0)}` },
     unsupportedExisting() {
       return Boolean(this.config.type && !KNOWN_STRATEGIES.includes(ownerStrategy(this.config)))
     },
     currentConfig() { return this.composeConfig() },
-    blocker() { return ownerBlocker(this.currentConfig, this.resources.fields || []) },
+    blocker() { return ownerBlocker(this.currentConfig, this.ownerFields) },
     explanation() {
       const primary = {
         EVENT_OWNER: `先读取事件字段“${this.fieldLabel(this.selection)}”`,
@@ -198,18 +210,23 @@ export default {
       immediate: true,
       deep: true,
       handler() { if (!this.syncing) this.hydrate() }
-    }
+    },
+    eventKey() { this.reconcileOwnerField() },
+    ownerFieldKeys() { this.reconcileOwnerField() }
   },
   methods: {
     hydrate() {
       const config = this.config
       const strategy = ownerStrategy(config)
       this.strategy = KNOWN_STRATEGIES.includes(strategy) ? strategy : ''
-      this.selection = this.strategy === 'EVENT_OWNER'
+      const selection = this.strategy === 'EVENT_OWNER'
         ? (config.field || '')
         : this.strategy === 'ROLE' || this.strategy === 'CANDIDATE_POOL'
           ? (config.roleKey || config.value || '')
           : this.strategy === 'USER' ? String(config.value || config.operand || '') : ''
+      this.selection = this.strategy === 'EVENT_OWNER' && !ownerSelectionStillValid(selection, this.ownerFields)
+        ? ''
+        : selection
       this.skipUnavailable = config.skipUnavailable !== false
       this.useDelegation = config.useDelegation !== false
       const fallback = config.fallback || {}
@@ -217,6 +234,14 @@ export default {
       this.fallbackSelection = fallback.type === 'ROLE'
         ? (fallback.roleKey || fallback.value || '')
         : fallback.type === 'USER' ? String(fallback.value || fallback.operand || '') : ''
+      if (this.strategy === 'EVENT_OWNER' && selection && !this.selection && !this.readonly) {
+        this.$nextTick(() => this.commit())
+      }
+    },
+    reconcileOwnerField() {
+      if (this.strategy !== 'EVENT_OWNER' || ownerSelectionStillValid(this.selection, this.ownerFields)) return
+      this.selection = ''
+      if (!this.readonly) this.commit()
     },
     chooseStrategy(strategy) {
       if (this.readonly) return

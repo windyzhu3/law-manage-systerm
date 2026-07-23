@@ -359,7 +359,7 @@
     from todo_validator_metadata metadata order by metadata.validator_name,metadata.validator_code
   </select>
   <select id="selectActiveEventResourceSchemas" resultType="java.util.Map">
-    select event_type,event_name,business_object_type,payload_schema_json
+    select event_type,event_name,business_object_type,payload_version,payload_schema_json
     from todo_event_catalog where status='ACTIVE' and schema_status='READY'
       and business_object_type=#{businessType}
     order by event_type,payload_version desc

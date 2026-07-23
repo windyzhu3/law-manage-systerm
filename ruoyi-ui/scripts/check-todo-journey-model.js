@@ -849,6 +849,19 @@ check('models schema health, owner blockers, and contextual resource return sema
     { type: 'PAYLOAD', field: 'ownerName' },
     [{ code: 'ownerName', type: 'string' }]
   ).code, 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED')
+
+  const scopedOwners = steps.scopeOwnerFields([
+    { code: 'leadOwnerId', type: 'integer', sourceEventVersions: ['LEAD_ASSIGNED@1'] },
+    { code: 'contractOwnerId', type: 'integer', sourceEventVersions: ['CONTRACT_APPROVED@2'] },
+    { code: 'legacyOwnerId', type: 'integer', sourceEvents: ['CONTRACT_APPROVED'] },
+    { code: 'ownerName', type: 'string', sourceEventVersions: ['CONTRACT_APPROVED@2'] }
+  ], { eventType: 'CONTRACT_APPROVED', payloadVersion: 2 })
+  assert.deepStrictEqual(scopedOwners.map(item => item.code), ['contractOwnerId'])
+  assert.strictEqual(steps.ownerSelectionStillValid('contractOwnerId', scopedOwners), true)
+  assert.strictEqual(steps.ownerSelectionStillValid('leadOwnerId', scopedOwners), false)
+
+  assert.strictEqual(steps.repairFocusTarget('payloadSchema'), 'schemaRepair')
+  assert.strictEqual(steps.repairFocusTarget('eventType'), 'eventSearch')
 })
 
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

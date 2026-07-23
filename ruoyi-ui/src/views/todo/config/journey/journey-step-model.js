@@ -283,12 +283,35 @@ function isOwnerField(field) {
     (semanticType === 'USER_ID' || /(owner|user|lawyer|manager)([._]?id)?$/i.test(code))
 }
 
+function scopeOwnerFields(fields, event) {
+  const selected = object(event)
+  const eventType = String(selected.eventType || '')
+  const payloadVersion = Number(selected.payloadVersion || 0)
+  if (!eventType || payloadVersion <= 0) return []
+  const sourceKey = `${eventType}@${payloadVersion}`
+  return (Array.isArray(fields) ? fields : []).filter(field =>
+    isOwnerField(field) &&
+    (Array.isArray(field.sourceEventVersions) ? field.sourceEventVersions : []).includes(sourceKey)
+  )
+}
+
+function ownerSelectionStillValid(selection, fields) {
+  return Boolean(selection) && (Array.isArray(fields) ? fields : [])
+    .some(field => String(field.code) === String(selection))
+}
+
+function repairFocusTarget(fieldPath) {
+  return String(fieldPath || '').toLowerCase().includes('payloadschema')
+    ? 'schemaRepair'
+    : 'eventSearch'
+}
+
 function buildOwnerConfig(strategy, selection, fallback) {
   const selected = selection || {}
   let config
   switch (strategy) {
     case 'EVENT_OWNER':
-      config = { type: 'PAYLOAD', field: selected.field || 'ownerId', selectionMode: 'EVENT_OWNER' }
+      config = { type: 'PAYLOAD', field: selected.field || '', selectionMode: 'EVENT_OWNER' }
       break
     case 'BUSINESS_OWNER':
       config = { type: 'BUSINESS_OWNER' }
@@ -366,6 +389,9 @@ module.exports = {
   ownerBlocker,
   ownerStrategy,
   isOwnerField,
+  scopeOwnerFields,
+  ownerSelectionStillValid,
+  repairFocusTarget,
   buildOwnerConfig,
   createRepairRequest,
   resourceRepairAccess,
