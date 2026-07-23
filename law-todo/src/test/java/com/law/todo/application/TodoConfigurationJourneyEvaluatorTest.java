@@ -76,6 +76,27 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
     }
 
+    @Test void blocksSuccessfulSimulationWithoutTheCurrentDefinitionHash()
+    {
+        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS")));
+
+        assertThat(result.step("SIMULATION_PUBLISH").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_SIMULATION_REQUIRED");
+    }
+
+    @Test void blocksOwnerWithBlankOperandAndNoFallback()
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",new EventRule("LEAD_ASSIGNED",1,Map.of()),
+                new OwnerRule(Map.of("type","USER","value","")),new DodRule(Map.of("requiredFields",List.of("leadId"))),
+                new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
+                new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.step("OWNER").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
+    }
+
     @Test void blocksUnavailableCalendarAndInvalidRouting()
     {
         when(templates.listTemplateCalendarCatalog()).thenReturn(List.of());

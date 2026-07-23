@@ -54,6 +54,21 @@ class TodoEmployeeTodoPreviewProjectorTest
         assertThat(view.dueSummary()).doesNotContain("DEFAULT");
     }
 
+    @Test void replacesJsonAndTechnicalConfiguredDisplayTextWithBusinessSafeFallbacks()
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",new EventRule("LEAD_ASSIGNED",1,Map.of()),
+                new OwnerRule(Map.of("displayName","LEAD_ASSIGNED","type","USER","value",7)),
+                new DodRule(Map.of()),new SlaRule(Map.of("displayName","{\"calendarCode\":\"DEFAULT\"}","minutes",480)),
+                new UiSchema(Map.of("employeeTitle","{\"eventType\":\"LEAD_ASSIGNED\"}")),new RoutingGraph(Map.of()),
+                List.of(),List.of(),List.of());
+
+        EmployeeTodoPreview view=projector.project(detail(),definition);
+
+        assertThat(view.title()).isEqualTo("Lead follow-up");
+        assertThat(view.assigneeSummary()).isEqualTo("Assigned according to the configured ownership rule");
+        assertThat(view.dueSummary()).isEqualTo("Due according to the configured service-level agreement");
+    }
+
     private TemplateConfigurationDetail detail()
     {
         return new TemplateConfigurationDetail(42L,"TODO-42","Lead follow-up","LEAD","0",4,4,101L,"DRAFT",91L,3,

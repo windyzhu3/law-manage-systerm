@@ -115,7 +115,7 @@ public class TodoConfigurationJourneyEvaluator
         boolean success=Boolean.TRUE.equals(ui.get("simulationSuccessful"))||"SUCCESS".equalsIgnoreCase(status)
                 ||"SUCCEEDED".equalsIgnoreCase(status)||"PASSED".equalsIgnoreCase(status);
         String simulatedHash=text(ui.get("simulationDefinitionHash"));String currentHash=detail==null||detail.editableVersion()==null?null:detail.editableVersion().definitionHash();
-        if(success&&!blank(simulatedHash)&&!simulatedHash.equals(currentHash))success=false;
+        success=success&&!blank(simulatedHash)&&simulatedHash.equals(currentHash);
         if(!success)local.add(blocker("TODO_JOURNEY_SIMULATION_REQUIRED","SIMULATION_PUBLISH","ui.simulationStatus",
                 "A successful simulation of this editable definition is required","Run a successful simulation before publishing"));
         append(issues,local);return step("SIMULATION_PUBLISH","Simulation and publish",local,success,success);
@@ -136,7 +136,12 @@ public class TodoConfigurationJourneyEvaluator
     private Map<String,Object> config(Object section)
     {if(section instanceof TodoDefinitionDocument.OwnerRule owner)return owner.config();if(section instanceof TodoDefinitionDocument.DodRule dod)return dod.config();if(section instanceof TodoDefinitionDocument.SlaRule sla)return sla.config();if(section instanceof TodoDefinitionDocument.UiSchema ui)return ui.config();if(section instanceof TodoDefinitionDocument.RoutingGraph routing)return routing.config();return Map.of();}
     private boolean ownerRule(Map<String,Object> value)
-    {return !blank(text(value.get("type")))&&(value.containsKey("value")||value.containsKey("operand")||value.containsKey("field")||"BUSINESS_OWNER".equals(text(value.get("type")))||"SUPERVISOR".equals(text(value.get("type"))));}
+    {
+        String type=text(value.get("type"));
+        if(blank(type))return false;
+        if("BUSINESS_OWNER".equals(type)||"SUPERVISOR".equals(type))return true;
+        return !blank(text(value.get("value")))||!blank(text(value.get("operand")))||!blank(text(value.get("field")));
+    }
     private Map<String,Object> map(Object value)
     {if(!(value instanceof Map<?,?> source))return Map.of();Map<String,Object> result=new java.util.LinkedHashMap<>();source.forEach((key,item)->result.put(String.valueOf(key),item));return result;}
     private List<String> strings(Object value)

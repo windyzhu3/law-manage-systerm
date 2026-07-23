@@ -42,12 +42,18 @@ public class TodoEmployeeTodoPreviewProjector
         if(value==null||!value.getClass().isArray())return List.of();List<String> result=new ArrayList<>();for(int index=0;index<Array.getLength(value);index++){Object item=Array.get(value,index);if(item!=null&&!String.valueOf(item).isBlank())result.add(String.valueOf(item));}return List.copyOf(result);
     }
     private String display(Map<String,Object> value,String key,String fallback)
-    {String result=text(value.get(key));return result==null||result.isBlank()?fallback:result;}
+    {return safeDisplay(text(value.get(key)),fallback);}
     private String describeOwner(Map<String,Object> owner)
-    {for(String key:List.of("displayName","label","summary","description")){String value=text(owner.get(key));if(value!=null&&!value.isBlank())return value;}return "Assigned according to the configured ownership rule";}
+    {for(String key:List.of("displayName","label","summary","description")){String value=text(owner.get(key));if(isBusinessSafe(value))return value;}return "Assigned according to the configured ownership rule";}
     private String describeSla(Map<String,Object> sla)
-    {for(String key:List.of("displayName","label","summary","description")){String value=text(sla.get(key));if(value!=null&&!value.isBlank())return value;}return sla.isEmpty()?null:"Due according to the configured service-level agreement";}
-    private String displayLabel(String label,String fallback){return label==null||label.isBlank()?fallback:label;}
+    {for(String key:List.of("displayName","label","summary","description")){String value=text(sla.get(key));if(isBusinessSafe(value))return value;}return sla.isEmpty()?null:"Due according to the configured service-level agreement";}
+    private String displayLabel(String label,String fallback){return safeDisplay(label,fallback);}
+    private String safeDisplay(String value,String fallback){return isBusinessSafe(value)?value:fallback;}
+    private boolean isBusinessSafe(String value)
+    {
+        if(value==null||value.isBlank())return false;String trimmed=value.trim();
+        return !(trimmed.startsWith("{")||trimmed.startsWith("[")||trimmed.matches("[A-Z][A-Z0-9_]*(?:\\.[A-Z0-9_]+)*"));
+    }
     private String text(Object value){return value==null?null:String.valueOf(value);}
     private Map<String,Object> config(Object section)
     {if(section instanceof TodoDefinitionDocument.OwnerRule owner)return owner.config();if(section instanceof TodoDefinitionDocument.DodRule dod)return dod.config();if(section instanceof TodoDefinitionDocument.SlaRule sla)return sla.config();if(section instanceof TodoDefinitionDocument.UiSchema ui)return ui.config();return Map.of();}
