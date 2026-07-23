@@ -469,7 +469,7 @@ The migration must update existing `DOD_RECIPE` JSON with these keys and seed at
   "businessActions":["FIRST_CONTACT"],
   "templateStages":["LEAD_FOLLOWUP"],
   "recommendationPriority":100,
-  "requiredFields":["contactTime","contactResult"],
+  "requiredFields":["contactedAt","contactResult"],
   "requiredAttachments":[],
   "conditionalRules":[],
   "validatorRefs":[],
