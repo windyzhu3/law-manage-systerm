@@ -70,6 +70,7 @@ function hydrateJourney(payload) {
     ...source,
     template,
     steps,
+    baselineSteps: clone(steps),
     definition: deriveDefinition(template, steps),
     dirty: false,
     saveState: 'SAVED',
@@ -206,6 +207,7 @@ function saveSuccess(journey, result) {
     ...clone(journey),
     template,
     steps,
+    baselineSteps: clone(steps),
     definition: deriveDefinition(template, steps),
     dirty: false,
     saveState: 'SAVED',
@@ -224,6 +226,48 @@ function mergeSaveResult(journey, result) {
   if (status === 'CONFLICT') return saveConflict(journey, result)
   if (status === 'FAILED') return saveFailure(journey, result)
   return saveSuccess(journey, result)
+}
+
+function mergeConflictWithServer(journey) {
+  const current = clone(journey || {})
+  const conflict = current.conflict || {}
+  const local = conflict.local || current
+  const server = hydrateJourney(conflict.server || {})
+  const baselineByCode = new Map(orderedSteps(local.baselineSteps).map(step => [step.code, step]))
+  let merged = server
+  let hasLocalChanges = false
+
+  for (const step of orderedSteps(local.steps)) {
+    const baseline = baselineByCode.get(step.code)
+    if (JSON.stringify(step.value) !== JSON.stringify(baseline && baseline.value)) {
+      merged = applyStepPatch(merged, step.code, step.value)
+      hasLocalChanges = true
+    }
+  }
+
+  return {
+    ...merged,
+    dirty: hasLocalChanges,
+    saveState: hasLocalChanges ? 'IDLE' : 'SAVED',
+    saveError: null,
+    conflict: null
+  }
+}
+
+function rebaseJourneyAfterSave(currentJourney, savingJourney, result) {
+  const current = clone(currentJourney || {})
+  const saving = clone(savingJourney || {})
+  const savingByCode = new Map(orderedSteps(saving.steps).map(step => [step.code, step]))
+  let rebased = saveSuccess(saving, result)
+
+  for (const step of orderedSteps(current.steps)) {
+    const savingStep = savingByCode.get(step.code)
+    if (JSON.stringify(step.value) !== JSON.stringify(savingStep && savingStep.value)) {
+      rebased = applyStepPatch(rebased, step.code, step.value)
+    }
+  }
+
+  return rebased
 }
 
 function toSimulationCommand(journey, businessObject, effectiveAt) {
@@ -256,6 +300,8 @@ module.exports = {
   applyStepPatch,
   derivePrimaryAction,
   mergeSaveResult,
+  mergeConflictWithServer,
+  rebaseJourneyAfterSave,
   toSimulationCommand,
   canLeave
 }

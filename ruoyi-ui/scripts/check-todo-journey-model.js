@@ -177,6 +177,57 @@ check('captures independent local and server snapshots on optimistic-lock confli
   assert.strictEqual(conflicted.conflict.server.template.lockVersion, 5)
 })
 
+check('refreshes a conflict with server changes while retaining only local edits', () => {
+  const original = model.hydrateJourney(fixture())
+  const local = model.applyStepPatch(original, 'SLA', {
+    config: { durationValue: 2, durationUnit: 'HOUR', calendarCode: 'WORKDAY' }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = server.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { type: 'ROLE', value: 'LEAD_MANAGER' } }, state: 'COMPLETED' }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const merged = model.mergeConflictWithServer(conflicted)
+
+  assert.strictEqual(merged.template.lockVersion, 5)
+  assert.strictEqual(merged.definition.owner.config.type, 'ROLE')
+  assert.strictEqual(merged.definition.sla.config.durationValue, 2)
+  assert.strictEqual(merged.dirty, true)
+  assert.strictEqual(merged.saveState, 'IDLE')
+  assert.strictEqual(merged.conflict, null)
+})
+
+check('rebases edits made during a save onto the fresh server baseline', () => {
+  const original = model.hydrateJourney(fixture())
+  const saving = model.applyStepPatch(original, 'OWNER', {
+    config: { type: 'BUSINESS_OWNER' }
+  })
+  const current = model.applyStepPatch(saving, 'SLA', {
+    config: { durationValue: 4, durationUnit: 'HOUR' }
+  })
+  const fresh = fixture()
+  fresh.template.lockVersion = 5
+  fresh.steps = fresh.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: saving.steps.find(item => item.code === 'OWNER').value, state: 'COMPLETED' }
+    : step)
+  const rebased = model.rebaseJourneyAfterSave(current, saving, fresh)
+
+  assert.strictEqual(rebased.template.lockVersion, 5)
+  assert.strictEqual(rebased.definition.owner.config.type, 'BUSINESS_OWNER')
+  assert.strictEqual(rebased.definition.sla.config.durationValue, 4)
+  assert.strictEqual(rebased.dirty, true)
+  assert.strictEqual(rebased.saveState, 'IDLE')
+  assert.deepStrictEqual(
+    rebased.baselineSteps.find(step => step.code === 'OWNER').value,
+    rebased.steps.find(step => step.code === 'OWNER').value
+  )
+  assert.notDeepStrictEqual(
+    rebased.baselineSteps.find(step => step.code === 'SLA').value,
+    rebased.steps.find(step => step.code === 'SLA').value
+  )
+})
+
 check('builds a read-only simulation command without runtime-write flags', () => {
   const journey = model.hydrateJourney(fixture())
   const object = { businessId: '9001', title: '测试线索' }

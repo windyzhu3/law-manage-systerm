@@ -17,6 +17,14 @@ const problemPath = 'src/views/todo/config/template/TemplateProblemSummary.vue'
 const progressPath = 'src/views/todo/config/template/TemplateProgressCell.vue'
 const summaryModelPath = 'src/views/todo/config/template/template-workbench-model.js'
 const stylePath = 'src/views/todo/config/styles/config-center.scss'
+const journeyPath = 'src/views/todo/config/journey/index.vue'
+const journeyComponentPaths = [
+  'src/views/todo/config/journey/components/JourneyStepNav.vue',
+  'src/views/todo/config/journey/components/ConfigurationHealthPanel.vue',
+  'src/views/todo/config/journey/components/EmployeeTodoPreview.vue',
+  'src/views/todo/config/journey/components/JourneySaveStatus.vue',
+  'src/views/todo/config/journey/components/JourneyConflictDialog.vue'
+]
 const workbench = read(workbenchPath)
 
 check('renders the task-centered template workbench', () => {
@@ -96,6 +104,48 @@ check('applies the approved visual tokens without gradients or table shadows', (
   }
   assert(!styles.includes('.template-workbench__table-section { box-shadow'), 'table section must not use a shadow')
   assert(!workbench.includes('linear-gradient'), 'workbench must not use gradients')
+})
+
+check('provides the seven-step journey shell and its reusable panels', () => {
+  assert(fs.existsSync(path.join(root, journeyPath)), 'missing journey shell')
+  for (const componentPath of journeyComponentPaths) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing journey component: ${componentPath}`)
+  }
+  const journey = read(journeyPath)
+  for (const token of [
+    'JourneyStepNav',
+    'ConfigurationHealthPanel',
+    'EmployeeTodoPreview',
+    'JourneySaveStatus',
+    'JourneyConflictDialog',
+    'activeComponent',
+    'beforeRouteLeave',
+    'canLeave(this.journey)',
+    'mergeSaveResult',
+    'updateTemplateDraft',
+    'getTodoTemplateJourney'
+  ]) {
+    assert(journey.includes(token), `journey shell missing token: ${token}`)
+  }
+})
+
+check('owns one 600ms autosave debounce and preserves explicit retry controls', () => {
+  const journey = read(journeyPath)
+  assert.strictEqual((journey.match(/setTimeout\s*\(/g) || []).length, 1, 'journey shell must own exactly one debounce timer')
+  assert(journey.includes('}, 600)'), 'journey autosave debounce must be 600ms')
+  assert(journey.includes('@retry="retrySave"'), 'failed saves must expose manual retry')
+  assert(journey.includes('status === 409'), 'optimistic-lock conflicts must handle HTTP 409')
+  assert(journey.includes('@refresh-merge="refreshAndMergeConflict"'), 'conflict dialog must support refresh and merge')
+  assert(journey.includes('@save-copy="saveConflictCopy"'), 'conflict dialog must support saving a copy')
+})
+
+check('uses the approved journey visual language responsively', () => {
+  const sources = [read(journeyPath), ...journeyComponentPaths.map(read)].join('\n')
+  for (const token of ['#0B2A55', '#C89A3D', '@media (max-width: 960px)', '@media (max-width: 640px)']) {
+    assert(sources.includes(token), `journey shell missing visual token: ${token}`)
+  }
+  assert(!sources.includes('linear-gradient'), 'journey shell must not use gradients')
+  assert(!sources.includes('table-section { box-shadow'), 'journey table sections must not use shadows')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)
