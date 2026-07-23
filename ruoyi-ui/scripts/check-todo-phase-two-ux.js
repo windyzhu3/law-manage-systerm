@@ -33,6 +33,12 @@ const journeyStepPaths = [
   'src/views/todo/config/journey/steps/SlaStep.vue',
   'src/views/todo/config/journey/steps/RoutingStep.vue'
 ]
+const simulationPublishPaths = [
+  'src/views/todo/config/journey/steps/SimulationPublishStep.vue',
+  'src/views/todo/config/journey/components/BusinessObjectPayloadEditor.vue',
+  'src/views/todo/config/journey/components/SimulationTrace.vue',
+  'src/views/todo/config/journey/components/PublishPreflightPanel.vue'
+]
 const businessFirstComponentPaths = [
   'src/views/todo/config/journey/components/ContextResourceDrawer.vue',
   'src/views/todo/config/journey/components/TypedConditionBuilder.vue',
@@ -379,6 +385,44 @@ check('keeps backend routing issues authoritative in the normal journey', () => 
     assert(!step.includes(forbidden), `client must not duplicate backend route issue: ${forbidden}`)
   }
   assert(step.includes('step.issueCount'), 'routing step must present authoritative backend issue state')
+})
+
+check('closes the journey with governed simulation and immutable publishing', () => {
+  for (const componentPath of simulationPublishPaths) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing Task 13 component: ${componentPath}`)
+  }
+  const journey = read(journeyPath)
+  const step = read(simulationPublishPaths[0])
+  const payload = read(simulationPublishPaths[1])
+  const trace = read(simulationPublishPaths[2])
+  const preflight = read(simulationPublishPaths[3])
+  for (const token of [
+    'SimulationPublishStep',
+    '@published="handlePublished"',
+    '@navigate-repair="navigateRepair"'
+  ]) assert(journey.includes(token), `journey Task 13 wiring missing token: ${token}`)
+  for (const token of [
+    'listBusinessObjects',
+    'hydrateTodoJourneyPayload',
+    'simulateTodoJourney',
+    'preflightTemplateDraft',
+    'publishReleaseRecord',
+    'manualOverrides',
+    'expectedDefinitionHash',
+    'requireSavedDraft',
+    'localDateTimeNow',
+    'this.readonly',
+    'dirty',
+    'saving'
+  ]) assert(step.includes(token), `simulation/publish step missing governed call: ${token}`)
+  assert(journey.includes("['PUBLISHED', 'RETIRED'].includes(publishStatus)"),
+    'immutable journey versions must enter a read-only shell after publish')
+  assert(!step.includes('new Date().toISOString()'), 'LocalDateTime commands must not send UTC-offset instants')
+  assert(payload.includes('只读样例'), 'sample objects must be visibly read-only')
+  assert(payload.includes('••••••'), 'sensitive payload values must be masked')
+  assert(trace.includes('EVENT') && trace.includes('TODO_PREVIEW'), 'simulation trace must cover the fixed journey')
+  assert(preflight.includes('warningReason'), 'warnings must require an acknowledgement reason')
+  assert(!step.includes('createRuntime'), 'simulation UI must never request runtime persistence')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

@@ -47,6 +47,7 @@
             :key="activeStep"
             :step="activeStepItem"
             :value="activeValue"
+            :template="journey.template"
             :resources="journey.resources || {}"
             :business-type="journey.template.businessType"
             :business-stage="journey.template.businessStage"
@@ -56,9 +57,13 @@
             :permissions="clientPermissions"
             :resource-revision="resourceRevision"
             :readonly="publishedReadOnly"
+            :dirty="journey.dirty"
+            :saving="saving"
             @change="onStepChange"
             @issue-change="onEditorIssue"
             @repair-resource="openResourceRepair"
+            @published="handlePublished"
+            @navigate-repair="navigateRepair"
           />
         </section>
         <aside class="journey-aside">
@@ -120,6 +125,7 @@ import OwnerStep from './steps/OwnerStep'
 import DodStep from './steps/DodStep'
 import SlaStep from './steps/SlaStep'
 import RoutingStep from './steps/RoutingStep'
+import SimulationPublishStep from './steps/SimulationPublishStep'
 import {
   getTodoTemplate,
   getTodoTemplateJourney,
@@ -221,6 +227,7 @@ export default {
     DodStep,
     SlaStep,
     RoutingStep,
+    SimulationPublishStep,
     JourneyStepPlaceholder
   },
   stepEditors: {
@@ -229,7 +236,8 @@ export default {
     OWNER: OwnerStep,
     DOD: DodStep,
     SLA: SlaStep,
-    ROUTING: RoutingStep
+    ROUTING: RoutingStep,
+    SIMULATION_PUBLISH: SimulationPublishStep
   },
   data() {
     return {
@@ -272,7 +280,9 @@ export default {
     },
     publishedReadOnly() {
       const permissions = (this.journey && this.journey.permissions) || {}
+      const publishStatus = String((this.journey && this.journey.template && this.journey.template.publishStatus) || '').toUpperCase()
       return this.$route.query.view === 'published' ||
+        ['PUBLISHED', 'RETIRED'].includes(publishStatus) ||
         this.unresolvedFieldConflicts ||
         !this.capabilities.canSaveDraft ||
         permissions.canEdit === false
@@ -870,6 +880,14 @@ export default {
         return
       }
       this.$modal.msgInfo('模拟与发布操作将在当前步骤的专用面板中完成')
+    },
+    navigateRepair(stepCode) {
+      const code = String(stepCode || '').toUpperCase()
+      if (STEP_CODES.includes(code)) this.activeStep = code
+    },
+    async handlePublished() {
+      await this.loadJourney()
+      this.activeStep = 'SIMULATION_PUBLISH'
     },
     goBack() {
       this.$router.push('/todo-engine/todo-template')

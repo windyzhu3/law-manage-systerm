@@ -3,6 +3,7 @@ const path = require('path')
 
 const root = path.resolve(__dirname, '..')
 const specPath = path.join(root, 'tests/e2e/todo-config-center.spec.js')
+const journeySpecPath = path.join(root, 'tests/e2e/todo-config-journey.spec.js')
 const bootstrapPath = path.join(root, 'tests/e2e/bootstrap/todo-config-admin.sql')
 const playwrightConfigPath = path.join(root, 'playwright.config.js')
 const productionServerPath = path.join(root, 'scripts/serve-e2e-production.js')
@@ -27,6 +28,7 @@ function forbidText(source, value, label) {
 }
 
 const spec = read(specPath)
+const journeySpec = read(journeySpecPath)
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
 for (const required of [
@@ -35,6 +37,7 @@ for (const required of [
 ]) requireText(mysqlRunner, required, 'Portable MySQL E2E runner')
 for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
   if (spec.includes(forbidden)) throw new Error(`Todo configuration real E2E must not mock core APIs: ${forbidden}`)
+  if (journeySpec.includes(forbidden)) throw new Error(`Todo journey real E2E must not mock core APIs: ${forbidden}`)
 }
 forbidText(spec, 'if (screenshotDir) {', 'Todo configuration real E2E functional assertions')
 for (const required of [
@@ -72,6 +75,18 @@ for (const required of [
   '8. 技术日志',
 ]) requireText(spec, required, 'Todo configuration real E2E spec')
 requireText(spec, "require('./support/todo-config-e2e-database')", 'Todo configuration real E2E spec')
+for (const required of [
+  'TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID',
+  'simulation-publish-step',
+  'business-object-selector',
+  '只读样例',
+  '绝不会生成或写入运行时待办',
+  'run-journey-simulation',
+  'publish-preflight-panel',
+  'publish-current-draft',
+  '当前版本已发布',
+  'AUDITOR_USER'
+]) requireText(journeySpec, required, 'Todo journey real E2E spec')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
   'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',

@@ -721,6 +721,93 @@ check('builds a read-only simulation command without runtime-write flags', () =>
   assert.strictEqual(JSON.stringify(object), snapshot)
 })
 
+check('projects hydrated payloads without exposing sensitive values or mutating server data', () => {
+  assert.strictEqual(typeof steps.buildHydratedPayloadRows, 'function')
+  const hydration = {
+    sample: false,
+    coveragePercent: 75,
+    fields: [
+      { path: 'leadNo', label: '线索编号', value: 'L-1001', source: 'BUSINESS_OBJECT', sensitive: false },
+      { path: 'mobile', label: '手机号', value: '[REDACTED]', source: 'BUSINESS_OBJECT', sensitive: true },
+      { path: 'contactResult', label: '联系结果', value: '未联系', source: 'EVENT_SAMPLE', sensitive: false }
+    ]
+  }
+  const snapshot = JSON.stringify(hydration)
+  const rows = steps.buildHydratedPayloadRows(hydration, { contactResult: '已接通' })
+  assert.strictEqual(rows[0].displayValue, 'L-1001')
+  assert.strictEqual(rows[1].displayValue, '••••••')
+  assert.strictEqual(rows[1].editable, false)
+  assert.strictEqual(rows[2].displayValue, '已接通')
+  assert.strictEqual(rows[2].source, 'MANUAL_OVERRIDE')
+  assert.strictEqual(JSON.stringify(hydration), snapshot)
+})
+
+check('stores only explicit manual payload overrides', () => {
+  assert.strictEqual(typeof steps.updateManualOverrides, 'function')
+  const original = { contactResult: '未联系', nested: { preserved: true } }
+  const updated = steps.updateManualOverrides(original, 'contactResult', '已接通')
+  assert.deepStrictEqual(updated, { contactResult: '已接通', nested: { preserved: true } })
+  assert.deepStrictEqual(original, { contactResult: '未联系', nested: { preserved: true } })
+  assert.deepStrictEqual(steps.updateManualOverrides(updated, 'contactResult', ''), {
+    nested: { preserved: true }
+  })
+})
+
+check('orders simulation trace by the governed journey and keeps repair targets', () => {
+  assert.strictEqual(typeof steps.orderedSimulationTrace, 'function')
+  const trace = steps.orderedSimulationTrace([
+    { code: 'SLA', status: 'PASS' },
+    { code: 'EVENT', status: 'PASS' },
+    { code: 'OWNER', status: 'BLOCKED' }
+  ])
+  assert.deepStrictEqual(trace.map(item => item.code), ['EVENT', 'OWNER', 'SLA'])
+  assert.strictEqual(trace[1].repairStep, 'OWNER')
+})
+
+check('requires a successful current-hash simulation and authoritative warning acknowledgement', () => {
+  assert.strictEqual(typeof steps.publishPreflightGate, 'function')
+  const simulation = { successful: true, definitionHash: 'hash-current' }
+  const ready = { definitionHash: 'hash-current', errors: [], warnings: [] }
+  assert.strictEqual(steps.publishPreflightGate(simulation, ready, '').allowed, true)
+  assert.strictEqual(steps.publishPreflightGate(
+    { successful: true, definitionHash: 'hash-old' }, ready, ''
+  ).allowed, false)
+  assert.strictEqual(steps.publishPreflightGate(simulation, {
+    definitionHash: 'hash-current',
+    errors: [{ code: 'BLOCKER' }],
+    warnings: []
+  }, '').allowed, false)
+  assert.strictEqual(steps.publishPreflightGate(simulation, {
+    definitionHash: 'hash-current',
+    errors: [],
+    warnings: [{ code: 'WARNING' }]
+  }, '').allowed, false)
+  assert.strictEqual(steps.publishPreflightGate(simulation, {
+    definitionHash: 'hash-current',
+    errors: [],
+    warnings: [{ code: 'WARNING' }]
+  }, '已复核该警告').allowed, true)
+})
+
+check('derives simulation and publish controls from exact role permissions', () => {
+  assert.strictEqual(typeof steps.simulationPublishCapabilities, 'function')
+  assert.deepStrictEqual(steps.simulationPublishCapabilities(['todo:simulation:simulate']), {
+    canSimulate: false,
+    canPublish: false,
+    canDiff: false
+  })
+  assert.deepStrictEqual(steps.simulationPublishCapabilities([
+    'todo:simulation:list', 'todo:simulation:simulate', 'todo:release:publish', 'todo:definition:diff'
+  ]), {
+    canSimulate: true,
+    canPublish: true,
+    canDiff: true
+  })
+  assert.strictEqual(steps.simulationPublishCapabilities([
+    'todo:simulation:list', 'todo:simulation:simulate', 'todo:release:publish', 'todo:release:diff'
+  ]).canDiff, false)
+})
+
 check('allows navigation only when there are no unsaved edits', () => {
   const journey = model.hydrateJourney(fixture())
   const changed = model.applyStepPatch(journey, 'OWNER', { config: { type: 'BUSINESS_OWNER' } })

@@ -855,6 +855,89 @@ function completeResourceRepair(request, draft, resourceId) {
   }
 }
 
+const SIMULATION_TRACE_ORDER = ['EVENT', 'OWNER', 'DOD', 'SLA', 'ROUTING', 'TODO_PREVIEW']
+const SIMULATION_REPAIR_STEPS = {
+  EVENT: 'EVENT',
+  OWNER: 'OWNER',
+  DOD: 'DOD',
+  SLA: 'SLA',
+  ROUTING: 'ROUTING',
+  TODO_PREVIEW: 'DOD'
+}
+
+function buildHydratedPayloadRows(hydration, manualOverrides) {
+  const source = object(hydration)
+  const overrides = object(manualOverrides)
+  return list(source.fields).map(row => {
+    const field = object(row)
+    const path = String(field.path || field.code || '')
+    const overridden = Object.prototype.hasOwnProperty.call(overrides, path)
+    const sensitive = field.sensitive === true
+    return {
+      ...clone(field),
+      path,
+      source: overridden ? 'MANUAL_OVERRIDE' : String(field.source || 'MISSING'),
+      displayValue: sensitive ? '••••••' : (overridden ? overrides[path] : field.value),
+      editable: !sensitive
+    }
+  })
+}
+
+function updateManualOverrides(current, path, value) {
+  const next = clone(object(current))
+  const key = String(path || '')
+  if (!key) return next
+  if (value === '' || value == null) delete next[key]
+  else next[key] = clone(value)
+  return next
+}
+
+function orderedSimulationTrace(trace) {
+  const rows = list(trace)
+  const byCode = new Map(rows.map(row => [String(row && row.code || '').toUpperCase(), clone(row)]))
+  return SIMULATION_TRACE_ORDER
+    .filter(code => byCode.has(code))
+    .map(code => ({
+      ...byCode.get(code),
+      code,
+      repairStep: SIMULATION_REPAIR_STEPS[code]
+    }))
+}
+
+function publishPreflightGate(simulation, preflight, warningReason) {
+  const result = object(simulation)
+  const report = object(preflight)
+  const errors = list(report.errors)
+  const warnings = list(report.warnings)
+  const hashMatches = Boolean(result.successful) &&
+    Boolean(result.definitionHash) &&
+    String(result.definitionHash) === String(report.definitionHash || '')
+  const reasonReady = !warnings.length || String(warningReason || '').trim().length > 0
+  let message = ''
+  if (!hashMatches) message = '请使用当前草稿重新试运行'
+  else if (errors.length) message = '发布预检仍有阻塞项'
+  else if (!reasonReady) message = '存在警告，请填写复核说明'
+  return {
+    allowed: hashMatches && !errors.length && reasonReady,
+    hashMatches,
+    blockerCount: errors.length,
+    warningCount: warnings.length,
+    message
+  }
+}
+
+function simulationPublishCapabilities(permissions) {
+  const granted = Array.isArray(permissions) ? permissions : []
+  const all = granted.includes('*:*:*')
+  const canListObjects = all || granted.includes('todo:simulation:list')
+  const canRunEngine = all || granted.includes('todo:simulation:simulate')
+  return {
+    canSimulate: canListObjects && canRunEngine,
+    canPublish: (all || granted.includes('todo:release:publish')) && canListObjects && canRunEngine,
+    canDiff: all || granted.includes('todo:definition:diff')
+  }
+}
+
 module.exports = {
   MAX_CONDITION_GROUP_DEPTH,
   operatorsForField,
@@ -891,5 +974,10 @@ module.exports = {
   routingDraftBlocker,
   createRepairRequest,
   resourceRepairAccess,
-  completeResourceRepair
+  completeResourceRepair,
+  buildHydratedPayloadRows,
+  updateManualOverrides,
+  orderedSimulationTrace,
+  publishPreflightGate,
+  simulationPublishCapabilities
 }
