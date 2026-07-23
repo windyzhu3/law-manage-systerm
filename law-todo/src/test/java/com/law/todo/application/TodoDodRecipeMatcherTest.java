@@ -44,6 +44,32 @@ class TodoDodRecipeMatcherTest
     }
 
     @Test
+    void excludesHighPriorityRecipesThatMismatchActionOrStage()
+    {
+        List<DodRecipeResource> result=matcher.match(List.of(
+                recipe("ACTION_MISMATCH","错误动作","LEAD",List.of("QUALIFY"),List.of("LEAD_FOLLOWUP"),100000,List.of()),
+                recipe("STAGE_MISMATCH","错误阶段","LEAD",List.of("FIRST_CONTACT"),List.of("LEAD_QUALIFY"),100000,List.of()),
+                recipe("MATCH","正确配方","LEAD",List.of("FIRST_CONTACT"),List.of("LEAD_FOLLOWUP"),0,List.of())),
+                "LEAD","FIRST_CONTACT","LEAD_FOLLOWUP");
+
+        assertThat(result).extracting(DodRecipeResource::code).containsExactly("MATCH");
+    }
+
+    @Test
+    void contextSpecificityPrecedesConfiguredPriority()
+    {
+        List<DodRecipeResource> result=matcher.match(List.of(
+                recipe("GLOBAL","全局","ALL",List.of(),List.of(),30000,List.of()),
+                recipe("STAGE_ONLY","阶段匹配","LEAD",List.of(),List.of("LEAD_FOLLOWUP"),20000,List.of()),
+                recipe("ACTION_ONLY","动作匹配","LEAD",List.of("FIRST_CONTACT"),List.of(),10000,List.of()),
+                recipe("ACTION_AND_STAGE","动作阶段匹配","LEAD",List.of("FIRST_CONTACT"),List.of("LEAD_FOLLOWUP"),0,List.of())),
+                "LEAD","FIRST_CONTACT","LEAD_FOLLOWUP");
+
+        assertThat(result).extracting(DodRecipeResource::code)
+                .containsExactly("ACTION_AND_STAGE","ACTION_ONLY","STAGE_ONLY","GLOBAL");
+    }
+
+    @Test
     void legacyRecipeConstructionDefaultsToWildcardContext()
     {
         DodRecipeResource legacy=new DodRecipeResource("LEGACY","历史配方","历史配方","LEAD",

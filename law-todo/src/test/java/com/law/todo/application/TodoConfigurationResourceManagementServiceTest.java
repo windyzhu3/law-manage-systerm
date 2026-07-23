@@ -98,6 +98,53 @@ class TodoConfigurationResourceManagementServiceTest
         assertEquals("TODO_CONFIGURATION_RESOURCE_VERSION_CONFLICT",error.getBusinessCode());
     }
 
+    @Test
+    void repeatsSuccessfulActionWithoutWritingTheResourceAgain()
+    {
+        replay("resource-create",41L);
+
+        assertEquals(41L,resources.save(field(null,"{\"type\":\"string\"}",0),actor));
+
+        verify(mapper,never()).insertConfigurationResourceItem(anyMap());
+    }
+
+    @Test
+    void rejectsRecipeThatReferencesUnknownMaterial()
+    {
+        when(catalog.isKnownField("contactedAt","LEAD")).thenReturn(true);
+        ConfigurationResourceCommand command=recipe(null,recipeValue("100",
+                "[\"contactedAt\"]","[\"UNKNOWN_MATERIAL\"]","[]"),0);
+
+        assertThatThrownBy(()->resources.save(command,actor))
+                .isInstanceOf(TodoException.class)
+                .hasMessageContaining("TODO_CONFIGURATION_RESOURCE_REFERENCE_UNKNOWN");
+    }
+
+    @Test
+    void rejectsRecipeThatReferencesUnavailableValidator()
+    {
+        when(catalog.isKnownField("contactedAt","LEAD")).thenReturn(true);
+        ConfigurationResourceCommand command=recipe(null,recipeValue("100",
+                "[\"contactedAt\"]","[]","[\"UnknownValidator\"]"),0);
+
+        assertThatThrownBy(()->resources.save(command,actor))
+                .isInstanceOf(TodoException.class)
+                .hasMessageContaining("TODO_CONFIGURATION_RESOURCE_REFERENCE_UNKNOWN");
+    }
+
+    @Test
+    void rejectsNonNumericAndNonIntegralRecommendationPriorities()
+    {
+        for(String priority:java.util.List.of("\"high\"","12.5"))
+        {
+            ConfigurationResourceCommand command=recipe(null,recipeValue(priority,"[]","[]","[]"),0);
+
+            assertThatThrownBy(()->resources.save(command,actor))
+                    .isInstanceOf(TodoException.class)
+                    .hasMessageContaining("TODO_CONFIGURATION_RESOURCE_VALUE_INVALID");
+        }
+    }
+
     private ConfigurationResourceCommand field(Long id,String valueJson,int version)
     {
         return new ConfigurationResourceCommand(id,"FIELD","contactedAt","联系时间","实际联系时间","LEAD",
@@ -108,6 +155,14 @@ class TodoConfigurationResourceManagementServiceTest
     {
         return new ConfigurationResourceCommand(id,"DOD_RECIPE","LEAD_FIRST_CONTACT","首联完成","记录首联结果","LEAD",
                 valueJson,"ACTIVE",10,"resource-recipe",version);
+    }
+
+    private String recipeValue(String priority,String fields,String materials,String validators)
+    {
+        return "{\"businessActions\":[\"FIRST_CONTACT\"],\"templateStages\":[\"LEAD_FOLLOWUP\"],"
+                +"\"recommendationPriority\":"+priority+",\"requiredFields\":"+fields
+                +",\"requiredAttachments\":"+materials+",\"validatorRefs\":"+validators
+                +",\"conditionalRules\":[],\"employeeInstructions\":[\"记录联系结果\"]}";
     }
 
     private Map<String,Object> existing(long id,String type,String code,String businessType,int version)
@@ -136,5 +191,21 @@ class TodoConfigurationResourceManagementServiceTest
                 org.mockito.ArgumentMatchers.eq(actionId),
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyLong())).thenReturn(1);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void replay(String actionId,long resourceItemId)
+    {
+        when(todoMapper.insertDefinitionActionClaim(anyMap())).thenReturn(0);
+        when(todoMapper.selectDefinitionActionForUpdate(actionId)).thenAnswer(invocation->{
+            Map<String,Object> claim=org.mockito.Mockito.mockingDetails(todoMapper).getInvocations().stream()
+                    .filter(call->call.getMethod().getName().equals("insertDefinitionActionClaim")).reduce((first,last)->last)
+                    .map(call->(Map<String,Object>)call.getArgument(0)).orElse(Map.of());
+            Map<String,Object> row=new HashMap<>();
+            row.put("action_type","SAVE_CONFIGURATION_RESOURCE");row.put("entity_type","CONFIGURATION_RESOURCE");
+            row.put("operator_id",7L);row.put("operator_name","alice");row.put("operator_dept_id",2L);
+            row.put("source_entity_id",claim.get("sourceEntityId"));row.put("request_fingerprint",claim.get("requestFingerprint"));
+            row.put("entity_id",resourceItemId);row.put("action_status","APPLIED");return row;
+        });
     }
 }

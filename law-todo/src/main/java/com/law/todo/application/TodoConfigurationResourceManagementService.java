@@ -93,7 +93,7 @@ public class TodoConfigurationResourceManagementService
     {
         if(!value.keySet().containsAll(RECIPE_KEYS)
                 ||!stringArray(value,"businessActions")||!stringArray(value,"templateStages")
-                ||value.getInteger("recommendationPriority")==null||value.getInteger("recommendationPriority")<0
+                ||!validPriority(value.get("recommendationPriority"))
                 ||!stringArray(value,"requiredFields")||!stringArray(value,"requiredAttachments")
                 ||!stringArray(value,"validatorRefs")||!objectArray(value,"conditionalRules")
                 ||!stringArray(value,"employeeInstructions"))
@@ -104,6 +104,13 @@ public class TodoConfigurationResourceManagementService
             if(!catalog.isKnownMaterial(material,businessType))throw unknown("material",material);
         for(String validator:strings(value.getJSONArray("validatorRefs")))
             if(!catalog.isSelectableValidator(validator,businessType))throw unknown("validator",validator);
+    }
+
+    private boolean validPriority(Object value)
+    {
+        if(!(value instanceof Number number))return false;
+        double priority=number.doubleValue();
+        return Double.isFinite(priority)&&priority>=0&&priority<=Integer.MAX_VALUE&&Math.rint(priority)==priority;
     }
 
     private boolean stringArray(JSONObject value,String key)

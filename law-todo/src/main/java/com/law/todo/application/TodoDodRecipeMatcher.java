@@ -16,27 +16,32 @@ public class TodoDodRecipeMatcher
     {
         if(recipes==null||recipes.isEmpty())return List.of();
         return recipes.stream()
-                .filter(recipe->matchesBusinessType(recipe,businessType))
-                .map(recipe->new RankedRecipe(recipe,score(recipe,businessAction,templateStage)))
-                .filter(ranked->ranked.score()>=0)
-                .sorted(Comparator.comparingInt(RankedRecipe::score).reversed()
+                .filter(recipe->eligible(recipe,businessType,businessAction,templateStage))
+                .map(recipe->rank(recipe,businessType))
+                .sorted(Comparator.comparingInt(RankedRecipe::actionSpecificity).reversed()
+                        .thenComparing(Comparator.comparingInt(RankedRecipe::stageSpecificity).reversed())
+                        .thenComparing(Comparator.comparingInt(RankedRecipe::businessSpecificity).reversed())
+                        .thenComparing(Comparator.comparingInt(RankedRecipe::recommendationPriority).reversed())
                         .thenComparing(ranked->ranked.recipe().name(),Comparator.nullsLast(String::compareTo))
                         .thenComparing(ranked->ranked.recipe().code(),Comparator.nullsLast(String::compareTo)))
                 .map(RankedRecipe::recipe)
                 .toList();
     }
 
-    private boolean matchesBusinessType(DodRecipeResource recipe,String businessType)
+    private boolean eligible(DodRecipeResource recipe,String businessType,String businessAction,String templateStage)
     {
-        return "ALL".equals(recipe.businessType())||recipe.businessType().equals(businessType);
+        return ("ALL".equals(recipe.businessType())||recipe.businessType().equals(businessType))
+                &&(recipe.businessActions().isEmpty()||recipe.businessActions().contains(businessAction))
+                &&(recipe.templateStages().isEmpty()||recipe.templateStages().contains(templateStage));
     }
 
-    private int score(DodRecipeResource recipe,String action,String stage)
+    private RankedRecipe rank(DodRecipeResource recipe,String businessType)
     {
-        int score=recipe.businessActions().isEmpty()?0:recipe.businessActions().contains(action)?100:-1000;
-        score+=recipe.templateStages().isEmpty()?0:recipe.templateStages().contains(stage)?20:-1000;
-        return score+recipe.recommendationPriority();
+        return new RankedRecipe(recipe,recipe.businessActions().isEmpty()?0:1,
+                recipe.templateStages().isEmpty()?0:1,recipe.businessType().equals(businessType)?1:0,
+                recipe.recommendationPriority());
     }
 
-    private record RankedRecipe(DodRecipeResource recipe,int score) { }
+    private record RankedRecipe(DodRecipeResource recipe,int actionSpecificity,int stageSpecificity,
+            int businessSpecificity,int recommendationPriority) { }
 }
