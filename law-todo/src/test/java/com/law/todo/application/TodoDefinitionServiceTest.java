@@ -387,7 +387,28 @@ class TodoDefinitionServiceTest
         TodoException error=assertThrows(TodoException.class,
                 ()->service().publish(new PublishDraftCommand("pub-blocked",9L),actor));
 
-        assertEquals("TODO_DEFINITION_PREFLIGHT_FAILED",error.getBusinessCode());
+        assertEquals("TODO_PUBLISH_BLOCKED",error.getBusinessCode());
+        verify(mapper).updateDefinitionCompilation(anyMap());
+        verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
+    }
+
+    @Test void publishRequiresAReasonWhenFreshPreflightContainsWarnings()
+    {
+        Map<String,Object> current=draft(null,null);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        TodoDefinitionCompiler warningCompiler=org.mockito.Mockito.mock(TodoDefinitionCompiler.class);
+        when(warningCompiler.compile(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.law.todo.definition.compiler.DefinitionValidationReport(List.of(),
+                        List.of(new com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue(
+                                "TODO_WARNING","event.condition","Review the broad trigger")),
+                        canonical("TD-001"),"a".repeat(64)));
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        TodoDefinitionService service=new TodoDefinitionService(mapper,warningCompiler);
+
+        TodoException missing=assertThrows(TodoException.class,()->service.publish(
+                new PublishDraftCommand("pub-warning",9L,"a".repeat(64),null),actor));
+
+        assertEquals("TODO_PUBLISH_WARNING_REASON_REQUIRED",missing.getBusinessCode());
         verify(mapper).updateDefinitionCompilation(anyMap());
         verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
     }
@@ -412,7 +433,7 @@ class TodoDefinitionServiceTest
                     .anyMatch(issue->"TODO_PRD_TEMPLATE_BLOCKED".equals(issue.code())));
             TodoException error=assertThrows(TodoException.class,()->service.publish(
                     new PublishDraftCommand("prd-blocked-"+versionId,versionId),actor));
-            assertEquals("TODO_DEFINITION_PREFLIGHT_FAILED",error.getBusinessCode());
+            assertEquals("TODO_PUBLISH_BLOCKED",error.getBusinessCode());
         }
         verify(mapper,never()).publishTemplateVersionConditionally(org.mockito.ArgumentMatchers.anyLong(),anyString(),anyString());
     }

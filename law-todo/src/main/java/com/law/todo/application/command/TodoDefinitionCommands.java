@@ -48,8 +48,13 @@ public final class TodoDefinitionCommands
     }
     public record RuleReference(@NotBlank String type,@NotNull @Positive Long id,
             @NotNull @PositiveOrZero Integer order) { }
-    public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,String expectedDefinitionHash)
-    { public PublishDraftCommand(String actionId,Long versionId){this(actionId,versionId,null);} }
+    public record PublishDraftCommand(@NotBlank String actionId,@NotNull @Positive Long versionId,
+            String expectedDefinitionHash,String warningReason)
+    {
+        public PublishDraftCommand(String actionId,Long versionId){this(actionId,versionId,null,null);}
+        public PublishDraftCommand(String actionId,Long versionId,String expectedDefinitionHash)
+        {this(actionId,versionId,expectedDefinitionHash,null);}
+    }
     public record SimulateDefinitionCommand(
             @NotEmpty Map<String,Object> payload,
             @NotBlank String businessType,

@@ -457,7 +457,7 @@ public class TodoDefinitionService
         });
     }
 
-    @Transactional(noRollbackFor = PreflightFailedException.class)
+    @Transactional(noRollbackFor = PublishGateException.class)
     public Long publish(PublishDraftCommand command, Actor actor)
     {
         Long repeated = repeatedEntity(command.actionId());
@@ -482,8 +482,7 @@ public class TodoDefinitionService
         if (isPrdBlocked(current))
         {
             preflight = preflight(command.versionId(), true,current,definition);
-            if (!preflight.publishable())
-                throw new PreflightFailedException();
+            assertPublishable(preflight.report(),command.warningReason());
         }
         validate(text(value(current, "owner_rule_json", "ownerRuleJson")),
                 text(value(current, "dod_rule_json", "dodRuleJson")),
@@ -492,18 +491,28 @@ public class TodoDefinitionService
                 text(value(current, "ui_schema_json", "uiSchemaJson")));
         if (preflight == null)
             preflight = preflight(command.versionId(), true,current,definition);
-        if (!preflight.publishable())
-            throw new PreflightFailedException();
+        assertPublishable(preflight.report(),command.warningReason());
         if(command.expectedDefinitionHash()!=null&&!command.expectedDefinitionHash().isBlank()
                 &&!command.expectedDefinitionHash().equals(preflight.report().definitionHash()))
             throw new TodoException("TODO_TEMPLATE_PREFLIGHT_STALE","Definition or bound rules changed after preflight; run preflight again");
-        claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,
-                Map.of("definitionHash", preflight.report().definitionHash()));
+        Map<String,Object> publication=new HashMap<>();
+        publication.put("definitionHash",preflight.report().definitionHash());
+        if(command.warningReason()!=null&&!command.warningReason().isBlank())
+            publication.put("warningReason",command.warningReason().trim());
+        claim(command.actionId(), "PUBLISH_VERSION", "VERSION", command.versionId(), actor,publication);
         if (mapper.publishTemplateVersionConditionally(command.versionId(),
                 preflight.report().definitionHash(), actor.userName()) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT",
                     "Definition changed or is no longer a draft");
         return command.versionId();
+    }
+
+    private void assertPublishable(DefinitionValidationReport report,String warningReason)
+    {
+        if(report==null||!report.errors().isEmpty())
+            throw new PreflightFailedException();
+        if(!report.warnings().isEmpty()&&(warningReason==null||warningReason.isBlank()))
+            throw new WarningReasonRequiredException();
     }
 
     @Transactional
@@ -774,11 +783,24 @@ public class TodoDefinitionService
         }
     }
 
-    private static final class PreflightFailedException extends TodoException
+    private abstract static class PublishGateException extends TodoException
+    {
+        private PublishGateException(String code,String message){super(code,message);}
+    }
+
+    private static final class PreflightFailedException extends PublishGateException
     {
         private PreflightFailedException()
         {
-            super("TODO_DEFINITION_PREFLIGHT_FAILED", "Definition preflight failed");
+            super("TODO_PUBLISH_BLOCKED", "Resolve blocking configuration issues before publishing");
+        }
+    }
+
+    private static final class WarningReasonRequiredException extends PublishGateException
+    {
+        private WarningReasonRequiredException()
+        {
+            super("TODO_PUBLISH_WARNING_REASON_REQUIRED","Publication explanation is required for warnings");
         }
     }
 

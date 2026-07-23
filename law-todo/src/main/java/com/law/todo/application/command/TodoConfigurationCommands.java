@@ -89,6 +89,30 @@ public final class TodoConfigurationCommands
         public boolean isValueJsonValid(){return JSON.isValidObject(valueJson);}
     }
 
+    public record JourneyPayloadCommand(@NotNull @Positive Long templateId,@NotNull @Positive Long versionId,
+            @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,@NotBlank String businessType,
+            @NotNull Long businessId,Map<String,Object> manualOverrides,@NotBlank String expectedDefinitionHash)
+    {
+        public JourneyPayloadCommand { manualOverrides=immutableMap(manualOverrides); }
+        @AssertTrue(message="Simulation business ID must not be zero")
+        public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
+    }
+
+    public record JourneySimulationCommand(@NotNull @Positive Long templateId,@NotNull @Positive Long versionId,
+            @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,@NotBlank String businessType,
+            @NotNull Long businessId,Map<String,Object> manualOverrides,@NotNull LocalDateTime effectiveAt,
+            @Valid List<TodoDefinitionCommands.VirtualTaskCompletionSample> taskCompletions,
+            @NotBlank String expectedDefinitionHash)
+    {
+        public JourneySimulationCommand
+        {
+            manualOverrides=immutableMap(manualOverrides);
+            taskCompletions=immutableTaskCompletions(taskCompletions);
+        }
+        @AssertTrue(message="Simulation business ID must not be zero")
+        public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
+    }
+
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
             @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,
             @NotBlank String businessType,@NotNull @Positive Long businessId,

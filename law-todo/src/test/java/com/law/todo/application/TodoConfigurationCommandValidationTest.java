@@ -15,6 +15,8 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneyPayloadCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.RuleReference;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
@@ -34,6 +36,20 @@ class TodoConfigurationCommandValidationTest
     {
         assertTrue(java.util.Arrays.stream(ConfigurationSimulationCommand.class.getRecordComponents())
                 .anyMatch(component->component.getName().equals("payloadVersion")));
+    }
+
+    @Test void journeyCommandsAllowNegativeSamplesButRejectZeroBusinessIds()
+    {
+        JourneyPayloadCommand payload=new JourneyPayloadCommand(1L,2L,"LEAD_CREATED",1,"LEAD",-1001L,
+                Map.of(),"hash");
+        JourneySimulationCommand sample=new JourneySimulationCommand(1L,2L,"LEAD_CREATED",1,"LEAD",-1001L,
+                Map.of(),LocalDateTime.of(2026,7,23,9,0),List.of(),"hash");
+        JourneySimulationCommand zero=new JourneySimulationCommand(1L,2L,"LEAD_CREATED",1,"LEAD",0L,
+                Map.of(),LocalDateTime.of(2026,7,23,9,0),List.of(),"hash");
+
+        assertTrue(violations(payload).isEmpty());
+        assertTrue(violations(sample).isEmpty());
+        assertEquals(Set.of("businessIdValid"),violations(zero));
     }
 
     @Test void slaThresholdsMustBeOrdered()
