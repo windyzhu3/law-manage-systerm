@@ -139,6 +139,40 @@ check('owns one 600ms autosave debounce and preserves explicit retry controls', 
   assert(journey.includes('@save-copy="saveConflictCopy"'), 'conflict dialog must support saving a copy')
 })
 
+check('wires capability-aware reads and meaningful reused-route guards', () => {
+  const journey = read(journeyPath)
+  for (const token of [
+    'resolveJourneyCapabilities',
+    'snapshotReadPlan',
+    'routeContextChanged(from, to)',
+    'beforeRouteUpdate',
+    'canSaveDraft',
+    "plan.length === 1 && plan[0] === 'JOURNEY'"
+  ]) {
+    assert(journey.includes(token), `journey capability wiring missing token: ${token}`)
+  }
+  assert(journey.includes("'$route.query':"), 'route query watcher must reload meaningful context changes')
+})
+
+check('renders field-level conflict differences and stages authoritative copy navigation', () => {
+  const journey = read(journeyPath)
+  const conflict = read('src/views/todo/config/journey/components/JourneyConflictDialog.vue')
+  for (const token of [
+    'buildConflictCopyJourney',
+    'createCopyTransition',
+    'consumeCopyTransition',
+    'pendingCopyTransition',
+    'authoritativeCopy',
+    'hasUnresolvedFieldConflicts',
+    'discard-local'
+  ]) {
+    assert(journey.includes(token), `journey copy recovery missing token: ${token}`)
+  }
+  for (const token of ['differences', 'collisions', '同一字段', '你的修改', '服务器修改']) {
+    assert(conflict.includes(token), `conflict dialog missing field-level difference token: ${token}`)
+  }
+})
+
 check('uses the approved journey visual language responsively', () => {
   const sources = [read(journeyPath), ...journeyComponentPaths.map(read)].join('\n')
   for (const token of ['#0B2A55', '#C89A3D', '@media (max-width: 960px)', '@media (max-width: 640px)']) {

@@ -171,9 +171,130 @@ function localSnapshot(journey) {
   return local
 }
 
+const MISSING = {}
+
+function plainObject(value) {
+  return value !== MISSING && value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function sameValue(left, right) {
+  if (left === MISSING || right === MISSING) return left === right
+  if (left === right) return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((value, index) => sameValue(value, right[index]))
+  }
+  if (plainObject(left) || plainObject(right)) {
+    if (!plainObject(left) || !plainObject(right)) return false
+    const leftKeys = Object.keys(left).sort()
+    const rightKeys = Object.keys(right).sort()
+    return sameValue(leftKeys, rightKeys) && leftKeys.every(key => sameValue(left[key], right[key]))
+  }
+  return false
+}
+
+function snapshotValue(value) {
+  return value === MISSING ? undefined : clone(value)
+}
+
+function mergeValue(base, local, server, path, differences) {
+  if ((base === MISSING || plainObject(base)) && plainObject(local) && plainObject(server)) {
+    const baseKeys = plainObject(base) ? Object.keys(base) : []
+    const keys = [...new Set([...baseKeys, ...Object.keys(local), ...Object.keys(server)])].sort()
+    const value = {}
+    for (const key of keys) {
+      const nested = mergeValue(
+        Object.prototype.hasOwnProperty.call(base, key) ? base[key] : MISSING,
+        Object.prototype.hasOwnProperty.call(local, key) ? local[key] : MISSING,
+        Object.prototype.hasOwnProperty.call(server, key) ? server[key] : MISSING,
+        path ? `${path}.${key}` : key,
+        differences
+      )
+      if (nested !== MISSING) value[key] = nested
+    }
+    return value
+  }
+  if (sameValue(local, server)) {
+    if (!sameValue(base, local)) {
+      differences.push({
+        path,
+        kind: 'BOTH',
+        baseValue: snapshotValue(base),
+        localValue: snapshotValue(local),
+        serverValue: snapshotValue(server)
+      })
+    }
+    return local === MISSING ? MISSING : clone(local)
+  }
+  if (sameValue(local, base)) {
+    differences.push({
+      path,
+      kind: 'SERVER',
+      baseValue: snapshotValue(base),
+      localValue: snapshotValue(local),
+      serverValue: snapshotValue(server)
+    })
+    return server === MISSING ? MISSING : clone(server)
+  }
+  if (sameValue(server, base)) {
+    differences.push({
+      path,
+      kind: 'LOCAL',
+      baseValue: snapshotValue(base),
+      localValue: snapshotValue(local),
+      serverValue: snapshotValue(server)
+    })
+    return local === MISSING ? MISSING : clone(local)
+  }
+  differences.push({
+    path,
+    kind: 'COLLISION',
+    baseValue: snapshotValue(base),
+    localValue: snapshotValue(local),
+    serverValue: snapshotValue(server)
+  })
+  return server === MISSING ? MISSING : clone(server)
+}
+
+function conflictAnalysis(localJourney, serverPayload) {
+  const local = localJourney || {}
+  const server = hydrateJourney(serverPayload || {})
+  const baselineByCode = new Map(orderedSteps(local.baselineSteps).map(step => [step.code, step]))
+  const localByCode = new Map(orderedSteps(local.steps).map(step => [step.code, step]))
+  const mergedValues = new Map()
+  const differences = []
+
+  for (const serverStep of orderedSteps(server.steps)) {
+    const code = serverStep.code
+    const stepDifferences = []
+    const baseline = baselineByCode.get(code)
+    const localStep = localByCode.get(code)
+    const mergedValue = mergeValue(
+      baseline ? baseline.value : defaultStepValue(code),
+      localStep ? localStep.value : defaultStepValue(code),
+      serverStep.value,
+      '',
+      stepDifferences
+    )
+    mergedValues.set(code, mergedValue)
+    stepDifferences.forEach(item => differences.push({ ...item, stepCode: code }))
+  }
+
+  return {
+    server,
+    mergedValues,
+    differences,
+    collisions: differences.filter(item => item.kind === 'COLLISION')
+  }
+}
+
 function saveConflict(journey, result) {
   const source = result || {}
   const server = source.server || source.serverJourney || (source.conflict && source.conflict.server) || {}
+  const local = localSnapshot(journey)
+  const analysis = server && Array.isArray(server.steps)
+    ? conflictAnalysis(local, server)
+    : { differences: [], collisions: [] }
   return {
     ...clone(journey),
     dirty: true,
@@ -181,7 +302,9 @@ function saveConflict(journey, result) {
     saveError: clone(source.error) || { code: 'TODO_JOURNEY_VERSION_CONFLICT', message: '草稿已被其他用户更新' },
     conflict: {
       server: clone(server),
-      local: localSnapshot(journey)
+      local,
+      differences: clone(analysis.differences),
+      collisions: clone(analysis.collisions)
     }
   }
 }
@@ -232,21 +355,90 @@ function mergeConflictWithServer(journey) {
   const current = clone(journey || {})
   const conflict = current.conflict || {}
   const local = conflict.local || current
-  const server = hydrateJourney(conflict.server || {})
-  const baselineByCode = new Map(orderedSteps(local.baselineSteps).map(step => [step.code, step]))
-  let merged = server
+  const analysis = conflictAnalysis(local, conflict.server || {})
+  let merged = analysis.server
   let hasLocalChanges = false
 
-  for (const step of orderedSteps(local.steps)) {
-    const baseline = baselineByCode.get(step.code)
-    if (JSON.stringify(step.value) !== JSON.stringify(baseline && baseline.value)) {
-      merged = applyStepPatch(merged, step.code, step.value)
+  for (const serverStep of orderedSteps(analysis.server.steps)) {
+    const mergedValue = analysis.mergedValues.get(serverStep.code)
+    if (!sameValue(mergedValue, serverStep.value)) {
+      merged = applyStepPatch(merged, serverStep.code, mergedValue)
       hasLocalChanges = true
+    }
+  }
+
+  if (analysis.collisions.length) {
+    return {
+      ...merged,
+      dirty: true,
+      saveState: 'FAILED',
+      saveError: {
+        code: 'TODO_JOURNEY_FIELD_CONFLICT',
+        message: '存在同一字段的并发修改，请确认差异或另存副本'
+      },
+      conflict: {
+        server: clone(conflict.server || {}),
+        local: clone(local),
+        differences: clone(analysis.differences),
+        collisions: clone(analysis.collisions)
+      }
     }
   }
 
   return {
     ...merged,
+    dirty: hasLocalChanges,
+    saveState: hasLocalChanges ? 'IDLE' : 'SAVED',
+    saveError: null,
+    conflict: null
+  }
+}
+
+function applyLocalDelta(base, local, target) {
+  if (sameValue(base, local)) return target === MISSING ? MISSING : clone(target)
+  if ((base === MISSING || plainObject(base)) && plainObject(local) && plainObject(target)) {
+    const value = clone(target)
+    const baseKeys = plainObject(base) ? Object.keys(base) : []
+    const keys = [...new Set([...baseKeys, ...Object.keys(local)])]
+    for (const key of keys) {
+      const nested = applyLocalDelta(
+        Object.prototype.hasOwnProperty.call(base, key) ? base[key] : MISSING,
+        Object.prototype.hasOwnProperty.call(local, key) ? local[key] : MISSING,
+        Object.prototype.hasOwnProperty.call(target, key) ? target[key] : MISSING
+      )
+      if (nested === MISSING) delete value[key]
+      else value[key] = nested
+    }
+    return value
+  }
+  return local === MISSING ? MISSING : clone(local)
+}
+
+function buildConflictCopyJourney(journey, copiedServerPayload) {
+  const current = clone(journey || {})
+  const conflict = current.conflict || {}
+  const local = conflict.local || current
+  const baselineByCode = new Map(orderedSteps(local.baselineSteps).map(step => [step.code, step]))
+  const localByCode = new Map(orderedSteps(local.steps).map(step => [step.code, step]))
+  let copied = hydrateJourney(copiedServerPayload || {})
+  let hasLocalChanges = false
+
+  for (const copiedStep of orderedSteps(copied.steps)) {
+    const baseline = baselineByCode.get(copiedStep.code)
+    const localStep = localByCode.get(copiedStep.code)
+    const value = applyLocalDelta(
+      baseline ? baseline.value : defaultStepValue(copiedStep.code),
+      localStep ? localStep.value : defaultStepValue(copiedStep.code),
+      copiedStep.value
+    )
+    if (!sameValue(value, copiedStep.value)) {
+      copied = applyStepPatch(copied, copiedStep.code, value)
+      hasLocalChanges = true
+    }
+  }
+
+  return {
+    ...copied,
     dirty: hasLocalChanges,
     saveState: hasLocalChanges ? 'IDLE' : 'SAVED',
     saveError: null,
@@ -295,13 +487,20 @@ function canLeave(journey) {
   return !journey || !journey.dirty || journey.saveState === 'SAVED'
 }
 
+function hasUnresolvedFieldConflicts(journey) {
+  const collisions = journey && journey.conflict && journey.conflict.collisions
+  return Array.isArray(collisions) && collisions.length > 0
+}
+
 module.exports = {
   hydrateJourney,
   applyStepPatch,
   derivePrimaryAction,
   mergeSaveResult,
   mergeConflictWithServer,
+  buildConflictCopyJourney,
   rebaseJourneyAfterSave,
   toSimulationCommand,
-  canLeave
+  canLeave,
+  hasUnresolvedFieldConflicts
 }

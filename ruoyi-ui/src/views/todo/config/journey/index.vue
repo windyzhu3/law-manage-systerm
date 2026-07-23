@@ -83,6 +83,7 @@
       :copying="conflictCopying"
       @refresh-merge="refreshAndMergeConflict"
       @save-copy="saveConflictCopy"
+      @discard-local="discardLocalConflict"
     />
   </div>
 </template>
@@ -105,9 +106,19 @@ import {
   derivePrimaryAction,
   mergeSaveResult,
   mergeConflictWithServer,
+  buildConflictCopyJourney,
   rebaseJourneyAfterSave,
-  canLeave
+  canLeave,
+  hasUnresolvedFieldConflicts
 } from './journey-model'
+import {
+  resolveJourneyCapabilities,
+  snapshotReadPlan,
+  routeContextChanged,
+  createCopyTransition,
+  copyTransitionMatches,
+  consumeCopyTransition
+} from './journey-runtime'
 import { hydrateTemplateDraft } from '../template/template-draft-model'
 import { toDraftPayload } from '../definition-codec'
 
@@ -177,7 +188,8 @@ export default {
       conflictMerging: false,
       conflictCopying: false,
       conflictServerContext: null,
-      loadSequence: 0
+      loadSequence: 0,
+      pendingCopyTransition: null
     }
   },
   computed: {
@@ -189,14 +201,21 @@ export default {
         ? this.journey.template.templateName
         : '待办模板业务旅程'
     },
+    clientPermissions() {
+      return (this.$store && this.$store.getters && this.$store.getters.permissions) || []
+    },
+    capabilities() {
+      return resolveJourneyCapabilities(this.clientPermissions)
+    },
+    unresolvedFieldConflicts() {
+      return hasUnresolvedFieldConflicts(this.journey)
+    },
     publishedReadOnly() {
       const permissions = (this.journey && this.journey.permissions) || {}
-      const allowedByClient = this.$auth && this.$auth.hasPermiOr([
-        'todo:template:edit',
-        'todo:template:create',
-        'todo:template:copy'
-      ])
-      return this.$route.query.view === 'published' || !allowedByClient || permissions.canEdit === false
+      return this.$route.query.view === 'published' ||
+        this.unresolvedFieldConflicts ||
+        !this.capabilities.canSaveDraft ||
+        permissions.canEdit === false
     },
     activeIndex() {
       return Math.max(0, STEP_CODES.indexOf(this.activeStep))
@@ -225,8 +244,16 @@ export default {
     this.loadJourney()
   },
   watch: {
-    '$route.query.templateId'(value, previous) {
-      if (String(value || '') !== String(previous || '')) this.loadJourney()
+    '$route.query': {
+      deep: true,
+      handler(value, previous) {
+        if (routeContextChanged({ query: previous || {} }, { query: value || {} })) {
+          this.loadJourney()
+          return
+        }
+        const requested = String((value && value.step) || '').toUpperCase()
+        if (STEP_CODES.includes(requested)) this.activeStep = requested
+      }
     }
   },
   beforeDestroy() {
@@ -234,7 +261,12 @@ export default {
     clearTimeout(this.autosaveTimer)
   },
   beforeRouteUpdate(to, from, next) {
-    if (String(to.query.templateId || '') === String(from.query.templateId || '')) {
+    if (copyTransitionMatches(this.pendingCopyTransition, to.query.templateId)) {
+      clearTimeout(this.autosaveTimer)
+      next()
+      return
+    }
+    if (!routeContextChanged(from, to)) {
       next()
       return
     }
@@ -302,6 +334,16 @@ export default {
       })
     },
     async fetchSnapshot(templateId) {
+      const plan = snapshotReadPlan(this.capabilities)
+      if (!plan.length) {
+        const denied = new Error('当前账号没有查看模板配置旅程的权限')
+        denied.code = 'TODO_JOURNEY_ACCESS_DENIED'
+        throw denied
+      }
+      if (plan.length === 1 && plan[0] === 'JOURNEY') {
+        const response = await getTodoTemplateJourney(templateId)
+        return { aggregate: response.data || {}, context: null }
+      }
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const beforeResponse = await getTodoTemplate(templateId)
         const journeyResponse = await getTodoTemplateJourney(templateId)
@@ -324,11 +366,28 @@ export default {
         this.loadError = '缺少模板编号，无法加载配置旅程。'
         return
       }
+      if (!this.capabilities.canLoadJourney) {
+        this.loadError = '当前账号没有查看模板配置旅程的权限。'
+        return
+      }
       const sequence = ++this.loadSequence
       clearTimeout(this.autosaveTimer)
       this.loading = true
       this.loadError = ''
       try {
+        const pending = consumeCopyTransition(this.pendingCopyTransition, this.templateId)
+        if (pending) {
+          this.pendingCopyTransition = null
+          this.journey = pending.journey
+          this.draftContext = pending.context
+          this.conflictVisible = false
+          this.editRevision = 0
+          const requested = String(this.$route.query.step || '').toUpperCase()
+          this.activeStep = STEP_CODES.includes(requested)
+            ? requested
+            : derivePrimaryAction(this.journey).stepCode
+          return
+        }
         const snapshot = await this.fetchSnapshot(this.templateId)
         if (sequence !== this.loadSequence) return
         this.journey = hydrateJourney(snapshot.aggregate)
@@ -386,7 +445,8 @@ export default {
     },
     async saveNow(options) {
       const automatic = Boolean(options && options.automatic)
-      if (!this.journey || this.publishedReadOnly || !this.journey.dirty || this.saving) return false
+      if (!this.journey || !this.capabilities.canSaveDraft || this.publishedReadOnly ||
+          !this.journey.dirty || this.saving) return false
       clearTimeout(this.autosaveTimer)
       const localSnapshot = this.journey
       const savedRevision = this.editRevision
@@ -444,6 +504,10 @@ export default {
       })
     },
     retrySave() {
+      if (this.unresolvedFieldConflicts) {
+        this.conflictVisible = true
+        return false
+      }
       return this.saveNow({ automatic: false })
     },
     async refreshAndMergeConflict() {
@@ -457,8 +521,14 @@ export default {
           conflict: { local, server: fresh.aggregate }
         })
         this.draftContext = fresh.context
-        this.conflictVisible = false
         this.editRevision += 1
+        const collisions = (this.journey.conflict && this.journey.conflict.collisions) || []
+        if (collisions.length) {
+          this.conflictVisible = true
+          this.$modal.msgWarning(`仍有 ${collisions.length} 个同一字段冲突，请核对差异或另存副本`)
+          return
+        }
+        this.conflictVisible = false
         if (this.journey.dirty) this.scheduleAutosave()
         else this.$modal.msgSuccess('已刷新为服务器最新配置')
       } catch (error) {
@@ -468,7 +538,7 @@ export default {
       }
     },
     async saveConflictCopy() {
-      if (!this.journey || !this.journey.conflict) return
+      if (!this.journey || !this.journey.conflict || !this.capabilities.canCopyTemplate) return
       this.conflictCopying = true
       try {
         const prompt = await this.$prompt('请输入副本的唯一模板编码', '另存副本', {
@@ -485,27 +555,51 @@ export default {
         })
         const copiedId = Number(response.data && response.data.templateId)
         const copied = await this.fetchSnapshot(copiedId)
-        const local = this.journey.conflict.local
-        const copiedJourney = mergeConflictWithServer({
-          ...this.journey,
-          conflict: { local, server: copied.aggregate }
-        })
+        const copiedJourney = buildConflictCopyJourney(this.journey, copied.aggregate)
         if (copiedJourney.dirty) await this.persistJourney(copiedJourney, copied.context)
         const savedCopy = await this.fetchSnapshot(copiedId)
-        mergeSaveResult(copiedJourney, savedCopy.aggregate)
-        this.journey = { ...this.journey, dirty: false, saveState: 'SAVED', conflict: null }
-        this.conflictVisible = false
+        const authoritativeCopy = mergeSaveResult(copiedJourney, savedCopy.aggregate)
+        this.pendingCopyTransition = createCopyTransition(copiedId, authoritativeCopy, savedCopy.context)
+        try {
+          await this.$router.push({
+            path: '/todo-engine/todo-template-journey',
+            query: { templateId: String(copiedId), view: 'draft' }
+          })
+        } catch (navigationError) {
+          this.pendingCopyTransition = null
+          throw navigationError
+        }
         this.$modal.msgSuccess('已保存为新的待办模板副本')
-        await this.$router.push({
-          path: '/todo-engine/todo-template-journey',
-          query: { templateId: String(copiedId), view: 'draft' }
-        })
       } catch (error) {
         if (error !== 'cancel' && error !== 'close') {
           this.$modal.msgError((error && (error.msg || error.message)) || '另存副本失败')
         }
       } finally {
         this.conflictCopying = false
+      }
+    },
+    async discardLocalConflict() {
+      if (!this.unresolvedFieldConflicts) return
+      try {
+        await this.$confirm(
+          '采用服务器版本后，你在冲突字段上的本地修改将被放弃。是否继续？',
+          '采用服务器版本',
+          {
+            confirmButtonText: '确认采用',
+            cancelButtonText: '返回核对',
+            type: 'warning'
+          }
+        )
+        const fresh = await this.fetchSnapshot(this.templateId)
+        this.journey = hydrateJourney(fresh.aggregate)
+        this.draftContext = fresh.context
+        this.conflictVisible = false
+        this.editRevision = 0
+        this.$modal.msgSuccess('已采用服务器最新版本')
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') {
+          this.$modal.msgError((error && (error.msg || error.message)) || '刷新服务器配置失败')
+        }
       }
     },
     repair(issue) {

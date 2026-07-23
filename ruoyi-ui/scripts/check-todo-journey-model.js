@@ -1,5 +1,6 @@
 const assert = require('assert')
 const model = require('../src/views/todo/config/journey/journey-model')
+const runtime = require('../src/views/todo/config/journey/journey-runtime')
 
 const STEP_CODES = ['EVENT', 'TRIGGER', 'OWNER', 'DOD', 'SLA', 'ROUTING', 'SIMULATION_PUBLISH']
 let checks = 0
@@ -40,6 +41,73 @@ function fixture() {
     payload: { manualOverrides: { contactResult: '已接通' } }
   }
 }
+
+check('derives an exact least-privilege journey API read plan', () => {
+  const listOnly = runtime.resolveJourneyCapabilities(['todo:template:list'])
+  assert.strictEqual(listOnly.canLoadJourney, true)
+  assert.strictEqual(listOnly.canSaveDraft, false)
+  assert.deepStrictEqual(runtime.snapshotReadPlan(listOnly), ['JOURNEY'])
+
+  const simulator = runtime.resolveJourneyCapabilities(['todo:simulation:simulate'])
+  assert.strictEqual(simulator.canLoadJourney, true)
+  assert.strictEqual(simulator.canReadDraftDetail, false)
+  assert.deepStrictEqual(runtime.snapshotReadPlan(simulator), ['JOURNEY'])
+
+  const editor = runtime.resolveJourneyCapabilities(['todo:template:edit'])
+  assert.strictEqual(editor.canLoadJourney, true)
+  assert.strictEqual(editor.canReadDraftDetail, true)
+  assert.strictEqual(editor.canSaveDraft, true)
+  assert.deepStrictEqual(runtime.snapshotReadPlan(editor), ['DETAIL', 'JOURNEY', 'DETAIL'])
+
+  const creatorWithoutJourneyRead = runtime.resolveJourneyCapabilities(['todo:template:create'])
+  assert.strictEqual(creatorWithoutJourneyRead.canLoadJourney, false)
+  assert.strictEqual(creatorWithoutJourneyRead.canSaveDraft, false)
+  assert.deepStrictEqual(runtime.snapshotReadPlan(creatorWithoutJourneyRead), [])
+
+  const creatorFromWorkbench = runtime.resolveJourneyCapabilities(['todo:template:list', 'todo:template:create'])
+  assert.strictEqual(creatorFromWorkbench.canSaveDraft, true)
+  assert.deepStrictEqual(runtime.snapshotReadPlan(creatorFromWorkbench), ['DETAIL', 'JOURNEY', 'DETAIL'])
+
+  const anonymous = runtime.resolveJourneyCapabilities([])
+  assert.deepStrictEqual(runtime.snapshotReadPlan(anonymous), [])
+})
+
+check('guards only meaningful reused-route context changes', () => {
+  const base = { query: { templateId: '42', view: 'draft', step: 'OWNER' } }
+  assert.strictEqual(runtime.routeContextChanged(base, {
+    query: { templateId: '42', view: 'draft', step: 'SLA' }
+  }), false)
+  assert.strictEqual(runtime.routeContextChanged(base, {
+    query: { templateId: '42', view: 'published', step: 'OWNER' }
+  }), true)
+  assert.strictEqual(runtime.routeContextChanged(base, {
+    query: { templateId: '43', view: 'draft', step: 'OWNER' }
+  }), true)
+  assert.strictEqual(runtime.routeContextChanged(base, {
+    query: { templateId: '42', view: 'draft', step: 'OWNER', compare: 'published' }
+  }), true)
+})
+
+check('stages and consumes an authoritative copied-template transition deterministically', () => {
+  const authoritative = model.hydrateJourney(fixture())
+  authoritative.template.templateId = 99
+  authoritative.template.versionId = 199
+  const context = { versionId: 199, sourceDefinitionJson: '{"copy":true}' }
+  const journeySnapshot = JSON.stringify(authoritative)
+  const contextSnapshot = JSON.stringify(context)
+  const transition = runtime.createCopyTransition(99, authoritative, context)
+
+  authoritative.template.templateId = -1
+  context.versionId = -1
+  assert.strictEqual(runtime.copyTransitionMatches(transition, 98), false)
+  assert.strictEqual(runtime.consumeCopyTransition(transition, 98), null)
+  assert.strictEqual(runtime.copyTransitionMatches(transition, 99), true)
+  const consumed = runtime.consumeCopyTransition(transition, 99)
+  assert.strictEqual(consumed.journey.template.templateId, 99)
+  assert.strictEqual(consumed.context.versionId, 199)
+  assert.strictEqual(JSON.stringify(consumed.journey), journeySnapshot)
+  assert.strictEqual(JSON.stringify(consumed.context), contextSnapshot)
+})
 
 check('hydrates the seven structured steps without reading raw definition JSON', () => {
   const input = fixture()
@@ -196,6 +264,135 @@ check('refreshes a conflict with server changes while retaining only local edits
   assert.strictEqual(merged.dirty, true)
   assert.strictEqual(merged.saveState, 'IDLE')
   assert.strictEqual(merged.conflict, null)
+})
+
+check('three-way merges independent nested fields within the same step', () => {
+  const base = fixture()
+  base.steps = base.steps.map(step => step.code === 'OWNER'
+    ? {
+        ...step,
+        state: 'COMPLETED',
+        value: {
+          config: {
+            type: 'ROLE',
+            fallback: { type: 'ROLE', value: 'LEAD_MANAGER' },
+            skipUnavailable: true
+          }
+        }
+      }
+    : step)
+  const original = model.hydrateJourney(base)
+  const localOwner = JSON.parse(JSON.stringify(original.steps.find(step => step.code === 'OWNER').value))
+  localOwner.config.fallback.value = 'DUTY_MANAGER'
+  const local = model.applyStepPatch(original, 'OWNER', localOwner)
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { ...step.value, config: { ...step.value.config, skipUnavailable: false } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const merged = model.mergeConflictWithServer(conflicted)
+
+  assert.strictEqual(merged.definition.owner.config.fallback.value, 'DUTY_MANAGER')
+  assert.strictEqual(merged.definition.owner.config.skipUnavailable, false)
+  assert.strictEqual(merged.conflict, null)
+  assert.strictEqual(merged.dirty, true)
+  assert(conflicted.conflict.differences.some(item =>
+    item.stepCode === 'OWNER' && item.path === 'config.fallback.value' && item.kind === 'LOCAL'
+  ))
+  assert(conflicted.conflict.differences.some(item =>
+    item.stepCode === 'OWNER' && item.path === 'config.skipUnavailable' && item.kind === 'SERVER'
+  ))
+})
+
+check('three-way merges independent fields added under the same new nested object', () => {
+  const base = fixture()
+  base.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: {} } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'OWNER', {
+    config: { fallback: { value: 'DUTY_MANAGER' } }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { fallback: { type: 'ROLE' } } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.strictEqual(merged.definition.owner.config.fallback.type, 'ROLE')
+  assert.strictEqual(merged.definition.owner.config.fallback.value, 'DUTY_MANAGER')
+  assert.strictEqual(merged.conflict, null)
+})
+
+check('keeps true same-field collisions unresolved and never overwrites the server value', () => {
+  const base = fixture()
+  base.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { fallback: { type: 'ROLE', value: 'LEAD_MANAGER' } } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'OWNER', {
+    config: { fallback: { type: 'ROLE', value: 'DUTY_MANAGER' } }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { fallback: { type: 'ROLE', value: 'CASE_MANAGER' } } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const merged = model.mergeConflictWithServer(conflicted)
+
+  assert.strictEqual(conflicted.conflict.collisions.length, 1)
+  assert.strictEqual(conflicted.conflict.collisions[0].path, 'config.fallback.value')
+  assert.strictEqual(merged.definition.owner.config.fallback.value, 'CASE_MANAGER')
+  assert.strictEqual(merged.saveState, 'FAILED')
+  assert.strictEqual(merged.dirty, true)
+  assert.strictEqual(merged.conflict.collisions.length, 1)
+  assert.strictEqual(model.hasUnresolvedFieldConflicts(merged), true)
+  assert.strictEqual(model.hasUnresolvedFieldConflicts(original), false)
+})
+
+check('builds a local-preserving copy and applies the authoritative saved copy result', () => {
+  const base = fixture()
+  base.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { fallback: { type: 'ROLE', value: 'LEAD_MANAGER' } } } }
+    : step)
+  const local = model.applyStepPatch(model.hydrateJourney(base), 'OWNER', {
+    config: { fallback: { type: 'ROLE', value: 'DUTY_MANAGER' } }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: { config: { fallback: { type: 'ROLE', value: 'CASE_MANAGER' } } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const snapshot = JSON.stringify(conflicted)
+  const copiedServer = JSON.parse(JSON.stringify(server))
+  copiedServer.template.templateId = 99
+  copiedServer.template.versionId = 199
+  copiedServer.template.templateCode = 'LEAD-FIRST-CONTACT-COPY'
+  const copyDraft = model.buildConflictCopyJourney(conflicted, copiedServer)
+
+  assert.strictEqual(copyDraft.template.templateId, 99)
+  assert.strictEqual(copyDraft.definition.owner.config.fallback.value, 'DUTY_MANAGER')
+  assert.strictEqual(copyDraft.dirty, true)
+  assert.strictEqual(copyDraft.conflict, null)
+
+  const savedCopyAggregate = JSON.parse(JSON.stringify(copiedServer))
+  savedCopyAggregate.template.lockVersion = 6
+  savedCopyAggregate.steps = savedCopyAggregate.steps.map(step => step.code === 'OWNER'
+    ? { ...step, value: copyDraft.steps.find(item => item.code === 'OWNER').value, state: 'COMPLETED' }
+    : step)
+  const authoritativeCopy = model.mergeSaveResult(copyDraft, savedCopyAggregate)
+  assert.strictEqual(authoritativeCopy.template.templateId, 99)
+  assert.strictEqual(authoritativeCopy.template.lockVersion, 6)
+  assert.strictEqual(authoritativeCopy.definition.owner.config.fallback.value, 'DUTY_MANAGER')
+  assert.strictEqual(authoritativeCopy.dirty, false)
+  assert.strictEqual(authoritativeCopy.conflict, null)
+  assert.strictEqual(JSON.stringify(conflicted), snapshot)
 })
 
 check('rebases edits made during a save onto the fresh server baseline', () => {
