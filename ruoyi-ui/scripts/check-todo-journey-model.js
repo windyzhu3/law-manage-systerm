@@ -921,8 +921,8 @@ check('ranks and materializes contextual DoD recipes without mutating catalogs o
     config: { customAdvancedFlag: true }
   })
   assert.deepStrictEqual(patch.config.requiredFields, ['contactedAt', 'contactResult'])
-  assert.deepStrictEqual(patch.config.requiredAttachments, ['CONTACT_NOTE'])
-  assert.deepStrictEqual(patch.config.conditionalRules, recipes[1].conditionalRules)
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'requiredAttachments'))
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'conditionalRules'))
   assert.deepStrictEqual(patch.config.conditionalRequired, recipes[1].conditionalRules)
   assert.deepStrictEqual(patch.config.materials, [{ type: 'CONTACT_NOTE', minCount: 1 }])
   assert.deepStrictEqual(patch.config.validatorRefs, ['CONTACT_TIME_VALID'])
@@ -950,7 +950,10 @@ check('updates only governed DoD collections and projects an employee-visible pr
     requiredAttachments: ['CONTACT_NOTE'],
     conditionalRules: [{ field: 'contactResult', when: { field: 'connected', equals: true } }]
   })
-  assert.deepStrictEqual(patch.config.conditionalRequired, patch.config.conditionalRules)
+  assert.deepStrictEqual(patch.config.conditionalRequired,
+    [{ field: 'contactResult', when: { field: 'connected', equals: true } }])
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'requiredAttachments'))
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'conditionalRules'))
   assert.deepStrictEqual(patch.config.materials, [{ type: 'CONTACT_NOTE', minCount: 1 }])
   assert.deepStrictEqual(patch.config.validatorRefs, ['CONTACT_TIME_VALID'])
   assert.deepStrictEqual(patch.config.employeeInstructions, ['填写联系结果'])
@@ -973,6 +976,54 @@ check('updates only governed DoD collections and projects an employee-visible pr
   assert.strictEqual(preview.fields[1].conditional, true)
   assert.deepStrictEqual(preview.materials.map(item => item.label), ['联系记录'])
   assert.deepStrictEqual(preview.completionInstructions, ['填写联系结果'])
+})
+
+check('round-trips canonical DoD evidence without losing governed metadata', () => {
+  const conditional = {
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: true },
+    message: 'Contact result is required'
+  }
+  const material = {
+    type: 'CONTACT_NOTE',
+    minCount: 2,
+    maxCount: 4,
+    label: 'Contact note',
+    retentionPolicy: 'CASE_FILE'
+  }
+  const current = {
+    config: {
+      requiredFields: ['contactedAt'],
+      materials: [material],
+      conditionalRequired: [conditional],
+      validatorRefs: ['CONTACT_TIME_VALID']
+    }
+  }
+
+  const patch = steps.updateGovernedDod(current, {
+    requiredFields: ['contactedAt', 'contactResult'],
+    requiredAttachments: ['CONTACT_NOTE'],
+    conditionalRules: [conditional]
+  })
+
+  assert.deepStrictEqual(patch.config.requiredFields, ['contactedAt', 'contactResult'])
+  assert.deepStrictEqual(patch.config.materials, [material])
+  assert.deepStrictEqual(patch.config.conditionalRequired, [conditional])
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'requiredAttachments'))
+  assert(!Object.prototype.hasOwnProperty.call(patch.config, 'conditionalRules'))
+
+  const preview = steps.projectEmployeePreview({}, patch.config, {
+    fields: [
+      { code: 'contactedAt', name: 'Contact time', type: 'datetime' },
+      { code: 'contactResult', name: 'Contact result', type: 'string' }
+    ],
+    materials: [{ code: 'CONTACT_NOTE', name: 'Contact note' }]
+  })
+  assert.deepStrictEqual(preview.fields.map(item => [item.code, item.required, item.conditional]), [
+    ['contactedAt', true, false],
+    ['contactResult', true, true]
+  ])
+  assert.deepStrictEqual(preview.materials.map(item => item.code), ['CONTACT_NOTE'])
 })
 
 check('builds natural-language SLA patches and four semantic timeline points with repair blockers', () => {

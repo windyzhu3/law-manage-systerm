@@ -88,7 +88,9 @@ public class TodoConfigurationJourneyEvaluator
     private JourneyStep evaluateDod(TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
         Map<String,Object> dod=config(definition==null?null:definition.dod());List<JourneyIssue> local=new ArrayList<>();
-        boolean configured=!strings(dod.get("requiredFields")).isEmpty()||!strings(dod.get("requiredAttachments")).isEmpty();
+        boolean configured=!strings(dod.get("requiredFields")).isEmpty()
+                ||hasEvidence(dod,"materials","requiredAttachments")
+                ||hasEvidence(dod,"conditionalRequired","conditionalRules");
         if(!dod.isEmpty()&&!configured)
             local.add(warning("TODO_JOURNEY_DOD_RECOMMENDATION","DOD","dod.config",
                     "No required completion evidence is configured","Add the fields or materials employees must provide"));
@@ -167,6 +169,11 @@ public class TodoConfigurationJourneyEvaluator
     {if(!(value instanceof Map<?,?> source))return Map.of();Map<String,Object> result=new java.util.LinkedHashMap<>();source.forEach((key,item)->result.put(String.valueOf(key),item));return result;}
     private List<String> strings(Object value)
     {if(!(value instanceof Collection<?> values))return List.of();return values.stream().filter(item->item!=null&&!String.valueOf(item).isBlank()).map(String::valueOf).toList();}
+    private boolean hasEvidence(Map<String,Object> value,String canonical,String legacy)
+    {
+        Object evidence=value.containsKey(canonical)?value.get(canonical):value.get(legacy);
+        return evidence instanceof Collection<?> collection&&!collection.isEmpty();
+    }
     private boolean positive(Object value){try{return value!=null&&Long.parseLong(String.valueOf(value))>0;}catch(NumberFormatException invalid){return false;}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
     private boolean blank(String value){return value==null||value.isBlank();}

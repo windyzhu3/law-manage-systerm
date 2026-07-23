@@ -26,12 +26,29 @@ public class TodoEmployeeTodoPreviewProjector
     public EmployeeTodoPreview project(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
     {
         Map<String,Object> ui=config(definition==null?null:definition.ui());Map<String,Object> dod=config(definition==null?null:definition.dod());
+        List<String> requiredFields=strings(dod.get("requiredFields"));List<String> previewFields=new ArrayList<>(requiredFields);
+        for(Map<String,Object> conditional:conditionalRules(dod))
+        {
+            String field=text(conditional.get("field"));
+            if(field!=null&&!field.isBlank()&&!previewFields.contains(field))previewFields.add(field);
+        }
         List<PreviewField> fields=resources==null?List.of():resources.fields(detail.businessType()).stream()
-                .filter(field->strings(dod.get("requiredFields")).contains(field.code()))
-                .map(field->new PreviewField(field.code(),displayLabel(field.name(),"Required field"),field.type(),true)).toList();
+                .filter(field->previewFields.contains(field.code()))
+                .map(field->new PreviewField(field.code(),displayLabel(field.name(),"Required field"),field.type(),
+                        requiredFields.contains(field.code()))).toList();
+        Map<String,Map<String,Object>> materialRulesByType=new java.util.LinkedHashMap<>();
+        for(Map<String,Object> material:materialRules(dod))
+        {
+            String type=text(material.containsKey("type")?material.get("type"):material.get("code"));
+            if(type!=null&&!type.isBlank())materialRulesByType.put(type,material);
+        }
         List<PreviewMaterial> materials=resources==null?List.of():resources.materials(detail.businessType()).stream()
-                .filter(material->strings(dod.get("requiredAttachments")).contains(material.code()))
-                .map(material->new PreviewMaterial(material.code(),displayLabel(material.name(),"Required material"),true)).toList();
+                .filter(material->materialRulesByType.containsKey(material.code()))
+                .map(material->{
+                    String configuredLabel=text(materialRulesByType.get(material.code()).get("label"));
+                    return new PreviewMaterial(material.code(),displayLabel(configuredLabel,
+                            displayLabel(material.name(),"Required material")),true);
+                }).toList();
         return new EmployeeTodoPreview(display(ui,"employeeTitle",detail.templateName()),describeOwner(config(definition==null?null:definition.owner())),
                 fields,materials,strings(dod.get("employeeInstructions")),describeSla(config(definition==null?null:definition.sla())));
     }
@@ -40,6 +57,23 @@ public class TodoEmployeeTodoPreviewProjector
     {
         if(value instanceof Collection<?> collection)return collection.stream().filter(item->item!=null&&!String.valueOf(item).isBlank()).map(String::valueOf).toList();
         if(value==null||!value.getClass().isArray())return List.of();List<String> result=new ArrayList<>();for(int index=0;index<Array.getLength(value);index++){Object item=Array.get(value,index);if(item!=null&&!String.valueOf(item).isBlank())result.add(String.valueOf(item));}return List.copyOf(result);
+    }
+    private List<Map<String,Object>> materialRules(Map<String,Object> dod)
+    {
+        if(dod.containsKey("materials"))return objects(dod.get("materials"));
+        return strings(dod.get("requiredAttachments")).stream()
+                .map(type->Map.<String,Object>of("type",type)).toList();
+    }
+    private List<Map<String,Object>> conditionalRules(Map<String,Object> dod)
+    {return objects(dod.containsKey("conditionalRequired")?dod.get("conditionalRequired"):dod.get("conditionalRules"));}
+    private List<Map<String,Object>> objects(Object value)
+    {
+        if(!(value instanceof Collection<?> collection))return List.of();List<Map<String,Object>> result=new ArrayList<>();
+        for(Object item:collection)if(item instanceof Map<?,?> source)
+        {
+            Map<String,Object> row=new java.util.LinkedHashMap<>();source.forEach((key,entry)->row.put(String.valueOf(key),entry));result.add(row);
+        }
+        return List.copyOf(result);
     }
     private String display(Map<String,Object> value,String key,String fallback)
     {return safeDisplay(text(value.get(key)),fallback);}

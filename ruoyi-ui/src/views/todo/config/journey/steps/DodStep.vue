@@ -118,6 +118,7 @@
 import DodRecipePicker from '../components/DodRecipePicker'
 import {
   rankDodRecipes,
+  normalizeDodConfig,
   materializeDodRecipe,
   updateGovernedDod
 } from '../journey-step-model'
@@ -171,9 +172,10 @@ export default {
   },
   methods: {
     hydrate() {
-      this.requiredFields = clone(this.config.requiredFields || [])
-      this.requiredAttachments = clone(this.config.requiredAttachments || [])
-      this.conditionalRules = clone(this.config.conditionalRules || []).map(rule => ({
+      const canonical = normalizeDodConfig(this.config)
+      this.requiredFields = clone(canonical.requiredFields || [])
+      this.requiredAttachments = clone(canonical.materials || []).map(material => material.type || material.code).filter(Boolean)
+      this.conditionalRules = clone(canonical.conditionalRequired || []).map(rule => ({
         field: rule.field || '',
         when: { field: '', equals: '', ...(rule.when || {}) }
       }))
@@ -202,10 +204,10 @@ export default {
       this.commitConditions()
     },
     commitInstructions() {
-      this.emitPatch({ config: { ...this.config, employeeInstructions: clone(this.employeeInstructions) } })
+      this.emitPatch({ config: { ...normalizeDodConfig(this.config), employeeInstructions: clone(this.employeeInstructions) } })
     },
     commitAdvanced() {
-      this.emitPatch({ config: { ...this.config, validatorRefs: clone(this.validatorRefs) } })
+      this.emitPatch({ config: { ...normalizeDodConfig(this.config), validatorRefs: clone(this.validatorRefs) } })
     },
     emitPatch(patch) {
       this.$emit('change', patch)

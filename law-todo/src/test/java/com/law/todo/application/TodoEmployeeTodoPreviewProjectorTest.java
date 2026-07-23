@@ -17,6 +17,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldRes
 import com.law.todo.application.TodoConfigurationResourceCatalogService.MaterialResource;
 import com.law.todo.application.view.TodoConfigurationJourneyView.EmployeeTodoPreview;
 import com.law.todo.application.view.TodoConfigurationJourneyView.PreviewField;
+import com.law.todo.application.view.TodoConfigurationJourneyView.PreviewMaterial;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
 import com.law.todo.definition.model.TodoDefinitionDocument;
@@ -67,6 +68,32 @@ class TodoEmployeeTodoPreviewProjectorTest
         assertThat(view.title()).isEqualTo("Lead follow-up");
         assertThat(view.assigneeSummary()).isEqualTo("Assigned according to the configured ownership rule");
         assertThat(view.dueSummary()).isEqualTo("Due according to the configured service-level agreement");
+    }
+
+    @Test void previewRecognizesCanonicalMaterialsAndConditionalRequiredFields()
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",
+                new EventRule("LEAD_ASSIGNED",1,Map.of()),
+                new OwnerRule(Map.of("displayName","Lead coordinator","type","USER","value",7)),
+                new DodRule(Map.of(
+                        "requiredFields",List.of("contactedAt"),
+                        "materials",List.of(Map.of("type","CALL_NOTE","minCount",2,"label","Call evidence")),
+                        "conditionalRequired",List.of(Map.of("field","contactResult",
+                                "when",Map.of("field","connected","equals",true))))),
+                new SlaRule(Map.of("calendarCode","DEFAULT","minutes",480)),
+                new UiSchema(Map.of("employeeTitle","Follow up with the lead")),
+                new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
+
+        EmployeeTodoPreview view=projector.project(detail(),definition);
+
+        assertThat(view.fields()).extracting(PreviewField::code)
+                .containsExactly("contactedAt","contactResult");
+        assertThat(view.fields()).extracting(PreviewField::required)
+                .containsExactly(true,false);
+        assertThat(view.materials()).extracting(PreviewMaterial::code)
+                .containsExactly("CALL_NOTE");
+        assertThat(view.materials()).extracting(PreviewMaterial::label)
+                .containsExactly("Call evidence");
     }
 
     private TemplateConfigurationDetail detail()

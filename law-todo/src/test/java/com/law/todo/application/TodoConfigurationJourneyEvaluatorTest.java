@@ -120,6 +120,26 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_SIMULATION_REQUIRED");
     }
 
+    @Test void canonicalMaterialAndConditionalEvidenceCompletesDodStep()
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",
+                new EventRule("LEAD_ASSIGNED",1,Map.of()),
+                new OwnerRule(Map.of("type","USER","value",7)),
+                new DodRule(Map.of(
+                        "materials",List.of(Map.of("type","CALL_NOTE","minCount",2)),
+                        "conditionalRequired",List.of(Map.of("field","leadId",
+                                "when",Map.of("field","connected","equals",true))))),
+                new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),
+                new UiSchema(Map.of("simulationStatus","SUCCESS")),
+                new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.step("DOD").state()).isEqualTo("COMPLETED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_DOD_RECOMMENDATION");
+    }
+
     @Test void blocksOwnerWithBlankOperandAndNoFallback()
     {
         TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",new EventRule("LEAD_ASSIGNED",1,Map.of()),

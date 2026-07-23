@@ -375,20 +375,54 @@ function rankDodRecipes(recipes, context) {
   return scored.map(item => clone(item.recipe))
 }
 
+function canonicalDodMaterials(config) {
+  const source = object(config)
+  const values = Object.prototype.hasOwnProperty.call(source, 'materials')
+    ? list(source.materials)
+    : list(source.requiredAttachments)
+  return values.map(value => {
+    if (typeof value === 'string') return { type: value, minCount: 1 }
+    const material = clone(object(value))
+    const type = String(material.type || material.code || '')
+    return type ? {
+      ...material,
+      type,
+      minCount: Object.prototype.hasOwnProperty.call(material, 'minCount') ? material.minCount : 1
+    } : null
+  }).filter(Boolean)
+}
+
+function canonicalDodConditions(config) {
+  const source = object(config)
+  return clone(Object.prototype.hasOwnProperty.call(source, 'conditionalRequired')
+    ? list(source.conditionalRequired)
+    : list(source.conditionalRules))
+}
+
+function normalizeDodConfig(config) {
+  const source = object(config)
+  const next = clone(source)
+  const hasMaterials = Object.prototype.hasOwnProperty.call(source, 'materials') ||
+    Object.prototype.hasOwnProperty.call(source, 'requiredAttachments')
+  const hasConditions = Object.prototype.hasOwnProperty.call(source, 'conditionalRequired') ||
+    Object.prototype.hasOwnProperty.call(source, 'conditionalRules')
+  delete next.requiredAttachments
+  delete next.conditionalRules
+  if (hasMaterials) next.materials = canonicalDodMaterials(source)
+  if (hasConditions) next.conditionalRequired = canonicalDodConditions(source)
+  return next
+}
+
 function materializeDodRecipe(recipe, current) {
   const source = object(recipe)
-  const existing = object(current && current.config)
-  const requiredAttachments = clone(list(source.requiredAttachments))
-  const conditionalRules = clone(list(source.conditionalRules))
+  const existing = normalizeDodConfig(current && current.config)
   return {
     config: {
       ...clone(existing),
       recipeCode: String(source.code || ''),
       requiredFields: clone(list(source.requiredFields)),
-      requiredAttachments,
-      materials: requiredAttachments.map(type => ({ type, minCount: 1 })),
-      conditionalRules,
-      conditionalRequired: clone(conditionalRules),
+      materials: canonicalDodMaterials(source),
+      conditionalRequired: canonicalDodConditions(source),
       validatorRefs: clone(list(source.validatorRefs)),
       employeeInstructions: clone(list(source.employeeInstructions))
     }
@@ -396,16 +430,25 @@ function materializeDodRecipe(recipe, current) {
 }
 
 function updateGovernedDod(current, changes) {
-  const existing = object(current && current.config)
+  const existing = normalizeDodConfig(current && current.config)
   const governed = object(changes)
   const next = { ...clone(existing) }
-  for (const key of ['requiredFields', 'requiredAttachments', 'conditionalRules']) {
-    if (Object.prototype.hasOwnProperty.call(governed, key)) next[key] = clone(list(governed[key]))
+  if (Object.prototype.hasOwnProperty.call(governed, 'requiredFields')) {
+    next.requiredFields = clone(list(governed.requiredFields))
   }
-  if (Object.prototype.hasOwnProperty.call(governed, 'requiredAttachments')) {
-    next.materials = list(governed.requiredAttachments).map(type => ({ type, minCount: 1 }))
+  if (Object.prototype.hasOwnProperty.call(governed, 'materials')) {
+    next.materials = canonicalDodMaterials(governed)
+  } else if (Object.prototype.hasOwnProperty.call(governed, 'requiredAttachments')) {
+    const existingByType = new Map(canonicalDodMaterials(existing).map(material => [String(material.type), material]))
+    next.materials = list(governed.requiredAttachments).map(value => {
+      const item = object(value)
+      const type = String(typeof value === 'string' ? value : item.type || item.code || '')
+      return clone(existingByType.get(type) || { type, minCount: 1 })
+    }).filter(material => material.type)
   }
-  if (Object.prototype.hasOwnProperty.call(governed, 'conditionalRules')) {
+  if (Object.prototype.hasOwnProperty.call(governed, 'conditionalRequired')) {
+    next.conditionalRequired = clone(list(governed.conditionalRequired))
+  } else if (Object.prototype.hasOwnProperty.call(governed, 'conditionalRules')) {
     next.conditionalRequired = clone(list(governed.conditionalRules))
   }
   return { config: next }
@@ -423,7 +466,7 @@ function projectEmployeePreview(serverPreview, dodConfig, resources) {
   const dod = object(dodConfig)
   const catalogs = object(resources)
   const conditionalByField = new Map()
-  list(dod.conditionalRules || dod.conditionalRequired).forEach(rule => {
+  canonicalDodConditions(dod).forEach(rule => {
     const value = object(rule)
     if (value.field) conditionalByField.set(String(value.field), value)
   })
@@ -445,9 +488,10 @@ function projectEmployeePreview(serverPreview, dodConfig, resources) {
         condition: conditional ? clone(conditional.when) : null
       }
     }),
-    materials: list(dod.requiredAttachments).map(code => ({
-      code,
-      label: resourceLabel(catalogs.materials, code, '必传材料'),
+    materials: canonicalDodMaterials(dod).map(material => ({
+      ...clone(material),
+      code: material.type,
+      label: String(material.label || resourceLabel(catalogs.materials, material.type, '必传材料')),
       required: true
     })),
     completionInstructions: clone(list(dod.employeeInstructions))
@@ -761,6 +805,7 @@ module.exports = {
   repairFocusTarget,
   buildOwnerConfig,
   rankDodRecipes,
+  normalizeDodConfig,
   materializeDodRecipe,
   updateGovernedDod,
   projectEmployeePreview,
