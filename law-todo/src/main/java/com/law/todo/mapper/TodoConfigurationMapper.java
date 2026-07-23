@@ -28,6 +28,8 @@ public interface TodoConfigurationMapper
     Map<String,Object> selectTemplateConfiguration(Long templateId);
     List<Map<String,Object>> selectTemplateConfigurations(Map<String,Object> query);
     long countTemplateConfigurations(Map<String,Object> query);
+    List<Map<String,Object>> selectTemplateJourneySummaries(Map<String,Object> query);
+    long countTemplateJourneySummaries(Map<String,Object> query);
     List<Map<String,Object>> selectTemplateOwnerCatalog();
     List<Map<String,Object>> selectReleaseRecords(Map<String,Object> query);
     long countReleaseRecords(Map<String,Object> query);

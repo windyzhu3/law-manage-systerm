@@ -201,6 +201,37 @@
   <select id="countTemplateConfigurations" resultType="long">
     select count(*) <include refid="templateConfigurationFrom"/><include refid="templateConfigurationWhere"/>
   </select>
+  <sql id="templateJourneySummaryFrom">
+    from todo_template t
+    left join todo_template_version draft on draft.version_id=(
+      select candidate.version_id from todo_template_version candidate where candidate.template_id=t.template_id
+        and candidate.status in ('DRAFT','BLOCKED') order by candidate.version_no desc,candidate.version_id desc limit 1)
+    left join todo_template_version published on published.version_id=(
+      select candidate.version_id from todo_template_version candidate where candidate.template_id=t.template_id
+        and candidate.status='PUBLISHED' order by candidate.version_no desc,candidate.version_id desc limit 1)
+  </sql>
+  <sql id="templateJourneySummaryWhere">
+    <where>
+      <if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if>
+      <if test="businessType != null and businessType != ''">and t.business_type=#{businessType}</if>
+      <if test="status != null and status != ''">and t.status=#{status}</if>
+    </where>
+  </sql>
+  <select id="selectTemplateJourneySummaries" resultType="java.util.Map">
+    select t.template_id,t.template_name,t.business_type,
+      json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage')) business_stage,
+      case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end publish_status,
+      coalesce(draft.definition_json,published.definition_json) definition_json,
+      coalesce(draft.validation_report_json,published.validation_report_json) validation_report_json,
+      coalesce(t.update_by,published.published_by,t.create_by) last_editor,
+      coalesce(draft.create_time,published.published_time,t.update_time,t.create_time) update_time
+    <include refid="templateJourneySummaryFrom"/><include refid="templateJourneySummaryWhere"/>
+    order by coalesce(draft.create_time,published.published_time,t.update_time,t.create_time) desc,t.template_id desc
+    limit #{limit} offset #{offset}
+  </select>
+  <select id="countTemplateJourneySummaries" resultType="long">
+    select count(*) <include refid="templateJourneySummaryFrom"/><include refid="templateJourneySummaryWhere"/>
+  </select>
   <select id="selectTemplateOwnerCatalog" resultType="java.util.Map">
     select 'USER' type,cast(u.user_id as char) value,coalesce(u.nick_name,u.user_name) label,u.user_name secondary_label
       from sys_user u where u.status='0' and u.del_flag='0'
