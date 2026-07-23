@@ -101,3 +101,48 @@ npm run test:e2e -- tests/e2e/todo-config-journey.spec.js
 - `.playwright-cli/`
 - `.runtime-logs/`
 - `output/`
+
+## 确定性 E2E 加固（独立后续提交）
+
+针对最终审查提出的“场景可能被条件分支跳过”问题，本轮将旅程 E2E 改为固定数据、固定账号、固定断言：
+
+- 引导 SQL 固定创建 `REPAIR`、`FAILED`、`WARNING` 三个草稿，不再依赖 `TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID`。
+- 固定创建 `todo_business_admin`、`todo_resource_admin`、`todo_publisher`、`todo_auditor` 四个最小权限账号，并分别验证可见性与后端写权限边界。
+- Schema 修复必须真实打开资源维护抽屉、创建可编辑版本、补充字段、保存、返回旅程并重新模拟。
+- 失败场景使用不存在的工作日历确定性地产生模拟阻塞，并验证发布按钮保持禁用。
+- 告警场景绑定显式的未决非阻塞决策；编译器把它投影为 `TODO_DECISION_REVIEW_REQUIRED`，从而复用既有“告警必须填写发布说明”门禁。普通模板和普通空条件触发器不受影响。
+- 样例模拟前后直接读取一次性 E2E 数据库，逐项比较 `todo_instance`、`todo_relation`、负数样例业务行以及真实测试线索指纹，证明模拟没有写入运行态或业务对象。
+- 旅程测试只保留一个“真实环境不存在”级别的 `test.skip`；场景内部不再有可选修复、可选告警或可选角色分支，也未使用 `page.route`、`route.fulfill` 或伪造 token。
+- 清理器扩展为校验并删除本次运行的三个模板、事件新版本、advisory decision、五个测试账号/角色及其授权；检测到运行态待办或关系时拒绝级联清理。
+
+TDD 与回归证据：
+
+```text
+RED: npm run test:e2e:contract
+     Todo journey deterministic E2E scenarios must not include if (await
+
+GREEN: npm run test:e2e:contract
+       Todo configuration real-backend E2E source contract passed
+       External-database Surefire report gate negative contract passed
+```
+
+```text
+RED: TodoDefinitionCompilerTest.unresolvedNonBlockingDecisionProducesAReviewWarning
+     expected true but was false
+
+GREEN: mvn -pl law-todo test
+       Tests run: 670, Failures: 0, Errors: 0, Skipped: 2
+```
+
+同时通过：
+
+- `node --check`：旅程 E2E、数据库 helper、源码契约脚本；
+- `npm run test:todo-phase-two`：42 个模型检查、25 个 UX 检查；
+- `npm run test:todo-config`；
+- `npm run test:encoding`。
+
+真实运行仍留给 Task14：本机检查结果为 `8080=STOPPED`、`3306=STOPPED`、`TODO_ENV=ABSENT`。因此本轮没有把源码契约或 mock 冒充为 Chrome 真实通过；Task14 启动一次性数据库和后端后，应直接执行：
+
+```text
+npm run test:e2e -- tests/e2e/todo-config-journey.spec.js
+```

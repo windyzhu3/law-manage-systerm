@@ -39,6 +39,13 @@ for (const forbidden of ['page.route(', 'route.fulfill(', 'e2e-token']) {
   if (spec.includes(forbidden)) throw new Error(`Todo configuration real E2E must not mock core APIs: ${forbidden}`)
   if (journeySpec.includes(forbidden)) throw new Error(`Todo journey real E2E must not mock core APIs: ${forbidden}`)
 }
+forbidText(journeySpec, 'if (await', 'Todo journey deterministic E2E scenarios')
+forbidText(journeySpec, 'TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID', 'Todo journey deterministic E2E fixtures')
+forbidText(journeySpec, 'TODO_CONFIG_E2E_AUDITOR_USER', 'Todo journey deterministic E2E identities')
+const journeySkips = journeySpec.match(/test\.skip\(/g) || []
+if (journeySkips.length !== 1 || !journeySpec.includes("test.skip(!realBackend, 'requires the disposable real-backend E2E environment')")) {
+  throw new Error('Todo journey E2E must have exactly one environment-only skip and no optional scenario skips')
+}
 forbidText(spec, 'if (screenshotDir) {', 'Todo configuration real E2E functional assertions')
 for (const required of [
   "loginAs(page, 'todo_config_admin'",
@@ -76,23 +83,41 @@ for (const required of [
 ]) requireText(spec, required, 'Todo configuration real E2E spec')
 requireText(spec, "require('./support/todo-config-e2e-database')", 'Todo configuration real E2E spec')
 for (const required of [
-  'TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID',
+  'loadJourneyFixture',
+  'SCENARIO_SCHEMA_REPAIR_RERUN',
+  'SCENARIO_FAILED_SIMULATION_BLOCKS_PUBLISH',
+  'SCENARIO_WARNING_REASON_REQUIRED',
+  'SCENARIO_SAMPLE_NO_RUNTIME_WRITES',
+  'SCENARIO_BUSINESS_ADMIN_BOUNDARY',
+  'SCENARIO_RESOURCE_ADMIN_BOUNDARY',
+  'SCENARIO_PUBLISHER_BOUNDARY',
+  'SCENARIO_AUDITOR_BOUNDARY',
   'simulation-publish-step',
   'business-object-selector',
-  '只读样例',
-  '绝不会生成或写入运行时待办',
+  'DEMO-L-001',
+  '.simulation-trace li',
   'run-journey-simulation',
   'publish-preflight-panel',
   'publish-current-draft',
-  '当前版本已发布',
-  'AUDITOR_USER'
+  "status === 'PUBLISHED'",
+  'todo_business_admin',
+  'todo_resource_admin',
+  'todo_publisher',
+  'todo_auditor',
+  'snapshotSimulationPersistence',
+  'assertSimulationPersistenceUnchanged'
 ]) requireText(journeySpec, required, 'Todo journey real E2E spec')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
   'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',
   'E2E_TODO_CONFIG_${runMarker}_', 'Todo E2E template ownership mismatch',
   'todo_instance', 'todo_route_token', 'todo_route_join', 'todo_sla_record', 'todo_sla_policy_version', 'todo_cycle_occurrence',
-  'todo.e2e.captcha.restore.'
+  'todo.e2e.captcha.restore.',
+  'loadJourneyFixture',
+  'snapshotSimulationPersistence',
+  'assertSimulationPersistenceUnchanged',
+  'todo_relation',
+  'businessFingerprint'
 ]) requireText(databaseFixture, required, 'Todo configuration database fixture')
 forbidText(spec, "delete from todo_definition_action where operator_id=", 'Todo configuration real E2E cleanup')
 forbidText(databaseFixture, "delete from todo_definition_action where operator_id=(select", 'Todo configuration database fixture')
@@ -100,6 +125,10 @@ forbidText(databaseFixture, "delete from todo_definition_action where operator_i
 const bootstrap = read(bootstrapPath)
 for (const required of [
   'todo_config_admin',
+  'todo_business_admin',
+  'todo_resource_admin',
+  'todo_publisher',
+  'todo_auditor',
   'TODO_CONFIG_E2E_PASSWORD_HASH',
   'todo:template:list',
   'todo:trigger:list',
@@ -114,7 +143,17 @@ for (const required of [
   'TODO_CONFIG_E2E_DOD_CODE',
   'TODO_CONFIG_E2E_LEAD_NO',
   'TEST_ONLY|TODO_CONFIG_E2E|',
-  'pwd_update_date'
+  'pwd_update_date',
+  '@repair_template_code',
+  '@failed_template_code',
+  '@warning_template_code',
+  '_JOURNEY_REPAIR',
+  '_JOURNEY_FAILED',
+  '_JOURNEY_WARNING',
+  'E2E_SCHEMA_REPAIR_',
+  'todo:resource:edit',
+  'todo:release:publish',
+  'todo:definition:diff'
 ]) requireText(bootstrap, required, 'Test-only identity bootstrap')
 for (const required of [
   "coalesce(remark,'')", "coalesce(create_by,'')", "coalesce(@test_remark,'')", 'todo.e2e.captcha.restore.'

@@ -39,6 +39,21 @@ public class TodoDecisionService
         return !unresolvedBlockingDecisions(List.of(decisionCode)).isEmpty();
     }
 
+    public List<String> unresolvedNonBlockingDecisions(List<String> decisionCodes)
+    {
+        if (decisionCodes == null || decisionCodes.isEmpty())
+            return List.of();
+        List<String> unresolved = new ArrayList<>();
+        for (String code : new LinkedHashSet<>(decisionCodes))
+        {
+            Map<String, Object> decision = code == null || code.isBlank()
+                    ? null : mapper.selectDecisionByCode(code);
+            if (decision != null && !decision.isEmpty() && isNonBlockingAndOpen(decision))
+                unresolved.add(code);
+        }
+        return List.copyOf(unresolved);
+    }
+
     private static boolean isBlockingAndOpen(Map<String, Object> decision)
     {
         Object blockingValue = value(decision, "blocking", "blocking");
@@ -48,6 +63,17 @@ public class TodoDecisionService
                         || "TRUE".equalsIgnoreCase(String.valueOf(blockingValue));
         String status = String.valueOf(value(decision, "status", "status"));
         return blocking && !"RESOLVED".equalsIgnoreCase(status) && !"CLOSED".equalsIgnoreCase(status);
+    }
+
+    private static boolean isNonBlockingAndOpen(Map<String, Object> decision)
+    {
+        Object blockingValue = value(decision, "blocking", "blocking");
+        boolean blocking = blockingValue instanceof Boolean bool ? bool
+                : "Y".equalsIgnoreCase(String.valueOf(blockingValue))
+                        || "1".equals(String.valueOf(blockingValue))
+                        || "TRUE".equalsIgnoreCase(String.valueOf(blockingValue));
+        String status = String.valueOf(value(decision, "status", "status"));
+        return !blocking && !"RESOLVED".equalsIgnoreCase(status) && !"CLOSED".equalsIgnoreCase(status);
     }
 
     private static Object value(Map<String, Object> row, String snakeCase, String camelCase)

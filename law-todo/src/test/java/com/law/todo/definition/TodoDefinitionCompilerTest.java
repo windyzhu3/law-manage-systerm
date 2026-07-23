@@ -156,6 +156,19 @@ class TodoDefinitionCompilerTest
     }
 
     @Test
+    void unresolvedNonBlockingDecisionProducesAReviewWarning()
+    {
+        when(mapper.selectDecisionByCode("Q-ADVISORY")).thenReturn(
+                Map.of("decision_code", "Q-ADVISORY", "status", "OPEN", "blocking", "N"));
+
+        DefinitionValidationReport report = compiler.compile(definitionWithDecision("Q-ADVISORY"));
+
+        assertTrue(report.errors().isEmpty());
+        assertTrue(report.warnings().stream()
+                .anyMatch(warning -> warning.code().equals("TODO_DECISION_REVIEW_REQUIRED")));
+    }
+
+    @Test
     void missingEventCatalogEntryIsAStructuralError()
     {
         TodoDefinitionDocument definition = definition("UNKNOWN_EVENT", List.of());

@@ -71,6 +71,7 @@ public class TodoDefinitionCompiler
     public DefinitionValidationReport compile(TodoDefinitionDocument definition, CompilationContext context)
     {
         List<ValidationIssue> errors = new ArrayList<>();
+        List<ValidationIssue> warnings = new ArrayList<>();
         if (definition == null)
         {
             errors.add(issue("TODO_DEFINITION_REQUIRED", "$", "Definition document is required"));
@@ -89,9 +90,12 @@ public class TodoDefinitionCompiler
         for (String code : decisions.unresolvedBlockingDecisions(definition.decisionRefs()))
             errors.add(issue("TODO_DECISION_UNRESOLVED", "decisionRefs",
                     "Decision is missing or unresolved: " + code));
+        for (String code : decisions.unresolvedNonBlockingDecisions(definition.decisionRefs()))
+            warnings.add(issue("TODO_DECISION_REVIEW_REQUIRED", "decisionRefs",
+                    "Non-blocking decision still requires publication review: " + code));
 
         String compiledJson = codec.canonicalJson(definition);
-        return new DefinitionValidationReport(errors, List.of(), compiledJson, sha256(compiledJson));
+        return new DefinitionValidationReport(errors, warnings, compiledJson, sha256(compiledJson));
     }
 
     private void validateAutoActions(TodoDefinitionDocument definition,List<ValidationIssue> errors)
