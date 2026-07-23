@@ -178,7 +178,8 @@ public class TodoEventResourceService
 
     private EventResourceListItem listItem(Map<String,Object> row)
     {return new EventResourceListItem(number(value(row,"event_catalog_id","eventCatalogId")),text(row,"event_type","eventType"),
-            text(row,"event_name","eventName"),integer(row,"payload_version","payloadVersion"),text(row,"business_object_type","businessObjectType"),
+            text(row,"event_name","eventName"),text(row,"description","description"),
+            integer(row,"payload_version","payloadVersion"),text(row,"business_object_type","businessObjectType"),
             text(row,"source_module","sourceModule"),text(row,"schema_status","schemaStatus"),text(row,"status","status"),
             integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")));}
     private EventResourceDetail detail(Map<String,Object> row,List<EventResourceReference> references)

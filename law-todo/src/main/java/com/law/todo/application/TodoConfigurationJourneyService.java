@@ -43,19 +43,23 @@ public class TodoConfigurationJourneyService
     private final TodoConfigurationResourceCatalogService resourceCatalog;
     private final TodoConfigurationJourneyEvaluator evaluator;
     private final TodoEmployeeTodoPreviewProjector preview;
+    private final TodoTemplateService templates;
+    private final TodoEventResourceService eventResources;
 
     @Autowired
     public TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
-            TodoEmployeeTodoPreviewProjector preview)
-    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview);}
+            TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
+            TodoEventResourceService eventResources)
+    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
-            TodoEmployeeTodoPreviewProjector preview)
+            TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
+            TodoEventResourceService eventResources)
     {
         this.query=query;this.codec=codec;this.mapper=mapper;this.resourceCatalog=resourceCatalog;
-        this.evaluator=evaluator;this.preview=preview;
+        this.evaluator=evaluator;this.preview=preview;this.templates=templates;this.eventResources=eventResources;
     }
 
     public TodoConfigurationJourneyView load(long templateId,Actor actor)
@@ -107,9 +111,11 @@ public class TodoConfigurationJourneyService
     private CurrentResources resources(TemplateConfigurationDetail detail)
     {
         String businessType=detail.businessType();
-        return new CurrentResources(List.of(),resourceCatalog.fields(businessType),query.ownerCatalog(),
+        var fields=resourceCatalog.fields(businessType);
+        var events=eventResources.list(Map.of("businessObjectType",businessType,"offset",0,"limit",500)).rows();
+        return new CurrentResources(events,fields,query.ownerCatalog(),
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
-                List.of(),List.of());
+                templates.listTemplateCalendarCatalog(),templates.listRoutingTargetCatalog());
     }
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row)

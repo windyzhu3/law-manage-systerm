@@ -14,7 +14,11 @@
 
       <dl v-if="fields.length" class="employee-preview__fields">
         <div v-for="(field, index) in fields.slice(0, 4)" :key="field.code || index">
-          <dt>{{ field.label || field.name || '业务信息' }}</dt>
+          <dt>
+            {{ field.label || field.name || '业务信息' }}
+            <em v-if="field.conditional">条件必填</em>
+            <em v-else-if="field.required">必填</em>
+          </dt>
           <dd>{{ displayValue(field.value) }}</dd>
         </div>
       </dl>
@@ -23,10 +27,18 @@
         <i>将在选择事件与展示字段后出现</i>
       </div>
 
+      <div v-if="materials.length" class="employee-preview__requirements">
+        <strong>需上传材料</strong>
+        <ul>
+          <li v-for="(item, index) in materials.slice(0, 4)" :key="item.code || index">
+            {{ item.label || item.name || item.code }}
+          </li>
+        </ul>
+      </div>
       <div class="employee-preview__requirements">
         <strong>完成要求</strong>
-        <ul v-if="requirements.length">
-          <li v-for="(item, index) in requirements.slice(0, 4)" :key="index">{{ item.label || item.title || item }}</li>
+        <ul v-if="instructions.length">
+          <li v-for="(item, index) in instructions.slice(0, 4)" :key="index">{{ item }}</li>
         </ul>
         <span v-else>完成标准配置后，员工会在此看到必填项和材料要求。</span>
       </div>
@@ -45,13 +57,17 @@ export default {
     fields() {
       return Array.isArray(this.value.fields) ? this.value.fields : []
     },
-    requirements() {
-      const configured = Array.isArray(this.value.requirements) ? this.value.requirements : []
-      const materials = Array.isArray(this.value.materials) ? this.value.materials : []
-      const instructions = Array.isArray(this.value.completionInstructions)
+    materials() {
+      return Array.isArray(this.value.materials) ? this.value.materials : []
+    },
+    instructions() {
+      const configured = Array.isArray(this.value.requirements)
+        ? this.value.requirements.map(item => item.label || item.title || item)
+        : []
+      const completion = Array.isArray(this.value.completionInstructions)
         ? this.value.completionInstructions
         : []
-      return [...configured, ...materials, ...instructions]
+      return [...configured, ...completion]
     },
     dueText() {
       return this.value.dueSummary || this.value.dueText || '截止时间待配置'
@@ -163,6 +179,16 @@ export default {
     font-size: 11px;
     line-height: 18px;
     color: #8996A7;
+
+    em {
+      padding: 1px 4px;
+      margin-left: 4px;
+      font-size: 10px;
+      font-style: normal;
+      color: #7A5210;
+      background: #FFF2D5;
+      border-radius: 6px;
+    }
   }
 
   dd {

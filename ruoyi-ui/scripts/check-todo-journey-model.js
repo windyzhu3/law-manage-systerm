@@ -841,6 +841,12 @@ check('models schema health, owner blockers, and contextual resource return sema
     type: 'EVENT',
     resourceId: 91
   }).allowed, false)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:calendar:manage'], {
+    type: 'CALENDAR'
+  }).allowed, true)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:add'], {
+    type: 'CALENDAR'
+  }).allowed, false)
 
   assert.strictEqual(steps.isOwnerField({ type: 'integer', semanticType: 'USER_ID' }), true)
   assert.strictEqual(steps.isOwnerField({ type: 'number', code: 'ownerId' }), true)
@@ -862,6 +868,229 @@ check('models schema health, owner blockers, and contextual resource return sema
 
   assert.strictEqual(steps.repairFocusTarget('payloadSchema'), 'schemaRepair')
   assert.strictEqual(steps.repairFocusTarget('eventType'), 'eventSearch')
+})
+
+check('ranks and materializes contextual DoD recipes without mutating catalogs or other drafts', () => {
+  const recipes = [
+    {
+      code: 'GENERIC',
+      name: '通用完成标准',
+      businessType: '',
+      businessActions: [],
+      templateStages: [],
+      recommendationPriority: 99,
+      requiredFields: ['remark']
+    },
+    {
+      code: 'LEAD-FIRST-CONTACT',
+      name: '首次联系已完成',
+      businessType: 'LEAD',
+      businessActions: ['LEAD_ASSIGNED'],
+      templateStages: ['FIRST_CONTACT'],
+      recommendationPriority: 10,
+      requiredFields: ['contactedAt', 'contactResult'],
+      requiredAttachments: ['CONTACT_NOTE'],
+      conditionalRules: [{ field: 'contactResult', when: { field: 'connected', equals: true } }],
+      validatorRefs: ['CONTACT_TIME_VALID'],
+      employeeInstructions: ['记录联系时间和结果']
+    },
+    {
+      code: 'LEAD-ANY-STAGE',
+      name: '线索办理已完成',
+      businessType: 'LEAD',
+      businessActions: ['LEAD_ASSIGNED'],
+      templateStages: [],
+      recommendationPriority: 1,
+      requiredFields: ['contactResult']
+    }
+  ]
+  const sourceSnapshot = JSON.stringify(recipes)
+  const ranked = steps.rankDodRecipes(recipes, {
+    businessType: 'LEAD',
+    businessAction: 'LEAD_ASSIGNED',
+    templateStage: 'FIRST_CONTACT'
+  })
+  assert.deepStrictEqual(ranked.map(item => item.code), [
+    'LEAD-FIRST-CONTACT',
+    'LEAD-ANY-STAGE',
+    'GENERIC'
+  ])
+
+  const otherDraft = { config: { requiredFields: ['untouched'] } }
+  const patch = steps.materializeDodRecipe(ranked[0], {
+    config: { customAdvancedFlag: true }
+  })
+  assert.deepStrictEqual(patch.config.requiredFields, ['contactedAt', 'contactResult'])
+  assert.deepStrictEqual(patch.config.requiredAttachments, ['CONTACT_NOTE'])
+  assert.deepStrictEqual(patch.config.conditionalRules, recipes[1].conditionalRules)
+  assert.deepStrictEqual(patch.config.conditionalRequired, recipes[1].conditionalRules)
+  assert.deepStrictEqual(patch.config.materials, [{ type: 'CONTACT_NOTE', minCount: 1 }])
+  assert.deepStrictEqual(patch.config.validatorRefs, ['CONTACT_TIME_VALID'])
+  assert.deepStrictEqual(patch.config.employeeInstructions, ['记录联系时间和结果'])
+  assert.strictEqual(patch.config.recipeCode, 'LEAD-FIRST-CONTACT')
+  assert.strictEqual(patch.config.customAdvancedFlag, true)
+  patch.config.requiredFields.push('local-only')
+  assert.strictEqual(JSON.stringify(recipes), sourceSnapshot)
+  assert.deepStrictEqual(otherDraft, { config: { requiredFields: ['untouched'] } })
+})
+
+check('updates only governed DoD collections and projects an employee-visible preview from the live draft', () => {
+  const current = {
+    config: {
+      requiredFields: ['contactedAt'],
+      requiredAttachments: ['CONTACT_NOTE'],
+      validatorRefs: ['CONTACT_TIME_VALID'],
+      conditionalRules: [{ field: 'contactResult', when: { field: 'connected', equals: true } }],
+      employeeInstructions: ['填写联系结果'],
+      advancedRuntimeFlag: 'preserve'
+    }
+  }
+  const patch = steps.updateGovernedDod(current, {
+    requiredFields: ['contactedAt', 'contactResult'],
+    requiredAttachments: ['CONTACT_NOTE'],
+    conditionalRules: [{ field: 'contactResult', when: { field: 'connected', equals: true } }]
+  })
+  assert.deepStrictEqual(patch.config.conditionalRequired, patch.config.conditionalRules)
+  assert.deepStrictEqual(patch.config.materials, [{ type: 'CONTACT_NOTE', minCount: 1 }])
+  assert.deepStrictEqual(patch.config.validatorRefs, ['CONTACT_TIME_VALID'])
+  assert.deepStrictEqual(patch.config.employeeInstructions, ['填写联系结果'])
+  assert.strictEqual(patch.config.advancedRuntimeFlag, 'preserve')
+
+  const preview = steps.projectEmployeePreview({
+    title: '首次联系',
+    assigneeSummary: '线索负责人',
+    fields: [{ code: 'serverOnly', label: '旧字段', required: true }],
+    materials: [{ code: 'OLD', label: '旧材料', required: true }],
+    completionInstructions: ['旧说明']
+  }, patch.config, {
+    fields: [
+      { code: 'contactedAt', name: '联系时间', type: 'datetime' },
+      { code: 'contactResult', name: '联系结果', type: 'string' }
+    ],
+    materials: [{ code: 'CONTACT_NOTE', name: '联系记录' }]
+  })
+  assert.deepStrictEqual(preview.fields.map(item => item.label), ['联系时间', '联系结果'])
+  assert.strictEqual(preview.fields[1].conditional, true)
+  assert.deepStrictEqual(preview.materials.map(item => item.label), ['联系记录'])
+  assert.deepStrictEqual(preview.completionInstructions, ['填写联系结果'])
+})
+
+check('builds natural-language SLA patches and four semantic timeline points with repair blockers', () => {
+  const patch = steps.buildSlaPatch({
+    durationValue: 2,
+    durationUnit: 'HOUR',
+    calendarCode: 'DEFAULT',
+    startStrategy: 'TODO_ACCEPTED',
+    pauseRules: ['WAIT_CUSTOMER']
+  }, { config: { advancedPolicy: { timezoneLock: true } } })
+  assert.strictEqual(patch.config.minutes, 120)
+  assert.strictEqual(patch.config.calendarCode, 'DEFAULT')
+  assert.strictEqual(patch.config.startStrategy, 'TODO_CREATED')
+  assert.deepStrictEqual(patch.config.pauseRules, [])
+  assert.deepStrictEqual(patch.config.advancedPolicy, { timezoneLock: true })
+  assert.strictEqual(steps.buildSlaPatch({
+    durationValue: 1,
+    durationUnit: 'DAY',
+    calendarCode: 'DEFAULT'
+  }, {}).config.minutes, null)
+  assert.strictEqual(steps.buildSlaPatch({
+    durationValue: 1,
+    durationUnit: 'DAY',
+    calendarCode: 'DEFAULT',
+    governedMinutes: 540
+  }, {}).config.minutes, 540)
+
+  const timeline = steps.buildSlaTimeline(patch.config, {
+    startAt: '2026-07-24T09:00:00',
+    remind80At: '2026-07-24T10:36:00',
+    overdue100At: '2026-07-24T11:00:00',
+    escalate150At: '2026-07-24T12:00:00'
+  })
+  assert.deepStrictEqual(timeline.map(item => item.percent), [0, 80, 100, 150])
+  assert.deepStrictEqual(timeline.map(item => item.semantic), ['CREATED', 'REMINDER', 'OVERDUE', 'ESCALATION'])
+  assert.deepStrictEqual(timeline[1].actions, ['REMIND_OWNER'])
+  assert.deepStrictEqual(timeline[2].actions, ['MARK_OVERDUE', 'REMIND_OWNER'])
+  assert.deepStrictEqual(timeline[3].actions, ['ESCALATE', 'REMIND_OWNER', 'NOTIFY_MANAGER'])
+
+  assert.strictEqual(steps.slaRepairBlocker(patch.config, [{ calendarCode: 'DEFAULT' }], timeline), null)
+  assert.strictEqual(
+    steps.slaRepairBlocker({ ...patch.config, calendarCode: 'MISSING' }, [{ calendarCode: 'DEFAULT' }], timeline).code,
+    'TODO_JOURNEY_SLA_CALENDAR_REQUIRED'
+  )
+  assert.strictEqual(
+    steps.slaRepairBlocker(patch.config, [{ calendarCode: 'DEFAULT' }], []).code,
+    'TODO_JOURNEY_SLA_CALCULATION_REQUIRED'
+  )
+  const request = steps.createRepairRequest({
+    type: 'CALENDAR',
+    businessType: 'LEAD',
+    returnStep: 'SLA',
+    focusField: 'calendarCode'
+  })
+  assert.deepStrictEqual(request, {
+    type: 'CALENDAR',
+    eventType: null,
+    payloadVersion: null,
+    resourceId: null,
+    businessType: 'LEAD',
+    returnStep: 'SLA',
+    focusField: 'calendarCode'
+  })
+})
+
+check('builds ordered terminal and parallel routing graphs while preserving advanced configuration', () => {
+  const current = { config: { advancedGraphOption: 'preserve' } }
+  const sequential = steps.buildBusinessRoutingPatch([
+    { id: 'approved', label: '审批通过', resultType: 'NEXT', targetVersionId: 201, default: false, condition: { status: 'APPROVED' } },
+    { id: 'rejected', label: '审批拒绝', resultType: 'END', default: true }
+  ], {
+    mode: 'SEQUENTIAL',
+    currentVersionId: 101
+  }, current)
+  assert.strictEqual(sequential.config.start, 'current_task')
+  assert.deepStrictEqual(sequential.config.businessOutcomes.map(item => item.label), ['审批通过', '审批拒绝'])
+  assert(sequential.config.nodes.some(node => node.type === 'DECISION'))
+  assert(sequential.config.nodes.some(node => node.type === 'END'))
+  assert.strictEqual(sequential.config.advancedGraphOption, 'preserve')
+  const decisionEdges = sequential.config.edges.filter(edge => edge.from === 'business_result')
+  assert(decisionEdges[0].priority > decisionEdges[1].priority, 'top outcome must execute first at runtime')
+
+  const terminal = steps.buildBusinessRoutingPatch([], {
+    mode: 'SEQUENTIAL',
+    currentVersionId: 101
+  }, current)
+  assert(terminal.config.nodes.some(node => node.type === 'END'))
+  assert(terminal.config.edges.some(edge => edge.from === 'current_task' && edge.to === 'route_end'))
+
+  assert.strictEqual(
+    steps.routingDraftBlocker([
+      { id: 'missing', label: '继续办理', resultType: 'NEXT', targetVersionId: null }
+    ], { mode: 'SEQUENTIAL' }).code,
+    'TODO_JOURNEY_ROUTING_TARGET_REQUIRED'
+  )
+  assert.strictEqual(
+    steps.routingDraftBlocker([
+      { id: 'only', label: '唯一分支', resultType: 'NEXT', targetVersionId: 201 }
+    ], { mode: 'PARALLEL' }).code,
+    'TODO_JOURNEY_ROUTING_PARALLEL_BRANCHES_REQUIRED'
+  )
+
+  const parallel = steps.buildBusinessRoutingPatch([
+    { id: 'finance', label: '财务确认', resultType: 'NEXT', targetVersionId: 301 },
+    { id: 'archive', label: '归档检查', resultType: 'NEXT', targetVersionId: 302 }
+  ], {
+    mode: 'PARALLEL',
+    joinMode: 'ALL',
+    currentVersionId: 101
+  }, current)
+  assert(parallel.config.nodes.some(node => node.type === 'FORK'))
+  assert(parallel.config.nodes.some(node => node.type === 'JOIN' && node.joinMode === 'ALL'))
+  assert.deepStrictEqual(parallel.config.businessRouting, { mode: 'PARALLEL', joinMode: 'ALL' })
+  assert.deepStrictEqual(parallel.config.businessOutcomes.map(item => item.label), ['财务确认', '归档检查'])
+  assert.strictEqual(
+    parallel.config.edges.filter(edge => edge.from === 'parallel_start').some(edge => edge.condition),
+    false
+  )
 })
 
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

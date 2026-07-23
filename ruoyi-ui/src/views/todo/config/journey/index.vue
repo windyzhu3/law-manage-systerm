@@ -49,18 +49,21 @@
             :value="activeValue"
             :resources="journey.resources || {}"
             :business-type="journey.template.businessType"
+            :business-stage="journey.template.businessStage"
+            :current-version-id="journey.template.versionId"
             :event="journey.definition.event || {}"
             :preview="journey.employeePreview || {}"
             :permissions="clientPermissions"
             :resource-revision="resourceRevision"
             :readonly="publishedReadOnly"
             @change="onStepChange"
+            @issue-change="onEditorIssue"
             @repair-resource="openResourceRepair"
           />
         </section>
         <aside class="journey-aside">
           <configuration-health-panel :issues="activeIssues" @repair="repair" />
-          <employee-todo-preview :value="journey.employeePreview || {}" />
+          <employee-todo-preview :value="liveEmployeePreview" />
         </aside>
       </main>
 
@@ -114,12 +117,17 @@ import ContextResourceDrawer from './components/ContextResourceDrawer'
 import EventStep from './steps/EventStep'
 import TriggerStep from './steps/TriggerStep'
 import OwnerStep from './steps/OwnerStep'
+import DodStep from './steps/DodStep'
+import SlaStep from './steps/SlaStep'
+import RoutingStep from './steps/RoutingStep'
 import {
   getTodoTemplate,
   getTodoTemplateJourney,
   updateTemplateDraft,
   copyTodoTemplate,
-  listTemplateEventCatalog
+  listTemplateEventCatalog,
+  listTemplateCalendarCatalog,
+  listTemplateRoutingTargetCatalog
 } from '@/api/todo-config'
 import {
   listFieldResources,
@@ -142,6 +150,7 @@ import {
   eventSchemaHealth,
   ownerBlocker,
   scopeOwnerFields,
+  projectEmployeePreview,
   createRepairRequest,
   completeResourceRepair as completeRepair
 } from './journey-step-model'
@@ -209,12 +218,18 @@ export default {
     EventStep,
     TriggerStep,
     OwnerStep,
+    DodStep,
+    SlaStep,
+    RoutingStep,
     JourneyStepPlaceholder
   },
   stepEditors: {
     EVENT: EventStep,
     TRIGGER: TriggerStep,
-    OWNER: OwnerStep
+    OWNER: OwnerStep,
+    DOD: DodStep,
+    SLA: SlaStep,
+    ROUTING: RoutingStep
   },
   data() {
     return {
@@ -233,7 +248,8 @@ export default {
       loadSequence: 0,
       pendingCopyTransition: null,
       resourceRevision: 0,
-      resourceRepair: { open: false, request: {} }
+      resourceRepair: { open: false, request: {} },
+      editorIssues: {}
     }
   },
   computed: {
@@ -279,6 +295,26 @@ export default {
       if (local && !current.some(issue => issue.code === local.code)) current.push(local)
       return current
     },
+    liveEmployeePreview() {
+      if (!this.journey) return {}
+      const definition = this.journey.definition || {}
+      const dod = (definition.dod && definition.dod.config) || {}
+      const preview = projectEmployeePreview(
+        this.journey.employeePreview || {},
+        dod,
+        this.journey.resources || {}
+      )
+      const sla = (definition.sla && definition.sla.config) || {}
+      if (Number(sla.minutes) > 0) {
+        const calendar = ((this.journey.resources || {}).calendars || []).find(item =>
+          String(item.calendarCode || item.calendar_code) === String(sla.calendarCode || '')
+        )
+        preview.dueSummary = `${sla.durationValue || sla.minutes} ${
+          { MINUTE: '工作分钟', HOUR: '工作小时', DAY: '工作日' }[sla.durationUnit] || '分钟'
+        }内完成${calendar ? ` · ${calendar.calendarName || calendar.calendar_name}` : ''}`
+      }
+      return preview
+    },
     localStepIssue() {
       if (!this.journey) return null
       const resources = this.journey.resources || {}
@@ -321,6 +357,12 @@ export default {
           eventFields
         )
         return blocker && { ...blocker, stepCode: 'OWNER', fieldPath: 'owner.config', repairAction: '设置负责人或兜底' }
+      }
+      if (this.activeStep === 'SLA') {
+        return this.editorIssues.SLA || null
+      }
+      if (this.activeStep === 'ROUTING') {
+        return this.editorIssues.ROUTING || null
       }
       return null
     },
@@ -509,6 +551,16 @@ export default {
       this.journey = applyStepPatch(this.journey, this.activeStep, value)
       this.editRevision += 1
       this.scheduleAutosave()
+    },
+    onEditorIssue(issue) {
+      this.$set(this.editorIssues, this.activeStep, issue
+        ? {
+            ...issue,
+            repairAction: issue.code === 'TODO_JOURNEY_SLA_CALENDAR_REQUIRED'
+              ? '修复工作日历'
+              : issue.stepCode === 'SLA' ? '检查办理时长' : '完善后续路由'
+          }
+        : null)
     },
     scheduleAutosave() {
       clearTimeout(this.autosaveTimer)
@@ -714,6 +766,18 @@ export default {
           returnStep: stepCode || 'EVENT',
           focusField: issue.fieldPath === 'event.condition' ? null : 'payloadSchema'
         })
+      } else if (issue && issue.code === 'TODO_JOURNEY_SLA_CALENDAR_REQUIRED') {
+        this.openResourceRepair({
+          type: 'CALENDAR',
+          businessType: this.journey.template.businessType,
+          returnStep: 'SLA',
+          focusField: 'calendarCode'
+        })
+      } else if (issue && issue.code === 'TODO_JOURNEY_SLA_CALCULATION_REQUIRED') {
+        this.$nextTick(() => {
+          const editor = this.$refs.activeEditor
+          if (editor && editor.focusField) editor.focusField('durationValue')
+        })
       }
     },
     openResourceRepair(request) {
@@ -745,6 +809,8 @@ export default {
       if (type === 'ALL' || type === 'MATERIAL') tasks.materials = listMaterialResources({ businessType })
       if (type === 'ALL' || type === 'DOD_RECIPE') tasks.recipes = listDodRecipeResources({ businessType })
       if (type === 'ALL') tasks.validators = listValidatorResources({ businessType })
+      if (type === 'ALL' || type === 'CALENDAR') tasks.calendars = listTemplateCalendarCatalog()
+      if (type === 'ALL') tasks.routingTargets = listTemplateRoutingTargetCatalog()
       try {
         const names = Object.keys(tasks)
         const responses = await Promise.all(names.map(name => tasks[name]))
@@ -759,8 +825,10 @@ export default {
                 (field.sourceEvents || []).includes(eventType)
               )
               return {
+                eventCatalogId: event.eventCatalogId || event.event_catalog_id || null,
                 eventType,
                 eventName: event.eventName || event.event_name || eventType,
+                description: event.description || '',
                 payloadVersion,
                 businessObjectType: event.businessObjectType || event.business_object_type,
                 sourceModule: event.sourceModule || event.source_module || '业务系统',

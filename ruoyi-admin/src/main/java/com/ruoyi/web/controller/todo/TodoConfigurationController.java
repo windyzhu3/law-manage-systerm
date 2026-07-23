@@ -40,6 +40,7 @@ import com.law.todo.application.command.TodoConfigurationCommands.JourneyPayload
 import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.SlaJourneyPreviewCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
@@ -150,6 +151,11 @@ public class TodoConfigurationController extends BaseController
     @PostMapping("/templates/{id}/journey/simulate")
     public AjaxResult journeySimulation(@PathVariable Long id,@Valid @RequestBody JourneySimulationCommand command)
     {requireSame(id,command.templateId());return success(journeySimulation.simulate(command,actor()));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @PostMapping("/journey/sla-preview")
+    public AjaxResult journeySlaPreview(@Valid @RequestBody SlaJourneyPreviewCommand command)
+    {return success(sla.previewCalculation(command.calendarCode(),command.durationValue(),
+            command.durationUnit(),command.createdAt()));}
 
     @PreAuthorize("@ss.hasPermi('todo:resource:list')")
     @GetMapping("/resources/events") public TableDataInfo eventResources(@Valid @ModelAttribute EventResourceListQuery value)

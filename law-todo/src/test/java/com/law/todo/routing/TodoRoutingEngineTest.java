@@ -88,6 +88,32 @@ class TodoRoutingEngineTest
         assertEquals("high", result.tasks().get(0).nodeKey());
     }
 
+    @Test void businessOutcomeWithHighestPriorityIsExecutedFirstAfterCurrentTaskCompletes()
+    {
+        RoutingGraph graph=graph(
+                List.of(node("current_task","TASK",Map.of("templateVersionId",101L)),
+                        node("business_result","DECISION",Map.of()),
+                        node("first","TASK",Map.of("templateVersionId",201L)),
+                        node("second","TASK",Map.of("templateVersionId",202L)),
+                        node("end","END",Map.of())),
+                List.of(edge("current-result","current_task","business_result",null,0),
+                        conditionalEdge("first-result","business_result","first",2,eq("approved",true)),
+                        conditionalEdge("second-result","business_result","second",1,eq("approved",true)),
+                        defaultEdge("fallback","business_result","end",0),
+                        edge("first-end","first","end",null,0),
+                        edge("second-end","second","end",null,0)));
+        TodoInstance completed=new TodoInstance();
+        completed.setTodoId(9L);completed.setRootTodoId(1L);completed.setBusinessType("LEAD");
+        completed.setBusinessId(7L);completed.setStatus("COMPLETED");completed.setRouteNodeKey("current_task");
+
+        var result=new TodoRoutingEngine(mapper).advance(new RouteContext(graph,"hash",1,completed,
+                new RouteToken(1L,"current_task",null,0,RouteTokenStatus.ACTIVE),Map.of("approved",true)));
+
+        assertEquals(RouteStatus.ADVANCED,result.status());
+        assertEquals("first",result.tasks().get(0).nodeKey());
+        assertEquals(201L,result.tasks().get(0).templateVersionId());
+    }
+
     @Test void forkProducesStableBranchTokens()
     {
         RoutingGraph graph = graph(

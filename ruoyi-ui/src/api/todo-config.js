@@ -32,6 +32,7 @@ export function getTodoTemplateJourney(id) { return request({ url: `/todo/config
 export function listTodoTemplateWorkbench(params) { return request({ url: '/todo/config/templates/workbench', method: 'get', params }) }
 export function hydrateTodoJourneyPayload(id, data) { return request({ url: `/todo/config/templates/${id}/journey/payload`, method: 'post', data }) }
 export function simulateTodoJourney(id, data) { return request({ url: `/todo/config/templates/${id}/journey/simulate`, method: 'post', data }) }
+export function previewTodoJourneySla(data) { return request({ url: '/todo/config/journey/sla-preview', method: 'post', data }) }
 export function listTemplateVersions(id) { return request({ url: `/todo/config/templates/${id}/versions`, method: 'get' }) }
 export function updateTemplateDraft(id, data) { return request({ url: `/todo/config/template-versions/${id}`, method: 'put', data }) }
 export function preflightTemplateDraft(id) { return request({ url: `/todo/config/template-versions/${id}/preflight`, method: 'post' }) }

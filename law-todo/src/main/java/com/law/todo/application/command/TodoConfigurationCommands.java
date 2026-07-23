@@ -8,6 +8,7 @@ import com.alibaba.fastjson2.JSON;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -41,6 +42,10 @@ public final class TodoConfigurationCommands
                     && validOptionalJson(autoActionJson);
         }
     }
+
+    public record SlaJourneyPreviewCommand(@NotBlank String calendarCode,
+            @NotNull @Positive @Max(999) Integer durationValue,@NotBlank String durationUnit,
+            @NotNull LocalDateTime createdAt) { }
 
     public record DodRuleCommand(Long dodRuleId,@NotBlank String ruleCode,@NotBlank String ruleName,
             @NotBlank String ruleType,@NotBlank String requiredFieldsJson,

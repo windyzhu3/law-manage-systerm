@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,18 +37,31 @@ class TodoConfigurationJourneyServiceTest
     @Mock TodoConfigurationMapper mapper;
     @Mock TodoConfigurationResourceCatalogService resources;
     @Mock TodoTemplateService templates;
+    @Mock TodoEventResourceService eventResources;
     private TodoConfigurationJourneyService service;
     private final Actor actor=new Actor(7L,"configuration-manager",3L);
 
     @BeforeEach void setUp()
     {
         service=new TodoConfigurationJourneyService(query,new TodoDefinitionCodec(),mapper,resources,
-                new TodoConfigurationJourneyEvaluator(resources,templates),new TodoEmployeeTodoPreviewProjector());
+                new TodoConfigurationJourneyEvaluator(resources,templates),new TodoEmployeeTodoPreviewProjector(),
+                templates,eventResources);
+        lenient().when(eventResources.list(anyMap())).thenReturn(
+                new com.law.todo.application.view.TodoResourceViews.EventResourcePage(List.of(),0));
     }
 
     @Test void loadsSevenOrderedStepsAndKeepsOptimisticLockVersion()
     {
         when(query.template(42L)).thenReturn(fixtureTemplate());
+        when(eventResources.list(anyMap())).thenReturn(new com.law.todo.application.view.TodoResourceViews.EventResourcePage(
+                List.of(new com.law.todo.application.view.TodoResourceViews.EventResourceListItem(
+                        71L,"LEAD_CREATED","线索已创建","在线索录入完成后触发",1,"LEAD",
+                        "线索中心","INCOMPLETE","DRAFT",3,2L,LocalDateTime.of(2026,7,24,9,0))),1));
+        when(templates.listTemplateCalendarCatalog()).thenReturn(List.of(
+                Map.of("calendarCode","DEFAULT","calendarName","默认工作日历","timezone","Asia/Shanghai")));
+        when(templates.listRoutingTargetCatalog()).thenReturn(List.of(
+                new com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry(
+                        9L,"TODO-NEXT","下一步办理","LEAD",91L,2,"PUBLISHED")));
 
         TodoConfigurationJourneyView view=service.load(42L,actor);
 
@@ -67,6 +81,18 @@ class TodoConfigurationJourneyServiceTest
                 Map.of("config",Map.of("start","review","nodes",List.of(Map.of("key","review")),"edges",List.of())),
                 Map.of("config",Map.of("businessStage","QUALIFY","panels",List.of(Map.of("code","summary")))));
         assertThat(view.permissions().canEdit()).isTrue();
+        assertThat(view.resources().events()).extracting(
+                com.law.todo.application.view.TodoResourceViews.EventResourceListItem::eventType)
+                .containsExactly("LEAD_CREATED");
+        var event=view.resources().events().get(0);
+        assertThat(event.eventCatalogId()).isEqualTo(71L);
+        assertThat(event.eventName()).isEqualTo("线索已创建");
+        assertThat(event.description()).isEqualTo("在线索录入完成后触发");
+        assertThat(event.sourceModule()).isEqualTo("线索中心");
+        assertThat(view.resources().calendars()).extracting(row->row.get("calendarCode")).containsExactly("DEFAULT");
+        assertThat(view.resources().routingTargets())
+                .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateName)
+                .containsExactly("下一步办理");
     }
 
     @Test void returnsTruthfulProgressHealthStateAndTemplateCodeWithoutPerRowQueries()

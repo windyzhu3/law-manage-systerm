@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.SlaCalculationResult;
+import com.law.todo.application.view.TodoConfigurationViews.SlaJourneyCalculationResult;
 import com.law.todo.application.view.TodoConfigurationViews.SlaRuleDetail;
 import com.law.todo.application.view.TodoConfigurationViews.SlaRuleListItem;
 import com.law.todo.domain.TodoException;
@@ -218,6 +219,42 @@ class TodoSlaRuleManagementServiceTest
         assertEquals(LocalDateTime.of(2026,7,13,9,36),result.remind80At());
         assertEquals(LocalDateTime.of(2026,7,13,10,0),result.overdue100At());
         assertEquals(LocalDateTime.of(2026,7,13,11,0),result.escalate150At());
+    }
+
+    @Test void previewsInlineJourneyDurationWithTheGovernedWorkingCalendar()
+    {
+        when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        LocalDateTime createdAt=LocalDateTime.of(2026,7,10,17,0);
+
+        SlaJourneyCalculationResult result=service.previewCalculation("DEFAULT",120,"MINUTE",createdAt);
+
+        assertEquals(120,result.minutes());
+        assertEquals(createdAt,result.createdAt());
+        assertEquals(LocalDateTime.of(2026,7,13,9,36),result.remind80At());
+        assertEquals(LocalDateTime.of(2026,7,13,10,0),result.overdue100At());
+        assertEquals(LocalDateTime.of(2026,7,13,11,0),result.escalate150At());
+        verify(mapper,never()).selectSlaRule(anyLong());
+        verify(mapper,never()).updateSlaRuleConditionally(anyMap());
+    }
+
+    @Test void inlineJourneyPreviewRejectsInvalidDuration()
+    {
+        TodoException error=assertThrows(TodoException.class,()->
+                service.previewCalculation("DEFAULT",0,"MINUTE",LocalDateTime.of(2026,7,10,9,0)));
+
+        assertEquals("TODO_SLA_RULE_DURATION_INVALID",error.getBusinessCode());
+        verify(todoMapper,never()).selectCalendarByCode(anyString());
+    }
+
+    @Test void inlineJourneyWorkingDayUsesTheSelectedCalendarsActualDayLength()
+    {
+        when(todoMapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        LocalDateTime createdAt=LocalDateTime.of(2026,7,10,17,0);
+
+        SlaJourneyCalculationResult result=service.previewCalculation("DEFAULT",1,"DAY",createdAt);
+
+        assertEquals(540,result.minutes());
+        assertEquals(LocalDateTime.of(2026,7,13,17,0),result.overdue100At());
     }
 
     private void enabledDictionaries()

@@ -7,9 +7,16 @@ public final class TodoResourceViews
 {
     private TodoResourceViews() { }
 
-    public record EventResourceListItem(long eventCatalogId,String eventType,String eventName,Integer payloadVersion,
+    public record EventResourceListItem(long eventCatalogId,String eventType,String eventName,String description,Integer payloadVersion,
             String businessObjectType,String sourceModule,String schemaStatus,String status,Integer version,
-            long referenceCount,LocalDateTime updateTime) { }
+            long referenceCount,LocalDateTime updateTime)
+    {
+        public EventResourceListItem(long eventCatalogId,String eventType,String eventName,Integer payloadVersion,
+                String businessObjectType,String sourceModule,String schemaStatus,String status,Integer version,
+                long referenceCount,LocalDateTime updateTime)
+        {this(eventCatalogId,eventType,eventName,null,payloadVersion,businessObjectType,sourceModule,schemaStatus,
+                status,version,referenceCount,updateTime);}
+    }
 
     public record EventResourceReference(String referenceType,Long referenceId,String referenceCode,
             String referenceName,String referenceStatus) { }

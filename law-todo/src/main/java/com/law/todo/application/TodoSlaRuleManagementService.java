@@ -21,6 +21,7 @@ import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.view.TodoConfigurationViews.SlaCalculationResult;
+import com.law.todo.application.view.TodoConfigurationViews.SlaJourneyCalculationResult;
 import com.law.todo.application.view.TodoConfigurationViews.SlaRuleDetail;
 import com.law.todo.application.view.TodoConfigurationViews.SlaRuleListItem;
 import com.law.todo.domain.TodoException;
@@ -109,6 +110,21 @@ public class TodoSlaRuleManagementService
         Map<String,Object> rule=require(slaRuleId);WorkCalendar calendar=calendar(requireCalendar(text(rule,"calendar_code","calendarCode")));
         long minutes=durationMinutes(rule,calendar);LocalDateTime due=calculator.addWorkingMinutes(createdAt,minutes,calendar);
         return new SlaCalculationResult(createdAt,calculator.addWorkingMinutes(createdAt,threshold(minutes,80),calendar),due,
+                calculator.addWorkingMinutes(createdAt,threshold(minutes,150),calendar));
+    }
+
+    @Transactional(readOnly=true)
+    public SlaJourneyCalculationResult previewCalculation(String calendarCode,int durationValue,
+            String durationUnit,LocalDateTime createdAt)
+    {
+        if(createdAt==null)throw new TodoException("TODO_SLA_RULE_CALCULATION_START_REQUIRED","SLA calculation start is required");
+        if(durationValue<=0||durationValue>999)
+            throw new TodoException("TODO_SLA_RULE_DURATION_INVALID","SLA duration is outside the supported range");
+        WorkCalendar calendar=calendar(requireCalendar(calendarCode));
+        long minutes=durationMinutes(Map.of("durationValue",durationValue,"durationUnit",durationUnit),calendar);
+        return new SlaJourneyCalculationResult(minutes,createdAt,
+                calculator.addWorkingMinutes(createdAt,threshold(minutes,80),calendar),
+                calculator.addWorkingMinutes(createdAt,minutes,calendar),
                 calculator.addWorkingMinutes(createdAt,threshold(minutes,150),calendar));
     }
 

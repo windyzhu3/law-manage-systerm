@@ -28,7 +28,10 @@ const journeyComponentPaths = [
 const journeyStepPaths = [
   'src/views/todo/config/journey/steps/EventStep.vue',
   'src/views/todo/config/journey/steps/TriggerStep.vue',
-  'src/views/todo/config/journey/steps/OwnerStep.vue'
+  'src/views/todo/config/journey/steps/OwnerStep.vue',
+  'src/views/todo/config/journey/steps/DodStep.vue',
+  'src/views/todo/config/journey/steps/SlaStep.vue',
+  'src/views/todo/config/journey/steps/RoutingStep.vue'
 ]
 const businessFirstComponentPaths = [
   'src/views/todo/config/journey/components/ContextResourceDrawer.vue',
@@ -250,6 +253,18 @@ check('restores visible focus after contextual event repair', () => {
   assert(event.includes('is-focus-restored'), 'repair return must visibly highlight the repaired area')
 })
 
+check('keeps existing incomplete event resources actionable during repair', () => {
+  const journey = read('src/views/todo/config/journey/index.vue')
+  const eventStep = read('src/views/todo/config/journey/steps/EventStep.vue')
+  assert(journey.includes('eventCatalogId: event.eventCatalogId || event.event_catalog_id || null'),
+    'resource refresh must retain the governed event identity')
+  assert(journey.includes("description: event.description || ''"),
+    'resource refresh must retain the business description')
+  assert(eventStep.includes('resourceId: event && event.eventCatalogId'),
+    'event repair must reopen the existing governed resource')
+  assert(eventStep.includes('event.eventName'), 'the normal event picker must prefer the business event name')
+})
+
 check('keeps event sample JSON behind an explicit advanced section', () => {
   const drawer = read('src/views/todo/config/resource/EventResourceDrawer.vue')
   assert(drawer.includes('根据字段生成样例'), 'event samples need a guided generator')
@@ -282,6 +297,88 @@ check('presents the unified governed resource center without executable validato
   for (const forbidden of ['上传实现', '执行校验器', '@click=\"execute', '@click=\"upload']) {
     assert(!validators.includes(forbidden), `validator catalog exposes executable control: ${forbidden}`)
   }
+})
+
+check('installs DoD SLA and routing journey editors with employee-preview parity', () => {
+  const components = [
+    'src/views/todo/config/journey/components/DodRecipePicker.vue',
+    'src/views/todo/config/journey/components/SlaTimelinePreview.vue',
+    'src/views/todo/config/journey/components/BusinessRoutingEditor.vue'
+  ]
+  for (const componentPath of components) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing Task 12 component: ${componentPath}`)
+  }
+  const journey = read(journeyPath)
+  for (const token of [
+    'DodStep',
+    'SlaStep',
+    'RoutingStep',
+    'projectEmployeePreview',
+    ':value="liveEmployeePreview"'
+  ]) {
+    assert(journey.includes(token), `journey Task 12 wiring missing token: ${token}`)
+  }
+})
+
+check('uses business-first DoD recipes while keeping validators advanced-only', () => {
+  const dod = read('src/views/todo/config/journey/steps/DodStep.vue')
+  const picker = read('src/views/todo/config/journey/components/DodRecipePicker.vue')
+  for (const token of ['推荐完成标准', '员工需要填写', '员工需要上传', '办理说明', '高级设置']) {
+    assert(dod.includes(token) || picker.includes(token), `DoD business editor missing token: ${token}`)
+  }
+  assert(dod.includes('rankDodRecipes'), 'DoD recipes must be context-ranked')
+  assert(dod.includes('materializeDodRecipe'), 'DoD recipes must materialize into the current draft')
+  assert(dod.includes('validatorRefs'), 'advanced DoD settings must expose governed validator references')
+  assert(!dod.includes('type="textarea"'), 'normal DoD journey must not expose raw JSON')
+})
+
+check('renders natural-language SLA semantics and repairable 80/100/150 timeline', () => {
+  const sla = read('src/views/todo/config/journey/steps/SlaStep.vue')
+  const timeline = read('src/views/todo/config/journey/components/SlaTimelinePreview.vue')
+  for (const token of ['办理时长', '工作日历', '待办创建时起算', '员工申请暂停或恢复', '修复工作日历']) {
+    assert(sla.includes(token), `SLA business editor missing token: ${token}`)
+  }
+  for (const token of ['创建待办', '80%', '100%', '150%', '提醒', '超时', '升级']) {
+    assert(timeline.includes(token), `SLA timeline missing semantic marker: ${token}`)
+  }
+  assert(sla.includes('slaRepairBlocker'), 'SLA editor must surface calendar/calculation blockers')
+  assert(sla.includes('previewTodoJourneySla'), 'SLA timeline must use the governed server calendar calculation')
+  assert(sla.includes('this.refreshCalculation({ commitOnSuccess: false })'),
+    'hydration and read-only preview must never write the journey draft')
+  assert(sla.includes('this.refreshCalculation({ commitOnSuccess: true })'),
+    'DAY edits must wait for a governed preview before writing the journey draft')
+  assert(sla.includes('if (commitOnSuccess) this.emitPatch()'),
+    'a governed DAY edit must emit exactly once after preview succeeds')
+  assert(!sla.includes('start.getTime()'), 'SLA timeline must not fabricate wall-clock due dates')
+  assert(!sla.includes('TODO_ACCEPTED'), 'journey must not expose unsupported SLA start semantics')
+  assert(!sla.includes('TODO_STARTED'), 'journey must not expose unsupported SLA start semantics')
+  assert(!sla.includes('type="textarea"'), 'normal SLA journey must not expose raw JSON')
+})
+
+check('edits ordered business routing and keeps the topology graph advanced-only', () => {
+  const step = read('src/views/todo/config/journey/steps/RoutingStep.vue')
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  for (const token of ['完成后下一步', '业务结果', '结束', '并行办理', '全部完成后汇合']) {
+    assert(step.includes(token) || routing.includes(token), `business routing missing token: ${token}`)
+  }
+  assert(step.includes('高级设置：拓扑图'), 'technical routing graph must be advanced-only')
+  assert(step.includes('RoutingGraphEditor'), 'advanced routing must preserve existing graph editor compatibility')
+  assert(routing.includes('templateName'), 'routing target business name must be primary')
+  assert(routing.includes('routingDraftBlocker'), 'incomplete business routing must be flagged before continuing')
+  assert(routing.includes('$emit(\'change\''), 'ordered routing changes must patch the journey draft')
+  assert(!routing.includes('type="textarea"'), 'normal routing journey must not expose raw JSON')
+})
+
+check('keeps backend routing issues authoritative in the normal journey', () => {
+  const step = read('src/views/todo/config/journey/steps/RoutingStep.vue')
+  for (const forbidden of [
+    'TODO_ROUTE_CYCLE_UNCONTROLLED',
+    'TODO_ROUTE_NODE_UNREACHABLE',
+    'TODO_ROUTE_TASK_TEMPLATE_REQUIRED'
+  ]) {
+    assert(!step.includes(forbidden), `client must not duplicate backend route issue: ${forbidden}`)
+  }
+  assert(step.includes('step.issueCount'), 'routing step must present authoritative backend issue state')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

@@ -22,6 +22,12 @@
       @update:visible="updateVisible"
       @saved="saved"
     />
+    <work-calendar-dialog
+      v-else-if="visible && access.allowed && resourceType === 'CALENDAR'"
+      ref="calendarDialog"
+      :on-save="saveCalendar"
+      @closed="calendarClosed"
+    />
     <el-drawer
       v-else-if="visible"
       title="维护配置资源"
@@ -43,11 +49,13 @@
 <script>
 import EventResourceDrawer from '../../resource/EventResourceDrawer'
 import ResourceItemDrawer from '../../resource/ResourceItemDrawer'
+import WorkCalendarDialog from '../../components/WorkCalendarDialog'
+import { saveWorkCalendar } from '@/api/todo-definition'
 import { resourceRepairAccess } from '../journey-step-model'
 
 export default {
   name: 'ContextResourceDrawer',
-  components: { EventResourceDrawer, ResourceItemDrawer },
+  components: { EventResourceDrawer, ResourceItemDrawer, WorkCalendarDialog },
   props: {
     visible: Boolean,
     request: { type: Object, default: () => ({}) },
@@ -71,6 +79,11 @@ export default {
     hydrate() {
       this.eventId = this.request.resourceId || null
       this.eventMode = this.eventId ? 'edit' : 'create'
+      if (this.resourceType === 'CALENDAR' && this.access.allowed) {
+        this.$nextTick(() => {
+          if (this.$refs.calendarDialog) this.$refs.calendarDialog.show(this.request.item || {})
+        })
+      }
     },
     updateVisible(value) { this.$emit('update:visible', value) },
     saved(resourceId) {
@@ -81,6 +94,15 @@ export default {
       this.eventId = resourceId
       this.eventMode = 'edit'
       this.$modal.msgSuccess('新版本已打开，请补齐字段后保存并启用')
+    },
+    async saveCalendar(value) {
+      const response = await saveWorkCalendar(value)
+      this.$emit('repaired', { request: { ...this.request }, resourceId: value.calendarId || null })
+      this.updateVisible(false)
+      return response
+    },
+    calendarClosed() {
+      if (this.visible) this.updateVisible(false)
     }
   }
 }

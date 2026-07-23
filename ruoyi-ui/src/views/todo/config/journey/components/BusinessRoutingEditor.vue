@@ -1,0 +1,311 @@
+<template>
+  <section class="business-routing" aria-label="完成后下一步">
+    <header>
+      <div>
+        <h3>完成后下一步</h3>
+        <p>按业务结果从上到下判断，命中后进入下一张待办或结束当前流程。</p>
+      </div>
+      <el-button v-if="!readonly" size="small" icon="el-icon-plus" @click="addOutcome">添加业务结果</el-button>
+    </header>
+
+    <div class="business-routing__mode">
+      <span>执行方式</span>
+      <el-radio-group v-model="mode" :disabled="readonly" size="small" @change="modeChanged">
+        <el-radio-button label="SEQUENTIAL">按结果选择一步</el-radio-button>
+        <el-radio-button label="PARALLEL">并行办理</el-radio-button>
+      </el-radio-group>
+      <el-select v-if="mode === 'PARALLEL'" v-model="joinMode" :disabled="readonly" @change="commit">
+        <el-option label="全部完成后汇合" value="ALL" />
+        <el-option label="任一完成后汇合" value="ANY" />
+      </el-select>
+    </div>
+
+    <div v-if="draftRows.length" class="routing-outcomes">
+      <article v-for="(row, index) in draftRows" :key="row.id" class="routing-outcome">
+        <div class="routing-outcome__order">
+          <span>{{ index + 1 }}</span>
+          <el-button-group v-if="!readonly">
+            <el-button type="text" icon="el-icon-top" :disabled="index === 0" @click="move(index, -1)" />
+            <el-button type="text" icon="el-icon-bottom" :disabled="index === draftRows.length - 1" @click="move(index, 1)" />
+          </el-button-group>
+        </div>
+        <div class="routing-outcome__body">
+          <div class="routing-outcome__main">
+            <el-input v-model.trim="row.label" :disabled="readonly" placeholder="填写业务结果，例如：审批通过" @change="commit">
+              <template slot="prepend">业务结果</template>
+            </el-input>
+            <el-select v-model="row.resultType" :disabled="readonly || mode === 'PARALLEL'" @change="resultTypeChanged(row)">
+              <el-option label="进入下一张待办" value="NEXT" />
+              <el-option label="结束" value="END" />
+            </el-select>
+            <el-select
+              v-if="row.resultType === 'NEXT'"
+              v-model="row.targetVersionId"
+              :disabled="readonly"
+              filterable
+              placeholder="选择下一张待办"
+              @change="commit"
+            >
+              <el-option
+                v-for="target in routingTargets"
+                :key="versionId(target)"
+                :label="templateName(target)"
+                :value="versionId(target)"
+              >
+                <span>{{ templateName(target) }}</span>
+                <small>{{ target.templateCode || target.template_code }} · 已发布 v{{ target.versionNo || target.version_no }}</small>
+              </el-option>
+            </el-select>
+            <div v-else class="routing-outcome__end"><i class="el-icon-circle-close" />流程在此结束，不再创建后续待办</div>
+          </div>
+          <div v-if="mode === 'SEQUENTIAL'" class="routing-outcome__condition">
+            <el-checkbox v-model="row.default" :disabled="readonly" @change="defaultChanged(index)">
+              其他结果都不匹配时走此分支
+            </el-checkbox>
+            <el-collapse v-if="!row.default">
+              <el-collapse-item title="设置此业务结果的判断条件" name="condition">
+                <typed-condition-builder
+                  :value="row.condition || {}"
+                  :fields="fields"
+                  :readonly="readonly"
+                  @input="conditionChanged(row, $event)"
+                />
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </div>
+        <el-button v-if="!readonly" type="text" class="is-danger" @click="removeOutcome(index)">删除</el-button>
+      </article>
+    </div>
+    <el-empty v-else description="尚未设置完成后的业务结果" :image-size="68" />
+
+    <el-alert
+      v-if="blocker"
+      title="请完善后续路由"
+      :description="blocker.message"
+      type="error"
+      :closable="false"
+      show-icon
+    />
+
+    <el-alert
+      v-if="mode === 'PARALLEL'"
+      title="并行办理说明"
+      :description="joinMode === 'ALL' ? '系统会同时创建以上待办，全部完成后再继续。' : '系统会同时创建以上待办，任一完成后即可汇合继续。'"
+      type="info"
+      :closable="false"
+      show-icon
+    />
+  </section>
+</template>
+
+<script>
+import TypedConditionBuilder from './TypedConditionBuilder'
+import { emptyConditionDocument, routingDraftBlocker } from '../journey-step-model'
+
+const clone = value => JSON.parse(JSON.stringify(value == null ? [] : value))
+
+export default {
+  name: 'BusinessRoutingEditor',
+  components: { TypedConditionBuilder },
+  props: {
+    rows: { type: Array, default: () => [] },
+    options: { type: Object, default: () => ({}) },
+    routingTargets: { type: Array, default: () => [] },
+    fields: { type: Array, default: () => [] },
+    readonly: Boolean
+  },
+  data() {
+    return {
+      draftRows: [],
+      mode: 'SEQUENTIAL',
+      joinMode: 'ALL',
+      syncing: false
+    }
+  },
+  computed: {
+    blocker() { return routingDraftBlocker(this.draftRows, { mode: this.mode, joinMode: this.joinMode }) }
+  },
+  watch: {
+    rows: { immediate: true, deep: true, handler() { if (!this.syncing) this.hydrate() } },
+    options: { immediate: true, deep: true, handler() { if (!this.syncing) this.hydrateSettings() } },
+    blocker: {
+      immediate: true,
+      handler(value) { this.$emit('issue-change', value ? { ...value, stepCode: 'ROUTING', fieldPath: 'routing.businessOutcomes' } : null) }
+    }
+  },
+  methods: {
+    hydrate() {
+      this.draftRows = clone(this.rows).map((row, index) => ({
+        id: row.id || `result_${index + 1}`,
+        label: row.label || '',
+        resultType: row.resultType || 'NEXT',
+        targetVersionId: Number(row.targetVersionId) || null,
+        default: row.default === true,
+        condition: clone(row.condition || {})
+      }))
+    },
+    hydrateSettings() {
+      this.mode = this.options.mode || 'SEQUENTIAL'
+      this.joinMode = this.options.joinMode || 'ALL'
+    },
+    addOutcome() {
+      const id = `result_${Date.now()}`
+      const target = this.routingTargets[0]
+      this.draftRows.push({
+        id,
+        label: '',
+        resultType: 'NEXT',
+        targetVersionId: target ? this.versionId(target) : null,
+        default: this.mode === 'SEQUENTIAL' && this.draftRows.length === 0,
+        condition: emptyConditionDocument()
+      })
+      this.commit()
+    },
+    removeOutcome(index) {
+      this.draftRows.splice(index, 1)
+      if (this.mode === 'SEQUENTIAL' && this.draftRows.length && !this.draftRows.some(row => row.default)) {
+        this.draftRows[this.draftRows.length - 1].default = true
+      }
+      this.commit()
+    },
+    move(index, offset) {
+      const target = index + offset
+      if (target < 0 || target >= this.draftRows.length) return
+      const row = this.draftRows.splice(index, 1)[0]
+      this.draftRows.splice(target, 0, row)
+      this.commit()
+    },
+    modeChanged() {
+      if (this.mode === 'PARALLEL') {
+        this.draftRows.forEach(row => {
+          row.resultType = 'NEXT'
+          row.default = false
+        })
+      } else if (this.draftRows.length) {
+        this.draftRows[this.draftRows.length - 1].default = true
+      }
+      this.commit()
+    },
+    defaultChanged(index) {
+      if (this.draftRows[index].default) {
+        this.draftRows.forEach((row, rowIndex) => { if (rowIndex !== index) row.default = false })
+      }
+      this.commit()
+    },
+    resultTypeChanged(row) {
+      if (row.resultType === 'END') row.targetVersionId = null
+      else if (!row.targetVersionId && this.routingTargets.length) row.targetVersionId = this.versionId(this.routingTargets[0])
+      this.commit()
+    },
+    conditionChanged(row, condition) {
+      row.condition = clone(condition)
+      this.commit()
+    },
+    commit() {
+      this.syncing = true
+      this.$emit('change', clone(this.draftRows), { mode: this.mode, joinMode: this.joinMode })
+      this.$nextTick(() => { this.syncing = false })
+    },
+    versionId(target) { return Number(target.versionId || target.version_id) },
+    templateName(target) { return target.templateName || target.template_name || '未命名待办' }
+  }
+}
+</script>
+
+<style scoped lang="scss">
+.business-routing {
+  > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+
+    h3 { margin: 0; font-size: 16px; color: #0B2A55; }
+    p { margin: 4px 0 0; font-size: 12px; color: #65758A; }
+  }
+
+  > .el-alert { margin-top: 14px; }
+}
+
+.business-routing__mode {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  margin: 14px 0;
+  font-size: 13px;
+  color: #53667C;
+  background: #F7F9FC;
+  border-radius: 8px;
+
+  .el-select { width: 180px; }
+}
+
+.routing-outcomes { display: grid; gap: 10px; }
+
+.routing-outcome {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  background: #FFFFFF;
+  border: 1px solid #D9E1EA;
+  border-radius: 8px;
+
+  .is-danger { align-self: start; color: #C43D3D; }
+}
+
+.routing-outcome__order {
+  text-align: center;
+
+  > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 4px;
+    font-weight: 700;
+    color: #FFFFFF;
+    background: #0B2A55;
+    border-radius: 50%;
+  }
+
+  .el-button-group { display: flex; flex-direction: column; }
+}
+
+.routing-outcome__main {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr);
+  gap: 9px;
+}
+
+.routing-outcome__end {
+  padding: 10px;
+  font-size: 12px;
+  color: #65758A;
+  background: #F7F9FC;
+  border-radius: 8px;
+
+  i { margin-right: 5px; color: #C89A3D; }
+}
+
+.routing-outcome__condition {
+  padding-top: 10px;
+
+  ::v-deep .el-collapse-item__header { color: #53667C; }
+}
+
+::v-deep .el-select-dropdown__item small {
+  float: right;
+  margin-left: 18px;
+  color: #8A98A8;
+}
+
+@media (max-width: 760px) {
+  .business-routing__mode { align-items: stretch; flex-direction: column; }
+  .routing-outcome { grid-template-columns: 38px minmax(0, 1fr); }
+  .routing-outcome > .is-danger { grid-column: 2; }
+  .routing-outcome__main { grid-template-columns: 1fr; }
+}
+</style>

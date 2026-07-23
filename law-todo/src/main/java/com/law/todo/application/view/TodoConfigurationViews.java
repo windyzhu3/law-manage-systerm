@@ -23,6 +23,8 @@ public final class TodoConfigurationViews
 
     public record SlaCalculationResult(LocalDateTime createdAt,LocalDateTime remind80At,LocalDateTime overdue100At,
             LocalDateTime escalate150At) { }
+    public record SlaJourneyCalculationResult(long minutes,LocalDateTime createdAt,LocalDateTime remind80At,
+            LocalDateTime overdue100At,LocalDateTime escalate150At) { }
 
     public record DodRuleListItem(long dodRuleId,String ruleCode,String ruleName,String ruleType,String businessType,String status,
             Integer version,long referenceCount,LocalDateTime updateTime,String requiredFieldsJson,

@@ -68,6 +68,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyStep;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateSummary;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchItem;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchPage;
+import com.law.todo.application.view.TodoConfigurationViews.SlaJourneyCalculationResult;
 import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoBusinessPayloadAccess.DataSourceStatus;
 import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadHydration;
@@ -82,6 +83,7 @@ class TodoConfigurationControllerJourneyTest
     @jakarta.annotation.Resource TodoConfigurationJourneyService journeys;
     @jakarta.annotation.Resource TodoBusinessPayloadHydrationService payloads;
     @jakarta.annotation.Resource TodoJourneySimulationService simulations;
+    @jakarta.annotation.Resource TodoSlaRuleManagementService sla;
     @jakarta.annotation.Resource TodoConfigurationResourceManagementService resources;
     @jakarta.annotation.Resource RequestMappingHandlerMapping handlerMapping;
 
@@ -172,6 +174,45 @@ class TodoConfigurationControllerJourneyTest
         ArgumentCaptor<Actor> actor=ArgumentCaptor.forClass(Actor.class);
         verify(simulations).simulate(command.capture(),actor.capture());
         assertEquals(42L,command.getValue().templateId());assertActor(actor.getValue());
+    }
+
+    @Test
+    void previewsJourneySlaUsingTheServerWorkingCalendar() throws Exception
+    {
+        authenticate("todo:template:edit");
+        LocalDateTime created=LocalDateTime.of(2026,7,24,9,0);
+        when(sla.previewCalculation("DEFAULT",2,"HOUR",created)).thenReturn(new SlaJourneyCalculationResult(
+                120,created,created.plusMinutes(96),created.plusMinutes(120),created.plusMinutes(180)));
+
+        mvc().perform(post("/todo/config/journey/sla-preview")
+                        .contentType("application/json")
+                        .content("""
+                                {"calendarCode":"DEFAULT","durationValue":2,"durationUnit":"HOUR",
+                                 "createdAt":"2026-07-24T09:00:00"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.remind80At").value("2026-07-24T10:36:00"))
+                .andExpect(jsonPath("$.data.overdue100At").value("2026-07-24T11:00:00"))
+                .andExpect(jsonPath("$.data.escalate150At").value("2026-07-24T12:00:00"));
+        verify(sla).previewCalculation("DEFAULT",2,"HOUR",created);
+    }
+
+    @Test
+    void allowsReleaseReviewerToPreviewJourneySla() throws Exception
+    {
+        authenticate("todo:release:publish");
+        LocalDateTime created=LocalDateTime.of(2026,7,24,9,0);
+        when(sla.previewCalculation("DEFAULT",1,"DAY",created)).thenReturn(new SlaJourneyCalculationResult(
+                540,created,created.plusMinutes(432),created.plusMinutes(540),created.plusMinutes(810)));
+
+        mvc().perform(post("/todo/config/journey/sla-preview")
+                        .contentType("application/json")
+                        .content("""
+                                {"calendarCode":"DEFAULT","durationValue":1,"durationUnit":"DAY",
+                                 "createdAt":"2026-07-24T09:00:00"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.minutes").value(540));
     }
 
     @Test
@@ -333,12 +374,14 @@ class TodoConfigurationControllerJourneyTest
             TodoConfigurationResourceManagementService service=org.mockito.Mockito.mock(TodoConfigurationResourceManagementService.class);
             when(service.save(any(),any())).thenReturn(51L);return service;
         }
+        @Bean TodoSlaRuleManagementService sla()
+        {return org.mockito.Mockito.mock(TodoSlaRuleManagementService.class);}
         @Bean TodoConfigurationController controller(TodoConfigurationJourneyService journeys,
                 TodoBusinessPayloadHydrationService payloads,TodoJourneySimulationService journeySimulation,
-                TodoConfigurationResourceManagementService resourceManagement)
+                TodoConfigurationResourceManagementService resourceManagement,TodoSlaRuleManagementService sla)
         {
             return new TodoConfigurationController(mock(TodoConfigurationQueryService.class),
-                    mock(TodoSlaRuleManagementService.class),mock(TodoDodRuleManagementService.class),
+                    sla,mock(TodoDodRuleManagementService.class),
                     mock(TodoTemplateService.class),mock(TodoDefinitionService.class),
                     mock(TodoDefinitionDiffService.class),mock(TodoConfigurationSimulationService.class),
                     mock(TodoDefinitionCatalogService.class),mock(TodoAutoActionCapabilityCatalogService.class),
