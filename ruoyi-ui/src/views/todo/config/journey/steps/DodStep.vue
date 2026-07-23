@@ -119,6 +119,7 @@ import DodRecipePicker from '../components/DodRecipePicker'
 import {
   rankDodRecipes,
   normalizeDodConfig,
+  hydrateDodConditions,
   materializeDodRecipe,
   updateGovernedDod
 } from '../journey-step-model'
@@ -175,10 +176,7 @@ export default {
       const canonical = normalizeDodConfig(this.config)
       this.requiredFields = clone(canonical.requiredFields || [])
       this.requiredAttachments = clone(canonical.materials || []).map(material => material.type || material.code).filter(Boolean)
-      this.conditionalRules = clone(canonical.conditionalRequired || []).map(rule => ({
-        field: rule.field || '',
-        when: { field: '', equals: '', ...(rule.when || {}) }
-      }))
+      this.conditionalRules = hydrateDodConditions(canonical)
       this.validatorRefs = clone(this.config.validatorRefs || [])
       this.employeeInstructions = clone(this.config.employeeInstructions || [])
     },

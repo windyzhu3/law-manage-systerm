@@ -1026,6 +1026,60 @@ check('round-trips canonical DoD evidence without losing governed metadata', () 
   assert.deepStrictEqual(preview.materials.map(item => item.code), ['CONTACT_NOTE'])
 })
 
+check('preserves conditional DoD metadata across the employee editor path', () => {
+  const first = {
+    field: 'contactResult',
+    when: { field: 'contactRequired', equals: true },
+    message: 'preserve',
+    severity: 'BLOCKER',
+    source: 'policy-library',
+    version: 7
+  }
+  const second = {
+    key: 'FOLLOWUP_NOTE',
+    field: 'followupNote',
+    when: { field: 'needsFollowup', equals: true },
+    message: 'keep while editing',
+    severity: 'WARNING',
+    source: 'case-policy',
+    version: 3
+  }
+  const current = {
+    config: {
+      requiredFields: ['contactedAt'],
+      materials: [{ type: 'CONTACT_NOTE', minCount: 2 }],
+      conditionalRequired: [first, second]
+    }
+  }
+
+  // This is the canonical value -> DodStep.hydrate -> commitGoverned path.
+  const hydrated = steps.hydrateDodConditions(current.config)
+  const unrelated = steps.updateGovernedDod(current, {
+    requiredFields: ['contactedAt', 'contactResult'],
+    requiredAttachments: ['CONTACT_NOTE'],
+    conditionalRules: hydrated
+  })
+  assert.deepStrictEqual(unrelated.config.conditionalRequired, [first, second])
+
+  const editedRules = hydrated.map(rule => ({ ...rule, when: { ...rule.when } }))
+  editedRules[0].when.equals = false
+  const edited = steps.updateGovernedDod(current, { conditionalRules: editedRules })
+  assert.deepStrictEqual(edited.config.conditionalRequired[0], {
+    ...first,
+    when: { field: 'contactRequired', equals: false }
+  })
+  assert.deepStrictEqual(edited.config.conditionalRequired[1], second)
+
+  const removed = steps.updateGovernedDod(current, {
+    conditionalRules: [editedRules[0]]
+  })
+  assert.deepStrictEqual(removed.config.conditionalRequired, [{
+    ...first,
+    when: { field: 'contactRequired', equals: false }
+  }])
+  assert(!Object.prototype.hasOwnProperty.call(removed.config, 'conditionalRules'))
+})
+
 check('builds natural-language SLA patches and four semantic timeline points with repair blockers', () => {
   const patch = steps.buildSlaPatch({
     durationValue: 2,

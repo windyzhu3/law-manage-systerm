@@ -399,6 +399,64 @@ function canonicalDodConditions(config) {
     : list(source.conditionalRules))
 }
 
+const DOD_CONDITION_IDENTITY = '__dodConditionIdentity'
+
+function stableConditionValue(value) {
+  if (Array.isArray(value)) return value.map(stableConditionValue)
+  if (!value || typeof value !== 'object') return value
+  return Object.keys(value).sort().reduce((result, key) => {
+    result[key] = stableConditionValue(value[key])
+    return result
+  }, {})
+}
+
+function dodConditionIdentity(rule) {
+  const source = object(rule)
+  for (const key of ['id', 'key', 'code']) {
+    if (source[key] != null && String(source[key]) !== '') {
+      return `${key}:${String(source[key])}`
+    }
+  }
+  // Rules without a governed identifier use their original field + condition
+  // composite. DodStep carries this token while the condition itself is edited.
+  return `composite:${String(source.field || '')}:${JSON.stringify(stableConditionValue(source.when || {}))}`
+}
+
+function hydrateDodConditions(config) {
+  return canonicalDodConditions(config).map(rule => ({
+    ...clone(rule),
+    field: rule.field || '',
+    when: { field: '', equals: '', ...clone(rule.when || {}) },
+    [DOD_CONDITION_IDENTITY]: dodConditionIdentity(rule)
+  }))
+}
+
+function canonicalConditionalRule(rule) {
+  const next = clone(object(rule))
+  delete next[DOD_CONDITION_IDENTITY]
+  return next
+}
+
+function mergeDodConditions(existingConfig, incomingRules) {
+  const existing = canonicalDodConditions(existingConfig)
+  const existingByIdentity = new Map(existing.map(rule => [dodConditionIdentity(rule), rule]))
+  return list(incomingRules).map(rule => {
+    const source = object(rule)
+    const identity = source[DOD_CONDITION_IDENTITY] || dodConditionIdentity(source)
+    const previous = existingByIdentity.get(identity)
+    const incoming = canonicalConditionalRule(source)
+    if (!previous) return incoming
+    return {
+      ...clone(previous),
+      ...incoming,
+      when: {
+        ...clone(object(previous.when)),
+        ...clone(object(incoming.when))
+      }
+    }
+  })
+}
+
 function normalizeDodConfig(config) {
   const source = object(config)
   const next = clone(source)
@@ -447,9 +505,9 @@ function updateGovernedDod(current, changes) {
     }).filter(material => material.type)
   }
   if (Object.prototype.hasOwnProperty.call(governed, 'conditionalRequired')) {
-    next.conditionalRequired = clone(list(governed.conditionalRequired))
+    next.conditionalRequired = mergeDodConditions(existing, governed.conditionalRequired)
   } else if (Object.prototype.hasOwnProperty.call(governed, 'conditionalRules')) {
-    next.conditionalRequired = clone(list(governed.conditionalRules))
+    next.conditionalRequired = mergeDodConditions(existing, governed.conditionalRules)
   }
   return { config: next }
 }
@@ -806,6 +864,7 @@ module.exports = {
   buildOwnerConfig,
   rankDodRecipes,
   normalizeDodConfig,
+  hydrateDodConditions,
   materializeDodRecipe,
   updateGovernedDod,
   projectEmployeePreview,
