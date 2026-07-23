@@ -32,6 +32,17 @@ class TodoBusinessDirectoryMapperXmlContractTest
             assertTrue(xml.contains("businessType == '"+type+"'"),()->"Missing business type "+type);
     }
 
+    @Test void payloadProjectionUsesColumnsThatExistInTheGovernedBusinessSchema()
+    {
+        assertTrue(xml.contains("select a.log_id from biz_lead_assignment_log"));
+        assertFalse(xml.contains("a.assignment_id from biz_lead_assignment_log"));
+        assertFalse(xml.matches("(?s).*biz_lead_followup\\s+f.*?f\\.del_flag.*"));
+        assertTrue(xml.contains("approval_approver_id"));
+        assertTrue(xml.contains("rejection_reason_code"));
+        assertTrue(xml.contains("rejection_reason"));
+        assertTrue(xml.contains("node_type"));
+    }
+
     private int occurrences(String value,String token){return (value.length()-value.replace(token,"").length())/token.length();}
     private String read(String relative)
     {try{return Files.readString(Path.of(relative));}catch(Exception failure){throw new AssertionError(failure);}}

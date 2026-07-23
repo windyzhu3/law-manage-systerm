@@ -1,18 +1,21 @@
 package com.law.todo.application;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldResource;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.domain.TodoException;
+import com.law.todo.spi.TodoBusinessDirectoryAccess;
 import com.law.todo.spi.TodoBusinessPayloadAccess;
 import com.law.todo.spi.TodoBusinessPayloadAccess.DataSourceStatus;
 import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadFieldSource;
@@ -25,13 +28,23 @@ public class TodoBusinessPayloadHydrationService
     private static final List<String> BUSINESS_TYPES=List.of("LEAD","CUSTOMER","CONTRACT","CASE","MATTER");
     private static final String REDACTED="[REDACTED]";
     private final List<TodoBusinessPayloadAccess> accesses;
+    private final List<TodoBusinessDirectoryAccess> directories;
     private final TodoConfigurationResourceCatalogService resources;
     private final TodoSimulationSampleCatalog samples;
 
     public TodoBusinessPayloadHydrationService(List<TodoBusinessPayloadAccess> accesses,
             TodoConfigurationResourceCatalogService resources,TodoSimulationSampleCatalog samples)
     {
+        this(accesses,List.of(),resources,samples);
+    }
+
+    @Autowired
+    public TodoBusinessPayloadHydrationService(List<TodoBusinessPayloadAccess> accesses,
+            List<TodoBusinessDirectoryAccess> directories,
+            TodoConfigurationResourceCatalogService resources,TodoSimulationSampleCatalog samples)
+    {
         this.accesses=accesses==null?List.of():List.copyOf(accesses);
+        this.directories=directories==null?List.of():List.copyOf(directories);
         this.resources=resources;this.samples=samples;
     }
 
@@ -43,10 +56,17 @@ public class TodoBusinessPayloadHydrationService
     public PayloadHydration hydrate(String eventType,int payloadVersion,String businessType,long businessId,Actor actor,
             Map<String,Object> manualOverrides)
     {
+        return hydrateForExecution(eventType,payloadVersion,businessType,businessId,actor,manualOverrides).publicView();
+    }
+
+    ExecutionHydration hydrateForExecution(String eventType,int payloadVersion,String businessType,long businessId,
+            Actor actor,Map<String,Object> manualOverrides)
+    {
         if(businessId==0)throw new TodoException("TODO_SIMULATION_BUSINESS_ID_INVALID",
                 "Simulation business ID must not be zero");
-        PayloadHydration base=businessId<0?sample(eventType,payloadVersion,businessType,businessId):
-                adapter(businessType).hydrate(eventType,payloadVersion,businessType,businessId,actor);
+        String physicalType=physicalType(eventType,businessType);
+        PayloadHydration base=businessId<0?sample(eventType,payloadVersion,businessType,physicalType,businessId):
+                adapter(physicalType).hydrate(eventType,payloadVersion,physicalType,businessId,actor);
         return normalize(eventType,businessType,base,manualOverrides);
     }
 
@@ -57,22 +77,28 @@ public class TodoBusinessPayloadHydrationService
         for(String type:BUSINESS_TYPES)
         {
             long adapterCount=accesses.stream().filter(access->access.supports(type)).count();
-            boolean payload=adapterCount==1;boolean sample=samples!=null&&samples.hasSample(type);
-            String status=payload&&sample?"READY":adapterCount>1?"CONFLICT":"PARTIAL";
+            long directoryCount=directories.stream().filter(directory->directory.supports(type)).count();
+            boolean payload=adapterCount==1;boolean directory=directoryCount==1;
+            boolean sample=samples!=null&&samples.hasSample(type);
+            String status=payload&&directory&&sample?"READY":
+                    adapterCount>1||directoryCount>1?"CONFLICT":"PARTIAL";
             String message=adapterCount>1?"Multiple payload adapters support this business type":
-                    payload&&sample?"Business data and read-only samples are available":
+                    directoryCount>1?"Multiple directories support this business type":
+                    payload&&directory&&sample?"Business directory, payload data and read-only samples are available":
+                    !directory?"Business directory is unavailable":
                     !payload?"Business payload adapter is unavailable":"Read-only sample is unavailable";
-            result.add(new DataSourceStatus(type,payload,payload,sample,status,message));
+            result.add(new DataSourceStatus(type,directory,payload,sample,status,message));
         }
         return List.copyOf(result);
     }
 
-    private PayloadHydration sample(String eventType,int payloadVersion,String businessType,long businessId)
+    private PayloadHydration sample(String eventType,int payloadVersion,String logicalType,String physicalType,
+            long businessId)
     {
-        if(samples==null||!samples.contains(businessType,businessId))
+        if(samples==null||!samples.contains(physicalType,businessId))
             throw new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND",
                     "Simulation sample business object does not exist");
-        Map<String,Object> values=samples.samplePayload(eventType,payloadVersion,businessType,businessId);
+        Map<String,Object> values=samples.samplePayload(eventType,payloadVersion,logicalType,physicalType,businessId);
         List<PayloadFieldSource> fields=flatten(values).entrySet().stream()
                 .map(entry->new PayloadFieldSource(entry.getKey(),entry.getValue(),"EVENT_SAMPLE",
                         false,false,null,false)).toList();
@@ -89,12 +115,13 @@ public class TodoBusinessPayloadHydrationService
         return supported.get(0);
     }
 
-    private PayloadHydration normalize(String eventType,String businessType,PayloadHydration base,
+    private ExecutionHydration normalize(String eventType,String businessType,PayloadHydration base,
             Map<String,Object> manualOverrides)
     {
-        Map<String,Object> values=deepMutable(base.payload());
+        Map<String,Object> executionValues=deepMutable(base.payload());
         Map<String,Object> overrides=flatten(manualOverrides==null?Map.of():manualOverrides);
-        overrides.forEach((path,value)->putPath(values,path,value));
+        overrides.forEach((path,value)->putPath(executionValues,path,value));
+        Map<String,Object> publicValues=deepMutable(executionValues);
         Map<String,PayloadFieldSource> provided=new LinkedHashMap<>();
         for(PayloadFieldSource field:base.fields())provided.put(field.path(),field);
 
@@ -108,7 +135,7 @@ public class TodoBusinessPayloadHydrationService
         for(String path:paths)
         {
             FieldResource descriptor=descriptorByPath.get(path);PayloadFieldSource original=provided.get(path);
-            Object value=valueAt(values,path);boolean required=descriptor!=null?descriptor.required():
+            Object value=valueAt(executionValues,path);boolean required=descriptor!=null?descriptor.required():
                     original!=null&&original.required();
             boolean sensitive=(descriptor!=null&&descriptor.sensitive())||(original!=null&&original.sensitive());
             String source=overrides.containsKey(path)?"MANUAL_OVERRIDE":
@@ -116,13 +143,65 @@ public class TodoBusinessPayloadHydrationService
             boolean missing=!present(value);
             if(missing)source="MISSING";
             Object responseValue=sensitive&&!missing?REDACTED:value;
-            if(sensitive&&!missing)putPath(values,path,REDACTED);
+            if(sensitive&&!missing)putPath(publicValues,path,REDACTED);
             fields.add(new PayloadFieldSource(path,responseValue,source,required,missing,
                     missing?"No value is available from the selected business object or event sample":null,sensitive));
         }
-        PayloadHydration result=new PayloadHydration(values,fields,base.sample());
+        PayloadHydration result=new PayloadHydration(publicValues,fields,base.sample());
         result.coveragePercent();
-        return result;
+        return new ExecutionHydration(deepImmutable(executionValues),result);
+    }
+
+    private String physicalType(String eventType,String logicalType)
+    {
+        if(BUSINESS_TYPES.contains(logicalType))return logicalType;
+        return switch(logicalType)
+        {
+            case "NON_LITIGATION" -> switch(eventType)
+            {
+                case "CASE_CLASSIFIED_NON_LITIGATION" -> "CASE";
+                case "NON_LITIGATION_WORK_COMPLETED" -> "MATTER";
+                default -> throw unsupported();
+            };
+            case "ENFORCEMENT" -> switch(eventType)
+            {
+                case "CASE_CLASSIFIED_ENFORCEMENT" -> "CASE";
+                case "ENFORCEMENT_ORDER_ACCEPTED","ENFORCEMENT_SERVICE_NODE_READY" -> "MATTER";
+                default -> throw unsupported();
+            };
+            default -> throw unsupported();
+        };
+    }
+
+    private TodoException unsupported()
+    {
+        return new TodoException("TODO_SIMULATION_PAYLOAD_MAPPING_UNSUPPORTED",
+                "The selected event, business type, and payload version are not supported");
+    }
+
+    private Map<String,Object> deepImmutable(Map<String,Object> source)
+    {
+        Map<String,Object> result=new LinkedHashMap<>();
+        source.forEach((key,value)->result.put(key,value instanceof Map<?,?> map?
+                deepImmutable(stringMap(map)):value));
+        return Collections.unmodifiableMap(result);
+    }
+
+    /**
+     * Internal-only execution carrier. It deliberately has no public payload accessor and its string form
+     * never renders raw values, so it cannot be used as an HTTP response or leak secrets through logging.
+     */
+    static final class ExecutionHydration
+    {
+        private final Map<String,Object> payload;
+        private final PayloadHydration publicView;
+
+        private ExecutionHydration(Map<String,Object> payload,PayloadHydration publicView)
+        {this.payload=payload;this.publicView=publicView;}
+
+        Map<String,Object> payload(){return payload;}
+        PayloadHydration publicView(){return publicView;}
+        @Override public String toString(){return "ExecutionHydration[REDACTED]";}
     }
 
     private boolean present(Object value)

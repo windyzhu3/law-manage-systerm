@@ -140,7 +140,7 @@ public class RuoYiTodoBusinessPayloadAccess implements TodoBusinessPayloadAccess
             case "CONTRACT_SUBMITTED" ->
             {put(payload,"approvalId",value(row,"approval_id","approvalId"));put(payload,"amount",amount);put(payload,"ownerId",owner);}
             case "CONTRACT_APPROVED" ->
-            {put(payload,"approvalId",value(row,"approval_id","approvalId"));put(payload,"reviewerId",value(row,"lawyer_id","lawyerId"));put(payload,"ownerId",owner);}
+            {put(payload,"approvalId",value(row,"approval_id","approvalId"));put(payload,"reviewerId",value(row,"approval_approver_id","approvalApproverId"));put(payload,"ownerId",owner);}
             case "CONTRACT_SIGNED" ->
             {put(payload,"signStatus",value(row,"sign_status","signStatus"));put(payload,"signedAt",value(row,"sign_date","signDate"));put(payload,"ownerId",owner);}
             case "RECEIVABLE_DUE" ->
@@ -179,7 +179,11 @@ public class RuoYiTodoBusinessPayloadAccess implements TodoBusinessPayloadAccess
             case "CASE_CLASSIFIED_ENFORCEMENT" ->
             {payload.put("classification","ENFORCEMENT");put(payload,"primaryAssistantId",lawyer);put(payload,"caseManagerId",owner);}
             case "CASE_REJECTED" ->
-            {put(payload,"reasonCode",value(row,"business_status","businessStatus"));put(payload,"lawyerId",lawyer);}
+            {
+                put(payload,"reasonCode",value(row,"rejection_reason_code","rejectionReasonCode"));
+                put(payload,"reason",value(row,"rejection_reason","rejectionReason"));
+                put(payload,"lawyerId",lawyer);
+            }
             case "CASE_TRANSFER_REQUESTED" ->
             {put(payload,"transferId",value(row,"transfer_id","transferId"));put(payload,"targetLawyerId",value(row,"target_lawyer_id","targetLawyerId"));put(payload,"reason",value(row,"transfer_reason","transferReason"));}
             case "CASE_TRANSFER_APPROVED" ->
@@ -199,11 +203,16 @@ public class RuoYiTodoBusinessPayloadAccess implements TodoBusinessPayloadAccess
             {put(payload,"archiveId",value(row,"archive_id","archiveId"));put(payload,"applicantId",owner);payload.put("action","apply");}
             case "CASE_CLOSED" ->
             {payload.put("action","pass");put(payload,"archiveNo",value(row,"archive_no","archiveNo"));put(payload,"assistantId",lawyer);}
-            case "MATTER_NODE_READY","ENFORCEMENT_SERVICE_NODE_READY" ->
+            case "MATTER_NODE_READY" ->
             {
                 put(payload,"nodeId",value(row,"node_id","nodeId"));put(payload,"ownerId",owner);
                 Object node=value(row,"node_code","nodeCode");
                 put(payload,"nodeCode",node==null?value(row,"current_node","currentNode"):node);
+            }
+            case "ENFORCEMENT_SERVICE_NODE_READY" ->
+            {
+                put(payload,"nodeId",value(row,"node_id","nodeId"));put(payload,"ownerId",owner);
+                put(payload,"nodeType",value(row,"node_type","nodeType"));
             }
             case "MATTER_EXPENSE_SUBMITTED" ->
             {put(payload,"expenseId",value(row,"expense_id","expenseId"));put(payload,"amount",value(row,"expense_amount","expenseAmount"));put(payload,"ownerId",owner);}

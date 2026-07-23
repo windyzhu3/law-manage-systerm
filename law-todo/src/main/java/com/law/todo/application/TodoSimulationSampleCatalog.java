@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import com.alibaba.fastjson2.JSON;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoBusinessDirectoryAccess.DirectoryEntry;
 import com.law.todo.spi.TodoBusinessDirectoryAccess.DirectoryPage;
 
@@ -49,20 +50,35 @@ public class TodoSimulationSampleCatalog
 
     public Map<String,Object> samplePayload(String eventType,int payloadVersion,String businessType,long businessId)
     {
-        DirectoryEntry sample=find(businessType,businessId).orElseThrow();
+        return samplePayload(eventType,payloadVersion,businessType,businessType,businessId);
+    }
+
+    public Map<String,Object> samplePayload(String eventType,int payloadVersion,String logicalBusinessType,
+            String physicalBusinessType,long businessId)
+    {
+        DirectoryEntry sample=find(physicalBusinessType,businessId).orElseThrow();
         Map<String,Object> payload=new LinkedHashMap<>();
         Map<String,Object> event=mapper==null?null:mapper.selectEventResourceByTypeVersion(eventType,payloadVersion);
-        if(event!=null&&businessType.equals(text(event,"business_object_type","businessObjectType")))
+        if(event==null||!logicalBusinessType.equals(text(event,"business_object_type","businessObjectType")))
+            throw unsupported();
+        Object value=value(event,"sample_payload_json","samplePayloadJson");
+        if(value instanceof Map<?,?> map)map.forEach((key,item)->payload.put(String.valueOf(key),item));
+        else if(value!=null&&JSON.isValidObject(String.valueOf(value)))
+            JSON.parseObject(String.valueOf(value)).forEach(payload::put);
+        else
         {
-            Object value=value(event,"sample_payload_json","samplePayloadJson");
-            if(value instanceof Map<?,?> map)map.forEach((key,item)->payload.put(String.valueOf(key),item));
-            else if(value!=null&&JSON.isValidObject(String.valueOf(value)))
-                JSON.parseObject(String.valueOf(value)).forEach(payload::put);
+            throw unsupported();
         }
-        payload.putIfAbsent(identityField(businessType),sample.businessId());
+        payload.putIfAbsent(identityField(physicalBusinessType),sample.businessId());
         payload.putIfAbsent("businessNo",sample.businessNo());
         payload.putIfAbsent("businessName",sample.businessName());
         return Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+    }
+
+    private TodoException unsupported()
+    {
+        return new TodoException("TODO_SIMULATION_PAYLOAD_MAPPING_UNSUPPORTED",
+                "The selected event, business type, and payload version are not supported");
     }
 
     private String identityField(String businessType)

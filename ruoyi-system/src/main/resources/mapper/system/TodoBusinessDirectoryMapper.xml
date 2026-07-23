@@ -97,9 +97,9 @@
                 select b.lead_id business_id,b.lead_no business_no,b.lead_name business_name,
                   b.owner_id owner_id,b.dept_id dept_id,b.status business_status,b.priority,
                   b.customer_id customer_id,b.next_follow_time,b.last_follow_time,b.invalid_reason,
-                  (select a.assignment_id from biz_lead_assignment_log a where a.lead_id=b.lead_id
-                    order by a.assignment_id desc limit 1) assignment_id,
-                  (select count(*) from biz_lead_followup f where f.lead_id=b.lead_id and f.del_flag='0') followup_count
+                  (select a.log_id from biz_lead_assignment_log a where a.lead_id=b.lead_id
+                    order by a.log_id desc limit 1) assignment_id,
+                  (select count(*) from biz_lead_followup f where f.lead_id=b.lead_id) followup_count
                 from biz_lead b where b.del_flag='0' and b.lead_id=#{businessId}
                 <include refid="actorDataScope"/> limit 1
             </when>
@@ -116,6 +116,8 @@
                   b.sign_date,b.sign_status,b.audit_status,b.contract_status,b.risk_level,
                   (select a.approval_id from biz_contract_approval a where a.contract_id=b.contract_id
                     order by a.approval_id desc limit 1) approval_id,
+                  (select a.approver_id from biz_contract_approval a where a.contract_id=b.contract_id
+                    order by a.approval_id desc limit 1) approval_approver_id,
                   (select p.plan_id from biz_contract_fee_plan p where p.contract_id=b.contract_id
                     order by p.plan_id desc limit 1) plan_id,
                   (select p.receivable_amount from biz_contract_fee_plan p where p.contract_id=b.contract_id
@@ -140,7 +142,11 @@
                   (select t.to_lawyer_id from biz_case_transfer t where t.case_id=b.case_id
                     order by t.transfer_id desc limit 1) target_lawyer_id,
                   (select t.transfer_reason from biz_case_transfer t where t.case_id=b.case_id
-                    order by t.transfer_id desc limit 1) transfer_reason
+                    order by t.transfer_id desc limit 1) transfer_reason,
+                  (select c.confirm_type from biz_case_confirm c where c.case_id=b.case_id
+                    and c.confirm_status='rejected' order by c.confirm_id desc limit 1) rejection_reason_code,
+                  (select coalesce(nullif(c.remark,''),c.content) from biz_case_confirm c where c.case_id=b.case_id
+                    and c.confirm_status='rejected' order by c.confirm_id desc limit 1) rejection_reason
                 from biz_case b where b.del_flag='0' and b.case_id=#{businessId}
                 <include refid="actorDataScope"/> limit 1
             </when>
@@ -153,6 +159,8 @@
                     order by n.node_id desc limit 1) node_id,
                   (select coalesce(n.node_type,n.node_name) from biz_case_node n where n.case_id=b.case_id and n.del_flag='0'
                     order by n.node_id desc limit 1) node_code,
+                  (select n.node_type from biz_case_node n where n.case_id=b.case_id and n.del_flag='0'
+                    order by n.node_id desc limit 1) node_type,
                   (select e.expense_id from biz_case_expense e where e.case_id=b.case_id and e.del_flag='0'
                     order by e.expense_id desc limit 1) expense_id,
                   (select e.amount from biz_case_expense e where e.case_id=b.case_id and e.del_flag='0'
