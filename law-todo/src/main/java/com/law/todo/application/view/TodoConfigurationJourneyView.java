@@ -26,8 +26,8 @@ public record TodoConfigurationJourneyView(
         issues=issues==null?List.of():List.copyOf(issues);
     }
     public record TemplateSummary(long templateId,long versionId,int versionNo,int lockVersion,
-            String templateName,String businessType,String businessStage,String publishStatus,
-            String definitionHash,String definitionJson) { }
+            String templateCode,String templateName,String businessType,String businessStage,String publishStatus,
+            String definitionHash) { }
     public record JourneyStep(String code,String title,String state,int issueCount,Map<String,Object> value) { }
     public record CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
             List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,

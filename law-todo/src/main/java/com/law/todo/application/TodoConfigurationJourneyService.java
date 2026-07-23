@@ -72,8 +72,8 @@ public class TodoConfigurationJourneyService
     private TemplateSummary summary(TemplateConfigurationDetail detail,TemplateVersionDetail version)
     {
         return new TemplateSummary(detail.templateId(),version.versionId(),number(version.versionNo()),number(detail.version()),
-                detail.templateName(),detail.businessType(),businessStage(version.definitionJson()),version.status(),
-                version.definitionHash(),version.definitionJson());
+                detail.templateCode(),detail.templateName(),detail.businessType(),businessStage(version.definitionJson()),version.status(),
+                version.definitionHash());
     }
 
     private CurrentResources resources(TemplateConfigurationDetail detail)

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -46,7 +47,10 @@ class TodoConfigurationJourneyServiceTest
         TodoConfigurationJourneyView view=service.load(42L,actor);
 
         assertThat(view.template().templateId()).isEqualTo(42L);
+        assertThat(view.template().templateCode()).isEqualTo("TODO-42");
         assertThat(view.template().lockVersion()).isEqualTo(4);
+        assertThat(Arrays.stream(TodoConfigurationJourneyView.TemplateSummary.class.getRecordComponents())
+                .map(component->component.getName())).doesNotContain("definitionJson");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::code)
                 .containsExactly("EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
         assertThat(view.permissions().canEdit()).isTrue();

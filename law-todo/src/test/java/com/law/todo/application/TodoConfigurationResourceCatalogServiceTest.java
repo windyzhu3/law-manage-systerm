@@ -3,10 +3,12 @@ package com.law.todo.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +59,13 @@ class TodoConfigurationResourceCatalogServiceTest
         assertTrue(service.validators("CASE").isEmpty());
     }
 
+    @Test void doesNotExposeValidatorJsonOrImplementationDetailsToBusinessEditors()
+    {
+        assertThat(Arrays.stream(TodoConfigurationResourceCatalogService.ValidatorResource.class.getRecordComponents())
+                .map(component->component.getName()))
+                .doesNotContain("parameterSchemaJson","exampleParametersJson","implementation");
+    }
+
     @Test void flattensTypedEventFieldsAndExposesOnlyValidOperators()
     {
         when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(Map.of(
@@ -72,6 +81,42 @@ class TodoConfigurationResourceCatalogServiceTest
         var owner=fields.stream().filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
         assertTrue(owner.required());
         assertTrue(owner.operators().containsAll(List.of("EQ","GT","LTE","IN")));
+    }
+
+    @Test void mergesGovernedFieldsWithEventSchemasWithoutLeakingSensitiveExamples()
+    {
+        when(mapper.selectConfigurationResourceItems("FIELD","LEAD")).thenReturn(List.of(
+                resource("FIELD","mobile","联系电话","{\"type\":\"string\",\"required\":true}"),
+                resource("FIELD","level","Customer level","{\"type\":\"string\"}")));
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(
+                Map.of("event_type","LEAD_CREATED","payload_schema_json","""
+                {"type":"object","properties":{"mobile":{"type":"string","title":"手机号","example":"13800000000","x-sensitive":true},
+                "level":{"type":"string","title":"客户等级","enum":["A","B"]}}}
+                """),
+                Map.of("event_type","LEAD_UPDATED","payload_schema_json","""
+                {"type":"object","properties":{"mobile":{"type":"string","title":"手机号","x-sensitive":true}}}
+                """)));
+
+        var fields=service.fields("LEAD");
+        var mobile=fields.stream().filter(field->field.code().equals("mobile")).findFirst().orElseThrow();
+        var level=fields.stream().filter(field->field.code().equals("level")).findFirst().orElseThrow();
+
+        assertEquals("联系电话",mobile.name());
+        assertTrue(mobile.required());
+        assertTrue(mobile.sensitive());
+        assertEquals(null,mobile.example());
+        assertEquals(List.of("LEAD_CREATED","LEAD_UPDATED"),mobile.sourceEvents());
+        assertEquals("客户等级",level.name());
+        assertThat(level.options()).containsExactly("A","B");
+        assertTrue(level.operators().contains("CONTAINS"));
+    }
+
+    @Test void ignoresBlankEventSchemasSoJourneyCanReportTheSchemaBlocker()
+    {
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(Map.of(
+                "event_type","LEAD_CREATED","payload_schema_json"," ")));
+
+        assertTrue(service.fields("LEAD").isEmpty());
     }
 
     @Test void returnsBusinessMaterialsAndRecipesAsTypedResources()
