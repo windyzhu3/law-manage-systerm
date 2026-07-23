@@ -11,3 +11,6 @@ export function listValidatorResources(params) { return request({ url: '/todo/co
 export function listFieldResources(params) { return request({ url: '/todo/config/resources/fields', method: 'get', params }) }
 export function listMaterialResources(params) { return request({ url: '/todo/config/resources/materials', method: 'get', params }) }
 export function listDodRecipeResources(params) { return request({ url: '/todo/config/resources/dod-recipes', method: 'get', params }) }
+export function createConfigurationResource(data) { return request({ url: '/todo/config/resources/items', method: 'post', data }) }
+export function updateConfigurationResource(id, data) { return request({ url: `/todo/config/resources/items/${id}`, method: 'put', data }) }
+export function listConfigurationDataSources() { return request({ url: '/todo/config/resources/data-sources', method: 'get' }) }

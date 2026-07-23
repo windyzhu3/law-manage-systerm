@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.law.todo.application.TodoConfigurationQueryService;
+import com.law.todo.application.TodoConfigurationJourneyService;
+import com.law.todo.application.TodoBusinessPayloadHydrationService;
+import com.law.todo.application.TodoJourneySimulationService;
+import com.law.todo.application.TodoConfigurationResourceManagementService;
 import com.law.todo.application.TodoConfigurationSimulationService;
 import com.law.todo.application.TodoDefinitionDiffService;
 import com.law.todo.application.TodoDefinitionCatalogService;
@@ -31,6 +35,9 @@ import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationResourceCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneyPayloadCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
@@ -79,6 +86,10 @@ public class TodoConfigurationController extends BaseController
     private final TodoEventResourceService eventResources;
     private final TodoConfigurationResourceCatalogService resourceCatalog;
     private final TodoPublishedSimulationDiagnosticService publishedDiagnostics;
+    private final TodoConfigurationJourneyService journeys;
+    private final TodoBusinessPayloadHydrationService payloads;
+    private final TodoJourneySimulationService journeySimulation;
+    private final TodoConfigurationResourceManagementService resourceManagement;
 
     @Autowired
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
@@ -86,15 +97,26 @@ public class TodoConfigurationController extends BaseController
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation,
             TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions,
             TodoEventResourceService eventResources,TodoConfigurationResourceCatalogService resourceCatalog,
-            TodoPublishedSimulationDiagnosticService publishedDiagnostics)
-    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;this.resourceCatalog=resourceCatalog;this.publishedDiagnostics=publishedDiagnostics;}
+            TodoPublishedSimulationDiagnosticService publishedDiagnostics,TodoConfigurationJourneyService journeys,
+            TodoBusinessPayloadHydrationService payloads,TodoJourneySimulationService journeySimulation,
+            TodoConfigurationResourceManagementService resourceManagement)
+    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;this.resourceCatalog=resourceCatalog;this.publishedDiagnostics=publishedDiagnostics;this.journeys=journeys;this.payloads=payloads;this.journeySimulation=journeySimulation;this.resourceManagement=resourceManagement;}
 
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
             TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation,
             TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions,
             TodoEventResourceService eventResources,TodoConfigurationResourceCatalogService resourceCatalog)
-    {this(query,sla,dod,templates,definitions,diff,simulation,catalogs,autoActions,eventResources,resourceCatalog,null);}
+    {this(query,sla,dod,templates,definitions,diff,simulation,catalogs,autoActions,eventResources,resourceCatalog,null,null,null,null,null);}
+
+    public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
+            TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
+            TodoDefinitionDiffService diff,TodoConfigurationSimulationService simulation,
+            TodoDefinitionCatalogService catalogs,TodoAutoActionCapabilityCatalogService autoActions,
+            TodoEventResourceService eventResources,TodoConfigurationResourceCatalogService resourceCatalog,
+            TodoPublishedSimulationDiagnosticService publishedDiagnostics)
+    {this(query,sla,dod,templates,definitions,diff,simulation,catalogs,autoActions,eventResources,resourceCatalog,
+            publishedDiagnostics,null,null,null,null);}
 
     /** Focused-test compatibility; production uses the fully injected catalogue constructor. */
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
@@ -104,6 +126,26 @@ public class TodoConfigurationController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/dashboard") public AjaxResult dashboard(){return success(query.dashboard());}
+
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @GetMapping("/templates/{id}/journey")
+    public AjaxResult journey(@PathVariable long id){return success(journeys.load(id,actor()));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
+    @GetMapping("/templates/workbench")
+    public TableDataInfo journeyWorkbench(@Valid @ModelAttribute TemplateListQuery value)
+    {var page=journeys.workbench(value.toMap(),actor());return new TableDataInfo(page.rows(),page.total());}
+    @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
+    @PostMapping("/templates/{id}/journey/payload")
+    public AjaxResult journeyPayload(@PathVariable Long id,@Valid @RequestBody JourneyPayloadCommand command)
+    {
+        requireSame(id,command.templateId());
+        return success(payloads.hydrate(command.eventType(),command.payloadVersion(),command.businessType(),
+                command.businessId(),actor(),command.manualOverrides()));
+    }
+    @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
+    @PostMapping("/templates/{id}/journey/simulate")
+    public AjaxResult journeySimulation(@PathVariable Long id,@Valid @RequestBody JourneySimulationCommand command)
+    {requireSame(id,command.templateId());return success(journeySimulation.simulate(command,actor()));}
 
     @PreAuthorize("@ss.hasPermi('todo:resource:list')")
     @GetMapping("/resources/events") public TableDataInfo eventResources(@Valid @ModelAttribute EventResourceListQuery value)
@@ -134,6 +176,17 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:dod-rule:list,todo:dod-rule:create,todo:dod-rule:edit,todo:template:create,todo:template:edit,todo:simulation:list')")
     @GetMapping("/resources/dod-recipes") public AjaxResult dodRecipeResources(@RequestParam String businessType)
     {return success(resourceCatalog.recipes(businessType));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:add,todo:resource:edit')")
+    @PostMapping("/resources/items")
+    public AjaxResult createResourceItem(@Valid @RequestBody ConfigurationResourceCommand command)
+    {requireNew(command.resourceItemId());return success(resourceManagement.save(command,actor()));}
+    @PreAuthorize("@ss.hasPermi('todo:resource:edit')")
+    @PutMapping("/resources/items/{id}")
+    public AjaxResult updateResourceItem(@PathVariable Long id,@Valid @RequestBody ConfigurationResourceCommand command)
+    {requireSame(id,command.resourceItemId());return success(resourceManagement.save(command,actor()));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:resource:list,todo:resource:query,todo:template:list,todo:simulation:simulate')")
+    @GetMapping("/resources/data-sources")
+    public AjaxResult resourceDataSources(){return success(payloads.dataSources());}
 
     @PreAuthorize("@ss.hasPermi('todo:sla-rule:list')")
     @GetMapping("/sla-rules") public TableDataInfo slaRules(@Valid @ModelAttribute RuleListQuery value){return page(sla.list(value.toMap()),value.pageNum(),value.pageSize());}

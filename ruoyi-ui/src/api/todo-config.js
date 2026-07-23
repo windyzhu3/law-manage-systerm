@@ -28,6 +28,10 @@ export function updateTodoTemplate(id, data) { return request({ url: `/todo/conf
 export function copyTodoTemplate(id, data) { return request({ url: `/todo/config/templates/${id}/copy`, method: 'post', data }) }
 export function importTodoTemplate(data) { return request({ url: '/todo/config/templates/import', method: 'post', data }) }
 export function toggleTodoTemplate(id, data) { return request({ url: `/todo/config/templates/${id}/toggle`, method: 'post', data }) }
+export function getTodoTemplateJourney(id) { return request({ url: `/todo/config/templates/${id}/journey`, method: 'get' }) }
+export function listTodoTemplateWorkbench(params) { return request({ url: '/todo/config/templates/workbench', method: 'get', params }) }
+export function hydrateTodoJourneyPayload(id, data) { return request({ url: `/todo/config/templates/${id}/journey/payload`, method: 'post', data }) }
+export function simulateTodoJourney(id, data) { return request({ url: `/todo/config/templates/${id}/journey/simulate`, method: 'post', data }) }
 export function listTemplateVersions(id) { return request({ url: `/todo/config/templates/${id}/versions`, method: 'get' }) }
 export function updateTemplateDraft(id, data) { return request({ url: `/todo/config/template-versions/${id}`, method: 'put', data }) }
 export function preflightTemplateDraft(id) { return request({ url: `/todo/config/template-versions/${id}/preflight`, method: 'post' }) }

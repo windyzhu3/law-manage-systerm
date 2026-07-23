@@ -18,6 +18,12 @@ requireTokens('resource APIs', api, [
   '/todo/config/resources/fields',
   '/todo/config/resources/materials',
   '/todo/config/resources/dod-recipes',
+  '/todo/config/resources/items',
+  '/todo/config/resources/items/${id}',
+  '/todo/config/resources/data-sources',
+  'createConfigurationResource',
+  'updateConfigurationResource',
+  'listConfigurationDataSources',
   'createEventResourceVersion',
   'changeEventResourceStatus'
 ])
