@@ -124,6 +124,20 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(release.contains("candidate.action_type='PUBLISH_VERSION'") && release.contains("#{limit}") && release.contains("#{offset}"));
     }
 
+    @Test void workbenchBatchCarriesTruthfulInputsAndAppliesAllNonIssueFilters() throws Exception
+    {
+        String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
+        String batch=statement(xml,"select","selectTemplateJourneySummaries");
+        String filters=fragment(xml,"templateJourneySummaryWhere");
+
+        assertTrue(batch.contains("t.template_code") && batch.contains("definition_json")
+                && batch.contains("validation_report_json") && batch.contains("definition_hash"));
+        assertTrue(filters.contains("t.business_type=#{businessType}"));
+        assertTrue(filters.contains("#{businessStage}") && filters.contains("#{publishStatus}"));
+        assertTrue(filters.contains("t.template_code like concat('%',#{keyword},'%')"));
+        assertTrue(batch.contains("limit #{limit} offset #{offset}"));
+    }
+
     @Test void dictionaryLookupIsParameterizedAndFiltersDisabledTypesAndValues() throws Exception
     {
         String lookup=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","countEnabledDictionaryValue");
@@ -147,6 +161,14 @@ class TodoConfigurationMapperXmlContractTest
     {
         int start=xml.indexOf("<"+tag+" id=\""+id+"\"");
         int end=xml.indexOf("</"+tag+">",start);
+        assertTrue(start>=0 && end>start,id);
+        return xml.substring(start,end);
+    }
+
+    private String fragment(String xml,String id)
+    {
+        int start=xml.indexOf("<sql id=\""+id+"\"");
+        int end=xml.indexOf("</sql>",start);
         assertTrue(start>=0 && end>start,id);
         return xml.substring(start,end);
     }

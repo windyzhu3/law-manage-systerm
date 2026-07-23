@@ -41,12 +41,22 @@ public record TodoConfigurationJourneyView(
             String message,String repairAction) { }
     public record JourneyPermissions(boolean canView,boolean canEdit,boolean canMaintainResources,
             boolean canSimulate,boolean canPublish,boolean canAudit) { }
-    public record TemplateWorkbenchItem(long templateId,String templateName,String businessType,
+    public record TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
             String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
-            int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction) { }
+            int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction)
+    {
+        public TemplateWorkbenchItem(long templateId,String templateName,String businessType,String businessStage,
+                String journeyState,int completedSteps,int totalSteps,int blockerCount,int warningCount,
+                String lastEditor,LocalDateTime updateTime,String primaryAction)
+        {this(templateId,null,templateName,businessType,businessStage,journeyState,completedSteps,totalSteps,
+                blockerCount,warningCount,lastEditor,updateTime,primaryAction);}
+    }
     public record TemplateWorkbenchPage(List<TemplateWorkbenchItem> rows,long total,
-            int blockerTemplates,int warningTemplates)
+            int blockerTemplates,int warningTemplates,int readyTemplates)
     {
         public TemplateWorkbenchPage { rows=rows==null?List.of():List.copyOf(rows); }
+        public TemplateWorkbenchPage(List<TemplateWorkbenchItem> rows,long total,int blockerTemplates,int warningTemplates)
+        {this(rows,total,blockerTemplates,warningTemplates,
+                Math.max(0,(int)Math.min(Integer.MAX_VALUE,total)-blockerTemplates-warningTemplates));}
     }
 }

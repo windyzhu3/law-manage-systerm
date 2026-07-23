@@ -154,6 +154,7 @@ import TemplateDrawer from './TemplateDrawer'
 import TemplateProblemSummary from './TemplateProblemSummary'
 import TemplateProgressCell from './TemplateProgressCell'
 import { listTodoTemplateWorkbench } from '@/api/todo-config'
+import { resolveProblemSummary } from './template-workbench-model'
 
 const emptyQuery = () => ({
   pageNum: 1,
@@ -178,18 +179,14 @@ export default {
       loading: false,
       rows: [],
       total: 0,
+      serverSummary: {},
       query: emptyQuery(),
       createDrawerOpen: false
     }
   },
   computed: {
     problemSummary() {
-      return this.rows.reduce((summary, row) => {
-        if (this.number(row.blockerCount)) summary.blockerTemplates += 1
-        else if (this.number(row.warningCount)) summary.warningTemplates += 1
-        else summary.readyTemplates += 1
-        return summary
-      }, { blockerTemplates: 0, warningTemplates: 0, readyTemplates: 0 })
+      return resolveProblemSummary(this.serverSummary, this.rows)
     }
   },
   created() {
@@ -206,9 +203,15 @@ export default {
         const response = await listTodoTemplateWorkbench(this.query)
         this.rows = Array.isArray(response.rows) ? response.rows : []
         this.total = this.number(response.total)
+        this.serverSummary = {
+          blockerTemplates: response.blockerTemplates,
+          warningTemplates: response.warningTemplates,
+          readyTemplates: response.readyTemplates
+        }
       } catch (error) {
         this.rows = []
         this.total = 0
+        this.serverSummary = {}
         this.$modal.msgError((error && (error.msg || error.message)) || '加载配置任务失败')
       } finally {
         this.loading = false

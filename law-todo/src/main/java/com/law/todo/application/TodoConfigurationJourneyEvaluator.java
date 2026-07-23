@@ -20,6 +20,8 @@ import com.law.todo.routing.RoutingGraphValidator;
 @Component
 public class TodoConfigurationJourneyEvaluator
 {
+    private static final TodoConfigurationJourneyEvaluator PURE_COMPATIBILITY=
+            new TodoConfigurationJourneyEvaluator(null,null);
     private final TodoConfigurationResourceCatalogService resources;
     private final TodoTemplateService templates;
 
@@ -43,6 +45,10 @@ public class TodoConfigurationJourneyEvaluator
         steps.add(evaluateSimulation(detail,definition,issues));
         return new Evaluation(steps,issues);
     }
+
+    /** Structural compatibility projection that never consults resource or template catalogs. */
+    public Evaluation evaluatePure(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
+    {return PURE_COMPATIBILITY.evaluate(detail,definition);}
 
     private JourneyStep evaluateEvent(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {

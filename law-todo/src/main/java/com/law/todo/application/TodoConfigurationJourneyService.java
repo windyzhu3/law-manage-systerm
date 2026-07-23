@@ -2,18 +2,25 @@ package com.law.todo.application;
 
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.view.TodoConfigurationJourneyView;
 import com.law.todo.application.view.TodoConfigurationJourneyView.CurrentResources;
+import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyIssue;
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyPermissions;
+import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyStep;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateSummary;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchItem;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchPage;
@@ -21,6 +28,7 @@ import com.law.todo.application.view.TodoConfigurationViews.TemplateConfiguratio
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
 /** Read-only aggregate for the configuration journey and its batch workbench. */
@@ -28,6 +36,7 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 public class TodoConfigurationJourneyService
 {
     private static final int STEP_COUNT=7;
+    private static final int MAX_BATCH_ROWS=5000;
     private final TodoConfigurationQueryService query;
     private final TodoDefinitionCodec codec;
     private final TodoConfigurationMapper mapper;
@@ -62,11 +71,30 @@ public class TodoConfigurationJourneyService
     public TemplateWorkbenchPage workbench(Map<String,Object> query,Actor actor)
     {
         Map<String,Object> normalized=normalize(query);
-        List<TemplateWorkbenchItem> rows=mapper.selectTemplateJourneySummaries(normalized).stream()
+        int offset=pagination(normalized.get("offset"),0,"offset");
+        int limit=pagination(normalized.get("limit"),20,"limit");
+        if(offset<0||limit<1||limit>200)
+            throw new TodoException("TODO_CONFIGURATION_QUERY_INVALID","Workbench pagination is out of range");
+        String issueType=text(normalized.get("issueType"));
+        Predicate<TemplateWorkbenchItem> issueFilter=issueFilter(issueType);
+        // Issue health is derived from the definition, so evaluate one bounded SQL batch before
+        // applying the issue filter and page. Rejecting overflow preserves exact totals.
+        Map<String,Object> batch=new LinkedHashMap<>(normalized);
+        batch.remove("issueType");batch.put("offset",0);batch.put("limit",MAX_BATCH_ROWS+1);
+        List<Map<String,Object>> source=mapper.selectTemplateJourneySummaries(batch);
+        source=source==null?List.of():source;
+        if(source.size()>MAX_BATCH_ROWS)
+            throw new TodoException("TODO_CONFIGURATION_WORKBENCH_LIMIT_EXCEEDED",
+                    "Workbench non-issue filters exceed the bounded evaluation limit");
+        List<TemplateWorkbenchItem> evaluated=source.stream()
                 .map(this::workbenchItem).toList();
-        return new TemplateWorkbenchPage(rows,mapper.countTemplateJourneySummaries(normalized),
-                (int)rows.stream().filter(item->item.blockerCount()>0).count(),
-                (int)rows.stream().filter(item->item.warningCount()>0).count());
+        int blockerTemplates=(int)evaluated.stream().filter(item->health(item).equals("BLOCKER")).count();
+        int warningTemplates=(int)evaluated.stream().filter(item->health(item).equals("WARNING")).count();
+        int readyTemplates=evaluated.size()-blockerTemplates-warningTemplates;
+        List<TemplateWorkbenchItem> filtered=evaluated.stream().filter(issueFilter).toList();
+        int from=Math.min(offset,filtered.size());int to=Math.min(from+limit,filtered.size());
+        return new TemplateWorkbenchPage(filtered.subList(from,to),filtered.size(),
+                blockerTemplates,warningTemplates,readyTemplates);
     }
 
     private TemplateSummary summary(TemplateConfigurationDetail detail,TemplateVersionDetail version)
@@ -86,14 +114,131 @@ public class TodoConfigurationJourneyService
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row)
     {
-        codec.read(text(row,"definition_json","definitionJson"));
+        String definitionJson=text(row,"definition_json","definitionJson");
+        TodoDefinitionDocument definition=codec.read(definitionJson);
+        TemplateConfigurationDetail detail=workbenchDetail(row,definitionJson);
+        TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluatePure(detail,definition);
+        List<JourneyIssue> issues=mergeIssues(evaluation.issues(),
+                persistedIssues(text(row,"validation_report_json","validationReportJson")));
+        int blockers=(int)issues.stream().filter(issue->"BLOCKER".equals(issue.severity())).count();
+        int warnings=(int)issues.stream().filter(issue->"WARNING".equals(issue.severity())).count();
+        int completed=(int)evaluation.steps().stream().filter(step->completed(step,issues)).count();
         String publishStatus=text(row,"publish_status","publishStatus");
         boolean published="PUBLISHED".equals(publishStatus);
-        return new TemplateWorkbenchItem(requiredId(row),text(row,"template_name","templateName"),
+        String journeyState=published?"PUBLISHED":blockers>0?"BLOCKED":warnings>0?"WARNING":
+                completed==STEP_COUNT?"READY":"IN_PROGRESS";
+        return new TemplateWorkbenchItem(requiredId(row),text(row,"template_code","templateCode"),
+                text(row,"template_name","templateName"),
                 text(row,"business_type","businessType"),text(row,"business_stage","businessStage"),
-                published?"PUBLISHED":"IN_PROGRESS",0,STEP_COUNT,0,0,text(row,"last_editor","lastEditor"),
+                journeyState,completed,STEP_COUNT,blockers,warnings,text(row,"last_editor","lastEditor"),
                 time(row,"update_time","updateTime"),published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION");
     }
+
+    private TemplateConfigurationDetail workbenchDetail(Map<String,Object> row,String definitionJson)
+    {
+        long templateId=requiredId(row);String publishStatus=text(row,"publish_status","publishStatus");
+        Long versionId=longNumber(value(row,"version_id","versionId"));if(versionId==null)versionId=templateId;
+        int versionNo=integer(value(row,"version_no","versionNo"),0);
+        String versionStatus=text(row,"version_status","versionStatus");
+        if(versionStatus==null)versionStatus="PUBLISHED".equals(publishStatus)?"PUBLISHED":"DRAFT";
+        String definitionHash=text(row,"definition_hash","definitionHash");
+        String validation=text(row,"validation_report_json","validationReportJson");
+        TemplateVersionDetail version=new TemplateVersionDetail(versionId,versionNo,versionStatus,null,1,definitionJson,
+                null,null,null,null,null,definitionHash,validation,null,null,null,null,null,
+                time(row,"update_time","updateTime"));
+        boolean published="PUBLISHED".equals(publishStatus);
+        return new TemplateConfigurationDetail(templateId,text(row,"template_code","templateCode"),
+                text(row,"template_name","templateName"),text(row,"business_type","businessType"),
+                text(row,"template_status","templateStatus"),integer(value(row,"lock_version","lockVersion"),0),
+                published?versionNo:0,published?null:versionId,published?null:versionStatus,
+                published?versionId:null,published?versionNo:null,version,List.of());
+    }
+
+    private List<JourneyIssue> persistedIssues(String reportJson)
+    {
+        if(reportJson==null||reportJson.isBlank())return List.of();
+        try
+        {
+            JSONObject report=JSON.parseObject(reportJson);if(report==null)return List.of();
+            List<JourneyIssue> result=new ArrayList<>();
+            appendPersisted(result,report.getJSONArray("errors"),"BLOCKER");
+            appendPersisted(result,report.getJSONArray("warnings"),"WARNING");
+            return List.copyOf(result);
+        }
+        catch(RuntimeException invalid)
+        {
+            return List.of(new JourneyIssue("TODO_JOURNEY_VALIDATION_REPORT_INVALID","BLOCKER",
+                    "SIMULATION_PUBLISH","validationReport","The persisted validation report is invalid",
+                    "Run validation again before publishing"));
+        }
+    }
+
+    private void appendPersisted(List<JourneyIssue> target,JSONArray values,String severity)
+    {
+        if(values==null)return;
+        for(int index=0;index<values.size();index++)
+        {
+            JSONObject value=values.getJSONObject(index);if(value==null)continue;
+            String code=value.getString("code");String path=value.getString("path");
+            if(code==null||code.isBlank())continue;
+            String message=value.getString("message");
+            target.add(new JourneyIssue(code,severity,stepCode(path),path,message,
+                    message==null?"Review the validation issue":message));
+        }
+    }
+
+    private List<JourneyIssue> mergeIssues(List<JourneyIssue> evaluated,List<JourneyIssue> persisted)
+    {
+        Map<String,JourneyIssue> merged=new LinkedHashMap<>();
+        for(JourneyIssue issue:evaluated)merged.put(issueKey(issue),issue);
+        for(JourneyIssue issue:persisted)
+        {
+            String key=issueKey(issue);JourneyIssue existing=merged.get(key);
+            if(existing==null||severityRank(issue.severity())>severityRank(existing.severity()))merged.put(key,issue);
+        }
+        return List.copyOf(merged.values());
+    }
+
+    private boolean completed(JourneyStep step,List<JourneyIssue> issues)
+    {
+        boolean blocker=issues.stream().anyMatch(issue->step.code().equals(issue.stepCode())
+                &&"BLOCKER".equals(issue.severity()));
+        if(blocker)return false;
+        boolean warning=issues.stream().anyMatch(issue->step.code().equals(issue.stepCode())
+                &&"WARNING".equals(issue.severity()));
+        return warning||"COMPLETED".equals(step.state())||"WARNING".equals(step.state());
+    }
+
+    private Predicate<TemplateWorkbenchItem> issueFilter(String issueType)
+    {
+        if(issueType==null||issueType.isBlank())return item->true;
+        return switch(issueType)
+        {
+            case "BLOCKER" -> item->"BLOCKER".equals(health(item));
+            case "WARNING" -> item->"WARNING".equals(health(item));
+            case "READY" -> item->"READY".equals(health(item));
+            default -> throw new TodoException("TODO_CONFIGURATION_QUERY_INVALID","Unsupported workbench issue filter");
+        };
+    }
+
+    private String health(TemplateWorkbenchItem item)
+    {return item.blockerCount()>0?"BLOCKER":item.warningCount()>0?"WARNING":"READY";}
+
+    private String stepCode(String path)
+    {
+        if(path==null)return "SIMULATION_PUBLISH";
+        if(path.startsWith("event.condition"))return "TRIGGER";
+        if(path.startsWith("event"))return "EVENT";
+        if(path.startsWith("owner"))return "OWNER";
+        if(path.startsWith("dod"))return "DOD";
+        if(path.startsWith("sla"))return "SLA";
+        if(path.startsWith("routing"))return "ROUTING";
+        return "SIMULATION_PUBLISH";
+    }
+
+    private String issueKey(JourneyIssue issue)
+    {return String.valueOf(issue.code())+'\u0000'+String.valueOf(issue.fieldPath());}
+    private int severityRank(String severity){return "BLOCKER".equals(severity)?2:"WARNING".equals(severity)?1:0;}
 
     private Map<String,Object> normalize(Map<String,Object> query)
     {
@@ -117,6 +262,13 @@ public class TodoConfigurationJourneyService
 
     private long requiredId(Map<String,Object> row)
     {return Long.parseLong(String.valueOf(value(row,"template_id","templateId")));}
+    private int pagination(Object value,int fallback,String field)
+    {try{return value==null?fallback:Integer.parseInt(String.valueOf(value));}
+        catch(NumberFormatException invalid){throw new TodoException("TODO_CONFIGURATION_QUERY_INVALID",field+" must be an integer");}}
+    private int integer(Object value,int fallback)
+    {return value==null?fallback:Integer.parseInt(String.valueOf(value));}
+    private Long longNumber(Object value){return value==null?null:Long.valueOf(String.valueOf(value));}
+    private String text(Object value){return value==null?null:String.valueOf(value);}
     private int number(Integer value){return value==null?0:value;}
     private String text(Map<String,Object> row,String snake,String camel)
     {Object value=value(row,snake,camel);return value==null?null:String.valueOf(value);}

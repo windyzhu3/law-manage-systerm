@@ -133,7 +133,11 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/workbench")
     public TableDataInfo journeyWorkbench(@Valid @ModelAttribute TemplateListQuery value)
-    {var page=journeys.workbench(value.toMap(),actor());return new TableDataInfo(page.rows(),page.total());}
+    {
+        var page=journeys.workbench(value.toMap(),actor());
+        return new TemplateWorkbenchTableDataInfo(page.rows(),page.total(),page.blockerTemplates(),
+                page.warningTemplates(),page.readyTemplates());
+    }
     @PreAuthorize("@ss.hasPermi('todo:simulation:simulate')")
     @PostMapping("/templates/{id}/journey/payload")
     public AjaxResult journeyPayload(@PathVariable Long id,@Valid @RequestBody JourneyPayloadCommand command)
@@ -317,8 +321,8 @@ public class TodoConfigurationController extends BaseController
     public record PageQuery(@Min(1) Integer pageNum,@Min(1) @Max(500) Integer pageSize,String keyword)
     {public PageQuery(Integer pageNum,Integer pageSize){this(pageNum,pageSize,null);}public PageQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}}
     public record TemplateListQuery(String keyword,String businessType,String businessStage,String templateType,
-            String publishStatus,String status,@Min(1) Integer pageNum,@Min(1) @Max(200) Integer pageSize)
-    {public TemplateListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);result.put("businessType",businessType);result.put("businessStage",businessStage);result.put("templateType",templateType);result.put("publishStatus",publishStatus);result.put("status",status);result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
+            String publishStatus,String status,String issueType,@Min(1) Integer pageNum,@Min(1) @Max(200) Integer pageSize)
+    {public TemplateListQuery{pageNum=pageNum==null?1:pageNum;pageSize=pageSize==null?20:pageSize;}public Map<String,Object> toMap(){Map<String,Object> result=new LinkedHashMap<>();result.put("keyword",keyword);result.put("businessType",businessType);result.put("businessStage",businessStage);result.put("templateType",templateType);result.put("publishStatus",publishStatus);result.put("status",status);result.put("issueType",issueType);result.put("offset",(pageNum-1)*pageSize);result.put("limit",pageSize);return result;}}
     public record CapabilitySummary(String code,String description,boolean simulatable) { }
     public record TemplateRuleCatalogEntry(Long id,String ruleCode,String ruleName,String status,String ruleType,
             Object durationValue,String durationUnit,String calendarCode,String requiredFieldsJson,
@@ -350,5 +354,16 @@ public class TodoConfigurationController extends BaseController
         {super(rows,total);this.emptyReason=emptyReason;this.sampleFallback=sampleFallback;}
         public String getEmptyReason(){return emptyReason;}
         public boolean isSampleFallback(){return sampleFallback;}
+    }
+
+    public static final class TemplateWorkbenchTableDataInfo extends TableDataInfo
+    {
+        private static final long serialVersionUID=1L;
+        private final int blockerTemplates;private final int warningTemplates;private final int readyTemplates;
+        public TemplateWorkbenchTableDataInfo(List<?> rows,long total,int blockerTemplates,int warningTemplates,int readyTemplates)
+        {super(rows,total);this.blockerTemplates=blockerTemplates;this.warningTemplates=warningTemplates;this.readyTemplates=readyTemplates;}
+        public int getBlockerTemplates(){return blockerTemplates;}
+        public int getWarningTemplates(){return warningTemplates;}
+        public int getReadyTemplates(){return readyTemplates;}
     }
 }

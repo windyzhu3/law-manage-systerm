@@ -215,13 +215,19 @@
       <if test="keyword != null and keyword != ''">and (t.template_code like concat('%',#{keyword},'%') or t.template_name like concat('%',#{keyword},'%'))</if>
       <if test="businessType != null and businessType != ''">and t.business_type=#{businessType}</if>
       <if test="status != null and status != ''">and t.status=#{status}</if>
+      <if test="businessStage != null and businessStage != ''">and json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage'))=#{businessStage}</if>
+      <if test="publishStatus != null and publishStatus != ''">and (case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end)=#{publishStatus}</if>
     </where>
   </sql>
   <select id="selectTemplateJourneySummaries" resultType="java.util.Map">
-    select t.template_id,t.template_name,t.business_type,
+    select t.template_id,t.template_code,t.template_name,t.business_type,t.status template_status,t.version lock_version,
       json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage')) business_stage,
       case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end publish_status,
+      coalesce(draft.version_id,published.version_id) version_id,
+      coalesce(draft.version_no,published.version_no) version_no,
+      coalesce(draft.status,published.status) version_status,
       coalesce(draft.definition_json,published.definition_json) definition_json,
+      coalesce(draft.definition_hash,published.definition_hash) definition_hash,
       coalesce(draft.validation_report_json,published.validation_report_json) validation_report_json,
       coalesce(t.update_by,published.published_by,t.create_by) last_editor,
       coalesce(draft.create_time,published.published_time,t.update_time,t.create_time) update_time

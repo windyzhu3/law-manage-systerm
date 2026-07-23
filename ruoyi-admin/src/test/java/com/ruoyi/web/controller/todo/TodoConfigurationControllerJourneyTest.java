@@ -120,13 +120,25 @@ class TodoConfigurationControllerJourneyTest
     void returnsTaskCenteredWorkbenchPage() throws Exception
     {
         authenticate("todo:template:list");
-        mvc().perform(get("/todo/config/templates/workbench").param("pageNum","1").param("pageSize","20"))
+        mvc().perform(get("/todo/config/templates/workbench").param("pageNum","1").param("pageSize","20")
+                        .param("keyword","lead").param("businessType","LEAD").param("businessStage","FIRST_CONTACT")
+                        .param("publishStatus","DRAFT").param("issueType","BLOCKER"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rows[0].templateCode").value("LEAD-FIRST"))
                 .andExpect(jsonPath("$.rows[0].completedSteps").value(4))
                 .andExpect(jsonPath("$.rows[0].blockerCount").value(1))
-                .andExpect(jsonPath("$.total").value(1));
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.blockerTemplates").value(1))
+                .andExpect(jsonPath("$.warningTemplates").value(0))
+                .andExpect(jsonPath("$.readyTemplates").value(0));
+        ArgumentCaptor<Map<String,Object>> query=ArgumentCaptor.forClass(Map.class);
         ArgumentCaptor<Actor> actor=ArgumentCaptor.forClass(Actor.class);
-        verify(journeys).workbench(anyMap(),actor.capture());
+        verify(journeys).workbench(query.capture(),actor.capture());
+        assertEquals("lead",query.getValue().get("keyword"));
+        assertEquals("LEAD",query.getValue().get("businessType"));
+        assertEquals("FIRST_CONTACT",query.getValue().get("businessStage"));
+        assertEquals("DRAFT",query.getValue().get("publishStatus"));
+        assertEquals("BLOCKER",query.getValue().get("issueType"));
         assertActor(actor.getValue());
     }
 
@@ -211,6 +223,19 @@ class TodoConfigurationControllerJourneyTest
         assertEquals(count,distinct);
     }
 
+    @Test
+    void keepsLegacyTemplateAndResourceRoutesAlongsideTheWorkbench()
+    {
+        Set<String> routes=handlerMapping.getHandlerMethods().entrySet().stream()
+                .filter(entry->entry.getValue().getBeanType()==TodoConfigurationController.class)
+                .flatMap(entry->entry.getKey().getPatternValues().stream()).collect(java.util.stream.Collectors.toSet());
+
+        org.assertj.core.api.Assertions.assertThat(routes).contains(
+                "/todo/config/templates","/todo/config/templates/{id}",
+                "/todo/config/resources/events","/todo/config/resources/fields",
+                "/todo/config/templates/workbench");
+    }
+
     private MockMvc mvc(){return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new Denied()).build();}
 
     private void authenticate(String permission)
@@ -288,9 +313,9 @@ class TodoConfigurationControllerJourneyTest
             TodoConfigurationJourneyService service=org.mockito.Mockito.mock(TodoConfigurationJourneyService.class);
             when(service.load(anyLong(),any())).thenReturn(journey());
             when(service.workbench(anyMap(),any())).thenReturn(new TemplateWorkbenchPage(List.of(
-                    new TemplateWorkbenchItem(42L,"首联待办","LEAD","FIRST_CONTACT","IN_PROGRESS",
+                    new TemplateWorkbenchItem(42L,"LEAD-FIRST","首联待办","LEAD","FIRST_CONTACT","IN_PROGRESS",
                             4,7,1,0,"server-user",LocalDateTime.of(2026,7,23,9,0),"CONTINUE_CONFIGURATION")),
-                    1,1,0));
+                    1,1,0,0));
             return service;
         }
         @Bean TodoBusinessPayloadHydrationService payloads()

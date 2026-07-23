@@ -15,6 +15,7 @@ function check(name, assertion) {
 const workbenchPath = 'src/views/todo/config/template/index.vue'
 const problemPath = 'src/views/todo/config/template/TemplateProblemSummary.vue'
 const progressPath = 'src/views/todo/config/template/TemplateProgressCell.vue'
+const summaryModelPath = 'src/views/todo/config/template/template-workbench-model.js'
 const stylePath = 'src/views/todo/config/styles/config-center.scss'
 const workbench = read(workbenchPath)
 
@@ -38,6 +39,24 @@ check('uses the server-paged workbench endpoint without per-row journey calls', 
   assert(!workbench.includes('listTodoTemplates'), 'legacy template listing must not power the workbench')
   assert(!workbench.includes('getTodoTemplateJourney'), 'per-row journey calls are forbidden')
   assert(!workbench.includes('todayTriggeredTodoCount'), 'generic dashboard cards must be removed from the workbench')
+})
+
+check('prefers global server health counts and keeps a page-row fallback', () => {
+  const model = require(path.join(root, summaryModelPath))
+  const rows = [{ blockerCount: 1, warningCount: 2 }, { blockerCount: 0, warningCount: 1 }, {}]
+  assert.deepStrictEqual(
+    model.resolveProblemSummary({ blockerTemplates: 8, warningTemplates: 5, readyTemplates: 3 }, rows),
+    { blockerTemplates: 8, warningTemplates: 5, readyTemplates: 3 },
+    'server counts must win over current-page counts'
+  )
+  assert.deepStrictEqual(
+    model.resolveProblemSummary({}, rows),
+    { blockerTemplates: 1, warningTemplates: 1, readyTemplates: 1 },
+    'older responses must fall back to mutually exclusive current-page counts'
+  )
+  for (const token of ['response.blockerTemplates', 'response.warningTemplates', 'response.readyTemplates']) {
+    assert(workbench.includes(token), `workbench does not retain server summary field: ${token}`)
+  }
 })
 
 check('keeps a single journey action and secondary template code metadata', () => {
