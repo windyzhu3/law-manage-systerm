@@ -136,6 +136,22 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(filters.contains("#{businessStage}") && filters.contains("#{publishStatus}"));
         assertTrue(filters.contains("t.template_code like concat('%',#{keyword},'%')"));
         assertTrue(batch.contains("limit #{limit} offset #{offset}"));
+        assertTrue(batch.contains("coalesce(draft.update_by,t.update_by,published.published_by,t.create_by) last_editor"));
+        assertTrue(batch.contains("coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) update_time"));
+        assertTrue(batch.contains("order by coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) desc"));
+    }
+
+    @Test void draftEditMetadataMigrationIsAppendOnlyAndSupportsRecentEditOrdering() throws Exception
+    {
+        java.nio.file.Path migration=java.nio.file.Path.of("..","ruoyi-admin","src","main","resources","db",
+                "migration","V0_20_44__todo_template_version_edit_metadata.sql");
+
+        assertTrue(java.nio.file.Files.exists(migration));
+        String sql=java.nio.file.Files.readString(migration).toLowerCase().replaceAll("\\s+"," ");
+        assertTrue(sql.contains("alter table todo_template_version"));
+        assertTrue(sql.contains("add column update_by varchar(64)"));
+        assertTrue(sql.contains("add column update_time datetime"));
+        assertTrue(sql.contains("idx_todo_template_version_recent_edit"));
     }
 
     @Test void dictionaryLookupIsParameterizedAndFiltersDisabledTypesAndValues() throws Exception

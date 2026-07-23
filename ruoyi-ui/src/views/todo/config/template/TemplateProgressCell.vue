@@ -36,7 +36,8 @@ export default {
     progressDescription() {
       if (this.percentage === 100) return '全部步骤已完成'
       if (this.completedSteps === 0) return '等待开始配置'
-      return `下一步：继续完成第 ${this.completedSteps + 1} 步`
+      if (this.row.nextStepTitle) return `下一步：${this.row.nextStepTitle}`
+      return '还有未完成的配置步骤'
     }
   },
   methods: {

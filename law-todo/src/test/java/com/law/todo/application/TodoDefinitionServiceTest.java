@@ -201,6 +201,7 @@ class TodoDefinitionServiceTest
         assertEquals(List.of("A-1"),saved.acceptanceRefs());
         assertTrue(String.valueOf(value.get("ownerRuleJson")).contains("ownerId"));
         assertTrue(String.valueOf(value.get("uiSchemaJson")).contains("TD-001"));
+        assertEquals("alice",value.get("updateBy"));
     }
 
     @Test void updateDraftUsesSourceTokenAndReturnsTheRecordedResultForAnIdenticalReplay()

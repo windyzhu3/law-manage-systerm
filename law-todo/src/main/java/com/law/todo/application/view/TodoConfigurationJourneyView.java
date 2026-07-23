@@ -43,13 +43,19 @@ public record TodoConfigurationJourneyView(
             boolean canSimulate,boolean canPublish,boolean canAudit) { }
     public record TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
             String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
-            int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction)
+            int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction,
+            String nextStepCode,String nextStepTitle)
     {
+        public TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
+                String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
+                int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction)
+        {this(templateId,templateCode,templateName,businessType,businessStage,journeyState,completedSteps,totalSteps,
+                blockerCount,warningCount,lastEditor,updateTime,primaryAction,null,null);}
         public TemplateWorkbenchItem(long templateId,String templateName,String businessType,String businessStage,
                 String journeyState,int completedSteps,int totalSteps,int blockerCount,int warningCount,
                 String lastEditor,LocalDateTime updateTime,String primaryAction)
         {this(templateId,null,templateName,businessType,businessStage,journeyState,completedSteps,totalSteps,
-                blockerCount,warningCount,lastEditor,updateTime,primaryAction);}
+                blockerCount,warningCount,lastEditor,updateTime,primaryAction,null,null);}
     }
     public record TemplateWorkbenchPage(List<TemplateWorkbenchItem> rows,long total,
             int blockerTemplates,int warningTemplates,int readyTemplates)

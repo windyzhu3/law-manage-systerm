@@ -344,6 +344,7 @@ public class TodoDefinitionService
         projectLegacyRules(definition,update);
         update.put("changeSummary",command.changeSummary()==null?value(current,"change_summary","changeSummary"):command.changeSummary());
         update.put("impactScope",command.impactScope()==null?value(current,"impact_scope","impactScope"):command.impactScope());
+        update.put("updateBy",actor.userName());
         if (mapper.updateTemplateVersionDraft(update) <= 0)
             throw new TodoException("TODO_TEMPLATE_VERSION_CONFLICT", "Draft version changed");
         replaceDraftRuleReferences(command.versionId(),command.ruleReferences());

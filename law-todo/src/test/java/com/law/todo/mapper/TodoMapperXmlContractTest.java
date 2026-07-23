@@ -76,6 +76,22 @@ class TodoMapperXmlContractTest
     }
 
     @Test
+    void draftSavePersistsAuthoritativeEditorAndEditTime() throws Exception
+    {
+        try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            int start = xml.indexOf("<update id=\"updateTemplateVersionDraft\">");
+            int end = xml.indexOf("</update>", start);
+            assertTrue(start >= 0 && end > start);
+            String update = xml.substring(start, end);
+            assertTrue(update.contains("update_by=#{updateBy}"));
+            assertTrue(update.contains("update_time=sysdate()"));
+            assertTrue(update.contains("where version_id=#{versionId} and status='DRAFT'"));
+        }
+    }
+
+    @Test
     void legacyDefinitionReadsUseTheSmallestEnabledTriggerAndPayloadVersionOne() throws Exception
     {
         try (InputStream input = getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))

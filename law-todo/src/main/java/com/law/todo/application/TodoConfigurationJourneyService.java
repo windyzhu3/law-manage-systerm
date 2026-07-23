@@ -122,7 +122,8 @@ public class TodoConfigurationJourneyService
                 persistedIssues(text(row,"validation_report_json","validationReportJson")));
         int blockers=(int)issues.stream().filter(issue->"BLOCKER".equals(issue.severity())).count();
         int warnings=(int)issues.stream().filter(issue->"WARNING".equals(issue.severity())).count();
-        int completed=(int)evaluation.steps().stream().filter(step->completed(step,issues)).count();
+        int completed=(int)evaluation.steps().stream().filter(this::completed).count();
+        JourneyStep nextStep=evaluation.steps().stream().filter(step->!completed(step)).findFirst().orElse(null);
         String publishStatus=text(row,"publish_status","publishStatus");
         boolean published="PUBLISHED".equals(publishStatus);
         String journeyState=published?"PUBLISHED":blockers>0?"BLOCKED":warnings>0?"WARNING":
@@ -131,7 +132,8 @@ public class TodoConfigurationJourneyService
                 text(row,"template_name","templateName"),
                 text(row,"business_type","businessType"),text(row,"business_stage","businessStage"),
                 journeyState,completed,STEP_COUNT,blockers,warnings,text(row,"last_editor","lastEditor"),
-                time(row,"update_time","updateTime"),published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION");
+                time(row,"update_time","updateTime"),published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION",
+                nextStep==null?null:nextStep.code(),nextStep==null?null:nextStep.title());
     }
 
     private TemplateConfigurationDetail workbenchDetail(Map<String,Object> row,String definitionJson)
@@ -199,15 +201,8 @@ public class TodoConfigurationJourneyService
         return List.copyOf(merged.values());
     }
 
-    private boolean completed(JourneyStep step,List<JourneyIssue> issues)
-    {
-        boolean blocker=issues.stream().anyMatch(issue->step.code().equals(issue.stepCode())
-                &&"BLOCKER".equals(issue.severity()));
-        if(blocker)return false;
-        boolean warning=issues.stream().anyMatch(issue->step.code().equals(issue.stepCode())
-                &&"WARNING".equals(issue.severity()));
-        return warning||"COMPLETED".equals(step.state())||"WARNING".equals(step.state());
-    }
+    private boolean completed(JourneyStep step)
+    {return "COMPLETED".equals(step.state())||"WARNING".equals(step.state());}
 
     private Predicate<TemplateWorkbenchItem> issueFilter(String issueType)
     {

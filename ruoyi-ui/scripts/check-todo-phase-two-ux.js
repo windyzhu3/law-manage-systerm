@@ -79,6 +79,8 @@ check('provides reusable problem and progress cells', () => {
   for (const token of ['配置进度', 'completedSteps', 'totalSteps']) {
     assert(progress.includes(token), `progress cell missing token: ${token}`)
   }
+  assert(progress.includes('nextStepTitle'), 'progress copy must use the backend first incomplete step')
+  assert(!progress.includes('this.completedSteps + 1'), 'progress copy must not assume journey steps are contiguous')
 })
 
 check('applies the approved visual tokens without gradients or table shadows', () => {

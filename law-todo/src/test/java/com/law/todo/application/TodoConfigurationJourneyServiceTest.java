@@ -97,6 +97,42 @@ class TodoConfigurationJourneyServiceTest
         verifyNoInteractions(query,resources,templates);
     }
 
+    @Test void persistedWarningDoesNotCompleteAnEvaluatorStepThatHasNotStarted()
+    {
+        Map<String,Object> row=workbenchRow(47L,"TODO-PERSISTED-WARNING","DRAFT","hash-persisted-warning",
+                definition("hash-persisted-warning",false,false,false,true),
+                """
+                {"errors":[],"warnings":[
+                  {"code":"TODO_PERSISTED_DOD_WARNING","path":"dod.config","message":"Review completion evidence"}]}
+                """);
+        when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(List.of(row));
+
+        TemplateWorkbenchPage page=service.workbench(Map.of("offset",0,"limit",20),actor);
+
+        assertThat(page.rows()).singleElement().satisfies(item->{
+            assertThat(item.completedSteps()).isEqualTo(5);
+            assertThat(item.warningCount()).isEqualTo(1);
+            assertThat(item.nextStepCode()).isEqualTo("DOD");
+            assertThat(item.nextStepTitle()).isEqualTo("Definition of done");
+        });
+    }
+
+    @Test void workbenchProjectsAuthoritativeDraftEditorAndEditTime()
+    {
+        LocalDateTime editedAt=LocalDateTime.of(2026,7,24,10,15);
+        Map<String,Object> row=new java.util.LinkedHashMap<>(fixtureWorkbenchRows().get(2));
+        row.put("last_editor","draft-editor");
+        row.put("update_time",editedAt);
+        when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(List.of(row));
+
+        TemplateWorkbenchPage page=service.workbench(Map.of("offset",0,"limit",20),actor);
+
+        assertThat(page.rows()).singleElement().satisfies(item->{
+            assertThat(item.lastEditor()).isEqualTo("draft-editor");
+            assertThat(item.updateTime()).isEqualTo(editedAt);
+        });
+    }
+
     @Test void appliesIssueFilterBeforePagingAndKeepsGlobalMutuallyExclusiveSummary()
     {
         when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(fixtureWorkbenchRows());
