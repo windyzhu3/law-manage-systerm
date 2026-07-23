@@ -137,6 +137,7 @@ import {
   buildOwnerConfig,
   ownerStrategy,
   ownerBlocker,
+  ownerFieldSelection,
   scopeOwnerFields,
   ownerSelectionStillValid
 } from '../journey-step-model'
@@ -220,7 +221,7 @@ export default {
       const strategy = ownerStrategy(config)
       this.strategy = KNOWN_STRATEGIES.includes(strategy) ? strategy : ''
       const selection = this.strategy === 'EVENT_OWNER'
-        ? (config.field || '')
+        ? ownerFieldSelection(config)
         : this.strategy === 'ROLE' || this.strategy === 'CANDIDATE_POOL'
           ? (config.roleKey || config.value || '')
           : this.strategy === 'USER' ? String(config.value || config.operand || '') : ''

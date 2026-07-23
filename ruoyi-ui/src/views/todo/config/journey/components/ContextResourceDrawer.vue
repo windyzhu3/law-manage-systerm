@@ -72,8 +72,8 @@ export default {
     access() { return resourceRepairAccess(this.permissions, this.request) }
   },
   watch: {
-    visible(open) { if (open) this.hydrate() },
-    request: { deep: true, handler() { if (this.visible) this.hydrate() } }
+    visible(open) { if (open) this.$nextTick(() => this.hydrate()) },
+    request: { deep: true, handler() { if (this.visible) this.$nextTick(() => this.hydrate()) } }
   },
   methods: {
     hydrate() {

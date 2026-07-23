@@ -258,13 +258,18 @@ function ownerBlocker(config, fields) {
   const governedFields = Array.isArray(fields) ? fields : null
   const payloadOwnerReady = String(value.type || '').toUpperCase() !== 'PAYLOAD' ||
     !governedFields ||
-    governedFields.some(field => field.code === value.field && isOwnerField(field))
+    governedFields.some(field => String(field.code) === ownerFieldSelection(value) && isOwnerField(field))
   if ((configuredOwner(value) && payloadOwnerReady) || configuredOwner(value.fallback)) return null
   return {
     code: 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED',
     severity: 'BLOCKER',
     message: '负责人无法解析，且没有可用的兜底负责人'
   }
+}
+
+function ownerFieldSelection(config) {
+  const value = object(config)
+  return String(value.field || value.operand || value.value || '')
 }
 
 function ownerStrategy(config) {
@@ -954,6 +959,7 @@ module.exports = {
   buildOwnerPatch,
   eventSchemaHealth,
   ownerBlocker,
+  ownerFieldSelection,
   ownerStrategy,
   isOwnerField,
   scopeOwnerFields,

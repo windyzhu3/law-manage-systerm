@@ -105,11 +105,12 @@ public class TodoConfigurationQueryService
         if(pageNum<1||pageSize<1||pageSize>100)throw invalidPagination("business object page is out of range");
         TodoBusinessDirectoryAccess.DirectoryPage page=directory(businessType).search(businessType,keyword,
                 (pageNum-1)*pageSize,pageSize,requireActor(actor));
-        if(page.total()==0&&page.rows().isEmpty()&&"NO_DATA".equals(page.emptyReason()))
+        if(page.total()==0&&page.rows().isEmpty()
+                &&("NO_DATA".equals(page.emptyReason())||"NO_MATCH".equals(page.emptyReason())))
         {
             TodoBusinessDirectoryAccess.DirectoryPage samplePage=samples.search(businessType,keyword,(pageNum-1)*pageSize,pageSize);
             return new BusinessObjectPage(samplePage.rows().stream().map(this::businessObject).toList(),samplePage.total(),
-                    "NO_DATA",!samplePage.rows().isEmpty());
+                    page.emptyReason(),!samplePage.rows().isEmpty());
         }
         return new BusinessObjectPage(page.rows().stream().map(this::businessObject).toList(),page.total(),page.emptyReason(),false);
     }

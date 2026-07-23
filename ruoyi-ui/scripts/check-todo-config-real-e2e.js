@@ -50,42 +50,21 @@ const journeySkips = journeySpec.match(/test\.skip\(/g) || []
 if (journeySkips.length !== 1 || !journeySpec.includes("test.skip(!realBackend, 'requires the disposable real-backend E2E environment')")) {
   throw new Error('Todo journey E2E must have exactly one environment-only skip and no optional scenario skips')
 }
-forbidText(spec, 'if (screenshotDir) {', 'Todo configuration real E2E functional assertions')
 for (const required of [
   "loginAs(page, 'todo_config_admin'",
   "pathname === '/prod-api/login'",
-  'expectSuccessfulApiResponse(loginResponsePromise)',
+  'expectSuccessfulApiResponse(await loginResponsePromise)',
   "not.toHaveURL(/\\/login(?:\\?|$)/, { timeout: 15000 })",
   "page.goto('/todo-engine/todo-template')",
-  '新建模板',
-  '保存草稿',
-  '运行真实模拟',
-  '发布',
-  "page.goto('/todo-engine/todo-release-record')",
-  'cleanupTodoConfiguration',
-  'TODO_CONFIG_E2E_RUN_MARKER',
-  'TODO_CONFIG_E2E_SLA_CODE',
-  'TODO_CONFIG_E2E_DOD_CODE',
-  'TODO_CONFIG_E2E_LEAD_NO',
-  'contactResult',
-  'routing-add-node',
-  "toHaveValue('当前定义版本（起点）')",
-  '新增连线',
-  'END',
-  'expectSuccessfulApiResponse(calendarResponsePromise)',
-  'expectSuccessfulApiResponse(validatorResponsePromise)',
-  'await expect(triggerRow).toBeVisible()',
-  '只读模拟，不创建真实待办',
-  '1. 状态变化',
-  '2. 命中模板',
-  '3. 负责人',
-  '4. SLA',
-  '5. DoD',
-  '6. 下一步路由',
-  '7. 待办卡片预览',
-  '8. 技术日志',
+  '新建配置',
+  "page.goto(route)",
+  "img[alt=\"404\"]",
+  '当前操作没有权限|页面不存在',
+  'publishedVersionSnapshot',
+  "where status='PUBLISHED'",
+  "'/todo-engine/todo-release-record'",
 ]) requireText(spec, required, 'Todo configuration real E2E spec')
-requireText(spec, "require('./support/todo-config-e2e-database')", 'Todo configuration real E2E spec')
+requireText(spec, "require('./support/mysql-e2e-runner')", 'Todo configuration real E2E spec')
 for (const required of [
   'loadJourneyFixture',
   'loadJourneyEventBinding',
@@ -101,7 +80,7 @@ for (const required of [
   'simulation-publish-step',
   'business-object-selector',
   'DEMO-L-001',
-  '.simulation-trace li',
+  "trace.locator('ol > li')",
   'run-journey-simulation',
   'publish-preflight-panel',
   'publish-current-draft',
@@ -155,6 +134,7 @@ for (const required of [
   'todo:dod-rule:list',
   'todo:simulation:simulate',
   'todo:release:list',
+  'todo/config/journey/index',
   "signal sqlstate '45000'",
   'TODO_CONFIG_E2E_DATABASE',
   'TODO_CONFIG_E2E_RUN_MARKER',
@@ -172,7 +152,8 @@ for (const required of [
   'E2E_SCHEMA_REPAIR_',
   'todo:resource:edit',
   'todo:release:publish',
-  'todo:definition:diff'
+  'todo:definition:diff',
+  'lead:mine:query'
 ]) requireText(bootstrap, required, 'Test-only identity bootstrap')
 for (const required of [
   "coalesce(remark,'')", "coalesce(create_by,'')", "coalesce(@test_remark,'')", 'todo.e2e.captcha.restore.'
@@ -182,6 +163,7 @@ const playwrightConfig = read(playwrightConfigPath)
 requireText(playwrightConfig, 'tests/e2e/**/*.spec.js', 'Playwright configuration')
 requireText(playwrightConfig, 'TODO_E2E_REAL_BACKEND', 'Playwright configuration')
 requireText(playwrightConfig, 'serve-e2e-production.js', 'Playwright configuration')
+requireText(playwrightConfig, 'workers: realBackend ? 1 : undefined', 'Playwright configuration')
 forbidText(playwrightConfig, "npm run dev", 'Playwright real-backend configuration')
 
 const productionServer = read(productionServerPath)

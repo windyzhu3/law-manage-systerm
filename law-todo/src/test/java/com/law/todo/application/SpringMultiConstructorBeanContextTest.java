@@ -1,6 +1,7 @@
 package com.law.todo.application;
 
 import com.law.todo.mapper.TodoHistoricalMigrationReadinessMapper;
+import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.routing.RoutingGraphValidator;
 import com.law.todo.routing.TodoRoutingEngine;
@@ -29,8 +30,10 @@ class SpringMultiConstructorBeanContextTest
             context.registerBean(TodoOrganizationPort.class, () -> mock(TodoOrganizationPort.class));
             context.registerBean(TodoHistoricalMigrationReadinessMapper.class,
                 () -> mock(TodoHistoricalMigrationReadinessMapper.class));
+            context.registerBean(TodoConfigurationMapper.class, () -> mock(TodoConfigurationMapper.class));
             context.register(HistoricalMigrationExportArchiveWriter.class, TodoAssignmentResolver.class,
-                TodoHistoricalMigrationPreflightService.class, RoutingGraphValidator.class, TodoRoutingEngine.class);
+                TodoHistoricalMigrationPreflightService.class, RoutingGraphValidator.class, TodoRoutingEngine.class,
+                TodoConfigurationResourceCatalogService.class);
 
             context.refresh();
 
@@ -39,6 +42,7 @@ class SpringMultiConstructorBeanContextTest
             assertNotNull(context.getBean(TodoHistoricalMigrationPreflightService.class));
             assertNotNull(context.getBean(RoutingGraphValidator.class));
             assertNotNull(context.getBean(TodoRoutingEngine.class));
+            assertNotNull(context.getBean(TodoConfigurationResourceCatalogService.class));
         }
     }
 }

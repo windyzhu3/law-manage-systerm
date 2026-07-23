@@ -94,21 +94,20 @@
             </div>
             <p v-else>尚未形成可用字段目录。</p>
           </div>
-          <el-alert
-            v-if="!schemaHealth.ready"
-            title="该事件暂不能用于模板"
-            description="请先补齐并启用事件字段；当前步骤会阻塞发布。"
-            type="error"
-            :closable="false"
-            show-icon
-          >
+          <div v-if="!schemaHealth.ready" class="event-detail__repair">
+            <el-alert
+              title="该事件暂不能用于模板"
+              description="请先补齐并启用事件字段；当前步骤会阻塞发布。"
+              type="error"
+              :closable="false"
+              show-icon
+            />
             <el-button
               v-if="!readonly"
-              slot="default"
               type="text"
               @click="repairSchema"
             >维护事件字段</el-button>
-          </el-alert>
+          </div>
         </template>
         <el-empty v-else description="请从左侧选择业务事件" :image-size="72" />
       </article>
@@ -515,8 +514,15 @@ export default {
   }
 }
 
-.event-detail > .el-alert {
+.event-detail__repair {
+  position: relative;
   margin-top: 16px;
+
+  > .el-button {
+    position: absolute;
+    right: 14px;
+    bottom: 5px;
+  }
 }
 
 @media (max-width: 960px) {

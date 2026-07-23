@@ -66,7 +66,7 @@ class TodoEmployeeTodoPreviewProjectorTest
         EmployeeTodoPreview view=projector.project(detail(),definition);
 
         assertThat(view.title()).isEqualTo("Lead follow-up");
-        assertThat(view.assigneeSummary()).isEqualTo("Assigned according to the configured ownership rule");
+        assertThat(view.assigneeSummary()).isEqualTo("按已配置的负责人规则分配");
         assertThat(view.dueSummary()).isEqualTo("Due according to the configured service-level agreement");
     }
 

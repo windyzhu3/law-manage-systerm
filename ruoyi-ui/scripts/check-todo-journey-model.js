@@ -889,6 +889,14 @@ check('models schema health, owner blockers, and contextual resource return sema
 
   assert.strictEqual(steps.ownerBlocker({ type: 'ROLE', roleKey: 'case_manager' }), null)
   assert.strictEqual(steps.ownerBlocker({ type: 'PAYLOAD', field: 'ownerId' }), null)
+  assert.strictEqual(
+    steps.ownerBlocker(
+      { type: 'PAYLOAD', operand: 'ownerId' },
+      [{ code: 'ownerId', type: 'integer', semanticType: 'USER_ID' }]
+    ),
+    null,
+    'legacy payload owner operands must hydrate as governed owner fields'
+  )
   assert.strictEqual(steps.ownerBlocker({ type: 'ROLE' }).code, 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED')
   assert.strictEqual(
     steps.ownerBlocker({ type: 'ROLE', fallback: { type: 'BUSINESS_OWNER' } }),

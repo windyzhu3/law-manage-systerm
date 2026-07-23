@@ -51,6 +51,9 @@
       </section>
     </div>
 
+    <el-collapse class="dod-advanced">
+      <el-collapse-item name="advanced">
+        <template slot="title"><i class="el-icon-setting" />高级设置（可选）· 条件、说明与系统校验</template>
     <section class="dod-condition-card">
       <header>
         <div><h3>条件要求</h3><p>仅在特定业务结果下，额外要求员工填写信息。</p></div>
@@ -87,9 +90,7 @@
       />
     </section>
 
-    <el-collapse class="dod-advanced">
-      <el-collapse-item name="advanced">
-        <template slot="title"><i class="el-icon-setting" />高级设置 · 系统自动校验</template>
+        <div class="dod-validator-settings">
         <p>以下能力由管理员维护。业务人员通常只需使用推荐配方，无需理解技术编码与参数。</p>
         <el-select
           v-model="validatorRefs"
@@ -108,6 +109,7 @@
           <strong>{{ validator.name || validator.code }}</strong>
           <span>{{ validator.description || '系统将在员工提交时自动检查。' }}</span>
           <small>技术编码：{{ validator.code }}<template v-if="validator.parameterSchema"> · 参数结构由管理员治理</template></small>
+        </div>
         </div>
       </el-collapse-item>
     </el-collapse>
@@ -314,6 +316,13 @@ export default {
   .el-icon-setting { margin-right: 7px; color: #C89A3D; }
   .el-select { width: 100%; }
   p { margin: 0 0 10px; color: #65758A; }
+}
+
+.dod-validator-settings {
+  padding: 16px;
+  background: #FFFFFF;
+  border: 1px solid #D9E1EA;
+  border-radius: 8px;
 }
 
 .dod-validator {

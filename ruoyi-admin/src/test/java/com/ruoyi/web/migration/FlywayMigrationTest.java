@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.41", current.getVersion().getVersion());
+        assertEquals("0.20.45", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -72,8 +72,28 @@ class FlywayMigrationTest
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
         verifyTodoConfigurationCenterSchema(url);
         verifyTodoConfigurationResourceSchema(url);
+        verifyTodoDodRecipeEventAlignment(url);
         verifyTodoPhaseOneAssetClosure(url);
         verifyReadableNavigationMenuNames(url);
+        verifyTodoTemplateVersionEditMetadata(url);
+    }
+
+    private void verifyTodoTemplateVersionEditMetadata(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(2L, count(connection,
+                "select count(*) from information_schema.columns where table_schema=database() "
+                    + "and table_name='todo_template_version' and column_name in ('update_by','update_time')"));
+            assertEquals(3L, count(connection,
+                "select count(*) from information_schema.statistics where table_schema=database() "
+                    + "and table_name='todo_template_version' and index_name='idx_todo_template_version_recent_edit'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Todo template version edit metadata invariants failed", exception);
+        }
     }
 
     private void verifyTodoPhaseOneAssetClosure(String url)
@@ -156,6 +176,34 @@ class FlywayMigrationTest
         catch (SQLException exception)
         {
             throw new AssertionError("Todo configuration resource database invariants failed", exception);
+        }
+    }
+
+    private void verifyTodoDodRecipeEventAlignment(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
+            System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(5L, count(connection,
+                "select count(*) from todo_configuration_resource_item where resource_type='DOD_RECIPE' "
+                    + "and status='ACTIVE' and json_length(json_extract(value_json,'$.businessActions'))=1 "
+                    + "and json_length(json_extract(value_json,'$.templateStages'))=0"));
+            assertEquals(5L, count(connection,
+                "select count(*) from todo_configuration_resource_item where "
+                    + "(resource_code='LEAD_FIRST_CONTACT_READY' "
+                    + "and json_contains(json_extract(value_json,'$.businessActions'),json_quote('LEAD_ASSIGNED'))) "
+                    + "or (resource_code='CUSTOMER_PROGRESS_READY' "
+                    + "and json_contains(json_extract(value_json,'$.businessActions'),json_quote('LEAD_FIRST_CONTACT_VALID'))) "
+                    + "or (resource_code='CONTRACT_SIGN_READY' "
+                    + "and json_contains(json_extract(value_json,'$.businessActions'),json_quote('CONTRACT_APPROVED'))) "
+                    + "or (resource_code='CASE_ACCEPT_READY' "
+                    + "and json_contains(json_extract(value_json,'$.businessActions'),json_quote('CASE_ASSIGNED'))) "
+                    + "or (resource_code='MATTER_ARCHIVE_READY' "
+                    + "and json_contains(json_extract(value_json,'$.businessActions'),json_quote('CASE_CLOSED')))"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Todo DoD recipe event alignment invariants failed", exception);
         }
     }
 

@@ -82,7 +82,7 @@ export default {
 
 .recipe-card {
   position: relative;
-  min-height: 160px;
+  min-height: 130px;
   padding: 15px;
   color: #34465B;
   text-align: left;
@@ -102,7 +102,7 @@ export default {
 
   > i {
     display: block;
-    margin: 24px 0 9px;
+    margin: 17px 0 7px;
     font-size: 22px;
     color: #0B2A55;
   }
@@ -119,8 +119,7 @@ export default {
   }
 
   p {
-    min-height: 38px;
-    margin: 5px 0 8px;
+    margin: 4px 0 6px;
     font-size: 12px;
     line-height: 19px;
     color: #65758A;

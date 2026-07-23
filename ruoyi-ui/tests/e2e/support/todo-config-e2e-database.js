@@ -80,7 +80,7 @@ function loadRepairEventResource(expectedStatus) {
   const database = requireEnv('TODO_E2E_DB_NAME')
   const runMarker = requireEnv('TODO_CONFIG_E2E_RUN_MARKER')
   assertSafeE2eDatabase(database)
-  const eventType = `E2E_SCHEMA_REPAIR_${runMarker}`
+  const eventType = `E2E_SCHEMA_REPAIR_${runMarker}`.toUpperCase()
   const row = parseRow(executeSql(`
     select event_catalog_id,event_type,payload_version,schema_status,status,version,
       coalesce(json_length(json_extract(payload_schema_json,'$.properties')),0)

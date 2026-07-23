@@ -53,6 +53,19 @@ class TodoConfigurationBusinessObjectDirectoryTest
         assertTrue(page.rows().isEmpty());
     }
 
+    @Test void sampleSearchRemainsAvailableWhenVisibleBusinessRowsDoNotMatch()
+    {
+        when(directory.supports("LEAD")).thenReturn(true);
+        when(directory.search("LEAD","DEMO-L-001",0,20,actor)).thenReturn(
+                new TodoBusinessDirectoryAccess.DirectoryPage(List.of(),0,"NO_MATCH","BUSINESS_DATA"));
+
+        var page=service().businessObjects("LEAD","DEMO-L-001",1,20,actor);
+
+        assertEquals("NO_MATCH",page.emptyReason());
+        assertTrue(page.sampleFallback());
+        assertEquals("DEMO-L-001",page.rows().get(0).businessNo());
+    }
+
     @Test void sampleIdsAreAcceptedOnlyByTheSimulationLookup()
     {
         TodoException error=assertThrows(TodoException.class,()->service().requireBusinessObject("LEAD",-1001L,actor));

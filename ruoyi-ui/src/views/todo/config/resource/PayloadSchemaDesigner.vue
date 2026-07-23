@@ -117,7 +117,10 @@ export default {
       this.$emit('input', json)
       this.$emit('validity-change', true, '')
     },
-    addField() { this.fields.push(newField()); this.emitSchema() },
+    addField() {
+      this.fields.push(newField())
+      this.$emit('validity-change', false, '请填写字段名称')
+    },
     removeField(index) { this.fields.splice(index, 1); this.emitSchema() },
     typeChanged(field) { field.exampleText = ''; this.emitSchema() },
     examplePlaceholder(type) { return ({ boolean: 'true', integer: '1', number: '99.5', array: '["A","B"]', object: '{"key":"value"}', 'string:date-time': '2026-07-22T10:00:00' })[type] || '示例文本' },

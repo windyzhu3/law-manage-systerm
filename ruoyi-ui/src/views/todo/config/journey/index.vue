@@ -5,8 +5,8 @@
         <el-button class="journey-page__back" type="text" icon="el-icon-back" @click="goBack">返回配置工作台</el-button>
         <div class="journey-page__title">
           <h1>{{ templateName }}</h1>
-          <el-tag size="small" :type="publishedReadOnly ? 'info' : 'warning'">
-            {{ publishedReadOnly ? '已发布 · 只读' : '草稿配置中' }}
+          <el-tag size="small" :type="immutableVersion || publishedReadOnly ? 'info' : 'warning'">
+            {{ journeyAccessLabel }}
           </el-tag>
         </div>
         <p>按照业务旅程依次完成七个步骤，右侧可随时检查员工看到的待办效果。</p>
@@ -56,7 +56,7 @@
             :preview="journey.employeePreview || {}"
             :permissions="clientPermissions"
             :resource-revision="resourceRevision"
-            :readonly="publishedReadOnly"
+            :readonly="activeEditorReadonly"
             :dirty="journey.dirty"
             :saving="saving"
             @change="onStepChange"
@@ -278,14 +278,25 @@ export default {
     unresolvedFieldConflicts() {
       return hasUnresolvedFieldConflicts(this.journey)
     },
-    publishedReadOnly() {
-      const permissions = (this.journey && this.journey.permissions) || {}
+    immutableVersion() {
       const publishStatus = String((this.journey && this.journey.template && this.journey.template.publishStatus) || '').toUpperCase()
       return this.$route.query.view === 'published' ||
-        ['PUBLISHED', 'RETIRED'].includes(publishStatus) ||
+        ['PUBLISHED', 'RETIRED'].includes(publishStatus)
+    },
+    publishedReadOnly() {
+      const permissions = (this.journey && this.journey.permissions) || {}
+      return this.immutableVersion ||
         this.unresolvedFieldConflicts ||
         !this.capabilities.canSaveDraft ||
         permissions.canEdit === false
+    },
+    activeEditorReadonly() {
+      return this.activeStep === 'SIMULATION_PUBLISH' ? this.immutableVersion : this.publishedReadOnly
+    },
+    journeyAccessLabel() {
+      if (this.immutableVersion) return '已发布 · 只读'
+      if (this.publishedReadOnly) return '草稿 · 仅可查看或发布'
+      return '草稿配置中'
     },
     activeIndex() {
       return Math.max(0, STEP_CODES.indexOf(this.activeStep))
@@ -979,7 +990,7 @@ export default {
 
 .journey-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 352px;
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 32%);
   gap: 20px;
   align-items: start;
   margin-top: 20px;

@@ -162,6 +162,14 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(lookup.contains("type.status='0'") && lookup.contains("data.status='0'"));
     }
 
+    @Test void ownerCatalogNormalizesDerivedUserIdsToTheFoundationCollation() throws Exception
+    {
+        String catalog=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select","selectTemplateOwnerCatalog");
+
+        assertTrue(catalog.contains("cast(u.user_id as char) collate utf8mb4_unicode_ci"),
+                "UNION must not mix the connection collation of a derived user ID with foundation catalog columns");
+    }
+
     @Test void releaseVersionDirectoryIsImmutableAndGenericMapperDoesNotExposeBusinessRows() throws Exception
     {
         String xml=resource("mapper/todo/TodoConfigurationMapper.xml");

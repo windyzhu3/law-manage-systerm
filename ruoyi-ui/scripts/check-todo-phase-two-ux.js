@@ -262,6 +262,7 @@ check('restores visible focus after contextual event repair', () => {
 check('keeps existing incomplete event resources actionable during repair', () => {
   const journey = read('src/views/todo/config/journey/index.vue')
   const eventStep = read('src/views/todo/config/journey/steps/EventStep.vue')
+  const contextDrawer = read('src/views/todo/config/journey/components/ContextResourceDrawer.vue')
   assert(journey.includes('eventCatalogId: event.eventCatalogId || event.event_catalog_id || null'),
     'resource refresh must retain the governed event identity')
   assert(journey.includes("description: event.description || ''"),
@@ -269,13 +270,18 @@ check('keeps existing incomplete event resources actionable during repair', () =
   assert(eventStep.includes('resourceId: event && event.eventCatalogId'),
     'event repair must reopen the existing governed resource')
   assert(eventStep.includes('event.eventName'), 'the normal event picker must prefer the business event name')
+  assert(contextDrawer.includes('this.$nextTick(() => this.hydrate())'),
+    'context repair must hydrate only after the replacement request prop has rendered')
 })
 
 check('keeps event sample JSON behind an explicit advanced section', () => {
   const drawer = read('src/views/todo/config/resource/EventResourceDrawer.vue')
+  const designer = read('src/views/todo/config/resource/PayloadSchemaDesigner.vue')
   assert(drawer.includes('根据字段生成样例'), 'event samples need a guided generator')
   assert(drawer.includes('高级设置：查看或调整原始样例'), 'raw event sample must be advanced-only')
   assert(drawer.includes('generateSample'), 'event sample generator must be wired')
+  assert(designer.includes("this.$emit('validity-change', false, '请填写字段名称')"),
+    'a newly added blank field must remain locally editable until it has a schema key')
 })
 
 check('allows only governed business resources to enter edit mode', () => {
@@ -417,11 +423,21 @@ check('closes the journey with governed simulation and immutable publishing', ()
   ]) assert(step.includes(token), `simulation/publish step missing governed call: ${token}`)
   assert(journey.includes("['PUBLISHED', 'RETIRED'].includes(publishStatus)"),
     'immutable journey versions must enter a read-only shell after publish')
+  assert(journey.includes(':readonly="activeEditorReadonly"'),
+    'publish-only users must retain simulation and publish controls on editable drafts')
+  assert(journey.includes("this.activeStep === 'SIMULATION_PUBLISH' ? this.immutableVersion : this.publishedReadOnly"),
+    'definition edit permission must not be conflated with immutable-version execution')
   assert(!step.includes('new Date().toISOString()'), 'LocalDateTime commands must not send UTC-offset instants')
   assert(payload.includes('只读样例'), 'sample objects must be visibly read-only')
   assert(payload.includes('••••••'), 'sensitive payload values must be masked')
   assert(trace.includes('EVENT') && trace.includes('TODO_PREVIEW'), 'simulation trace must cover the fixed journey')
   assert(preflight.includes('warningReason'), 'warnings must require an acknowledgement reason')
+  assert(preflight.includes('<el-form v-if="warnings.length"'), 'warning acknowledgement must render inside an Element form context')
+  const api = read('src/api/todo-config.js')
+  assert(
+    /preflightTemplateDraft[\s\S]*?repeatSubmit:\s*false/.test(api),
+    'read-only POST preflight must opt out of the generic duplicate-submit guard'
+  )
   assert(!step.includes('createRuntime'), 'simulation UI must never request runtime persistence')
 })
 

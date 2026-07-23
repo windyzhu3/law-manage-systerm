@@ -10,7 +10,7 @@ set @captcha_restore_key=concat('todo.e2e.captcha.restore.',@run_marker);
 set @repair_template_code=concat('E2E_TODO_CONFIG_',@run_marker,'_JOURNEY_REPAIR');
 set @failed_template_code=concat('E2E_TODO_CONFIG_',@run_marker,'_JOURNEY_FAILED');
 set @warning_template_code=concat('E2E_TODO_CONFIG_',@run_marker,'_JOURNEY_WARNING');
-set @repair_event_type=concat('E2E_SCHEMA_REPAIR_',@run_marker);
+set @repair_event_type=upper(concat('E2E_SCHEMA_REPAIR_',@run_marker));
 set @warning_decision_code=concat('E2E_ADVISORY_',@run_marker);
 
 delimiter //
@@ -113,11 +113,12 @@ insert ignore into sys_role_menu(role_id,menu_id)
 select @todo_config_role_id,m.menu_id from sys_menu m
 where m.status='0' and (
   (m.menu_type='M' and m.path='todo-engine')
-  or m.component in ('todo/config/template/index','todo/config/trigger/index','todo/config/sla/index',
-                     'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index')
+  or m.component in ('todo/config/template/index','todo/config/journey/index','todo/config/trigger/index','todo/config/sla/index',
+                     'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index','todo/config/resource/index')
+  or m.perms='lead:mine:query'
   or m.parent_id in (select page.menu_id from sys_menu page where page.component in (
-       'todo/config/template/index','todo/config/trigger/index','todo/config/sla/index',
-       'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index'))
+       'todo/config/template/index','todo/config/journey/index','todo/config/trigger/index','todo/config/sla/index',
+       'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index','todo/config/resource/index'))
 );
 
 -- Business admin edits and simulates drafts, resource admin governs catalogues,
@@ -152,17 +153,23 @@ where r.role_key in ('todo_business_admin','todo_resource_admin','todo_publisher
 
 insert into todo_sla_rule(rule_code,rule_name,sla_type,duration_value,duration_unit,calendar_code,start_strategy,
   soft_remind_percent,hard_remind_percent,escalate_percent,status,version,create_by,create_time)
-select @sla_code,concat('E2E first contact 30 minutes · ',@run_marker),'RESPONSE',30,'MINUTE','DEFAULT','TODO_CREATED',80,100,150,'0',0,@run_marker,sysdate()
+select @sla_code,concat('E2E first contact 30 minutes - ',@run_marker),'RESPONSE',30,'MINUTE','DEFAULT','TODO_CREATED',80,100,150,'0',0,@run_marker,sysdate()
 where not exists(select 1 from todo_sla_rule where rule_code=@sla_code and create_by=@run_marker);
 
 insert into todo_dod_rule(rule_code,rule_name,rule_type,required_fields_json,required_attachments_json,
   conditional_rules_json,validator_refs_json,error_messages_json,status,version,create_by,create_time)
-select @dod_code,concat('E2E first contact completion · ',@run_marker),'TASK',json_array('contactResult'),json_array(),json_array(),json_array(),json_object(),'0',0,@run_marker,sysdate()
+select @dod_code,concat('E2E first contact completion - ',@run_marker),'TASK',json_array('contactResult'),json_array(),json_array(),json_array(),json_object(),'0',0,@run_marker,sysdate()
 where not exists(select 1 from todo_dod_rule where rule_code=@dod_code and create_by=@run_marker);
 
 insert into biz_lead(lead_no,lead_name,contact_name,status,pool_status,priority,owner_id,dept_id,del_flag,create_by,create_time,update_time,remark)
-select @lead_no,concat('Todo configuration E2E lead · ',@run_marker),'E2E contact','1','0','2',@todo_config_user_id,103,'0',@run_marker,sysdate(),sysdate(),@test_remark
+select @lead_no,concat('Todo configuration E2E lead - ',@run_marker),'E2E contact','1','0','2',@todo_config_user_id,103,'0',@run_marker,sysdate(),sysdate(),@test_remark
 where not exists(select 1 from biz_lead where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark);
+update todo_sla_rule set rule_name=concat('E2E first contact 30 minutes - ',@run_marker)
+where rule_code=@sla_code and create_by=@run_marker;
+update todo_dod_rule set rule_name=concat('E2E first contact completion - ',@run_marker)
+where rule_code=@dod_code and create_by=@run_marker;
+update biz_lead set lead_name=concat('Todo configuration E2E lead - ',@run_marker)
+where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark;
 
 -- Deterministic journey fixtures. Source definitions remain immutable; every fixture is a disposable draft.
 set @source_version_id=(select v.version_id from todo_template t join todo_template_version v on v.template_id=t.template_id
@@ -172,23 +179,37 @@ set @source_version_id=(select v.version_id from todo_template t join todo_templ
 insert into todo_event_catalog(event_type,event_name,description,payload_version,business_object_type,payload_schema_json,
   owner_field_paths_json,condition_field_paths_json,default_value_field_paths_json,producer,source_module,
   sample_payload_json,schema_status,version,status,create_by,create_time)
-select @repair_event_type,concat('E2E schema repair · ',@run_marker),'Disposable incomplete event schema',1,'LEAD',
+select @repair_event_type,concat('E2E schema repair - ',@run_marker),'Disposable incomplete event schema',1,'LEAD',
   json_object('type','object','properties',json_object()),json_array(),json_array(),json_array(),
   'todo-e2e','lead',json_object(),'INCOMPLETE',0,'ACTIVE',@run_marker,sysdate()
 where not exists(select 1 from todo_event_catalog where event_type=@repair_event_type and payload_version=1);
 
 insert into todo_decision(decision_code,title,description,blocking,status,create_by,create_time)
-select @warning_decision_code,concat('E2E publication advisory · ',@run_marker),
+select @warning_decision_code,concat('E2E publication advisory - ',@run_marker),
   'Disposable non-blocking decision that requires an explicit release review','N','OPEN',@run_marker,sysdate()
 where not exists(select 1 from todo_decision where decision_code=@warning_decision_code);
+update todo_event_catalog
+set event_name=concat('E2E schema repair - ',@run_marker)
+where event_type=@repair_event_type and payload_version=1 and create_by=@run_marker;
+update todo_decision
+set title=concat('E2E publication advisory - ',@run_marker)
+where decision_code=@warning_decision_code and create_by=@run_marker;
 
 insert into todo_template(template_code,template_name,business_type,current_version,status,create_by,create_time)
 select x.template_code,x.template_name,'LEAD',1,'0','todo_config_admin',sysdate()
 from (
-  select @repair_template_code template_code,concat('E2E journey repair · ',@run_marker) template_name union all
-  select @failed_template_code,concat('E2E journey failed simulation · ',@run_marker) union all
-  select @warning_template_code,concat('E2E journey warning review · ',@run_marker)
+  select @repair_template_code template_code,concat('E2E journey repair - ',@run_marker) template_name union all
+  select @failed_template_code,concat('E2E journey failed simulation - ',@run_marker) union all
+  select @warning_template_code,concat('E2E journey warning review - ',@run_marker)
 ) x where not exists(select 1 from todo_template existing where existing.template_code=x.template_code);
+update todo_template
+set template_name=case template_code
+  when @repair_template_code then concat('E2E journey repair - ',@run_marker)
+  when @failed_template_code then concat('E2E journey failed simulation - ',@run_marker)
+  else concat('E2E journey warning review - ',@run_marker)
+end
+where template_code in (@repair_template_code,@failed_template_code,@warning_template_code)
+  and create_by='todo_config_admin';
 
 insert into todo_template_version(template_id,version_no,status,source_version_id,owner_rule_json,dod_rule_json,
   sla_rule_json,next_rule_json,ui_schema_json,change_summary,impact_scope,rollback_source_version_id,
@@ -206,7 +227,7 @@ select target.template_id,1,'DRAFT',source.version_id,source.owner_rule_json,sou
     else json_set(source.definition_json,'$.templateCode',target.template_code,
       '$.decisionRefs',json_array(@warning_decision_code))
   end,
-  null,null,null,null,null,null,'todo_config_admin',sysdate()
+  null,null,null,null,null,'todo_config_admin',sysdate()
 from todo_template target join todo_template_version source on source.version_id=@source_version_id
 where target.template_code in (@repair_template_code,@failed_template_code,@warning_template_code)
   and not exists(select 1 from todo_template_version existing where existing.template_id=target.template_id);

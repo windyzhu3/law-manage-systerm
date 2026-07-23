@@ -22,16 +22,18 @@
       <div v-for="issue in warnings" :key="issueKey(issue)" class="preflight-panel__issue is-warning">
         <strong>{{ issue.message || issue.code }}</strong>
       </div>
-      <el-form-item v-if="warnings.length" label="警告复核说明" required>
-        <el-input
-          :value="warningReason"
-          maxlength="300"
-          show-word-limit
-          placeholder="说明接受警告并发布的业务原因"
-          data-testid="publish-warning-reason"
-          @input="$emit('update:warningReason', $event)"
-        />
-      </el-form-item>
+      <el-form v-if="warnings.length" label-position="top" class="preflight-panel__warning-form">
+        <el-form-item label="警告复核说明" required>
+          <el-input
+            :value="warningReason"
+            maxlength="300"
+            show-word-limit
+            placeholder="说明接受警告并发布的业务原因"
+            data-testid="publish-warning-reason"
+            @input="$emit('update:warningReason', $event)"
+          />
+        </el-form-item>
+      </el-form>
 
       <details v-if="diff && diff.changes && diff.changes.length" class="preflight-panel__diff">
         <summary>查看草稿与已发布版本差异（{{ diff.changes.length }}）</summary>
@@ -78,6 +80,7 @@ export default {
 .is-warning { color: #A15C00; }
 .is-ready { color: #2E7D4F; }
 .preflight-panel__issue { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-bottom: 8px; background: #F8FAFC; }
+.preflight-panel__warning-form { margin-top: 16px; }
 .preflight-panel__diff { margin-top: 16px; color: #0B2A55; }
 .preflight-panel__diff li { display: grid; grid-template-columns: 130px 1fr auto; gap: 10px; padding: 8px 0; border-top: 1px solid #E8EDF3; }
 </style>

@@ -36,7 +36,14 @@ export function previewTodoJourneySla(data) { return request({ url: '/todo/confi
 export function listTemplateVersions(id) { return request({ url: `/todo/config/templates/${id}/versions`, method: 'get' }) }
 export function diffTemplateVersions(left, right) { return request({ url: `/todo/definitions/versions/${left}/diff/${right}`, method: 'get' }) }
 export function updateTemplateDraft(id, data) { return request({ url: `/todo/config/template-versions/${id}`, method: 'put', data }) }
-export function preflightTemplateDraft(id) { return request({ url: `/todo/config/template-versions/${id}/preflight`, method: 'post' }) }
+export function preflightTemplateDraft(id) {
+  return request({
+    url: `/todo/config/template-versions/${id}/preflight`,
+    method: 'post',
+    // Preflight is a read-only validation operation and is intentionally safe to rerun.
+    headers: { repeatSubmit: false }
+  })
+}
 export function listTemplateEventCatalog() { return request({ url: '/todo/config/template-catalog/events', method: 'get' }) }
 export function listTemplateOwnerCatalog() { return request({ url: '/todo/config/template-catalog/owners', method: 'get' }) }
 export function listTemplateHandlerCatalog() { return request({ url: '/todo/config/template-catalog/handlers', method: 'get' }) }

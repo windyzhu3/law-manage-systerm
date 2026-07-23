@@ -78,7 +78,7 @@ public class TodoEmployeeTodoPreviewProjector
     private String display(Map<String,Object> value,String key,String fallback)
     {return safeDisplay(text(value.get(key)),fallback);}
     private String describeOwner(Map<String,Object> owner)
-    {for(String key:List.of("displayName","label","summary","description")){String value=text(owner.get(key));if(isBusinessSafe(value))return value;}return "Assigned according to the configured ownership rule";}
+    {for(String key:List.of("displayName","label","summary","description")){String value=text(owner.get(key));if(isBusinessSafe(value))return value;}return "按已配置的负责人规则分配";}
     private String describeSla(Map<String,Object> sla)
     {for(String key:List.of("displayName","label","summary","description")){String value=text(sla.get(key));if(isBusinessSafe(value))return value;}return sla.isEmpty()?null:"Due according to the configured service-level agreement";}
     private String displayLabel(String label,String fallback){return safeDisplay(label,fallback);}

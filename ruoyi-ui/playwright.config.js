@@ -7,6 +7,7 @@ module.exports = defineConfig({
   testDir: '.',
   testMatch: ['e2e/**/*.spec.js', 'tests/e2e/**/*.spec.js'],
   timeout: realBackend ? 90000 : 30000,
+  workers: realBackend ? 1 : undefined,
   retries: 0,
   use: {
     baseURL: 'http://127.0.0.1:4173',

@@ -28,7 +28,9 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
   })
 
   test.afterAll(() => {
-    cleanupTodoConfiguration(fixtures.warning.templateCode)
+    if (fixtures && fixtures.warning) {
+      cleanupTodoConfiguration(fixtures.warning.templateCode)
+    }
   })
 
   test('SCENARIO_SCHEMA_REPAIR_ACTIVATE_BIND_RERUN repairs, activates and binds the exact event version before rerun', async ({ page }) => {
@@ -88,7 +90,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
 
     await expect(eventDetail.locator('.event-detail__facts')).toContainText(`v${repairedResource.payloadVersion}`)
     await expect(eventDetail.locator('.event-detail__heading .el-tag')).toHaveClass(/el-tag--success/)
-    await expect(eventDetail.locator('.event-detail__field-list')).toContainText('ownerId')
+    await expect(eventDetail.locator('.event-detail__field-list')).toContainText('线索负责人')
     const repairedBinding = loadJourneyEventBinding('REPAIR')
     expect(repairedBinding.eventType === repairedResource.eventType).toBeTruthy()
     expect(repairedBinding.payloadVersion === repairedResource.payloadVersion).toBeTruthy()
@@ -138,6 +140,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
   test('SCENARIO_WARNING_REASON_REQUIRED and SCENARIO_SAMPLE_NO_RUNTIME_WRITES publish only after review', async ({ page }) => {
     await loginAs(page, 'todo_config_admin', password)
     await openJourney(page, fixtures.warning, 'SIMULATION_PUBLISH')
+    await expect(page.locator('.journey-page__title h1')).not.toContainText(/[?\uFFFD]/)
     const step = page.getByTestId('simulation-publish-step')
     await selectBusinessObject(page, step, 'DEMO-L-001')
 
@@ -171,13 +174,24 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     const step = page.getByTestId('simulation-publish-step')
     await expect(step.getByTestId('run-journey-simulation')).toBeVisible()
     await expect(step.getByTestId('publish-current-draft')).toHaveCount(0)
-    await expectForbidden(page, 'POST', '/prod-api/todo/config/resources/events', {})
+    await expectForbidden(page, 'POST', '/prod-api/todo/config/resources/events', {
+      eventType: `E2E_FORBIDDEN_${process.env.TODO_CONFIG_E2E_RUN_MARKER}`,
+      payloadVersion: 1,
+      eventName: 'Forbidden resource probe',
+      businessObjectType: 'LEAD',
+      sourceModule: 'lead',
+      payloadSchemaJson: '{"type":"object","properties":{"ownerId":{"type":"integer"}}}',
+      samplePayloadJson: '{"ownerId":11}',
+      status: 'DRAFT',
+      actionId: `forbidden-resource-${process.env.TODO_CONFIG_E2E_RUN_MARKER}`,
+      expectedVersion: 0
+    })
   })
 
   test('SCENARIO_RESOURCE_ADMIN_BOUNDARY can maintain resources but cannot read or edit template journeys', async ({ page }) => {
     await loginAs(page, 'todo_resource_admin', password)
     await page.goto('/todo-engine/todo-config-resource')
-    await expect(page.locator('.app-container').getByRole('button', { name: '新增事件' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /新增事件/ })).toBeVisible()
     await expectForbidden(page, 'GET', `/prod-api/todo/config/templates/${fixtures.failed.templateId}/journey`)
   })
 
@@ -188,7 +202,10 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     await expect(step.getByTestId('run-journey-simulation')).toBeVisible()
     await expect(step.getByTestId('publish-current-draft')).toBeVisible()
     await expect(page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true })).toHaveCount(0)
-    await expectForbidden(page, 'PUT', `/prod-api/todo/config/template-versions/${fixtures.failed.versionId}`, {})
+    await expectForbidden(page, 'PUT', `/prod-api/todo/config/template-versions/${fixtures.failed.versionId}`, {
+      actionId: `forbidden-draft-${process.env.TODO_CONFIG_E2E_RUN_MARKER}`,
+      versionId: fixtures.failed.versionId
+    })
   })
 
   test('SCENARIO_AUDITOR_BOUNDARY is read-only and cannot simulate, edit or publish', async ({ page }) => {
@@ -199,7 +216,11 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     await expect(step.getByTestId('run-journey-simulation')).toHaveCount(0)
     await expect(step.getByTestId('publish-current-draft')).toHaveCount(0)
     await expect(page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true })).toHaveCount(0)
-    await expectForbidden(page, 'POST', `/prod-api/todo/config/release-records/${fixtures.failed.versionId}/publish`, {})
+    await expectForbidden(page, 'POST', `/prod-api/todo/config/release-records/${fixtures.failed.versionId}/publish`, {
+      actionId: `forbidden-publish-${process.env.TODO_CONFIG_E2E_RUN_MARKER}`,
+      versionId: fixtures.failed.versionId,
+      expectedDefinitionHash: 'permission-probe'
+    })
   })
 })
 
@@ -219,7 +240,7 @@ async function selectBusinessObject(page, step, keyword) {
 
 async function expectFixedTrace(step) {
   const trace = step.getByTestId('simulation-trace')
-  await expect(trace.locator('.simulation-trace li')).toHaveCount(6)
+  await expect(trace.locator('ol > li')).toHaveCount(6)
 }
 
 async function loginAs(page, username, secret) {
@@ -247,9 +268,9 @@ async function expectForbidden(page, method, path, body) {
     })
     let payload = {}
     try { payload = await response.json() } catch (_) { payload = {} }
-    return { status: response.status, code: payload.code }
+    return { status: response.status, code: payload.code, msg: payload.msg }
   }, { method, path, body })
-  expect(result.status === 403 || Number(result.code) === 403).toBeTruthy()
+  expect(result.status === 403 || Number(result.code) === 403, JSON.stringify(result)).toBeTruthy()
 }
 
 async function activateEventResource(page, resource) {
