@@ -197,7 +197,133 @@ function snapshotValue(value) {
   return value === MISSING ? undefined : clone(value)
 }
 
+const ARRAY_IDENTITY_FIELDS = ['id', 'code', 'key']
+
+function stableArrayIdentity(value) {
+  if (!plainObject(value)) return null
+  for (const field of ARRAY_IDENTITY_FIELDS) {
+    const identity = value[field]
+    if ((typeof identity === 'string' && identity.trim()) ||
+        (typeof identity === 'number' && Number.isFinite(identity))) {
+      const normalized = String(identity)
+      return {
+        field,
+        key: `${field}:${normalized}`,
+        path: `${field}=${normalized.replace(/]/g, '\\]')}`
+      }
+    }
+  }
+  return null
+}
+
+function identifiedArray(value) {
+  const source = value === MISSING ? [] : value
+  if (!Array.isArray(source)) return null
+  const entries = []
+  const byKey = new Map()
+  for (const item of source) {
+    const identity = stableArrayIdentity(item)
+    if (!identity || byKey.has(identity.key)) return null
+    const entry = { ...identity, value: item }
+    entries.push(entry)
+    byKey.set(identity.key, entry)
+  }
+  return { entries, byKey }
+}
+
+function identifiedArraySet(base, local, server) {
+  const values = [base, local, server]
+  if (!values.every(value => value === MISSING || Array.isArray(value))) return null
+  const descriptors = values.map(identifiedArray)
+  if (descriptors.some(value => !value)) return null
+  const hasIdentifiedEntry = descriptors.some(value => value.entries.length)
+  return hasIdentifiedEntry
+    ? { base: descriptors[0], local: descriptors[1], server: descriptors[2] }
+    : null
+}
+
+function identityOrder(descriptor, allowed) {
+  return descriptor.entries
+    .map(entry => entry.key)
+    .filter(key => !allowed || allowed.has(key))
+}
+
+function sameIdentityOrder(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+// Existing entries follow the side that alone changed their order. The server order wins when
+// neither side reordered, and incompatible concurrent reorders stay unresolved.
+// Additions unique to the other side are appended in their original relative order.
+function mergedArrayOrder(descriptors, path, differences) {
+  const baseKeys = new Set(descriptors.base.entries.map(entry => entry.key))
+  const localKeys = new Set(descriptors.local.entries.map(entry => entry.key))
+  const serverKeys = new Set(descriptors.server.entries.map(entry => entry.key))
+  const commonBaseKeys = new Set([...baseKeys].filter(key => localKeys.has(key) && serverKeys.has(key)))
+  const baseCommon = identityOrder(descriptors.base, commonBaseKeys)
+  const localCommon = identityOrder(descriptors.local, commonBaseKeys)
+  const serverCommon = identityOrder(descriptors.server, commonBaseKeys)
+  const localReordered = !sameIdentityOrder(localCommon, baseCommon)
+  const serverReordered = !sameIdentityOrder(serverCommon, baseCommon)
+  const localMembershipChanged = [...localKeys].some(key => !baseKeys.has(key)) ||
+    [...baseKeys].some(key => !localKeys.has(key))
+  const serverMembershipChanged = [...serverKeys].some(key => !baseKeys.has(key)) ||
+    [...baseKeys].some(key => !serverKeys.has(key))
+  const incompatibleReorder = localReordered && serverReordered &&
+    !sameIdentityOrder(localCommon, serverCommon)
+
+  if (incompatibleReorder) {
+    differences.push({
+      path: `${path}[@order]`,
+      kind: 'COLLISION',
+      baseValue: baseCommon.map(key => key.replace(':', '=')),
+      localValue: localCommon.map(key => key.replace(':', '=')),
+      serverValue: serverCommon.map(key => key.replace(':', '='))
+    })
+  }
+
+  const preferLocal = (localReordered && !serverReordered) ||
+    (!localReordered && !serverReordered && localMembershipChanged && !serverMembershipChanged)
+  const primary = preferLocal ? descriptors.local : descriptors.server
+  const secondary = preferLocal ? descriptors.server : descriptors.local
+  const order = primary.entries.map(entry => entry.key)
+  const included = new Set(order)
+  for (const entry of secondary.entries) {
+    if (!included.has(entry.key)) {
+      order.push(entry.key)
+      included.add(entry.key)
+    }
+  }
+  for (const entry of descriptors.base.entries) {
+    if (!included.has(entry.key)) order.push(entry.key)
+  }
+  return order
+}
+
+function mergeIdentifiedArray(base, local, server, path, differences) {
+  const descriptors = identifiedArraySet(base, local, server)
+  if (!descriptors) return null
+  const merged = []
+  for (const key of mergedArrayOrder(descriptors, path, differences)) {
+    const baseEntry = descriptors.base.byKey.get(key)
+    const localEntry = descriptors.local.byKey.get(key)
+    const serverEntry = descriptors.server.byKey.get(key)
+    const identity = serverEntry || localEntry || baseEntry
+    const value = mergeValue(
+      baseEntry ? baseEntry.value : MISSING,
+      localEntry ? localEntry.value : MISSING,
+      serverEntry ? serverEntry.value : MISSING,
+      `${path}[${identity.path}]`,
+      differences
+    )
+    if (value !== MISSING) merged.push(value)
+  }
+  return merged
+}
+
 function mergeValue(base, local, server, path, differences) {
+  const mergedArray = mergeIdentifiedArray(base, local, server, path, differences)
+  if (mergedArray) return mergedArray
   if ((base === MISSING || plainObject(base)) && plainObject(local) && plainObject(server)) {
     const baseKeys = plainObject(base) ? Object.keys(base) : []
     const keys = [...new Set([...baseKeys, ...Object.keys(local), ...Object.keys(server)])].sort()
@@ -394,8 +520,44 @@ function mergeConflictWithServer(journey) {
   }
 }
 
+function applyLocalIdentifiedArrayDelta(base, local, target) {
+  const descriptors = identifiedArraySet(base, local, target)
+  if (!descriptors) return null
+  const result = []
+  const baseOrder = identityOrder(descriptors.base)
+  const localOrder = identityOrder(descriptors.local)
+  const localStructureChanged = !sameIdentityOrder(localOrder, baseOrder)
+  const primary = localStructureChanged ? descriptors.local : descriptors.server
+  const secondary = localStructureChanged ? descriptors.server : descriptors.local
+  const order = primary.entries.map(entry => entry.key)
+  const included = new Set(order)
+  for (const entry of secondary.entries) {
+    if (!included.has(entry.key)) {
+      order.push(entry.key)
+      included.add(entry.key)
+    }
+  }
+  for (const entry of descriptors.base.entries) {
+    if (!included.has(entry.key)) order.push(entry.key)
+  }
+  for (const key of order) {
+    const baseEntry = descriptors.base.byKey.get(key)
+    const localEntry = descriptors.local.byKey.get(key)
+    const targetEntry = descriptors.server.byKey.get(key)
+    const value = applyLocalDelta(
+      baseEntry ? baseEntry.value : MISSING,
+      localEntry ? localEntry.value : MISSING,
+      targetEntry ? targetEntry.value : MISSING
+    )
+    if (value !== MISSING) result.push(value)
+  }
+  return result
+}
+
 function applyLocalDelta(base, local, target) {
   if (sameValue(base, local)) return target === MISSING ? MISSING : clone(target)
+  const identifiedDelta = applyLocalIdentifiedArrayDelta(base, local, target)
+  if (identifiedDelta) return identifiedDelta
   if ((base === MISSING || plainObject(base)) && plainObject(local) && plainObject(target)) {
     const value = clone(target)
     const baseKeys = plainObject(base) ? Object.keys(base) : []

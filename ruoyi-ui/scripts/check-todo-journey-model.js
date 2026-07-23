@@ -328,6 +328,220 @@ check('three-way merges independent fields added under the same new nested objec
   assert.strictEqual(merged.conflict, null)
 })
 
+check('three-way merges independent fields on different identified array entries', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A', target: 'QUEUE_A' },
+    { id: 'b', label: 'Node B', target: 'QUEUE_B' }
+  ]
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [{ ...nodes[0], label: 'Local A' }, nodes[1]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], { ...nodes[1], label: 'Server B' }], edges: [] } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const merged = model.mergeConflictWithServer(conflicted)
+
+  assert.deepStrictEqual(
+    merged.definition.routing.config.nodes.map(node => [node.id, node.label]),
+    [['a', 'Local A'], ['b', 'Server B']]
+  )
+  assert.strictEqual(merged.conflict, null)
+  assert(conflicted.conflict.differences.some(item =>
+    item.path === 'config.nodes[id=a].label' && item.kind === 'LOCAL'
+  ))
+  assert(conflicted.conflict.differences.some(item =>
+    item.path === 'config.nodes[id=b].label' && item.kind === 'SERVER'
+  ))
+})
+
+check('keeps same identified array entry field conflicts precise and unresolved', () => {
+  const base = fixture()
+  const node = { id: 'a', label: 'Node A', target: 'QUEUE_A' }
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [node], edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [{ ...node, label: 'Local A' }], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [{ ...node, label: 'Server A' }], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.strictEqual(merged.definition.routing.config.nodes[0].label, 'Server A')
+  assert.strictEqual(merged.conflict.collisions.length, 1)
+  assert.strictEqual(merged.conflict.collisions[0].path, 'config.nodes[id=a].label')
+})
+
+check('preserves independent identified array additions in deterministic order', () => {
+  const base = fixture()
+  const nodeA = { id: 'a', label: 'Node A' }
+  const nodeB = { id: 'b', label: 'Server B' }
+  const nodeC = { id: 'c', label: 'Local C' }
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodeA], edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [nodeA, nodeC], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodeA, nodeB], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.deepStrictEqual(merged.definition.routing.config.nodes.map(node => node.id), ['a', 'b', 'c'])
+  assert.strictEqual(merged.conflict, null)
+})
+
+check('preserves local insertion position when the server has no structural array change', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A' },
+    { id: 'b', label: 'Node B' }
+  ]
+  const localNode = { id: 'c', label: 'Local C' }
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [nodes[0], localNode, nodes[1]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], { ...nodes[1], label: 'Server B' }], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.deepStrictEqual(merged.definition.routing.config.nodes.map(node => node.id), ['a', 'c', 'b'])
+  assert.strictEqual(merged.definition.routing.config.nodes[2].label, 'Server B')
+  assert.strictEqual(merged.conflict, null)
+})
+
+check('preserves a local reorder when the server only edits an entry field', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A' },
+    { id: 'b', label: 'Node B' },
+    { id: 'c', label: 'Node C' }
+  ]
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [nodes[1], nodes[0], nodes[2]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], { ...nodes[1], label: 'Server B' }, nodes[2]], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.deepStrictEqual(merged.definition.routing.config.nodes.map(node => node.id), ['b', 'a', 'c'])
+  assert.strictEqual(merged.definition.routing.config.nodes[0].label, 'Server B')
+  assert.strictEqual(merged.conflict, null)
+})
+
+check('raises a precise order collision for incompatible concurrent reorders', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A' },
+    { id: 'b', label: 'Node B' },
+    { id: 'c', label: 'Node C' }
+  ]
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [nodes[1], nodes[0], nodes[2]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], nodes[2], nodes[1]], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.deepStrictEqual(merged.definition.routing.config.nodes.map(node => node.id), ['a', 'c', 'b'])
+  assert.strictEqual(merged.conflict.collisions.length, 1)
+  assert.strictEqual(merged.conflict.collisions[0].path, 'config.nodes[@order]')
+})
+
+check('treats identified array delete versus edit as an entry-level collision', () => {
+  const base = fixture()
+  const node = { id: 'a', label: 'Node A', target: 'QUEUE_A' }
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [node], edges: [] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [{ ...node, label: 'Server A' }], edges: [] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.strictEqual(merged.definition.routing.config.nodes[0].label, 'Server A')
+  assert.strictEqual(merged.conflict.collisions.length, 1)
+  assert.strictEqual(merged.conflict.collisions[0].path, 'config.nodes[id=a]')
+})
+
+check('keeps primitive arrays atomic and conflicts on divergent concurrent changes', () => {
+  const base = fixture()
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [], edges: ['a', 'b'] } } }
+    : step)
+  const original = model.hydrateJourney(base)
+  const local = model.applyStepPatch(original, 'ROUTING', {
+    config: { nodes: [], edges: ['a', 'b', 'c'] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [], edges: ['a', 'b', 'd'] } } }
+    : step)
+  const merged = model.mergeConflictWithServer(
+    model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  )
+
+  assert.deepStrictEqual(merged.definition.routing.config.edges, ['a', 'b', 'd'])
+  assert.strictEqual(merged.conflict.collisions.length, 1)
+  assert.strictEqual(merged.conflict.collisions[0].path, 'config.edges')
+})
+
 check('keeps true same-field collisions unresolved and never overwrites the server value', () => {
   const base = fixture()
   base.steps = base.steps.map(step => step.code === 'OWNER'
@@ -393,6 +607,62 @@ check('builds a local-preserving copy and applies the authoritative saved copy r
   assert.strictEqual(authoritativeCopy.dirty, false)
   assert.strictEqual(authoritativeCopy.conflict, null)
   assert.strictEqual(JSON.stringify(conflicted), snapshot)
+})
+
+check('save-copy preserves independent server fields in identified arrays', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A', target: 'QUEUE_A' },
+    { id: 'b', label: 'Node B', target: 'QUEUE_B' }
+  ]
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const local = model.applyStepPatch(model.hydrateJourney(base), 'ROUTING', {
+    config: { nodes: [{ ...nodes[0], label: 'Local A' }, nodes[1]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], { ...nodes[1], label: 'Server B' }], edges: [] } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const copiedServer = JSON.parse(JSON.stringify(server))
+  copiedServer.template.templateId = 99
+  copiedServer.template.versionId = 199
+  const copyDraft = model.buildConflictCopyJourney(conflicted, copiedServer)
+
+  assert.deepStrictEqual(
+    copyDraft.definition.routing.config.nodes.map(node => [node.id, node.label]),
+    [['a', 'Local A'], ['b', 'Server B']]
+  )
+})
+
+check('save-copy preserves a local reorder over an incompatible server reorder', () => {
+  const base = fixture()
+  const nodes = [
+    { id: 'a', label: 'Node A' },
+    { id: 'b', label: 'Node B' },
+    { id: 'c', label: 'Node C' }
+  ]
+  base.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes, edges: [] } } }
+    : step)
+  const local = model.applyStepPatch(model.hydrateJourney(base), 'ROUTING', {
+    config: { nodes: [nodes[1], nodes[0], nodes[2]], edges: [] }
+  })
+  const server = fixture()
+  server.template.lockVersion = 5
+  server.steps = base.steps.map(step => step.code === 'ROUTING'
+    ? { ...step, value: { config: { nodes: [nodes[0], nodes[2], nodes[1]], edges: [] } } }
+    : step)
+  const conflicted = model.mergeSaveResult(local, { status: 'CONFLICT', server })
+  const copiedServer = JSON.parse(JSON.stringify(server))
+  copiedServer.template.templateId = 99
+  copiedServer.template.versionId = 199
+  const copyDraft = model.buildConflictCopyJourney(conflicted, copiedServer)
+
+  assert.deepStrictEqual(copyDraft.definition.routing.config.nodes.map(node => node.id), ['b', 'a', 'c'])
 })
 
 check('rebases edits made during a save onto the fresh server baseline', () => {
