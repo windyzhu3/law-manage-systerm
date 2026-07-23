@@ -38,9 +38,15 @@ class TodoBusinessDirectoryMapperXmlContractTest
         assertFalse(xml.contains("a.assignment_id from biz_lead_assignment_log"));
         assertFalse(xml.matches("(?s).*biz_lead_followup\\s+f.*?f\\.del_flag.*"));
         assertTrue(xml.contains("approval_approver_id"));
-        assertTrue(xml.contains("rejection_reason_code"));
         assertTrue(xml.contains("rejection_reason"));
         assertTrue(xml.contains("node_type"));
+    }
+
+    @Test void rejectionWorkflowCategoryIsNeverProjectedAsAGovernedReasonCode()
+    {
+        assertFalse(xml.contains("rejection_reason_code"));
+        assertFalse(xml.contains("select c.confirm_type from biz_case_confirm"));
+        assertTrue(xml.contains("coalesce(nullif(c.remark,''),c.content)"));
     }
 
     private int occurrences(String value,String token){return (value.length()-value.replace(token,"").length())/token.length();}

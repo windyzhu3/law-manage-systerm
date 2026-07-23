@@ -71,11 +71,11 @@ class RuoYiTodoBusinessPayloadAccessTest
                 .containsEntry("reviewerId",31L);
 
         when(mapper.selectVisibleBusinessPayload(anyMap())).thenReturn(row(
-                "business_id",84L,"main_lawyer_id",21L,"rejection_reason_code","conflict",
-                "rejection_reason","存在利益冲突","business_status","pending"));
+                "business_id",84L,"main_lawyer_id",21L,"rejection_reason","存在利益冲突",
+                "business_status","pending"));
         assertThat(access.hydrate("CASE_REJECTED",1,"CASE",84L,actor).payload())
-                .containsEntry("reasonCode","conflict")
-                .containsEntry("reason","存在利益冲突");
+                .containsEntry("reason","存在利益冲突")
+                .doesNotContainKey("reasonCode");
 
         when(mapper.selectVisibleBusinessPayload(anyMap())).thenReturn(row(
                 "business_id",85L,"node_id",1001L,"node_type","ENFORCEMENT_PROGRESS","node_code","HEARING"));
@@ -111,7 +111,7 @@ class RuoYiTodoBusinessPayloadAccessTest
                 new Fixture("CASE","CASE_CLASSIFIED_COMPREHENSIVE","classification"),
                 new Fixture("CASE","CASE_CLASSIFIED_NON_LITIGATION","classification"),
                 new Fixture("CASE","CASE_CLASSIFIED_ENFORCEMENT","classification"),
-                new Fixture("CASE","CASE_REJECTED","reasonCode"),
+                new Fixture("CASE","CASE_REJECTED","reason"),
                 new Fixture("CASE","CASE_TRANSFER_REQUESTED","transferId"),
                 new Fixture("CASE","CASE_TRANSFER_APPROVED","approvedBy"),
                 new Fixture("MATTER","ARCHIVE_APPLIED","action"),
@@ -132,7 +132,7 @@ class RuoYiTodoBusinessPayloadAccessTest
                 "sign_date","2026-07-23","receivable_amount",new BigDecimal("100"),
                 "plan_receive_date","2026-07-30","plan_id",701L,"received_amount",new BigDecimal("100"),
                 "invoice_status","issued","contract_id",83L,"main_lawyer_id",21L,
-                "rejection_reason_code","conflict","rejection_reason","存在利益冲突",
+                "rejection_reason","存在利益冲突",
                 "transfer_id",601L,"target_lawyer_id",22L,"transfer_reason","specialty",
                 "archive_id",501L,"archive_no","AR-001","node_id",401L,"node_code","HEARING",
                 "node_type","ENFORCEMENT_PROGRESS","expense_id",301L,"expense_amount",new BigDecimal("50"),

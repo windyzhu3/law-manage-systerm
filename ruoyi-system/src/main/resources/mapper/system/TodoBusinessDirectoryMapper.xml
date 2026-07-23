@@ -143,8 +143,6 @@
                     order by t.transfer_id desc limit 1) target_lawyer_id,
                   (select t.transfer_reason from biz_case_transfer t where t.case_id=b.case_id
                     order by t.transfer_id desc limit 1) transfer_reason,
-                  (select c.confirm_type from biz_case_confirm c where c.case_id=b.case_id
-                    and c.confirm_status='rejected' order by c.confirm_id desc limit 1) rejection_reason_code,
                   (select coalesce(nullif(c.remark,''),c.content) from biz_case_confirm c where c.case_id=b.case_id
                     and c.confirm_status='rejected' order by c.confirm_id desc limit 1) rejection_reason
                 from biz_case b where b.del_flag='0' and b.case_id=#{businessId}

@@ -192,6 +192,32 @@ class TodoBusinessPayloadHydrationServiceTest
         assertThat(result.coveragePercent()).isEqualTo(50);
     }
 
+    @Test void missingStructuredRejectionReasonCodeRemainsMissingUntilManuallyCompleted()
+    {
+        when(access.supports("CASE")).thenReturn(true);
+        when(resources.fields("CASE","CASE_REJECTED")).thenReturn(List.of(
+                field("reasonCode",true,false,"CASE_REJECTED"),
+                field("reason",true,false,"CASE_REJECTED"),
+                field("lawyerId",true,false,"CASE_REJECTED")));
+        when(access.hydrate("CASE_REJECTED",1,"CASE",84L,actor)).thenReturn(new PayloadHydration(
+                Map.of("reason","存在利益冲突","lawyerId",21L),
+                List.of(source("reason","存在利益冲突","BUSINESS_OBJECT"),
+                        source("lawyerId",21L,"BUSINESS_OBJECT")),false));
+
+        PayloadHydration missing=service.hydrate("CASE_REJECTED",1,"CASE",84L,actor);
+        PayloadHydration completed=service.hydrate("CASE_REJECTED",1,"CASE",84L,actor,
+                Map.of("reasonCode","CONFLICT"));
+
+        assertThat(missing.payload()).doesNotContainKey("reasonCode");
+        assertThat(missing.fields()).filteredOn(field->field.path().equals("reasonCode"))
+                .allMatch(field->field.missing()&&"MISSING".equals(field.source()));
+        assertThat(missing.coveragePercent()).isEqualTo(67);
+        assertThat(completed.payload()).containsEntry("reasonCode","CONFLICT");
+        assertThat(completed.fields()).filteredOn(field->field.path().equals("reasonCode"))
+                .allMatch(field->!field.missing()&&"MANUAL_OVERRIDE".equals(field.source()));
+        assertThat(completed.coveragePercent()).isEqualTo(100);
+    }
+
     @Test void rejectsZeroUnknownSampleAndAmbiguousAdapters()
     {
         assertThatThrownBy(()->service.hydrate("LEAD_ASSIGNED",1,"LEAD",0L,actor))

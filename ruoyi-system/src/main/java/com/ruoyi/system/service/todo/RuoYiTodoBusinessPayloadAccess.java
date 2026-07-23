@@ -180,7 +180,6 @@ public class RuoYiTodoBusinessPayloadAccess implements TodoBusinessPayloadAccess
             {payload.put("classification","ENFORCEMENT");put(payload,"primaryAssistantId",lawyer);put(payload,"caseManagerId",owner);}
             case "CASE_REJECTED" ->
             {
-                put(payload,"reasonCode",value(row,"rejection_reason_code","rejectionReasonCode"));
                 put(payload,"reason",value(row,"rejection_reason","rejectionReason"));
                 put(payload,"lawyerId",lawyer);
             }
