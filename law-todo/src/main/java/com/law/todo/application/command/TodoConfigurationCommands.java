@@ -77,6 +77,18 @@ public final class TodoConfigurationCommands
         }
     }
 
+    public record ConfigurationResourceCommand(Long resourceItemId,
+            @NotBlank @Pattern(regexp="FIELD|MATERIAL|DOD_RECIPE") String resourceType,
+            @NotBlank String resourceCode,@NotBlank String resourceName,String description,
+            @NotBlank @Pattern(regexp="LEAD|CUSTOMER|CONTRACT|CASE|MATTER") String businessType,
+            @NotBlank String valueJson,@NotBlank @Pattern(regexp="ACTIVE|DISABLED") String status,
+            @NotNull @PositiveOrZero Integer sortOrder,@NotBlank String actionId,
+            @NotNull @PositiveOrZero Integer expectedVersion)
+    {
+        @AssertTrue(message="Configuration resource value must be a JSON object")
+        public boolean isValueJsonValid(){return JSON.isValidObject(valueJson);}
+    }
+
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
             @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,
             @NotBlank String businessType,@NotNull @Positive Long businessId,

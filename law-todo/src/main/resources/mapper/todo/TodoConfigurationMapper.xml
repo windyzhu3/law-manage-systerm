@@ -364,4 +364,19 @@
       and (business_type=#{businessType} or business_type='ALL')
     order by sort_order,resource_name,resource_code
   </select>
+  <select id="selectConfigurationResourceItem" resultType="java.util.Map">
+    select * from todo_configuration_resource_item where resource_item_id=#{resourceItemId}
+  </select>
+  <insert id="insertConfigurationResourceItem" useGeneratedKeys="true" keyProperty="resourceItemId">
+    insert into todo_configuration_resource_item(resource_type,resource_code,resource_name,description,business_type,
+      value_json,status,sort_order,version,create_by)
+    values(#{resourceType},#{resourceCode},#{resourceName},#{description},#{businessType},
+      cast(#{valueJson} as json),#{status},#{sortOrder},0,#{createBy})
+  </insert>
+  <update id="updateConfigurationResourceItemConditionally">
+    update todo_configuration_resource_item
+    set resource_name=#{resourceName},description=#{description},value_json=cast(#{valueJson} as json),
+      status=#{status},sort_order=#{sortOrder},update_by=#{updateBy},update_time=sysdate(),version=version+1
+    where resource_item_id=#{resourceItemId} and version=#{expectedVersion}
+  </update>
 </mapper>

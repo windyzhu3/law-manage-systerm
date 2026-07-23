@@ -91,8 +91,9 @@ public class TodoConfigurationResourceCatalogService
     public List<DodRecipeResource> recipes(String businessType)
     {return mapper.selectConfigurationResourceItems("DOD_RECIPE",businessType).stream().map(row->{JSONObject value=parseObject(row.get("value_json"));return new DodRecipeResource(
             text(row,"resource_code"),text(row,"resource_name"),text(row,"description"),text(row,"business_type"),
+            strings(value.get("businessActions")),strings(value.get("templateStages")),integer(value.get("recommendationPriority")),
             strings(value.get("requiredFields")),strings(value.get("requiredAttachments")),strings(value.get("validatorRefs")),
-            listOfMaps(value.get("conditionalRules")));}).toList();}
+            listOfMaps(value.get("conditionalRules")),strings(value.get("employeeInstructions")));}).toList();}
 
     public boolean isSelectableValidator(String code,String businessType)
     {return validators(businessType).stream().anyMatch(row->row.code().equals(code)&&row.selectable());}
@@ -160,6 +161,27 @@ public class TodoConfigurationResourceCatalogService
         {this(code,name,type,required,null,false,operators,sourceEvents,List.of());}
     }
     public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder) { }
-    public record DodRecipeResource(String code,String name,String description,String businessType,List<String> requiredFields,
-            List<String> requiredAttachments,List<String> validatorRefs,List<Map<String,Object>> conditionalRules) { }
+    public record DodRecipeResource(String code,String name,String description,String businessType,
+            List<String> businessActions,List<String> templateStages,int recommendationPriority,
+            List<String> requiredFields,List<String> requiredAttachments,List<String> validatorRefs,
+            List<Map<String,Object>> conditionalRules,List<String> employeeInstructions)
+    {
+        public DodRecipeResource
+        {
+            businessActions=businessActions==null?List.of():List.copyOf(businessActions);
+            templateStages=templateStages==null?List.of():List.copyOf(templateStages);
+            requiredFields=requiredFields==null?List.of():List.copyOf(requiredFields);
+            requiredAttachments=requiredAttachments==null?List.of():List.copyOf(requiredAttachments);
+            validatorRefs=validatorRefs==null?List.of():List.copyOf(validatorRefs);
+            conditionalRules=conditionalRules==null?List.of():List.copyOf(conditionalRules);
+            employeeInstructions=employeeInstructions==null?List.of():List.copyOf(employeeInstructions);
+        }
+        public DodRecipeResource(String code,String name,String description,String businessType,
+                List<String> requiredFields,List<String> requiredAttachments,List<String> validatorRefs,
+                List<Map<String,Object>> conditionalRules)
+        {
+            this(code,name,description,businessType,List.of(),List.of(),0,requiredFields,requiredAttachments,
+                    validatorRefs,conditionalRules,List.of());
+        }
+    }
 }

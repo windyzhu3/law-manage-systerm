@@ -48,5 +48,8 @@ public interface TodoConfigurationMapper
     List<Map<String,Object>> selectValidatorMetadata();
     List<Map<String,Object>> selectActiveEventResourceSchemas(String businessType);
     List<Map<String,Object>> selectConfigurationResourceItems(@Param("resourceType") String resourceType,@Param("businessType") String businessType);
+    Map<String,Object> selectConfigurationResourceItem(long resourceItemId);
+    int insertConfigurationResourceItem(Map<String,Object> row);
+    int updateConfigurationResourceItemConditionally(Map<String,Object> row);
     List<Map<String,Object>> selectPublishedSimulationCandidates();
 }

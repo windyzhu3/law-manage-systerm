@@ -1,0 +1,81 @@
+insert into todo_configuration_resource_item(
+  resource_type,resource_code,resource_name,description,business_type,value_json,status,sort_order,create_by
+) values
+(
+  'DOD_RECIPE','LEAD_FIRST_CONTACT_READY','首联完成','记录联系时间与跟进结果','LEAD',
+  json_object(
+    'businessActions',json_array('FIRST_CONTACT'),
+    'templateStages',json_array('LEAD_FOLLOWUP'),
+    'recommendationPriority',100,
+    'requiredFields',json_array('contactedAt','contactResult'),
+    'requiredAttachments',json_array(),
+    'conditionalRules',json_array(),
+    'validatorRefs',json_array(),
+    'employeeInstructions',json_array('记录联系时间并填写跟进结果')
+  ),
+  'ACTIVE',10,'migration'
+),
+(
+  'DOD_RECIPE','CUSTOMER_PROGRESS_READY','客户跟进完成','记录客户实质进展并保留跟进凭证','CUSTOMER',
+  json_object(
+    'businessActions',json_array('FOLLOW_UP'),
+    'templateStages',json_array('CUSTOMER_FOLLOWUP'),
+    'recommendationPriority',90,
+    'requiredFields',json_array('progressType','progressAt'),
+    'requiredAttachments',json_array('FOLLOWUP_PROOF'),
+    'conditionalRules',json_array(),
+    'validatorRefs',json_array(),
+    'employeeInstructions',json_array('填写客户进展类型和时间并上传跟进凭证')
+  ),
+  'ACTIVE',10,'migration'
+),
+(
+  'DOD_RECIPE','CONTRACT_SIGN_READY','合同签署完成','登记合同签署结果并上传已签合同','CONTRACT',
+  json_object(
+    'businessActions',json_array('SIGN_CONTRACT'),
+    'templateStages',json_array('CONTRACT_SIGNING'),
+    'recommendationPriority',90,
+    'requiredFields',json_array('contractNo','signedAt','signResult'),
+    'requiredAttachments',json_array('SIGNED_CONTRACT'),
+    'conditionalRules',json_array(),
+    'validatorRefs',json_array('ContractTodoValidator'),
+    'employeeInstructions',json_array('填写合同编号、签署时间和结果并上传已签合同')
+  ),
+  'ACTIVE',10,'migration'
+),
+(
+  'DOD_RECIPE','CASE_ACCEPT_READY','接案确认完成','记录承办律师接案结果并上传确认材料','CASE',
+  json_object(
+    'businessActions',json_array('ACCEPT_CASE'),
+    'templateStages',json_array('CASE_ASSIGNMENT'),
+    'recommendationPriority',90,
+    'requiredFields',json_array('acceptResult'),
+    'requiredAttachments',json_array('CASE_ACCEPTANCE_FORM'),
+    'conditionalRules',json_array(),
+    'validatorRefs',json_array('CaseTodoValidator'),
+    'employeeInstructions',json_array('填写接案结果并上传接案确认书')
+  ),
+  'ACTIVE',10,'migration'
+),
+(
+  'DOD_RECIPE','MATTER_ARCHIVE_READY','归档材料齐备','完成归档交接并上传归档材料','MATTER',
+  json_object(
+    'businessActions',json_array('ARCHIVE_MATTER'),
+    'templateStages',json_array('MATTER_ARCHIVE'),
+    'recommendationPriority',90,
+    'requiredFields',json_array('handoffResult','archiveNo'),
+    'requiredAttachments',json_array('ARCHIVE_HANDOFF_FORM','ARCHIVE_SCAN'),
+    'conditionalRules',json_array(),
+    'validatorRefs',json_array('ArchiveTodoValidator'),
+    'employeeInstructions',json_array('填写归档交接结果和归档编号并上传归档材料')
+  ),
+  'ACTIVE',10,'migration'
+)
+on duplicate key update
+  resource_name=values(resource_name),
+  description=values(description),
+  value_json=values(value_json),
+  status=values(status),
+  sort_order=values(sort_order),
+  update_by='migration',
+  update_time=sysdate();
