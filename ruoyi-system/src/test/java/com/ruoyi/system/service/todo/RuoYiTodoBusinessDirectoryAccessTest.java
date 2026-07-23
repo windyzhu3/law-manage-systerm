@@ -32,7 +32,7 @@ class RuoYiTodoBusinessDirectoryAccessTest
 
         ArgumentCaptor<Map<String,Object>> queries=ArgumentCaptor.forClass(Map.class);
         verify(mapper,org.mockito.Mockito.times(5)).selectVisibleBusinessObjects(queries.capture());
-        assertEquals(java.util.Arrays.asList(null,"customer:list,customer:query","contract:list,contract:query","case:list,case:query",
+        assertEquals(java.util.Arrays.asList("lead:query,lead:mine:query","customer:list,customer:query","contract:list,contract:query","case:list,case:query",
                 "matter:list,matter:query,matter:mine:list,matter:mine:query"),queries.getAllValues().stream().map(q->q.get("permissions")).toList());
         for(Map<String,Object> query:queries.getAllValues())
         {assertEquals(7L,query.get("currentUserId"));assertEquals(2L,query.get("currentDeptId"));assertEquals(true,query.get("dataScope"));}

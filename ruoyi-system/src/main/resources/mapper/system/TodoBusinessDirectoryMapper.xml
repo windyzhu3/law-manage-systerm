@@ -89,4 +89,82 @@
     <select id="selectVisibleBusinessObject" resultType="java.util.Map">
         <include refid="visibleDirectorySource"/> limit 1
     </select>
+
+    <!-- Payload projection deliberately repeats the same actorDataScope predicate as the directory lookup. -->
+    <select id="selectVisibleBusinessPayload" resultType="java.util.Map">
+        <choose>
+            <when test="businessType == 'LEAD'">
+                select b.lead_id business_id,b.lead_no business_no,b.lead_name business_name,
+                  b.owner_id owner_id,b.dept_id dept_id,b.status business_status,b.priority,
+                  b.customer_id customer_id,b.next_follow_time,b.last_follow_time,b.invalid_reason,
+                  (select a.assignment_id from biz_lead_assignment_log a where a.lead_id=b.lead_id
+                    order by a.assignment_id desc limit 1) assignment_id,
+                  (select count(*) from biz_lead_followup f where f.lead_id=b.lead_id and f.del_flag='0') followup_count
+                from biz_lead b where b.del_flag='0' and b.lead_id=#{businessId}
+                <include refid="actorDataScope"/> limit 1
+            </when>
+            <when test="businessType == 'CUSTOMER'">
+                select b.customer_id business_id,b.customer_no business_no,b.customer_name business_name,
+                  b.owner_id owner_id,b.dept_id dept_id,b.status business_status,b.lead_id,
+                  b.customer_level,b.first_contact_time,b.last_follow_time,b.next_follow_time
+                from biz_customer b where b.del_flag='0' and b.customer_id=#{businessId}
+                <include refid="actorDataScope"/> limit 1
+            </when>
+            <when test="businessType == 'CONTRACT'">
+                select b.contract_id business_id,b.contract_no business_no,b.contract_name business_name,
+                  b.owner_id owner_id,b.dept_id dept_id,b.customer_id,b.lawyer_id,b.sign_amount,
+                  b.sign_date,b.sign_status,b.audit_status,b.contract_status,b.risk_level,
+                  (select a.approval_id from biz_contract_approval a where a.contract_id=b.contract_id
+                    order by a.approval_id desc limit 1) approval_id,
+                  (select p.plan_id from biz_contract_fee_plan p where p.contract_id=b.contract_id
+                    order by p.plan_id desc limit 1) plan_id,
+                  (select p.receivable_amount from biz_contract_fee_plan p where p.contract_id=b.contract_id
+                    order by p.plan_id desc limit 1) receivable_amount,
+                  (select p.received_amount from biz_contract_fee_plan p where p.contract_id=b.contract_id
+                    order by p.plan_id desc limit 1) received_amount,
+                  (select p.plan_receive_date from biz_contract_fee_plan p where p.contract_id=b.contract_id
+                    order by p.plan_id desc limit 1) plan_receive_date,
+                  (select p.invoice_status from biz_contract_fee_plan p where p.contract_id=b.contract_id
+                    order by p.plan_id desc limit 1) invoice_status
+                from biz_contract b where b.del_flag='0' and b.contract_id=#{businessId}
+                <include refid="actorDataScope"/> limit 1
+            </when>
+            <when test="businessType == 'CASE'">
+                select b.case_id business_id,b.case_no business_no,b.case_name business_name,
+                  b.owner_id owner_id,b.dept_id dept_id,b.customer_id,b.contract_id,b.case_type,
+                  b.case_status business_status,b.main_lawyer_id,b.assistant_lawyer_ids,b.current_node,
+                  (select a.assignment_id from biz_case_assignment a where a.case_id=b.case_id
+                    order by a.assignment_id desc limit 1) assignment_id,
+                  (select t.transfer_id from biz_case_transfer t where t.case_id=b.case_id
+                    order by t.transfer_id desc limit 1) transfer_id,
+                  (select t.to_lawyer_id from biz_case_transfer t where t.case_id=b.case_id
+                    order by t.transfer_id desc limit 1) target_lawyer_id,
+                  (select t.transfer_reason from biz_case_transfer t where t.case_id=b.case_id
+                    order by t.transfer_id desc limit 1) transfer_reason
+                from biz_case b where b.del_flag='0' and b.case_id=#{businessId}
+                <include refid="actorDataScope"/> limit 1
+            </when>
+            <when test="businessType == 'MATTER'">
+                select b.case_id business_id,b.case_no business_no,b.case_name business_name,
+                  b.owner_id owner_id,b.dept_id dept_id,b.customer_id,b.contract_id,b.case_type,
+                  b.case_status business_status,b.main_lawyer_id,b.assistant_lawyer_ids,b.current_node,
+                  b.case_stage,b.next_key_date,b.recent_progress,b.last_progress_time,b.fee_status,b.archive_status,
+                  (select n.node_id from biz_case_node n where n.case_id=b.case_id and n.del_flag='0'
+                    order by n.node_id desc limit 1) node_id,
+                  (select coalesce(n.node_type,n.node_name) from biz_case_node n where n.case_id=b.case_id and n.del_flag='0'
+                    order by n.node_id desc limit 1) node_code,
+                  (select e.expense_id from biz_case_expense e where e.case_id=b.case_id and e.del_flag='0'
+                    order by e.expense_id desc limit 1) expense_id,
+                  (select e.amount from biz_case_expense e where e.case_id=b.case_id and e.del_flag='0'
+                    order by e.expense_id desc limit 1) expense_amount,
+                  (select a.archive_id from biz_case_archive a where a.case_id=b.case_id
+                    order by a.archive_id desc limit 1) archive_id,
+                  (select a.archive_no from biz_case_archive a where a.case_id=b.case_id
+                    order by a.archive_id desc limit 1) archive_no
+                from biz_case b where b.del_flag='0' and b.case_id=#{businessId}
+                <include refid="actorDataScope"/> limit 1
+            </when>
+            <otherwise>select null business_id where 1=0</otherwise>
+        </choose>
+    </select>
 </mapper>

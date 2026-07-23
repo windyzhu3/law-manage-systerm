@@ -63,6 +63,10 @@ public class TodoConfigurationResourceCatalogService
 
     @Transactional(readOnly=true)
     public List<FieldResource> fields(String businessType)
+    {return fields(businessType,null);}
+
+    @Transactional(readOnly=true)
+    public List<FieldResource> fields(String businessType,String eventType)
     {
         Map<String,MutableField> fields=new LinkedHashMap<>();
         List<Map<String,Object>> configured=mapper.selectConfigurationResourceItems("FIELD",businessType);
@@ -74,9 +78,10 @@ public class TodoConfigurationResourceCatalogService
         List<Map<String,Object>> schemas=mapper.selectActiveEventResourceSchemas(businessType);
         for(Map<String,Object> event:schemas==null?List.<Map<String,Object>>of():schemas)
         {
-            String eventType=text(event,"event_type");
+            String sourceEvent=text(event,"event_type");
+            if(eventType!=null&&!eventType.isBlank()&&!eventType.equals(sourceEvent))continue;
             for(PayloadFieldDescriptor descriptor:payloadSchemas.describe(text(event,"payload_schema_json"),businessType))
-                fields.computeIfAbsent(descriptor.path(),MutableField::new).merge(descriptor,eventType);
+                fields.computeIfAbsent(descriptor.path(),MutableField::new).merge(descriptor,sourceEvent);
         }
         return fields.values().stream().map(MutableField::view).sorted(Comparator.comparing(FieldResource::name).thenComparing(FieldResource::code)).toList();
     }

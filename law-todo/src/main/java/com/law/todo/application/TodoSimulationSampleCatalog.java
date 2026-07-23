@@ -1,11 +1,17 @@
 package com.law.todo.application;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import com.alibaba.fastjson2.JSON;
+import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoBusinessDirectoryAccess.DirectoryEntry;
 import com.law.todo.spi.TodoBusinessDirectoryAccess.DirectoryPage;
 
@@ -19,6 +25,11 @@ public class TodoSimulationSampleCatalog
             sample(-1003,"DEMO-CT-001","示例合同－劳动争议委托","CONTRACT"),
             sample(-1004,"DEMO-CA-001","示例案件－劳动争议案","CASE"),
             sample(-1005,"DEMO-M-001","示例事项－一审办理","MATTER"));
+    @Autowired(required=false)
+    private TodoConfigurationMapper mapper;
+
+    public TodoSimulationSampleCatalog() { }
+    public TodoSimulationSampleCatalog(TodoConfigurationMapper mapper){this.mapper=mapper;}
 
     public DirectoryPage search(String businessType,String keyword,int offset,int limit)
     {
@@ -32,6 +43,34 @@ public class TodoSimulationSampleCatalog
 
     public Optional<DirectoryEntry> find(String businessType,long businessId)
     {return SAMPLES.stream().filter(row->row.businessType().equals(businessType)&&row.businessId()==businessId).findFirst();}
+
+    public boolean contains(String businessType,long businessId){return find(businessType,businessId).isPresent();}
+    public boolean hasSample(String businessType){return SAMPLES.stream().anyMatch(row->row.businessType().equals(businessType));}
+
+    public Map<String,Object> samplePayload(String eventType,int payloadVersion,String businessType,long businessId)
+    {
+        DirectoryEntry sample=find(businessType,businessId).orElseThrow();
+        Map<String,Object> payload=new LinkedHashMap<>();
+        Map<String,Object> event=mapper==null?null:mapper.selectEventResourceByTypeVersion(eventType,payloadVersion);
+        if(event!=null&&businessType.equals(text(event,"business_object_type","businessObjectType")))
+        {
+            Object value=value(event,"sample_payload_json","samplePayloadJson");
+            if(value instanceof Map<?,?> map)map.forEach((key,item)->payload.put(String.valueOf(key),item));
+            else if(value!=null&&JSON.isValidObject(String.valueOf(value)))
+                JSON.parseObject(String.valueOf(value)).forEach(payload::put);
+        }
+        payload.putIfAbsent(identityField(businessType),sample.businessId());
+        payload.putIfAbsent("businessNo",sample.businessNo());
+        payload.putIfAbsent("businessName",sample.businessName());
+        return Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+    }
+
+    private String identityField(String businessType)
+    {return switch(businessType){case "LEAD"->"leadId";case "CUSTOMER"->"customerId";case "CONTRACT"->"contractId";case "CASE"->"caseId";case "MATTER"->"matterId";default->"businessId";};}
+    private Object value(Map<String,Object> row,String snake,String camel)
+    {return row.containsKey(snake)?row.get(snake):row.get(camel);}
+    private String text(Map<String,Object> row,String snake,String camel)
+    {Object result=value(row,snake,camel);return result==null?null:String.valueOf(result);}
 
     private static DirectoryEntry sample(long id,String no,String name,String type)
     {return new DirectoryEntry(id,no,name,type,"SAMPLE",true);}

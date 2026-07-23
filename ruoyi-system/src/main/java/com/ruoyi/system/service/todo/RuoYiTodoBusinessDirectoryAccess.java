@@ -16,6 +16,7 @@ import com.ruoyi.system.mapper.TodoBusinessDirectoryMapper;
 public class RuoYiTodoBusinessDirectoryAccess implements TodoBusinessDirectoryAccess
 {
     private static final Map<String,String> PERMISSIONS=Map.of(
+            "LEAD","lead:query,lead:mine:query",
             "CUSTOMER","customer:list,customer:query",
             "CONTRACT","contract:list,contract:query",
             "CASE","case:list,case:query",
@@ -50,12 +51,14 @@ public class RuoYiTodoBusinessDirectoryAccess implements TodoBusinessDirectoryAc
         return row==null||row.isEmpty()?Optional.empty():Optional.of(entry(row));
     }
 
-    private Map<String,Object> query(String type,Actor actor)
+    static Map<String,Object> actorScopedQuery(String type,Actor actor)
     {
         Map<String,Object> query=new LinkedHashMap<>();query.put("businessType",type);query.put("currentUserId",actor.userId());
         query.put("currentDeptId",actor.deptId());query.put("dataScope",!Long.valueOf(1L).equals(actor.userId()));
         query.put("permissions",PERMISSIONS.get(type));return query;
     }
+
+    private Map<String,Object> query(String type,Actor actor){return actorScopedQuery(type,actor);}
 
     private DirectoryEntry entry(Map<String,Object> row)
     {return new DirectoryEntry(number(row,"business_id","businessId"),text(row,"business_no","businessNo"),

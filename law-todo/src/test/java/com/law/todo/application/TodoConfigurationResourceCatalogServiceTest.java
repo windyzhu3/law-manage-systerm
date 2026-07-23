@@ -119,6 +119,23 @@ class TodoConfigurationResourceCatalogServiceTest
         assertTrue(service.fields("LEAD").isEmpty());
     }
 
+    @Test void eventScopedFieldsDoNotInheritRequiredFlagsFromOtherEvents()
+    {
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(
+                Map.of("event_type","LEAD_CREATED","payload_schema_json","""
+                {"type":"object","required":["ownerId"],"properties":{"ownerId":{"type":"integer","title":"负责人"}}}
+                """),
+                Map.of("event_type","LEAD_ASSIGNED","payload_schema_json","""
+                {"type":"object","properties":{"ownerId":{"type":"integer","title":"负责人"}}}
+                """)));
+
+        var fields=service.fields("LEAD","LEAD_ASSIGNED");
+
+        assertEquals(1,fields.size());
+        assertFalse(fields.get(0).required());
+        assertEquals(List.of("LEAD_ASSIGNED"),fields.get(0).sourceEvents());
+    }
+
     @Test void returnsBusinessMaterialsAndRecipesAsTypedResources()
     {
         when(mapper.selectConfigurationResourceItems("MATERIAL","MATTER")).thenReturn(List.of(resource("MATERIAL","ARCHIVE_FORM","归档表","{}")));
