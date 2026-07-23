@@ -870,12 +870,12 @@ assert.strictEqual(model.canLeave(changed), false)
 - [ ] **Step 2: Add the script entry and verify failure**
 
 ```json
-"test:todo-phase-two": "node scripts/check-todo-journey-model.js && node scripts/check-todo-phase-two-ux.js"
+"test:todo-phase-two": "node scripts/check-todo-journey-model.js"
 ```
 
 Run: `npm run test:todo-phase-two`
 
-Expected: FAIL because the model and UX contract script do not exist.
+Expected: FAIL because the journey model does not exist. Task 9 creates the UX source-contract script and extends this package entry.
 
 - [ ] **Step 3: Implement immutable model transformations**
 
@@ -937,6 +937,7 @@ git commit -m "feat(todo-config): add journey client model"
 - Create: `ruoyi-ui/src/views/todo/config/template/TemplateProgressCell.vue`
 - Modify: `ruoyi-ui/src/views/todo/config/styles/config-center.scss`
 - Create: `ruoyi-ui/scripts/check-todo-phase-two-ux.js`
+- Modify: `ruoyi-ui/package.json`
 
 **Interfaces:**
 - Consumes: `listTodoTemplateWorkbench(params)` from Task 7; no client-side per-row journey requests.
