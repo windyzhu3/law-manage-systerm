@@ -21,6 +21,7 @@ import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand
 import com.law.todo.application.command.TodoConfigurationCommands.RuleReference;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.TemplateDraftRuleCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.SimulateDefinitionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateRuleReference;
@@ -138,6 +139,31 @@ class TodoConfigurationCommandValidationTest
                 Map.of("event","created"),LocalDateTime.of(2026,7,20,9,0),List.of(completion));
 
         assertTrue(violations(command).contains("taskCompletions[0].payload"));
+    }
+
+    @Test void simulationCommandStringsNeverExposeRawPayloadValues()
+    {
+        String manualSecret="MANUAL_OVERRIDE_SECRET_8D51";
+        String engineSecret="ENGINE_PAYLOAD_SECRET_4A29";
+        String completionSecret="COMPLETION_PAYLOAD_SECRET_1F73";
+        LocalDateTime effectiveAt=LocalDateTime.of(2026,7,23,9,0);
+        VirtualTaskCompletionSample completion=new VirtualTaskCompletionSample("review",0,
+                Map.of("neutral",completionSecret),effectiveAt.plusMinutes(5));
+        JourneyPayloadCommand payloadCommand=new JourneyPayloadCommand(1L,2L,"LEAD_CREATED",1,"LEAD",-1001L,
+                Map.of("neutral",manualSecret),"hash");
+        JourneySimulationCommand journeyCommand=new JourneySimulationCommand(1L,2L,"LEAD_CREATED",1,"LEAD",-1001L,
+                Map.of("neutral",manualSecret),effectiveAt,List.of(completion),"hash");
+        ConfigurationSimulationCommand configurationCommand=new ConfigurationSimulationCommand("request",2L,
+                "LEAD_CREATED",1,"LEAD",1001L,Map.of("neutral",engineSecret),effectiveAt,List.of(completion),"hash");
+        SimulateDefinitionCommand derivedCommand=configurationCommand.toDefinitionCommand();
+
+        for (Object command : List.of(payloadCommand,journeyCommand,configurationCommand,derivedCommand,completion))
+        {
+            String representation=command.toString();
+            assertFalse(representation.contains(manualSecret),command.getClass().getSimpleName());
+            assertFalse(representation.contains(engineSecret),command.getClass().getSimpleName());
+            assertFalse(representation.contains(completionSecret),command.getClass().getSimpleName());
+        }
     }
 
     @Test void templateDetailRuleReferencesAreImmutableTypedProjections()

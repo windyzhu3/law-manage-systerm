@@ -96,6 +96,14 @@ public final class TodoConfigurationCommands
         public JourneyPayloadCommand { manualOverrides=immutableMap(manualOverrides); }
         @AssertTrue(message="Simulation business ID must not be zero")
         public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
+
+        @Override
+        public String toString()
+        {
+            return "JourneyPayloadCommand[templateId="+templateId+", versionId="+versionId
+                    +", payloadVersion="+payloadVersion+", businessId="+businessId
+                    +", manualOverrideCount="+manualOverrides.size()+"]";
+        }
     }
 
     public record JourneySimulationCommand(@NotNull @Positive Long templateId,@NotNull @Positive Long versionId,
@@ -111,6 +119,15 @@ public final class TodoConfigurationCommands
         }
         @AssertTrue(message="Simulation business ID must not be zero")
         public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
+
+        @Override
+        public String toString()
+        {
+            return "JourneySimulationCommand[templateId="+templateId+", versionId="+versionId
+                    +", payloadVersion="+payloadVersion+", businessId="+businessId
+                    +", manualOverrideCount="+manualOverrides.size()
+                    +", taskCompletionCount="+taskCompletions.size()+"]";
+        }
     }
 
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
@@ -138,6 +155,14 @@ public final class TodoConfigurationCommands
         {
             return new TodoDefinitionCommands.SimulateDefinitionCommand(payload,businessType,businessId,effectiveAt,
                     taskCompletions);
+        }
+
+        @Override
+        public String toString()
+        {
+            return "ConfigurationSimulationCommand[versionId="+versionId+", payloadVersion="+payloadVersion
+                    +", businessId="+businessId+", payloadFieldCount="+payload.size()
+                    +", taskCompletionCount="+taskCompletions.size()+"]";
         }
     }
 

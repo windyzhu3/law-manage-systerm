@@ -73,6 +73,13 @@ public final class TodoDefinitionCommands
             payload=payload==null?Map.of():java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
             taskCompletions=taskCompletions==null?List.of():List.copyOf(taskCompletions);
         }
+
+        @Override
+        public String toString()
+        {
+            return "SimulateDefinitionCommand[businessId="+businessId+", payloadFieldCount="+payload.size()
+                    +", taskCompletionCount="+taskCompletions.size()+"]";
+        }
     }
     public record VirtualTaskCompletionSample(
             @NotBlank String nodeKey,
@@ -83,6 +90,13 @@ public final class TodoDefinitionCommands
         public VirtualTaskCompletionSample
         {
             payload=payload==null?null:java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(payload));
+        }
+
+        @Override
+        public String toString()
+        {
+            return "VirtualTaskCompletionSample[occurrence="+occurrence+", payloadFieldCount="
+                    +(payload==null?0:payload.size())+"]";
         }
     }
     public record RollbackDraftCommand(@NotBlank String actionId,@NotNull @Min(1) Integer newVersionNo) { }
