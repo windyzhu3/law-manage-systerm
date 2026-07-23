@@ -1,5 +1,6 @@
 const assert = require('assert')
 const model = require('../src/views/todo/config/journey/journey-model')
+const steps = require('../src/views/todo/config/journey/journey-step-model')
 const runtime = require('../src/views/todo/config/journey/journey-runtime')
 
 const STEP_CODES = ['EVENT', 'TRIGGER', 'OWNER', 'DOD', 'SLA', 'ROUTING', 'SIMULATION_PUBLISH']
@@ -727,6 +728,127 @@ check('allows navigation only when there are no unsaved edits', () => {
   assert.strictEqual(model.canLeave(journey), true)
   assert.strictEqual(model.canLeave(changed), false)
   assert.strictEqual(model.canLeave({ ...changed, saveState: 'SAVED' }), true)
+})
+
+check('derives safe operators and business controls from governed field descriptors', () => {
+  const fields = [
+    { code: 'amount', name: '合同金额', type: 'number', operators: ['EQ', 'GTE', 'PRESENT'] },
+    { code: 'approved', name: '是否通过', type: 'boolean', operators: ['EQ', 'NE', 'PRESENT'] },
+    { code: 'signedAt', name: '签署日期', type: 'date', operators: ['EQ', 'GTE'] },
+    { code: 'level', name: '客户等级', type: 'string', operators: ['EQ', 'IN'], options: ['A', 'B'] },
+    { code: 'remark', name: '备注', type: 'string', operators: ['EQ', 'CONTAINS'] }
+  ]
+
+  assert.deepStrictEqual(steps.operatorsForField(fields[0]).map(item => item.value), ['EQ', 'GTE', 'EXISTS'])
+  assert.strictEqual(steps.controlForField(fields[0], 'GTE'), 'NUMBER')
+  assert.strictEqual(steps.controlForField(fields[1], 'EQ'), 'BOOLEAN')
+  assert.strictEqual(steps.controlForField(fields[2], 'EQ'), 'DATE')
+  assert.strictEqual(steps.controlForField(fields[3], 'IN'), 'SELECT')
+  assert.strictEqual(steps.controlForField(fields[4], 'EQ'), 'TEXT')
+  assert.strictEqual(steps.controlForField(fields[4], 'EXISTS'), 'NONE')
+  assert.strictEqual(steps.operatorsForField(fields[4]).some(item => item.value === 'CONTAINS'), false)
+})
+
+check('enforces two condition-group levels while preserving canonical patch shapes', () => {
+  const empty = steps.emptyConditionDocument()
+  const withNested = steps.addConditionGroup(empty, [])
+  assert.strictEqual(steps.conditionGroupDepth(withNested), 2)
+  assert.throws(
+    () => steps.addConditionGroup(withNested, [0]),
+    error => error && error.code === 'TODO_CONDITION_GROUP_DEPTH_LIMIT'
+  )
+  const predicate = { field: 'amount', operator: 'GTE', value: 1000 }
+  const trigger = steps.buildTriggerPatch(steps.replaceConditionNode(withNested, [0, 0], predicate))
+
+  assert.strictEqual(trigger.condition.$expression.version, 1)
+  assert.deepStrictEqual(trigger.condition.$expression.root.conditions[0].conditions[0], predicate)
+  assert.deepStrictEqual(steps.buildEventPatch({ eventType: 'CONTRACT_APPROVED', payloadVersion: 3 }), {
+    eventType: 'CONTRACT_APPROVED',
+    payloadVersion: 3
+  })
+  assert.deepStrictEqual(steps.buildOwnerPatch({ type: 'BUSINESS_OWNER', skipUnavailable: true }), {
+    config: { type: 'BUSINESS_OWNER', skipUnavailable: true }
+  })
+  assert.deepStrictEqual(
+    steps.buildOwnerConfig('ROLE', { value: 'case_manager' }),
+    { type: 'ROLE', roleKey: 'case_manager', selectionMode: 'ROLE', skipUnavailable: true, useDelegation: true }
+  )
+  assert.deepStrictEqual(
+    steps.buildOwnerConfig('EVENT_OWNER', { field: 'ownerId' }),
+    { type: 'PAYLOAD', field: 'ownerId', selectionMode: 'EVENT_OWNER', skipUnavailable: true, useDelegation: true }
+  )
+  assert.deepStrictEqual(
+    steps.buildOwnerConfig('CANDIDATE_POOL', { value: 'duty_pool' }),
+    { type: 'ROLE', roleKey: 'duty_pool', selectionMode: 'CANDIDATE_POOL', skipUnavailable: true, useDelegation: true }
+  )
+
+  const pruned = steps.removeConditionNode(withNested, [0, 0])
+  assert.deepStrictEqual(steps.buildTriggerPatch(pruned), { condition: {} })
+  assert.strictEqual(steps.normalizeConditionDocument({
+    $expression: {
+      version: 1,
+      root: { type: 'AND', conditions: [{ type: 'AND', conditions: [] }] }
+    }
+  }).supported, false)
+})
+
+check('models schema health, owner blockers, and contextual resource return semantics', () => {
+  const healthy = steps.eventSchemaHealth(
+    { eventType: 'CONTRACT_APPROVED', payloadVersion: 2, schemaStatus: 'READY' },
+    [{ code: 'ownerId', sourceEvents: ['CONTRACT_APPROVED'] }]
+  )
+  assert.strictEqual(healthy.ready, true)
+  assert.strictEqual(steps.eventSchemaHealth({ schemaStatus: 'INCOMPLETE' }, []).ready, false)
+
+  assert.strictEqual(steps.ownerBlocker({ type: 'ROLE', roleKey: 'case_manager' }), null)
+  assert.strictEqual(steps.ownerBlocker({ type: 'PAYLOAD', field: 'ownerId' }), null)
+  assert.strictEqual(steps.ownerBlocker({ type: 'ROLE' }).code, 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED')
+  assert.strictEqual(
+    steps.ownerBlocker({ type: 'ROLE', fallback: { type: 'BUSINESS_OWNER' } }),
+    null
+  )
+
+  const request = steps.createRepairRequest({
+    type: 'EVENT',
+    eventType: 'CONTRACT_APPROVED',
+    payloadVersion: 2,
+    returnStep: 'TRIGGER',
+    focusField: 'customer.level'
+  })
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:add'], request).allowed, true)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:list'], request).allowed, false)
+  const draft = { definition: { event: { eventType: 'CONTRACT_APPROVED' } }, dirty: true }
+  const completed = steps.completeResourceRepair(request, draft, 91)
+  assert.strictEqual(completed.close, true)
+  assert.strictEqual(completed.reloadResource, 'EVENT')
+  assert.strictEqual(completed.returnStep, 'TRIGGER')
+  assert.strictEqual(completed.focusField, 'customer.level')
+  assert.strictEqual(completed.draft, draft)
+
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:add'], {
+    type: 'EVENT',
+    resourceId: null
+  }).allowed, true)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:edit'], {
+    type: 'EVENT',
+    resourceId: null
+  }).allowed, false)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:edit'], {
+    type: 'EVENT',
+    resourceId: 91
+  }).allowed, true)
+  assert.strictEqual(steps.resourceRepairAccess(['todo:resource:add'], {
+    type: 'EVENT',
+    resourceId: 91
+  }).allowed, false)
+
+  assert.strictEqual(steps.isOwnerField({ type: 'integer', semanticType: 'USER_ID' }), true)
+  assert.strictEqual(steps.isOwnerField({ type: 'number', code: 'ownerId' }), true)
+  assert.strictEqual(steps.isOwnerField({ type: 'string', code: 'ownerName' }), false)
+  assert.strictEqual(steps.ownerBlocker(
+    { type: 'PAYLOAD', field: 'ownerName' },
+    [{ code: 'ownerName', type: 'string' }]
+  ).code, 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED')
 })
 
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

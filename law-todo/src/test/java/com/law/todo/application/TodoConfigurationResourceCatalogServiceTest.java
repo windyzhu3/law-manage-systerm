@@ -146,6 +146,37 @@ class TodoConfigurationResourceCatalogServiceTest
         assertEquals(List.of("archiveNo"),service.recipes("MATTER").get(0).requiredFields());
     }
 
+    @Test void exposesGovernedResourceIdentityForSafeEditing()
+    {
+        Map<String,Object> field=new java.util.HashMap<>(resource("FIELD","ownerId","Owner","{\"type\":\"integer\"}"));
+        field.put("resource_item_id",70L);field.put("version",2);field.put("description","Owner identity");
+        field.put("sort_order",8);field.put("business_type","LEAD");
+        when(mapper.selectConfigurationResourceItems("MATERIAL","MATTER")).thenReturn(List.of(Map.of(
+                "resource_item_id",71L,"version",3,"resource_type","MATERIAL","resource_code","ARCHIVE_FORM",
+                "resource_name","Archive form","description","Archive form","business_type","MATTER",
+                "value_json","{}","status","ACTIVE","sort_order",1)));
+        when(mapper.selectConfigurationResourceItems("FIELD","LEAD")).thenReturn(List.of(field));
+        when(mapper.selectConfigurationResourceItems("DOD_RECIPE","MATTER")).thenReturn(List.of(Map.ofEntries(
+                Map.entry("resource_item_id",72L),Map.entry("version",4),Map.entry("resource_type","DOD_RECIPE"),
+                Map.entry("resource_code","ARCHIVE_READY"),Map.entry("resource_name","Archive ready"),
+                Map.entry("description","Archive ready"),Map.entry("business_type","MATTER"),
+                Map.entry("value_json","{}"),Map.entry("status","ACTIVE"),Map.entry("sort_order",9))));
+
+        var material=service.materials("MATTER").get(0);
+        var governedField=service.fields("LEAD").get(0);
+        var recipe=service.recipes("MATTER").get(0);
+
+        assertEquals(71L,material.resourceItemId());
+        assertEquals(3,material.version());
+        assertEquals("GOVERNED",material.source());
+        assertEquals("Owner identity",governedField.description());
+        assertEquals("LEAD",governedField.businessType());
+        assertEquals("ACTIVE",governedField.status());
+        assertEquals(8,governedField.sortOrder());
+        assertEquals(9,recipe.sortOrder());
+        assertEquals("ACTIVE",recipe.status());
+    }
+
     private Map<String,Object> validator(String code,String name,String types,String status)
     {return Map.of("validator_code",code,"validator_name",name,"description",name,"business_types_json",types,
             "parameter_schema_json","{\"type\":\"object\",\"properties\":{}}","example_parameters_json","{}","status",status,

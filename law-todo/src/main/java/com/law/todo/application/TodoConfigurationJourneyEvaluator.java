@@ -160,7 +160,8 @@ public class TodoConfigurationJourneyEvaluator
         String type=text(value.get("type"));
         if(blank(type))return false;
         if("BUSINESS_OWNER".equals(type)||"SUPERVISOR".equals(type))return true;
-        return !blank(text(value.get("value")))||!blank(text(value.get("operand")))||!blank(text(value.get("field")));
+        return !blank(text(value.get("value")))||!blank(text(value.get("operand")))||!blank(text(value.get("field")))
+                ||!blank(text(value.get("roleKey")))||!blank(text(value.get("departmentCode")));
     }
     private Map<String,Object> map(Object value)
     {if(!(value instanceof Map<?,?> source))return Map.of();Map<String,Object> result=new java.util.LinkedHashMap<>();source.forEach((key,item)->result.put(String.valueOf(key),item));return result;}

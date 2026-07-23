@@ -73,7 +73,7 @@ public class TodoConfigurationResourceCatalogService
         for(Map<String,Object> row:configured==null?List.<Map<String,Object>>of():configured)
         {
             JSONObject value=parseObject(row.get("value_json"));String code=text(row,"resource_code");
-            if(code!=null&&!code.isBlank())fields.computeIfAbsent(code,MutableField::new).mergeGoverned(text(row,"resource_name"),value);
+            if(code!=null&&!code.isBlank())fields.computeIfAbsent(code,MutableField::new).mergeGoverned(row,text(row,"resource_name"),value);
         }
         List<Map<String,Object>> schemas=mapper.selectActiveEventResourceSchemas(businessType);
         for(Map<String,Object> event:schemas==null?List.<Map<String,Object>>of():schemas)
@@ -90,7 +90,8 @@ public class TodoConfigurationResourceCatalogService
     public List<MaterialResource> materials(String businessType)
     {return mapper.selectConfigurationResourceItems("MATERIAL",businessType).stream().map(row->new MaterialResource(
             text(row,"resource_code"),text(row,"resource_name"),text(row,"description"),text(row,"business_type"),
-            text(row,"status"),integer(row.get("sort_order")))).toList();}
+            text(row,"status"),integer(row.get("sort_order")),longNullable(row.get("resource_item_id")),
+            integer(row.get("version")),"GOVERNED")).toList();}
 
     @Transactional(readOnly=true)
     public List<DodRecipeResource> recipes(String businessType)
@@ -98,7 +99,9 @@ public class TodoConfigurationResourceCatalogService
             text(row,"resource_code"),text(row,"resource_name"),text(row,"description"),text(row,"business_type"),
             strings(value.get("businessActions")),strings(value.get("templateStages")),integer(value.get("recommendationPriority")),
             strings(value.get("requiredFields")),strings(value.get("requiredAttachments")),strings(value.get("validatorRefs")),
-            listOfMaps(value.get("conditionalRules")),strings(value.get("employeeInstructions")));}).toList();}
+            listOfMaps(value.get("conditionalRules")),strings(value.get("employeeInstructions")),
+            longNullable(row.get("resource_item_id")),integer(row.get("version")),"GOVERNED",
+            text(row,"status"),integer(row.get("sort_order")));}).toList();}
 
     public boolean isSelectableValidator(String code,String businessType)
     {return validators(businessType).stream().anyMatch(row->row.code().equals(code)&&row.selectable());}
@@ -125,15 +128,21 @@ public class TodoConfigurationResourceCatalogService
     private String text(Map<String,Object> row,String key){Object value=row==null?null:row.get(key);return value==null?null:String.valueOf(value);}
     private int integer(Object value){return value==null?0:Integer.parseInt(String.valueOf(value));}
     private long longNumber(Object value){return value==null?0:Long.parseLong(String.valueOf(value));}
+    private Long longNullable(Object value){return value==null?null:Long.parseLong(String.valueOf(value));}
 
     private final class MutableField
     {
         private final String code;private String name="业务字段";private boolean governedName;private String type="string";private boolean required;
         private Object example;private boolean sensitive;private final Set<String> operators=new LinkedHashSet<>();
         private final Set<String> events=new LinkedHashSet<>();private final Set<Object> options=new LinkedHashSet<>();
+        private Long resourceItemId;private int version;private String source="EVENT_SCHEMA";
+        private String description;private String businessType;private String status;private int sortOrder;
         private MutableField(String code){this.code=code;}
-        private void mergeGoverned(String governedName,JSONObject value)
+        private void mergeGoverned(Map<String,Object> row,String governedName,JSONObject value)
         {
+            resourceItemId=longNullable(row.get("resource_item_id"));version=integer(row.get("version"));source="GOVERNED";
+            description=text(row,"description");businessType=text(row,"business_type");status=text(row,"status");
+            sortOrder=integer(row.get("sort_order"));
             if(chineseLabel(governedName)){name=governedName.trim();this.governedName=true;}
             String type=value.getString("type");if(type!=null&&!type.isBlank())this.type=type;
             required|=Boolean.TRUE.equals(value.getBoolean("required"));if(example==null)example=value.get("example");
@@ -149,12 +158,14 @@ public class TodoConfigurationResourceCatalogService
         }
         private FieldResource view()
         {return new FieldResource(code,name,type,required,sensitive?null:example,sensitive,
-                operators.isEmpty()?operators(type):List.copyOf(operators),List.copyOf(events),List.copyOf(options));}
+                operators.isEmpty()?operators(type):List.copyOf(operators),List.copyOf(events),List.copyOf(options),
+                resourceItemId,version,source,description,businessType,status,sortOrder);}
     }
     public record ValidatorResource(String code,String name,String description,List<String> businessTypes,
             String configuredStatus,String effectiveStatus,boolean selectable,long referenceCount) { }
     public record FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
-            List<String> operators,List<String> sourceEvents,List<Object> options)
+            List<String> operators,List<String> sourceEvents,List<Object> options,
+            Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder)
     {
         public FieldResource
         {
@@ -163,13 +174,22 @@ public class TodoConfigurationResourceCatalogService
             if(sensitive)example=null;
         }
         public FieldResource(String code,String name,String type,boolean required,List<String> operators,List<String> sourceEvents)
-        {this(code,name,type,required,null,false,operators,sourceEvents,List.of());}
+        {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0);}
+        public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
+                List<String> operators,List<String> sourceEvents,List<Object> options)
+        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0);}
     }
-    public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder) { }
+    public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder,
+            Long resourceItemId,int version,String source)
+    {
+        public MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder)
+        {this(code,name,description,businessType,status,sortOrder,null,0,"GOVERNED");}
+    }
     public record DodRecipeResource(String code,String name,String description,String businessType,
             List<String> businessActions,List<String> templateStages,int recommendationPriority,
             List<String> requiredFields,List<String> requiredAttachments,List<String> validatorRefs,
-            List<Map<String,Object>> conditionalRules,List<String> employeeInstructions)
+            List<Map<String,Object>> conditionalRules,List<String> employeeInstructions,
+            Long resourceItemId,int version,String source,String status,int sortOrder)
     {
         public DodRecipeResource
         {
@@ -186,7 +206,13 @@ public class TodoConfigurationResourceCatalogService
                 List<Map<String,Object>> conditionalRules)
         {
             this(code,name,description,businessType,List.of(),List.of(),0,requiredFields,requiredAttachments,
-                    validatorRefs,conditionalRules,List.of());
+                    validatorRefs,conditionalRules,List.of(),null,0,"GOVERNED","ACTIVE",0);
         }
+        public DodRecipeResource(String code,String name,String description,String businessType,
+                List<String> businessActions,List<String> templateStages,int recommendationPriority,
+                List<String> requiredFields,List<String> requiredAttachments,List<String> validatorRefs,
+                List<Map<String,Object>> conditionalRules,List<String> employeeInstructions)
+        {this(code,name,description,businessType,businessActions,templateStages,recommendationPriority,
+                requiredFields,requiredAttachments,validatorRefs,conditionalRules,employeeInstructions,null,0,"GOVERNED","ACTIVE",0);}
     }
 }

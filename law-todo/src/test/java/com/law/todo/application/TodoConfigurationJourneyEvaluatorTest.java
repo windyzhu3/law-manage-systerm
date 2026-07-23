@@ -133,6 +133,21 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
     }
 
+    @Test void acceptsStableRoleKeyOwnerReference()
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",new EventRule("LEAD_ASSIGNED",1,Map.of()),
+                new OwnerRule(Map.of("type","ROLE","roleKey","case_manager")),
+                new DodRule(Map.of("requiredFields",List.of("leadId"))),
+                new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
+                new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.step("OWNER").state()).isNotEqualTo("BLOCKED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
+    }
+
     @Test void blocksUnavailableCalendarAndInvalidRouting()
     {
         when(templates.listTemplateCalendarCatalog()).thenReturn(List.of());

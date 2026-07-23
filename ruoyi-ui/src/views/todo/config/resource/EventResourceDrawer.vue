@@ -25,9 +25,15 @@
         <el-divider content-position="left">Payload 结构</el-divider>
         <payload-schema-designer ref="schemaDesigner" v-model="form.payloadSchemaJson" :readonly="readonly" @validity-change="schemaValid = $event" />
 
-        <el-divider content-position="left">示例 Payload</el-divider>
-        <p class="form-help">用于配置预览和模拟测试，应与上方字段结构一致。</p>
-        <el-input v-model="form.samplePayloadJson" type="textarea" :rows="7" :disabled="readonly" spellcheck="false" />
+        <el-divider content-position="left">模拟样例</el-divider>
+        <p class="form-help">系统可根据上方字段结构生成安全样例，配置人员无需编写 JSON。</p>
+        <el-button :disabled="readonly || !schemaValid" plain icon="el-icon-magic-stick" @click="generateSample">根据字段生成样例</el-button>
+        <el-collapse v-model="advancedPanels" class="event-resource-advanced">
+          <el-collapse-item title="高级设置：查看或调整原始样例" name="sample-json">
+            <el-alert title="仅供熟悉事件结构的管理员调整；普通配置请使用自动生成。" type="info" :closable="false" show-icon />
+            <el-input v-model="form.samplePayloadJson" type="textarea" :rows="7" :disabled="readonly" spellcheck="false" />
+          </el-collapse-item>
+        </el-collapse>
 
         <el-descriptions v-if="persisted" :column="3" border size="small" class="event-resource-meta">
           <el-descriptions-item label="Payload 版本">v{{ form.payloadVersion }}</el-descriptions-item>
@@ -61,7 +67,7 @@ export default {
   props: { visible: Boolean, resourceId: { type: [Number, String], default: null }, mode: { type: String, default: 'view' } },
   data() {
     return {
-      form: emptyForm(), loading: false, saving: false, schemaValid: true, initialSnapshot: '',
+      form: emptyForm(), loading: false, saving: false, schemaValid: true, initialSnapshot: '', advancedPanels: [],
       businessTypes: ['LEAD', 'CUSTOMER', 'CONTRACT', 'CASE', 'MATTER'],
       rules: {
         eventType: [{ required: true, message: '请输入事件编码', trigger: 'blur' }, { pattern: /^[A-Z][A-Z0-9_]*$/, message: '仅支持大写字母、数字和下划线', trigger: 'blur' }],
@@ -98,6 +104,31 @@ export default {
       const value = JSON.parse(this.form.samplePayloadJson || '{}')
       if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error('示例 Payload 必须是 JSON 对象')
       return JSON.stringify(value)
+    },
+    sampleValue(schema) {
+      if (!schema || typeof schema !== 'object') return null
+      if (schema.example !== undefined) return schema.example
+      if (schema.default !== undefined) return schema.default
+      if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0]
+      if (schema.type === 'object' || schema.properties) {
+        return Object.keys(schema.properties || {}).reduce((result, key) => {
+          result[key] = this.sampleValue(schema.properties[key])
+          return result
+        }, {})
+      }
+      if (schema.type === 'array') return [this.sampleValue(schema.items || {})]
+      if (schema.type === 'integer' || schema.type === 'number') return 0
+      if (schema.type === 'boolean') return false
+      return schema.format === 'date' ? '2026-01-01' : schema.format === 'date-time' ? '2026-01-01T09:00:00' : ''
+    },
+    generateSample() {
+      try {
+        const schema = JSON.parse(this.$refs.schemaDesigner.validate())
+        this.form.samplePayloadJson = JSON.stringify(this.sampleValue(schema), null, 2)
+        this.$modal.msgSuccess('已根据字段结构生成模拟样例')
+      } catch (error) {
+        this.$modal.msgError((error && error.message) || '请先完善事件字段结构')
+      }
     },
     async save() {
       if (this.saving) return
@@ -142,4 +173,6 @@ export default {
 .event-resource-form > .el-alert { margin-bottom: 16px; }
 .form-help { margin: -2px 0 9px; color: #64748b; font-size: 12px; }
 .event-resource-meta { margin: 20px 0 12px; }
+.event-resource-advanced { margin-top: 12px; }
+.event-resource-advanced .el-alert { margin-bottom: 10px; }
 </style>

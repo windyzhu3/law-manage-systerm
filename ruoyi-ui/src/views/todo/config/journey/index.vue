@@ -43,12 +43,19 @@
         <section class="journey-editor">
           <component
             :is="activeComponent"
+            ref="activeEditor"
             :key="activeStep"
             :step="activeStepItem"
             :value="activeValue"
             :resources="journey.resources || {}"
+            :business-type="journey.template.businessType"
+            :event="journey.definition.event || {}"
+            :preview="journey.employeePreview || {}"
+            :permissions="clientPermissions"
+            :resource-revision="resourceRevision"
             :readonly="publishedReadOnly"
             @change="onStepChange"
+            @repair-resource="openResourceRepair"
           />
         </section>
         <aside class="journey-aside">
@@ -85,6 +92,15 @@
       @save-copy="saveConflictCopy"
       @discard-local="discardLocalConflict"
     />
+    <context-resource-drawer
+      v-if="journey"
+      :visible.sync="resourceRepair.open"
+      :request="resourceRepair.request"
+      :permissions="clientPermissions"
+      :resources="journey.resources || {}"
+      :business-type="journey.template.businessType"
+      @repaired="completeResourceRepair"
+    />
   </div>
 </template>
 
@@ -94,12 +110,23 @@ import ConfigurationHealthPanel from './components/ConfigurationHealthPanel'
 import EmployeeTodoPreview from './components/EmployeeTodoPreview'
 import JourneySaveStatus from './components/JourneySaveStatus'
 import JourneyConflictDialog from './components/JourneyConflictDialog'
+import ContextResourceDrawer from './components/ContextResourceDrawer'
+import EventStep from './steps/EventStep'
+import TriggerStep from './steps/TriggerStep'
+import OwnerStep from './steps/OwnerStep'
 import {
   getTodoTemplate,
   getTodoTemplateJourney,
   updateTemplateDraft,
-  copyTodoTemplate
+  copyTodoTemplate,
+  listTemplateEventCatalog
 } from '@/api/todo-config'
+import {
+  listFieldResources,
+  listMaterialResources,
+  listDodRecipeResources,
+  listValidatorResources
+} from '@/api/todo-resources'
 import {
   hydrateJourney,
   applyStepPatch,
@@ -111,6 +138,12 @@ import {
   canLeave,
   hasUnresolvedFieldConflicts
 } from './journey-model'
+import {
+  eventSchemaHealth,
+  ownerBlocker,
+  createRepairRequest,
+  completeResourceRepair as completeRepair
+} from './journey-step-model'
 import {
   resolveJourneyCapabilities,
   snapshotReadPlan,
@@ -171,9 +204,17 @@ export default {
     EmployeeTodoPreview,
     JourneySaveStatus,
     JourneyConflictDialog,
+    ContextResourceDrawer,
+    EventStep,
+    TriggerStep,
+    OwnerStep,
     JourneyStepPlaceholder
   },
-  stepEditors: {},
+  stepEditors: {
+    EVENT: EventStep,
+    TRIGGER: TriggerStep,
+    OWNER: OwnerStep
+  },
   data() {
     return {
       journey: null,
@@ -189,7 +230,9 @@ export default {
       conflictCopying: false,
       conflictServerContext: null,
       loadSequence: 0,
-      pendingCopyTransition: null
+      pendingCopyTransition: null,
+      resourceRevision: 0,
+      resourceRepair: { open: false, request: {} }
     }
   },
   computed: {
@@ -230,7 +273,51 @@ export default {
     },
     activeIssues() {
       const issues = (this.journey && this.journey.issues) || []
-      return issues.filter(issue => !issue.stepCode || issue.stepCode === this.activeStep)
+      const current = issues.filter(issue => !issue.stepCode || issue.stepCode === this.activeStep)
+      const local = this.localStepIssue
+      if (local && !current.some(issue => issue.code === local.code)) current.push(local)
+      return current
+    },
+    localStepIssue() {
+      if (!this.journey) return null
+      const resources = this.journey.resources || {}
+      if (this.activeStep === 'EVENT' && this.activeValue.eventType) {
+        const event = (resources.events || []).find(item =>
+          item.eventType === this.activeValue.eventType &&
+          Number(item.payloadVersion) === Number(this.activeValue.payloadVersion)
+        ) || this.activeValue
+        const health = eventSchemaHealth(event, resources.fields || [])
+        return health.ready ? null : {
+          code: 'TODO_JOURNEY_EVENT_SCHEMA_REQUIRED',
+          severity: 'BLOCKER',
+          stepCode: 'EVENT',
+          fieldPath: 'event',
+          message: '所选事件字段尚未维护完整',
+          repairAction: '维护事件字段'
+        }
+      }
+      if (this.activeStep === 'TRIGGER' && this.journey.definition.event.eventType) {
+        const fields = (resources.fields || []).filter(field =>
+          !(field.sourceEvents || []).length ||
+          (field.sourceEvents || []).includes(this.journey.definition.event.eventType)
+        )
+        return fields.length ? null : {
+          code: 'TODO_JOURNEY_EVENT_SCHEMA_REQUIRED',
+          severity: 'BLOCKER',
+          stepCode: 'TRIGGER',
+          fieldPath: 'event.condition',
+          message: '当前事件没有可用于触发条件的业务字段',
+          repairAction: '维护事件字段'
+        }
+      }
+      if (this.activeStep === 'OWNER') {
+        const blocker = ownerBlocker(
+          (this.activeValue && this.activeValue.config) || {},
+          resources.fields || []
+        )
+        return blocker && { ...blocker, stepCode: 'OWNER', fieldPath: 'owner.config', repairAction: '设置负责人或兜底' }
+      }
+      return null
     },
     activeComponent() {
       return this.$options.stepEditors[this.activeStep] || JourneyStepPlaceholder
@@ -386,6 +473,7 @@ export default {
           this.activeStep = STEP_CODES.includes(requested)
             ? requested
             : derivePrimaryAction(this.journey).stepCode
+          await this.refreshResourceSnapshot('ALL', true)
           return
         }
         const snapshot = await this.fetchSnapshot(this.templateId)
@@ -397,6 +485,7 @@ export default {
           ? requested
           : derivePrimaryAction(this.journey).stepCode
         this.editRevision = 0
+        await this.refreshResourceSnapshot('ALL', true)
       } catch (error) {
         if (sequence !== this.loadSequence) return
         this.loadError = (error && (error.msg || error.message)) || '待办模板配置旅程加载失败。'
@@ -605,10 +694,99 @@ export default {
     repair(issue) {
       const stepCode = issue && issue.stepCode
       if (STEP_CODES.includes(stepCode)) this.activeStep = stepCode
+      if (issue && issue.code === 'TODO_JOURNEY_EVENT_SCHEMA_REQUIRED') {
+        const event = this.journey && this.journey.definition && this.journey.definition.event
+        const resource = ((this.journey && this.journey.resources && this.journey.resources.events) || []).find(item =>
+          item.eventType === (event && event.eventType) &&
+          Number(item.payloadVersion) === Number(event && event.payloadVersion)
+        ) || {}
+        this.openResourceRepair({
+          type: 'EVENT',
+          resourceId: resource.eventCatalogId,
+          eventType: event && event.eventType,
+          payloadVersion: event && event.payloadVersion,
+          businessType: this.journey.template.businessType,
+          returnStep: stepCode || 'EVENT',
+          focusField: issue.fieldPath === 'event.condition' ? null : 'payloadSchema'
+        })
+      }
+    },
+    openResourceRepair(request) {
+      this.resourceRepair = { open: true, request: createRepairRequest(request) }
+    },
+    async completeResourceRepair(payload) {
+      const request = (payload && payload.request) || this.resourceRepair.request
+      const result = completeRepair(request, this.journey, payload && payload.resourceId)
+      this.resourceRepair.open = false
+      try {
+        await this.refreshResourceSnapshot(result.reloadResource)
+        this.activeStep = STEP_CODES.includes(result.returnStep) ? result.returnStep : this.activeStep
+        this.$nextTick(() => {
+          const editor = this.$refs.activeEditor
+          if (editor && editor.focusField) editor.focusField(result.focusField)
+        })
+        this.$modal.msgSuccess('资源已刷新，模板草稿和当前步骤已保留')
+      } catch (error) {
+        this.$modal.msgError((error && (error.msg || error.message)) || '资源已保存，但刷新失败，请稍后重试')
+      }
+    },
+    async refreshResourceSnapshot(type, silent) {
+      if (!this.journey) return
+      const businessType = this.journey.template.businessType
+      const current = this.journey.resources || {}
+      const tasks = {}
+      if (type === 'ALL' || type === 'EVENT') tasks.events = listTemplateEventCatalog()
+      if (type === 'ALL' || type === 'EVENT' || type === 'FIELD') tasks.fields = listFieldResources({ businessType })
+      if (type === 'ALL' || type === 'MATERIAL') tasks.materials = listMaterialResources({ businessType })
+      if (type === 'ALL' || type === 'DOD_RECIPE') tasks.recipes = listDodRecipeResources({ businessType })
+      if (type === 'ALL') tasks.validators = listValidatorResources({ businessType })
+      try {
+        const names = Object.keys(tasks)
+        const responses = await Promise.all(names.map(name => tasks[name]))
+        const resources = { ...current }
+        names.forEach((name, index) => {
+          const values = responses[index].data || []
+          if (name === 'events') {
+            resources.events = values.map(event => {
+              const eventType = event.eventType || event.event_type
+              const payloadVersion = Number(event.payloadVersion || event.payload_version || 1)
+              const hasFields = (resources.fields || current.fields || []).some(field =>
+                (field.sourceEvents || []).includes(eventType)
+              )
+              return {
+                eventType,
+                eventName: event.eventName || event.event_name || eventType,
+                payloadVersion,
+                businessObjectType: event.businessObjectType || event.business_object_type,
+                sourceModule: event.sourceModule || event.source_module || '业务系统',
+                schemaStatus: hasFields ? 'READY' : 'INCOMPLETE',
+                status: event.status || 'ACTIVE'
+              }
+            })
+          } else resources[name] = values
+        })
+        if (resources.events) {
+          resources.events = resources.events.map(event => ({
+            ...event,
+            schemaStatus: (resources.fields || []).some(field =>
+              (field.sourceEvents || []).includes(event.eventType)
+            ) ? 'READY' : event.schemaStatus
+          }))
+        }
+        this.journey = { ...this.journey, resources }
+        this.resourceRevision += 1
+      } catch (error) {
+        if (!silent) throw error
+      }
     },
     async runPrimaryAction() {
       if (!this.journey) return
       if (this.journey.dirty && !(await this.saveNow({ automatic: false }))) return
+      const blocker = this.activeIssues.find(issue => String(issue.severity).toUpperCase() === 'BLOCKER')
+      if (blocker) {
+        this.$modal.msgWarning(blocker.message || '请先处理当前步骤的阻塞问题')
+        return
+      }
       const action = derivePrimaryAction({ ...this.journey, activeStepCode: this.activeStep })
       if (action.code === 'CONTINUE_CONFIGURATION' && this.activeIndex < STEP_CODES.length - 1) {
         this.activeStep = STEP_CODES[this.activeIndex + 1]

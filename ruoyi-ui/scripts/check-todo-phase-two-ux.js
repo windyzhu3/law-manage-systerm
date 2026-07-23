@@ -25,6 +25,17 @@ const journeyComponentPaths = [
   'src/views/todo/config/journey/components/JourneySaveStatus.vue',
   'src/views/todo/config/journey/components/JourneyConflictDialog.vue'
 ]
+const journeyStepPaths = [
+  'src/views/todo/config/journey/steps/EventStep.vue',
+  'src/views/todo/config/journey/steps/TriggerStep.vue',
+  'src/views/todo/config/journey/steps/OwnerStep.vue'
+]
+const businessFirstComponentPaths = [
+  'src/views/todo/config/journey/components/ContextResourceDrawer.vue',
+  'src/views/todo/config/journey/components/TypedConditionBuilder.vue',
+  'src/views/todo/config/resource/ResourceItemDrawer.vue',
+  'src/views/todo/config/resource/BusinessDataSourcePanel.vue'
+]
 const workbench = read(workbenchPath)
 
 check('renders the task-centered template workbench', () => {
@@ -180,6 +191,84 @@ check('uses the approved journey visual language responsively', () => {
   }
   assert(!sources.includes('linear-gradient'), 'journey shell must not use gradients')
   assert(!sources.includes('table-section { box-shadow'), 'journey table sections must not use shadows')
+})
+
+check('installs business-first event trigger and owner journey editors', () => {
+  for (const componentPath of [...journeyStepPaths, ...businessFirstComponentPaths]) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing Task 11 component: ${componentPath}`)
+  }
+  const journey = read(journeyPath)
+  for (const token of [
+    'EventStep',
+    'TriggerStep',
+    'OwnerStep',
+    'ContextResourceDrawer',
+    '@repair-resource="openResourceRepair"',
+    '@repaired="completeResourceRepair"'
+  ]) {
+    assert(journey.includes(token), `journey Task 11 wiring missing token: ${token}`)
+  }
+})
+
+check('keeps normal journey editors free of raw JSON and code-entry controls', () => {
+  const sources = journeyStepPaths.concat([
+    'src/views/todo/config/journey/components/TypedConditionBuilder.vue'
+  ]).map(read).join('\n')
+  for (const forbidden of [
+    '原始 JSON',
+    '输入 JSON',
+    '字段路径',
+    '运算符编码',
+    'type=\"textarea\"'
+  ]) {
+    assert(!sources.includes(forbidden), `business journey editor exposes technical input: ${forbidden}`)
+  }
+  for (const token of ['维护事件字段', '全部满足', '任一满足', '阻塞发布', '解析顺序', '兜底负责人']) {
+    assert(sources.includes(token), `business journey editor missing guidance: ${token}`)
+  }
+})
+
+check('guards owner and condition controls against unsupported runtime values', () => {
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  const conditions = read('src/views/todo/config/journey/components/TypedConditionBuilder.vue')
+  assert(owner.includes('isOwnerField'), 'event-owner choices must use governed numeric user references')
+  assert(owner.includes("value: 'CANDIDATE_POOL'") && owner.includes('disabled: true'),
+    'candidate-pool must remain visibly unavailable until runtime claim semantics are implemented')
+  assert(conditions.includes('precision: integer ? 0'), 'integer conditions must not accept decimals')
+})
+
+check('keeps event sample JSON behind an explicit advanced section', () => {
+  const drawer = read('src/views/todo/config/resource/EventResourceDrawer.vue')
+  assert(drawer.includes('根据字段生成样例'), 'event samples need a guided generator')
+  assert(drawer.includes('高级设置：查看或调整原始样例'), 'raw event sample must be advanced-only')
+  assert(drawer.includes('generateSample'), 'event sample generator must be wired')
+})
+
+check('allows only governed business resources to enter edit mode', () => {
+  const panel = read('src/views/todo/config/resource/BusinessResourcePanel.vue')
+  assert(panel.includes("item.source === 'GOVERNED'"), 'schema-derived fields must remain read-only')
+  assert(panel.includes("openEdit('FIELD', row)"), 'governed fields need an edit action')
+  assert(panel.includes("openEdit('MATERIAL', row)"), 'governed materials need an edit action')
+  assert(panel.includes("openEdit('DOD_RECIPE', item)"), 'governed recipes need an edit action')
+  assert(panel.includes(':item=\"drawer.item\"'), 'resource editor must receive the selected governed item')
+})
+
+check('presents the unified governed resource center without executable validator controls', () => {
+  const resourceIndex = read('src/views/todo/config/resource/index.vue')
+  const business = read('src/views/todo/config/resource/BusinessResourcePanel.vue')
+  const validators = read('src/views/todo/config/resource/ValidatorCatalogPanel.vue')
+  for (const token of ['事件目录', '校验器目录', '业务资源', '工作日历', '数据源状态']) {
+    assert(resourceIndex.includes(token), `resource center missing section: ${token}`)
+  }
+  for (const token of ['ResourceItemDrawer', '业务字段', '材料类型', '完成条件配方']) {
+    assert(business.includes(token), `business resource maintenance missing token: ${token}`)
+  }
+  assert(resourceIndex.includes('WorkCalendarDialog'), 'resource center must reuse WorkCalendarDialog')
+  assert(resourceIndex.includes('BusinessDataSourcePanel'), 'resource center must expose data-source readiness')
+  assert(validators.includes('高级状态'), 'validator technical status must be secondary')
+  for (const forbidden of ['上传实现', '执行校验器', '@click=\"execute', '@click=\"upload']) {
+    assert(!validators.includes(forbidden), `validator catalog exposes executable control: ${forbidden}`)
+  }
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)
