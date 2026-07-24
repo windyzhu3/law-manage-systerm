@@ -1,6 +1,8 @@
 # Phase 2 Task 14 Report
 
-Task 14 is complete locally. No push was performed.
+Task 14 engineering work is complete locally. No push was performed. The separate
+10-minute new-administrator usability target remains a product UAT timing exercise
+and is not claimed from browser automation runtime.
 
 ## Outcome
 
@@ -11,6 +13,7 @@ Task 14 is complete locally. No push was performed.
 - Real-backend Chrome suite: 8/8 PASS
 - 1440×1024 and 1920×1080 same-state visual QA: PASS
 - Unresolved P0/P1/P2 defects: 0
+- Human 10-minute usability timing: pending product UAT
 
 The acceptance evidence is recorded in:
 

@@ -4,13 +4,13 @@ Date: 2026-07-24
 
 Branch: `runtime/startup-wiring-fix`
 
-Decision: PASS
+Decision: ENGINEERING PASS; the 10-minute human usability target remains a product UAT item.
 
 ## Measurable acceptance
 
 | Requirement | Result | Evidence |
 |---|---:|---|
-| Simple configuration and simulation | 4.8 seconds | Real Chrome failed-simulation repair/save/rerun scenario. This is deterministic browser automation timing, not a separately timed human usability study, and is below the 10-minute target. |
+| Simple configuration and simulation | AUTOMATED SCENARIO PASS; HUMAN TIMING NOT MEASURED | Real Chrome verifies the seeded failed-simulation repair/save/rerun path. Its 4.8-second automation runtime is scenario execution time only and does not prove that a new administrator can complete an end-to-end configuration within 10 minutes. The 10-minute target must be measured in product UAT with a representative new administrator. |
 | Active-event schema coverage | 36/36, 100% | Every active event is `READY`, has at least one schema property, and has a sample payload in the clean MySQL migration database. |
 | DoD recipe coverage | 5/5, 100% | Active recipes cover the five governed canonical business types: LEAD, CUSTOMER, CONTRACT, CASE, and MATTER. V0.20.45 aligns recipe actions with real event types. |
 | Payload auto-fill | 2/2 required fields, 100% | Server `PayloadHydration.coveragePercent()` result for `DEMO-L-001` and `LEAD_ASSIGNED@1`. For transparency, 6/16 total schema fields had values; the remaining ten are optional event-result fields entered only when that event is being simulated. |
@@ -23,13 +23,13 @@ Decision: PASS
 
 | Layer | Command | Result |
 |---|---|---|
-| Backend reactor | `mvn test` | PASS, all 10 reactor modules; 49.224 s. `ruoyi-admin`: 118 tests, 0 failures/errors, 13 intentional external-database skips in the environment-free reactor run. |
+| Backend reactor | `mvn test` | PASS, all 10 reactor modules; 50.191 s. `ruoyi-admin`: 118 tests, 0 failures/errors, 13 intentional external-database skips in the environment-free reactor run. |
 | Focused regression | `mvn -pl law-todo "-Dtest=TodoConfigurationQueryServiceTest,TodoConfigurationBusinessObjectDirectoryTest" test` | PASS, 20/20. |
 | Real MySQL migration | v0.15 baseline import, then `mvn -pl ruoyi-admin -am "-Dtest=FlywayMigrationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` | PASS, 1/1 with no skip; 58 migrations validated and schema reached V0.20.45. |
 | Frontend model and UX | `npm run test:todo-phase-two` | PASS, 42 model checks and 25 UX checks. |
 | Frontend compatibility | `npm run test:todo-config`; `npm run test:todo`; `npm run test:encoding`; `npm run test:e2e:contract` | PASS. |
 | Production frontend | `npm run build:prod` | PASS; two pre-existing bundle-size warnings only. |
-| Real browser | `npx playwright test tests/e2e/todo-config-center.spec.js tests/e2e/todo-config-journey.spec.js --workers=1` with real backend/MySQL/Redis and Chrome | PASS, 8/8 in 25.1 s; no route mocks and no runtime task writes from sample simulation. |
+| Real browser | `npx playwright test tests/e2e/todo-config-center.spec.js tests/e2e/todo-config-journey.spec.js --workers=1` with real backend/MySQL/Redis and Chrome | PASS, 8/8 in 30.8 s on the final clean UTF-8 baseline run; no route mocks and no runtime task writes from sample simulation. |
 | Cleanliness | `git diff --check` | PASS. |
 
 The first full Maven run exposed a null `emptyReason` regression in sample fallback. The implementation was corrected with null-safe comparisons, the focused 20-test set passed, and the full reactor was rerun successfully.
@@ -44,4 +44,4 @@ The first full Maven run exposed a null `emptyReason` regression in sample fallb
 
 Residual non-blocking risk: the Vue 2 production bundle remains large and should be handled as a later performance task; it is not a functional or phase-two design acceptance defect.
 
-Phase 2 comprehensive hardening accepted with 0 unresolved P0/P1/P2 defects
+Phase 2 engineering hardening accepted with 0 unresolved P0/P1/P2 implementation defects. Product UAT still needs to measure the separate 10-minute human usability target.
