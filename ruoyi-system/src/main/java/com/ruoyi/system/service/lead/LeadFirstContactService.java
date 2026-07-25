@@ -171,7 +171,8 @@ public class LeadFirstContactService
         LeadAssignmentPolicyService.RetrySchedulePolicy policy=policies.resolveRetrySchedule(lead);
         return schedules.createPlan(new TodoScheduleService.CreateSchedulePlanCommand(
                 command.getTodoId(), policy.templateVersionId(), "LEAD", command.getLeadId(),
-                LocalDateTime.now(), policy.timezone(), policy.ruleVersionId(), policy.windows()));
+                LocalDateTime.now(),policy.timezone(),policy.ruleVersionId(),policy.policyId(),
+                policy.policyVersion(),policy.windows()));
     }
 
     private void validateBranch(LeadFirstContactCommand command, String result)

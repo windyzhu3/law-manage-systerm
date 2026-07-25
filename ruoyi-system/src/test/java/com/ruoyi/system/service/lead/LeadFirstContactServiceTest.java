@@ -172,6 +172,8 @@ class LeadFirstContactServiceTest
         verify(schedules).createPlan(plan.capture());
         assertEquals(99L,plan.getValue().templateVersionId());
         assertEquals(501L,plan.getValue().ruleVersionId());
+        assertEquals(11L,plan.getValue().assignmentPolicyId());
+        assertEquals(2,plan.getValue().assignmentPolicyVersion());
         assertEquals("Asia/Shanghai",plan.getValue().timezone());
         assertEquals(windows,plan.getValue().windows());
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);

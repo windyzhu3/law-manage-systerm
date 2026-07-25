@@ -6,13 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -33,6 +34,9 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.Test;
 
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.application.TodoRoutingService;
+import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.schedule.TodoScheduleService;
 
 class TodoScheduleLockOrderExternalMysqlIT
 {
@@ -48,7 +52,6 @@ class TodoScheduleLockOrderExternalMysqlIT
         createSchema(adminUrl,user,password,schema);
         ExecutorService workers=Executors.newFixedThreadPool(2);
         CountDownLatch materializerOwnsPlan=new CountDownLatch(1);
-        CountDownLatch connectedWillLockPlan=new CountDownLatch(1);
         CountDownLatch releaseMaterializer=new CountDownLatch(1);
         try
         {
@@ -57,24 +60,21 @@ class TodoScheduleLockOrderExternalMysqlIT
             createTablesAndFixtures(dataSource);
             SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
 
-            Future<String> materializer=workers.submit(()->{
+            Future<Long> materializer=workers.submit(()->{
                 try(SqlSession session=sessions.openSession(false))
                 {
                     session.getConnection().createStatement()
                             .execute("set session innodb_lock_wait_timeout=10");
-                    TodoMapper mapper=session.getMapper(TodoMapper.class);
-                    Map<String,Object> identity=mapper.selectScheduleOccurrenceIdentityByKey("3:T1_AM:1");
-                    assertEquals(3L,number(identity,"planId"));
-                    assertEquals("ACTIVE",mapper.selectSchedulePlanForUpdate(3L).get("status"));
-                    materializerOwnsPlan.countDown();
-                    assertTrue(releaseMaterializer.await(10,SECONDS));
-                    Map<String,Object> occurrence=
-                            mapper.selectScheduleOccurrenceWindowForUpdate("3:T1_AM:1",3L);
-                    assertEquals("CLAIMED",occurrence.get("status"));
-                    assertEquals(1,mapper.linkScheduleOccurrenceByKey(
-                            "3:T1_AM:1",55L,0,NOW));
+                    TodoMapper mapper=planFence(session.getMapper(TodoMapper.class),
+                            materializerOwnsPlan,releaseMaterializer);
+                    TodoInstance previous=new TodoInstance();
+                    previous.setTodoId(44L);
+                    previous.setBusinessType("LEAD");
+                    previous.setBusinessId(7L);
+                    TodoInstance result=new TodoRoutingService(mapper).createScheduledNext(
+                            previous,22L,"3:T1_AM:1",NOW);
                     session.commit();
-                    return "MATERIALIZED";
+                    return result.getTodoId();
                 }
             });
 
@@ -85,24 +85,21 @@ class TodoScheduleLockOrderExternalMysqlIT
                     session.getConnection().createStatement()
                             .execute("set session innodb_lock_wait_timeout=10");
                     TodoMapper mapper=session.getMapper(TodoMapper.class);
-                    assertEquals("CLAIMED",mapper.selectScheduleOccurrenceById(9L).get("status"));
-                    connectedWillLockPlan.countDown();
-                    assertEquals("ACTIVE",mapper.selectSchedulePlanForUpdate(3L).get("status"));
-                    assertEquals(1,mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW));
-                    assertEquals(1,mapper.completeSchedulePlan(3L,"CONTACTED",NOW));
+                    TodoScheduleService.ScheduleCompletion result=
+                            new TodoScheduleService(mapper,new TodoRoutingService(mapper))
+                                    .completeOccurrence(9L,"CONNECTED",NOW);
                     session.commit();
-                    return "CONTACTED";
+                    return result.windowCode();
                 }
             });
 
-            assertTrue(connectedWillLockPlan.await(10,SECONDS));
             assertTrue(awaitPlanLockWait(adminUrl,user,password,schema),
                     "CONNECTED connection must wait on the materializer-owned plan row");
             assertFalse(connected.isDone(),"CONNECTED must remain serialized behind the plan lock");
             releaseMaterializer.countDown();
 
-            assertEquals("MATERIALIZED",materializer.get(10,SECONDS));
-            assertEquals("CONTACTED",connected.get(10,SECONDS));
+            assertEquals(55L,materializer.get(10,SECONDS));
+            assertEquals("T1_AM",connected.get(10,SECONDS));
             assertFinalSerializedState(dataSource);
         }
         finally
@@ -114,10 +111,33 @@ class TodoScheduleLockOrderExternalMysqlIT
         }
     }
 
+    private static TodoMapper planFence(TodoMapper delegate,CountDownLatch ownsPlan,
+            CountDownLatch release)
+    {
+        return (TodoMapper)Proxy.newProxyInstance(TodoMapper.class.getClassLoader(),
+                new Class<?>[]{TodoMapper.class},(proxy,method,args)->{
+                    try
+                    {
+                        Object result=method.invoke(delegate,args);
+                        if("selectSchedulePlanForUpdate".equals(method.getName()))
+                        {
+                            ownsPlan.countDown();
+                            assertTrue(release.await(10,SECONDS));
+                        }
+                        return result;
+                    }
+                    catch(InvocationTargetException wrapped)
+                    {
+                        throw wrapped.getCause();
+                    }
+                });
+    }
+
     private static Configuration myBatis(DataSource dataSource) throws Exception
     {
         Configuration configuration=new Configuration(new Environment("todo-schedule-lock-order-it",
                 new JdbcTransactionFactory(),dataSource));
+        configuration.setMapUnderscoreToCamelCase(true);
         String mapperResource="mapper/todo/TodoMapper.xml";
         try(InputStream input=Resources.getResourceAsStream(mapperResource))
         {
@@ -134,7 +154,14 @@ class TodoScheduleLockOrderExternalMysqlIT
             statement.execute("""
                     create table todo_schedule_plan(
                       plan_id bigint not null primary key,
+                      previous_todo_id bigint null,
                       template_version_id bigint not null,
+                      business_type varchar(32) not null,
+                      business_id bigint not null,
+                      timezone varchar(64) not null,
+                      rule_version_id bigint not null,
+                      assignment_policy_id bigint null,
+                      assignment_policy_version int null,
                       status varchar(20) not null,
                       completion_reason varchar(64) null,
                       completed_at datetime null,
@@ -146,7 +173,17 @@ class TodoScheduleLockOrderExternalMysqlIT
                     create table todo_schedule_window(
                       window_id bigint not null primary key,
                       plan_id bigint not null,
+                      window_code varchar(32) not null,
+                      window_order int not null,
+                      materialize_at datetime not null,
+                      due_at datetime not null,
+                      max_attempts int not null,
                       status varchar(20) not null
+                      ,cancel_reason varchar(128) null
+                      ,completed_at datetime null
+                      ,claimed_at datetime null
+                      ,update_time datetime not null
+                      ,version int not null
                     ) engine=innodb
                     """);
             statement.execute("""
@@ -159,6 +196,7 @@ class TodoScheduleLockOrderExternalMysqlIT
                       occurrence_key varchar(192) not null,
                       due_at datetime not null,
                       todo_id bigint null,
+                      claimed_at datetime null,
                       status varchar(20) not null,
                       result_code varchar(64) null,
                       completed_at datetime null,
@@ -169,20 +207,34 @@ class TodoScheduleLockOrderExternalMysqlIT
                       unique key uk_occurrence_key(occurrence_key)
                     ) engine=innodb
                     """);
-            statement.executeUpdate("""
-                    insert into todo_schedule_plan(
-                      plan_id,template_version_id,status,update_time,version
-                    ) values(3,22,'ACTIVE',now(),0)
+            statement.execute("""
+                    create table todo_instance(
+                      todo_id bigint not null primary key,
+                      next_idempotency_key varchar(255) null,
+                      status varchar(20) not null
+                    ) engine=innodb
                     """);
             statement.executeUpdate("""
-                    insert into todo_schedule_window(window_id,plan_id,status)
-                    values(12,3,'PROCESSING')
+                    insert into todo_schedule_plan(
+                      plan_id,previous_todo_id,template_version_id,business_type,business_id,
+                      timezone,rule_version_id,assignment_policy_id,assignment_policy_version,
+                      status,update_time,version
+                    ) values(3,44,22,'LEAD',7,'Asia/Shanghai',99,101,4,'ACTIVE',now(),0)
+                    """);
+            statement.executeUpdate("""
+                    insert into todo_schedule_window(window_id,plan_id,window_code,window_order,
+                      materialize_at,due_at,max_attempts,status,update_time,version)
+                    values(12,3,'T1_AM',1,now(),now(),3,'MATERIALIZED',now(),0)
                     """);
             statement.executeUpdate("""
                     insert into todo_schedule_occurrence(
                       occurrence_id,plan_id,window_id,window_code,occurrence_no,
-                      occurrence_key,due_at,status,update_time,version
-                    ) values(9,3,12,'T1_AM',1,'3:T1_AM:1',now(),'CLAIMED',now(),0)
+                      occurrence_key,due_at,todo_id,status,update_time,version
+                    ) values(9,3,12,'T1_AM',1,'3:T1_AM:1',now(),55,'MATERIALIZED',now(),0)
+                    """);
+            statement.executeUpdate("""
+                    insert into todo_instance(todo_id,next_idempotency_key,status)
+                    values(55,'SCHEDULE:3:T1_AM:1','CREATED')
                     """);
         }
     }
@@ -232,11 +284,6 @@ class TodoScheduleLockOrderExternalMysqlIT
             assertEquals("CONNECTED",rows.getString("result_code"));
             assertEquals(55L,rows.getLong("todo_id"));
         }
-    }
-
-    private static long number(Map<String,Object> row,String key)
-    {
-        return ((Number)row.get(key)).longValue();
     }
 
     private static void createSchema(String url,String user,String password,String schema) throws Exception

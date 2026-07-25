@@ -34,6 +34,7 @@ import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLeadCallRecord;
+import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BusinessEventRecord;
 import com.ruoyi.system.mapper.BizLeadMapper;
@@ -42,12 +43,57 @@ import com.ruoyi.system.mapper.LeadFlowMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.event.OutboxBusinessEventPublisher;
 import com.ruoyi.system.service.lead.LeadAccessPolicy;
+import com.ruoyi.system.service.lead.LeadAssignmentPolicyService;
 import com.ruoyi.system.service.lead.LeadCallRecordService;
 import com.ruoyi.system.service.lead.LeadPoolService;
 import com.ruoyi.system.service.lead.LeadRetryService;
 
 class LeadFlowMapperExternalMysqlIT
 {
+    @Test
+    void sourceSpecificAndWildcardPoliciesPersistTheirExactScheduleSnapshots() throws Exception
+    {
+        String url=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
+        SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
+        try(SqlSession session=sessions.openSession(false))
+        {
+            Connection connection=session.getConnection();
+            long templateVersionId=td003Version(connection);
+            try(PreparedStatement publish=connection.prepareStatement(
+                    "update todo_template_version set status='PUBLISHED' where version_id=?"))
+            {
+                publish.setLong(1,templateVersionId);
+                assertEquals(1,publish.executeUpdate());
+            }
+            long deptId=920_000_000L+Math.abs(System.nanoTime()%10_000_000L);
+            long wildcardId=insertPolicy(connection,"TASK6-WILD-"+deptId,deptId,"*",9,
+                    retryPolicyJson(templateVersionId,701L,2));
+            long sourceId=insertPolicy(connection,"TASK6-SOURCE-"+deptId,deptId,"WEB",7,
+                    retryPolicyJson(templateVersionId,702L,4));
+
+            LeadFlowMapper facts=session.getMapper(LeadFlowMapper.class);
+            LeadAssignmentPolicyService policies=new LeadAssignmentPolicyService(facts);
+            TodoMapper todos=session.getMapper(TodoMapper.class);
+            TodoScheduleService schedules=new TodoScheduleService(todos,new TodoRoutingService(todos));
+
+            BizLead sourceLead=policyLead(deptId,"WEB");
+            LeadAssignmentPolicyService.RetrySchedulePolicy source=
+                    policies.resolveRetrySchedule(sourceLead);
+            long sourcePlan=createPolicyPlan(schedules,templateVersionId,source,930_000_001L);
+            assertPolicySnapshot(connection,sourcePlan,sourceId,7,702L,4);
+
+            BizLead wildcardLead=policyLead(deptId,"REFERRAL");
+            LeadAssignmentPolicyService.RetrySchedulePolicy wildcard=
+                    policies.resolveRetrySchedule(wildcardLead);
+            long wildcardPlan=createPolicyPlan(schedules,templateVersionId,wildcard,930_000_002L);
+            assertPolicySnapshot(connection,wildcardPlan,wildcardId,9,701L,2);
+            session.rollback();
+        }
+    }
+
     @Test
     void factLeadTransitionAndOutboxShareOneRealMysqlTransaction() throws Exception
     {
@@ -202,6 +248,82 @@ class LeadFlowMapperExternalMysqlIT
         return configuration;
     }
 
+    private static long td003Version(Connection connection) throws Exception
+    {
+        try(Statement statement=connection.createStatement();ResultSet row=statement.executeQuery(
+                "select v.version_id from todo_template t join todo_template_version v "
+                +"on v.template_id=t.template_id where t.template_code='TD-003' "
+                +"order by v.version_no desc limit 1"))
+        {
+            if(!row.next())throw new AssertionError("TD-003 version fixture is required");
+            return row.getLong(1);
+        }
+    }
+
+    private static long insertPolicy(Connection connection,String code,long deptId,String source,
+            int rowVersion,String retryJson) throws Exception
+    {
+        try(PreparedStatement insert=connection.prepareStatement(
+                "insert into biz_lead_assignment_policy(policy_code,policy_name,sales_dept_id,"
+                +"source_code,business_type,retry_rule_json,status,row_version,create_by) "
+                +"values(?, ?, ?, ?, 'LEAD', cast(? as json), 'ACTIVE', ?, 'task6')",
+                Statement.RETURN_GENERATED_KEYS))
+        {
+            insert.setString(1,code);insert.setString(2,code);insert.setLong(3,deptId);
+            insert.setString(4,source);insert.setString(5,retryJson);insert.setInt(6,rowVersion);
+            assertEquals(1,insert.executeUpdate());
+            try(ResultSet keys=insert.getGeneratedKeys())
+            {
+                if(!keys.next())throw new AssertionError("Policy identity was not generated");
+                return keys.getLong(1);
+            }
+        }
+    }
+
+    private static String retryPolicyJson(long templateVersionId,long ruleVersionId,int attempts)
+    {
+        return "{\"templateVersionId\":"+templateVersionId+",\"ruleVersionId\":"+ruleVersionId
+                +",\"timezone\":\"Asia/Shanghai\",\"windows\":[{\"windowCode\":\"T0\","
+                +"\"windowOrder\":0,\"dayOffset\":0,\"startOffsetMinutes\":0,"
+                +"\"durationMinutes\":120,\"maxAttempts\":"+attempts+",\"occurrenceNo\":1}]}";
+    }
+
+    private static BizLead policyLead(long deptId,String sourceCode)
+    {
+        BizLead lead=new BizLead();
+        lead.setDeptId(deptId);lead.setSourceCode(sourceCode);
+        return lead;
+    }
+
+    private static long createPolicyPlan(TodoScheduleService schedules,long templateVersionId,
+            LeadAssignmentPolicyService.RetrySchedulePolicy policy,long businessId)
+    {
+        return schedules.createPlan(new TodoScheduleService.CreateSchedulePlanCommand(
+                businessId-100,templateVersionId,"LEAD",businessId,
+                LocalDateTime.of(2026,7,25,9,0),policy.timezone(),policy.ruleVersionId(),
+                policy.policyId(),policy.policyVersion(),policy.windows()));
+    }
+
+    private static void assertPolicySnapshot(Connection connection,long planId,long expectedPolicyId,
+            int expectedPolicyVersion,long expectedRuleVersion,int expectedAttempts) throws Exception
+    {
+        try(PreparedStatement query=connection.prepareStatement(
+                "select p.assignment_policy_id,p.assignment_policy_version,p.rule_version_id,"
+                +"w.max_attempts from todo_schedule_plan p join todo_schedule_window w "
+                +"on w.plan_id=p.plan_id where p.plan_id=?"))
+        {
+            query.setLong(1,planId);
+            try(ResultSet row=query.executeQuery())
+            {
+                if(!row.next())throw new AssertionError("Persisted policy schedule was not found");
+                assertEquals(expectedPolicyId,row.getLong("assignment_policy_id"));
+                assertEquals(expectedPolicyVersion,row.getInt("assignment_policy_version"));
+                assertEquals(expectedRuleVersion,row.getLong("rule_version_id"));
+                assertEquals(expectedAttempts,row.getInt("max_attempts"));
+            }
+        }
+    }
+
     private static LeadRetryService retryService(SqlSession session)
     {
         BizLeadMapper leads=session.getMapper(BizLeadMapper.class);
@@ -233,9 +355,10 @@ class LeadFlowMapperExternalMysqlIT
                     +"'COMPLETED','UNREACHABLE','T1_AM'),("+leadB+",'RB-"+leadB
                     +"','Retry B','2','0','ACTIVE','0',1,0,'COMPLETED','UNREACHABLE','T1_AM')");
             statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,template_version_id,"
-                    +"business_type,business_id,timezone,rule_version_id,first_contact_at,status,create_time,"
+                    +"business_type,business_id,timezone,rule_version_id,assignment_policy_id,"
+                    +"assignment_policy_version,first_contact_at,status,create_time,"
                     +"update_time,version) values("+todoId+",1,'LEAD',"+leadA
-                    +",'Asia/Shanghai',11,'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
+                    +",'Asia/Shanghai',11,1,0,'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
                     Statement.RETURN_GENERATED_KEYS);
             long planId=generated(statement);
             statement.executeUpdate("insert into todo_schedule_window(plan_id,window_code,window_order,"

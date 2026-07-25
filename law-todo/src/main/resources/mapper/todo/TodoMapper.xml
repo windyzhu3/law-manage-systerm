@@ -348,8 +348,10 @@
   <insert id="insertAutoActionAudit">insert into todo_auto_action_audit(execution_key,attempt_no,todo_id,rule_key,action_type,status,service_actor_id,service_actor_name,error_code,error_message,executed_at) values(#{executionKey},#{attemptNo},#{todoId},#{ruleKey},#{actionType},#{status},#{serviceActorId},#{serviceActorName},#{errorCode},#{errorMessage},#{now})</insert>
   <update id="returnToPoolConditionally">update todo_instance set status='CREATED',owner_id=null,owner_dept_id=null,claimed_at=null,started_at=null,submitted_at=null,version=version+1,update_by=#{operator},update_time=sysdate() where todo_id=#{todoId} and status=#{fromStatus} and status not in ('COMPLETED','CANCELLED')</update>
   <insert id="insertSchedulePlan" useGeneratedKeys="true" keyProperty="planId">
-    insert into todo_schedule_plan(previous_todo_id,template_version_id,business_type,business_id,timezone,rule_version_id,first_contact_at,status,create_time,update_time,version)
-    values(#{previousTodoId},#{templateVersionId},#{businessType},#{businessId},#{timezone},#{ruleVersionId},#{firstContactAt},#{status},sysdate(),sysdate(),0)
+    insert into todo_schedule_plan(previous_todo_id,template_version_id,business_type,business_id,timezone,
+      rule_version_id,assignment_policy_id,assignment_policy_version,first_contact_at,status,create_time,update_time,version)
+    values(#{previousTodoId},#{templateVersionId},#{businessType},#{businessId},#{timezone},
+      #{ruleVersionId},#{assignmentPolicyId},#{assignmentPolicyVersion},#{firstContactAt},#{status},sysdate(),sysdate(),0)
   </insert>
   <insert id="insertScheduleWindow" useGeneratedKeys="true" keyProperty="windowId">
     insert into todo_schedule_window(plan_id,window_code,window_order,day_offset,start_time,end_time,materialize_at,due_at,max_attempts,occurrence_no,status,create_time,update_time,version)
@@ -398,6 +400,10 @@
            status,result_code resultCode,version
     from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
   </select>
+  <select id="selectScheduleOccurrenceIdentity" resultType="java.util.Map">
+    select occurrence_id occurrenceId,plan_id planId,window_id windowId
+    from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
+  </select>
   <select id="selectScheduleOccurrenceContextForUpdate" resultType="java.util.Map">
     select o.occurrence_id occurrenceId,o.plan_id planId,o.window_id windowId,
            o.window_code windowCode,o.occurrence_no occurrenceNo,o.todo_id todoId,
@@ -405,7 +411,8 @@
            w.max_attempts maxAttempts,w.materialize_at windowStartAt,w.due_at windowDueAt,
            p.previous_todo_id previousTodoId,p.template_version_id templateVersionId,
            p.business_type businessType,p.business_id businessId,p.timezone,
-           p.rule_version_id ruleVersionId,p.status planStatus
+           p.rule_version_id ruleVersionId,p.assignment_policy_id assignmentPolicyId,
+           p.assignment_policy_version assignmentPolicyVersion,p.status planStatus
     from todo_schedule_occurrence o
     join todo_schedule_window w on w.window_id=o.window_id and w.plan_id=o.plan_id
     join todo_schedule_plan p on p.plan_id=o.plan_id
@@ -472,7 +479,8 @@
     where plan_id=#{planId} and status='ACTIVE'
   </update>
   <select id="selectSchedulePlanForUpdate" resultType="java.util.Map">
-    select plan_id planId,template_version_id templateVersionId,status,
+    select plan_id planId,template_version_id templateVersionId,assignment_policy_id assignmentPolicyId,
+           assignment_policy_version assignmentPolicyVersion,status,
            completion_reason completionReason,version
     from todo_schedule_plan where plan_id=#{planId}
     for update

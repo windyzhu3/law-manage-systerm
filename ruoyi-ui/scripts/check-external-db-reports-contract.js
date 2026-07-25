@@ -14,8 +14,9 @@ const classes = [
   'TodoPhaseTwoTransactionTest',
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
-  'TodoDefinitionLedgerConcurrencyTest'
-  ,'TodoTriggerRuleMetadataMigrationContractTest'
+  'TodoDefinitionLedgerConcurrencyTest',
+  'TodoTriggerRuleMetadataMigrationContractTest',
+  'LeadFlowMapperExternalMysqlIT'
 ]
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-external-reports-'))
 

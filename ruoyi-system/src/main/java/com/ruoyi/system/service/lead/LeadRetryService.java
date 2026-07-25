@@ -61,66 +61,89 @@ public class LeadRetryService
         TodoScheduleService.ScheduleOccurrenceContext context =
                 schedules.lockOccurrenceContext(command.getOccurrenceId());
         validateContext(command, context);
-        String occurrenceKey = "LEAD_RETRY_OCCURRENCE:" + command.getOccurrenceId();
-        BizLeadRetryRecord prior = facts.selectRetryRecordByIdempotencyKey(occurrenceKey);
-        if (prior != null) return replay(command, context, prior);
+        String requestedResult = trim(command.getResult());
+        requireDict("law_retry_result", requestedResult);
+        validateBranch(command, requestedResult);
+        LeadCallRecordService.CallRecordOutcome call =
+                calls.recordForLead(command.getCallRecord(), lead, actor, context.todoId());
+        String attemptKey="LEAD_RETRY_ATTEMPT:"+context.occurrenceId()+":"+call.callRecordId();
+        BizLeadRetryRecord prior=facts.selectRetryRecordByIdempotencyKey(attemptKey);
+        if(prior!=null)return replay(command,context,prior,call.callRecordId());
+
         require(actor.administrator() || actor.userId().equals(lead.getOwnerId()),
                 BusinessErrorCode.ACCESS_DENIED, "Only the lead owner may complete a retry window");
-
         require("ACTIVE".equals(lead.getDisposition()) && "UNREACHABLE".equals(lead.getFirstContactResult())
                 && context.windowCode().equals(lead.getRetryStage()),
                 BusinessErrorCode.STATE_CONFLICT, "LEAD_RETRY_STATE_INVALID");
-        String result = trim(command.getResult());
-        requireDict("law_retry_result", result);
-        validateBranch(command, result);
-        LeadCallRecordService.CallRecordOutcome call =
-                calls.recordForLead(command.getCallRecord(), lead, actor, context.todoId());
-        LocalDateTime completedAt = LocalDateTime.now();
-        TodoScheduleService.ScheduleCompletion schedule = schedules.completeOccurrence(
-                context, result, completedAt);
-        require(context.planId().equals(schedule.planId())
-                && context.windowCode().equals(schedule.windowCode())
-                && context.businessId().equals(schedule.businessId())
-                && context.todoId().equals(schedule.todoId()),
-                BusinessErrorCode.STATE_CONFLICT, "Retry command does not match its schedule occurrence");
+        int attemptNo=facts.countCallRecordsForLeadTodo(context.businessId(),context.todoId());
+        require(attemptNo>0&&attemptNo<=context.maxAttempts(),BusinessErrorCode.STATE_CONFLICT,
+                "LEAD_RETRY_ATTEMPT_LIMIT_INVALID");
+        if("EXHAUSTED".equals(requestedResult)&&attemptNo<context.maxAttempts())
+            throw new ServiceException("LEAD_RETRY_MAX_ATTEMPTS_NOT_REACHED",
+                    BusinessErrorCode.STATE_CONFLICT.name());
 
-        String nextStage = "EXHAUSTED".equals(result) ? "EXHAUSTED" : schedule.nextWindowCode();
-        BizLeadRetryRecord retry = insertRetry(command, context, call.callRecordId(), actor,
-                occurrenceKey, nextStage);
-        if ("NEXT_WINDOW".equals(result))
+        LocalDateTime completedAt = LocalDateTime.now();
+        TodoScheduleService.ScheduleCompletion schedule=null;
+        String result;
+        String nextStage;
+        if("CONNECTED".equals(requestedResult))
+        {
+            schedule=schedules.completeOccurrence(context,"CONNECTED",completedAt);
+            validateSchedule(context,schedule);
+            result="CONNECTED";nextStage=null;
+        }
+        else if(attemptNo<context.maxAttempts())
+        {
+            result="CONTINUE_CURRENT_WINDOW";nextStage=context.windowCode();
+        }
+        else
+        {
+            schedule=schedules.completeAttemptLimit(context,completedAt);
+            validateSchedule(context,schedule);
+            result=schedule.nextWindowCode()==null?"EXHAUSTED":"NEXT_WINDOW";
+            nextStage="EXHAUSTED".equals(result)?"EXHAUSTED":schedule.nextWindowCode();
+        }
+        BizLeadRetryRecord retry=insertRetry(context,call.callRecordId(),actor,attemptKey,
+                attemptNo,result,nextStage);
+        if ("CONTINUE_CURRENT_WINDOW".equals(result))
+        {
+            changed(leads.advanceRetryStage(lead.getLeadId(),lead.getRetryStage(),lead.getRetryStage(),
+                    attemptNo,lead.getNextRetryTime(),lead.getRowVersion(),actor.userName()));
+        }
+        else if ("NEXT_WINDOW".equals(result))
         {
             Date nextRetry = Date.from(schedule.nextStartAt().atZone(ZoneId.of(context.timezone())).toInstant());
             changed(leads.advanceRetryStage(lead.getLeadId(), lead.getRetryStage(), nextStage,
-                    context.occurrenceNo(), nextRetry, lead.getRowVersion(), actor.userName()));
+                    attemptNo, nextRetry, lead.getRowVersion(), actor.userName()));
         }
         else if ("CONNECTED".equals(result))
         {
             changed(leads.completeRetryConnected(lead.getLeadId(), lead.getRetryStage(),
                     trim(command.getContactName()), trim(command.getCity()), trim(command.getLegalDemand()),
                     trim(command.getVisited()), lead.getRowVersion(), actor.userName()));
-            publishConnected(lead, retry, command, actor);
+            publishConnected(lead,retry,actor);
         }
         else
         {
             schedules.cancelPlan(context.planId(), "RETRY_EXHAUSTED", completedAt);
             changed(leads.advanceRetryStage(lead.getLeadId(), lead.getRetryStage(), "EXHAUSTED",
-                    context.occurrenceNo(), null, lead.getRowVersion(), actor.userName()));
+                    attemptNo, null, lead.getRowVersion(), actor.userName()));
             pool.moveToPoolBySystem(lead, lead.getRowVersion() + 1, "RETRY_EXHAUSTED");
             publishExhausted(lead, context, actor);
         }
-        return new RetryOutcome(result, retry.getRetryRecordId(), nextStage, false);
+        return new RetryOutcome(result,retry.getRetryRecordId(),nextStage,attemptNo,false);
     }
 
-    private BizLeadRetryRecord insertRetry(LeadRetryCompleteCommand command,
-            TodoScheduleService.ScheduleOccurrenceContext context, Long callRecordId,
-            BusinessActor actor, String key, String nextWindowCode)
+    private BizLeadRetryRecord insertRetry(TodoScheduleService.ScheduleOccurrenceContext context,
+            Long callRecordId,BusinessActor actor,String key,int attemptNo,String result,
+            String nextWindowCode)
     {
         BizLeadRetryRecord retry = new BizLeadRetryRecord();
-        retry.setLeadId(command.getLeadId());
+        retry.setLeadId(context.businessId());
         retry.setPlanId(context.planId());
         retry.setWindowCode(context.windowCode());
-        retry.setAttemptNo(context.occurrenceNo());
-        retry.setContactResult(trim(command.getResult()));
+        retry.setAttemptNo(attemptNo);
+        retry.setContactResult(result);
         retry.setNextWindowCode(nextWindowCode);
         retry.setTodoId(context.todoId());
         retry.setCallRecordId(callRecordId);
@@ -134,19 +157,44 @@ public class LeadRetryService
     }
 
     private RetryOutcome replay(LeadRetryCompleteCommand command,
-            TodoScheduleService.ScheduleOccurrenceContext context, BizLeadRetryRecord prior)
+            TodoScheduleService.ScheduleOccurrenceContext context,BizLeadRetryRecord prior,
+            Long callRecordId)
     {
         require(command.getLeadId().equals(prior.getLeadId()) && context.planId().equals(prior.getPlanId())
                 && context.windowCode().equals(prior.getWindowCode())
-                && Integer.valueOf(context.occurrenceNo()).equals(prior.getAttemptNo())
                 && context.todoId().equals(prior.getTodoId())
-                && trim(command.getResult()).equals(prior.getContactResult()),
+                && callRecordId.equals(prior.getCallRecordId())
+                && replayResultMatches(trim(command.getResult()),prior.getContactResult()),
                 BusinessErrorCode.DUPLICATE_OPERATION, "Retry occurrence belongs to another outcome");
-        return new RetryOutcome(prior.getContactResult(), prior.getRetryRecordId(), prior.getNextWindowCode(), true);
+        return new RetryOutcome(prior.getContactResult(),prior.getRetryRecordId(),
+                prior.getNextWindowCode(),prior.getAttemptNo(),true);
     }
 
-    private void publishConnected(BizLead lead, BizLeadRetryRecord retry, LeadRetryCompleteCommand command,
-            BusinessActor actor)
+    private boolean replayResultMatches(String requested,String persisted)
+    {
+        if("CONNECTED".equals(requested))return "CONNECTED".equals(persisted);
+        if("EXHAUSTED".equals(requested))return "EXHAUSTED".equals(persisted);
+        return "CONTINUE_CURRENT_WINDOW".equals(persisted)
+                ||"NEXT_WINDOW".equals(persisted)||"EXHAUSTED".equals(persisted);
+    }
+
+    private void validateSchedule(TodoScheduleService.ScheduleOccurrenceContext context,
+            TodoScheduleService.ScheduleCompletion schedule)
+    {
+        require(schedule!=null&&context.planId().equals(schedule.planId())
+                &&context.windowCode().equals(schedule.windowCode())
+                &&context.businessId().equals(schedule.businessId())
+                &&context.todoId().equals(schedule.todoId())
+                &&context.timezone().equals(schedule.timezone())
+                &&context.templateVersionId().equals(schedule.templateVersionId())
+                &&context.ruleVersionId().equals(schedule.ruleVersionId())
+                &&context.assignmentPolicyId().equals(schedule.assignmentPolicyId())
+                &&context.assignmentPolicyVersion()==schedule.assignmentPolicyVersion(),
+                BusinessErrorCode.STATE_CONFLICT,
+                "Retry command does not match its schedule occurrence");
+    }
+
+    private void publishConnected(BizLead lead,BizLeadRetryRecord retry,BusinessActor actor)
     {
         Map<String, Object> payload = base(lead, actor);
         payload.put("planId", retry.getPlanId());
@@ -192,9 +240,10 @@ public class LeadRetryService
                 && command.getOccurrenceId().equals(context.occurrenceId())
                 && context.planId() != null && context.windowId() != null
                 && context.windowCode() != null && !context.windowCode().isBlank()
-                && context.occurrenceNo() > 0 && context.occurrenceNo() <= context.maxAttempts()
+                && context.occurrenceNo() > 0 && context.maxAttempts()>0
                 && context.timezone() != null && context.templateVersionId() != null
-                && context.ruleVersionId() != null
+                && context.ruleVersionId() != null&&context.assignmentPolicyId()!=null
+                && context.assignmentPolicyVersion()>=0
                 && ("MATERIALIZED".equals(context.status()) || "COMPLETED".equals(context.status())),
                 BusinessErrorCode.STATE_CONFLICT, "LEAD_RETRY_STATE_INVALID");
     }
@@ -236,5 +285,6 @@ public class LeadRetryService
     }
     private String trim(String value) { return value == null ? null : value.trim(); }
 
-    public record RetryOutcome(String result, Long retryRecordId, String nextStage, boolean replayed) { }
+    public record RetryOutcome(String result,Long retryRecordId,String nextStage,int attemptNo,
+            boolean replayed) { }
 }

@@ -45,7 +45,7 @@ class TodoScheduleServiceTest
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
         long planId=service.createPlan(new CreateSchedulePlanCommand(
-                7L,22L,"LEAD",91L,NOW,null,4L));
+                7L,22L,"LEAD",91L,NOW,null,4L,11L,2));
 
         assertEquals(3L,planId);
         assertEquals(List.of("T0","T1_AM","T1_NOON","T1_PM","T2_AM","T2_NOON","T2_PM"),
@@ -65,7 +65,7 @@ class TodoScheduleServiceTest
     {
         TodoScheduleService service=new TodoScheduleService(mock(TodoMapper.class),mock(TodoRoutingService.class));
         TodoException error=assertThrows(TodoException.class,()->service.createPlan(
-                new CreateSchedulePlanCommand(null,22L,"LEAD",91L,NOW,null,4L)));
+                new CreateSchedulePlanCommand(null,22L,"LEAD",91L,NOW,null,4L,11L,2)));
         assertEquals("TODO_SCHEDULE_PLAN_INVALID",error.getBusinessCode());
     }
 
@@ -127,8 +127,7 @@ class TodoScheduleServiceTest
     void connectedResultCancelsFutureWindows()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(contextRow("MATERIALIZED",null,"ACTIVE"));
+        stubPlanFirst(mapper,contextRow("MATERIALIZED",null,"ACTIVE"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(1);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -144,8 +143,7 @@ class TodoScheduleServiceTest
     void nextWindowResultReturnsScheduleOwnedStageAndStartTime()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(contextRow("MATERIALIZED",null,"ACTIVE"));
+        stubPlanFirst(mapper,contextRow("MATERIALIZED",null,"ACTIVE"));
         when(mapper.recordScheduleOccurrenceResult(9L,"NEXT_WINDOW",NOW)).thenReturn(1);
         when(mapper.selectNextScheduleWindow(3L,12L)).thenReturn(Map.of(
                 "windowCode","T1_NOON","startAt",LocalDateTime.of(2026,7,26,12,0)));
@@ -162,13 +160,15 @@ class TodoScheduleServiceTest
     void locksAndReturnsAuthoritativeOccurrencePlanAndWindowContext()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L)).thenReturn(Map.ofEntries(
+        Map<String,Object> locked=Map.ofEntries(
                 Map.entry("occurrenceId",9L),Map.entry("planId",3L),Map.entry("windowId",12L),
                 Map.entry("windowCode","T1_AM"),Map.entry("occurrenceNo",2),Map.entry("todoId",44L),
                 Map.entry("businessType","LEAD"),Map.entry("businessId",91L),
                 Map.entry("timezone","Asia/Shanghai"),Map.entry("templateVersionId",22L),
-                Map.entry("ruleVersionId",4L),Map.entry("maxAttempts",3),
-                Map.entry("status","MATERIALIZED")));
+                Map.entry("ruleVersionId",4L),Map.entry("assignmentPolicyId",11L),
+                Map.entry("assignmentPolicyVersion",2),Map.entry("maxAttempts",3),
+                Map.entry("status","MATERIALIZED"),Map.entry("planStatus","ACTIVE"));
+        stubPlanFirst(mapper,locked);
 
         TodoScheduleService.ScheduleOccurrenceContext context =
                 new TodoScheduleService(mapper,mock(TodoRoutingService.class)).lockOccurrenceContext(9L);
@@ -181,11 +181,49 @@ class TodoScheduleServiceTest
     }
 
     @Test
+    void authoritativeOccurrenceUsesGlobalPlanFirstLockOrder()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectScheduleOccurrenceIdentity(9L)).thenReturn(
+                Map.of("occurrenceId",9L,"planId",3L,"windowId",12L));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(
+                Map.of("planId",3L,"status","ACTIVE"));
+        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
+                .thenReturn(contextRow("MATERIALIZED",null,"ACTIVE"));
+
+        new TodoScheduleService(mapper,mock(TodoRoutingService.class)).lockOccurrenceContext(9L);
+
+        InOrder order=inOrder(mapper);
+        order.verify(mapper).selectScheduleOccurrenceIdentity(9L);
+        order.verify(mapper).selectSchedulePlanForUpdate(3L);
+        order.verify(mapper).selectScheduleOccurrenceContextForUpdate(9L);
+    }
+
+    @Test
+    void planFirstFenceComparesNumericIdentitiesBeyondTheJvmLongCache()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectScheduleOccurrenceIdentity(900L)).thenReturn(
+                Map.of("occurrenceId",900L,"planId",300L,"windowId",1200L));
+        when(mapper.selectSchedulePlanForUpdate(300L)).thenReturn(
+                Map.of("planId",300L,"status","ACTIVE"));
+        Map<String,Object> row=new HashMap<>(contextRow("MATERIALIZED",null,"ACTIVE"));
+        row.put("occurrenceId",900L);row.put("planId",300L);row.put("windowId",1200L);
+        when(mapper.selectScheduleOccurrenceContextForUpdate(900L)).thenReturn(row);
+
+        TodoScheduleService.ScheduleOccurrenceContext context=
+                new TodoScheduleService(mapper,mock(TodoRoutingService.class))
+                        .lockOccurrenceContext(900L);
+
+        assertEquals(300L,context.planId());
+        assertEquals(1200L,context.windowId());
+    }
+
+    @Test
     void contextCompletionRejectsCallerContextThatDiffersFromLockedOccurrence()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(contextRow("MATERIALIZED",null,"ACTIVE"));
+        stubPlanFirst(mapper,contextRow("MATERIALIZED",null,"ACTIVE"));
         TodoScheduleService.ScheduleOccurrenceContext forged =
                 new TodoScheduleService.ScheduleOccurrenceContext(9L,999L,12L,"T1_AM",1,44L,
                         "LEAD",91L,"Asia/Shanghai",22L,4L,3,"MATERIALIZED",null);
@@ -215,7 +253,7 @@ class TodoScheduleServiceTest
                         java.time.LocalTime.of(10,15),java.time.LocalTime.of(11,45),null,null,4,2));
 
         new TodoScheduleService(mapper,mock(TodoRoutingService.class)).createPlan(
-                new CreateSchedulePlanCommand(7L,22L,"LEAD",91L,NOW,"Asia/Shanghai",4L,rules));
+                new CreateSchedulePlanCommand(7L,22L,"LEAD",91L,NOW,"Asia/Shanghai",4L,11L,2,rules));
 
         assertEquals(List.of("T0","CUSTOM"),inserted.stream().map(row->row.get("windowCode")).toList());
         assertEquals(NOW.plusMinutes(90),inserted.get(0).get("dueAt"));
@@ -235,7 +273,7 @@ class TodoScheduleServiceTest
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
         TodoException error=assertThrows(TodoException.class,()->service.createPlan(
-                new CreateSchedulePlanCommand(7L,22L,"LEAD",91L,NOW,"Asia/Shanghai",4L,List.of(
+                new CreateSchedulePlanCommand(7L,22L,"LEAD",91L,NOW,"Asia/Shanghai",4L,11L,2,List.of(
                         new TodoScheduleService.ScheduleWindowRule("T0",0,0,null,null,0,90,2,1)))));
 
         assertEquals("TODO_SCHEDULE_TEMPLATE_INVALID",error.getBusinessCode());
@@ -248,8 +286,7 @@ class TodoScheduleServiceTest
         TodoMapper mapper=mock(TodoMapper.class);
         Map<String,Object> accepted=contextRow("MATERIALIZED",null,"ACTIVE");
         Map<String,Object> completed=contextRow("COMPLETED","CONNECTED","CONTACTED");
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(accepted,completed,completed);
+        stubPlanFirst(mapper,accepted,completed,completed);
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(1,0);
         when(mapper.selectActiveLinkedScheduleTodosForUpdate(3L,9L)).thenReturn(
                 List.of(Map.of("occurrenceId",10L,"todoId",55L,"status","CREATED")),
@@ -315,8 +352,8 @@ class TodoScheduleServiceTest
     void outOfOrderCompletionCannotCancelPlan()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(contextRow("CLAIMED",null,"ACTIVE"));
+        stubPlanFirst(mapper,contextRow("CLAIMED",null,"ACTIVE"),
+                contextRow("CLAIMED",null,"ACTIVE"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(0);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -332,9 +369,8 @@ class TodoScheduleServiceTest
     void acceptedConnectedCompletionReplayIsIdempotent()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
-                .thenReturn(contextRow("COMPLETED","CONNECTED","CONTACTED"),
-                        contextRow("COMPLETED","CONNECTED","CONTACTED"));
+        stubPlanFirst(mapper,contextRow("COMPLETED","CONNECTED","CONTACTED"),
+                contextRow("COMPLETED","CONNECTED","CONTACTED"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(0);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -375,8 +411,23 @@ class TodoScheduleServiceTest
         row.put("windowCode","T1_AM");row.put("occurrenceNo",1);row.put("todoId",44L);
         row.put("businessType","LEAD");row.put("businessId",91L);row.put("timezone","Asia/Shanghai");
         row.put("templateVersionId",22L);row.put("ruleVersionId",4L);row.put("maxAttempts",3);
+        row.put("assignmentPolicyId",11L);row.put("assignmentPolicyVersion",2);
         row.put("status",status);row.put("planStatus",planStatus);
         if(result!=null)row.put("resultCode",result);
         return row;
+    }
+
+    @SafeVarargs
+    private final void stubPlanFirst(TodoMapper mapper,Map<String,Object>... rows)
+    {
+        when(mapper.selectScheduleOccurrenceIdentity(9L)).thenReturn(
+                Map.of("occurrenceId",9L,"planId",3L,"windowId",12L));
+        java.util.concurrent.atomic.AtomicInteger index=new java.util.concurrent.atomic.AtomicInteger();
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenAnswer(invocation->{
+            Map<String,Object> row=rows[Math.min(index.getAndIncrement(),rows.length-1)];
+            return Map.of("planId",3L,"status",row.getOrDefault("planStatus","ACTIVE"));
+        });
+        Map<String,Object>[] remainder=java.util.Arrays.copyOfRange(rows,1,rows.length);
+        when(mapper.selectScheduleOccurrenceContextForUpdate(9L)).thenReturn(rows[0],remainder);
     }
 }

@@ -251,6 +251,14 @@ class TodoMapperXmlContractTest
             String identity=statement(xml,"select","selectScheduleOccurrenceIdentityByKey");
             assertTrue(identity.contains("occurrence_id occurrenceId,plan_id planId,window_id windowId"));
             assertFalse(identity.contains("for update"));
+            String completionIdentity=statement(xml,"select","selectScheduleOccurrenceIdentity");
+            assertTrue(completionIdentity.contains(
+                    "occurrence_id occurrenceId,plan_id planId,window_id windowId"));
+            assertFalse(completionIdentity.contains("for update"));
+            String completionContext=statement(xml,"select",
+                    "selectScheduleOccurrenceContextForUpdate");
+            assertTrue(completionContext.contains("where o.occurrence_id=#{occurrenceId}"));
+            assertTrue(completionContext.contains("for update"));
             String occurrenceLock=statement(xml,"select","selectScheduleOccurrenceWindowForUpdate");
             assertTrue(occurrenceLock.contains("w.status windowStatus"));
             assertTrue(occurrenceLock.contains("o.occurrence_key=#{occurrenceKey} and o.plan_id=#{planId}"));

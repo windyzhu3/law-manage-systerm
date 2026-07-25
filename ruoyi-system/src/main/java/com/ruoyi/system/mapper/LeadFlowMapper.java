@@ -13,6 +13,7 @@ public interface LeadFlowMapper
 {
     int insertCallRecordIfAbsent(BizLeadCallRecord record);
     BizLeadCallRecord selectCallRecordByIdempotencyKey(String idempotencyKey);
+    int countCallRecordsForLeadTodo(@Param("leadId") Long leadId,@Param("todoId") Long todoId);
 
     int insertInvalidReviewIfAbsent(BizLeadInvalidReview review);
     BizLeadInvalidReview selectInvalidReviewById(Long reviewId);

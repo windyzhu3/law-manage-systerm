@@ -15,6 +15,10 @@
           provider_summary_hash providerSummaryHash,idempotency_key idempotencyKey,create_by createBy
         from biz_lead_call_record where idempotency_key=#{idempotencyKey}
     </select>
+    <select id="countCallRecordsForLeadTodo" resultType="int">
+        select count(*) from biz_lead_call_record
+        where lead_id=#{leadId} and todo_id=#{todoId}
+    </select>
 
     <insert id="insertInvalidReviewIfAbsent" parameterType="BizLeadInvalidReview" useGeneratedKeys="true" keyProperty="reviewId">
         insert ignore into biz_lead_invalid_review(

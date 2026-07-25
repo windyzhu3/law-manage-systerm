@@ -56,7 +56,8 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.48", current.getVersion().getVersion());
+        assertEquals("0.20.49", current.getVersion().getVersion());
+        verifyTodoSchedulePolicySnapshotSchema(url);
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -76,6 +77,23 @@ class FlywayMigrationTest
         verifyTodoPhaseOneAssetClosure(url);
         verifyReadableNavigationMenuNames(url);
         verifyTodoTemplateVersionEditMetadata(url);
+    }
+
+    private void verifyTodoSchedulePolicySnapshotSchema(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(2L,count(connection,
+                    "select count(*) from information_schema.columns where table_schema=database() "
+                    +"and table_name='todo_schedule_plan' and column_name in "
+                    +"('assignment_policy_id','assignment_policy_version')"));
+        }
+        catch(SQLException exception)
+        {
+            throw new AssertionError("Todo schedule policy snapshot schema invariants failed",exception);
+        }
     }
 
     private void verifyTodoTemplateVersionEditMetadata(String url)

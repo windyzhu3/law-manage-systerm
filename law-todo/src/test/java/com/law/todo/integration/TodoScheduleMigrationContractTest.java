@@ -11,6 +11,8 @@ class TodoScheduleMigrationContractTest
 {
     private static final Path MIGRATION=Path.of("..","ruoyi-admin","src","main","resources",
             "db","migration","V0_20_47__todo_schedule_windows.sql");
+    private static final Path POLICY_SNAPSHOT_MIGRATION=Path.of("..","ruoyi-admin","src","main",
+            "resources","db","migration","V0_20_49__todo_schedule_policy_snapshot.sql");
 
     @Test
     void createsVersionedPlansWindowsAndUniqueOccurrences() throws Exception
@@ -27,5 +29,15 @@ class TodoScheduleMigrationContractTest
         assertTrue(sql.contains("timezone varchar(64) not null default 'asia/shanghai'"));
         assertTrue(sql.contains("materialize_at datetime not null"));
         assertTrue(sql.contains("due_at datetime not null"));
+    }
+
+    @Test
+    void addsAssignmentPolicyIdentityVersionAndInternalContinuationOutcome() throws Exception
+    {
+        String sql=Files.readString(POLICY_SNAPSHOT_MIGRATION).toLowerCase().replaceAll("\\s+"," ");
+
+        assertTrue(sql.contains("add column assignment_policy_id bigint"));
+        assertTrue(sql.contains("add column assignment_policy_version int"));
+        assertTrue(sql.contains("continue_current_window"));
     }
 }

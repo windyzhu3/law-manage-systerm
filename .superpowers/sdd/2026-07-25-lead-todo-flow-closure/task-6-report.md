@@ -217,3 +217,104 @@ mvn -pl ruoyi-admin -am "-Dtest=LeadFlowMapperExternalMysqlIT" "-Dsurefire.failI
 Result: `BUILD SUCCESS`; 3 tests passed. In addition to the original rollback/commit proof, the real mapper/service test proves cross-lead and cross-Todo retry commands leave both lead rows, the plan, the occurrence, and retry facts unchanged. The real Outbox publisher also persists `create_by='system'` with no authenticated principal.
 
 `git diff --check` passes. User-owned Task 7 report, UI proxy edit, Playwright/runtime output, and test-results remain unstaged.
+
+## Independent review fix round 2
+
+Status: complete. R1, R2, R3 and the missing durable CI gate from
+`task-6-rereview.md` are addressed.
+
+### RED evidence
+
+The round-two contract tests were introduced before the production mapper API:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=TodoScheduleServiceTest,TodoScheduleMigrationContractTest,LeadRetryServiceTest,LeadFirstContactServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+The expected RED stopped at `law-todo` test compilation with two missing
+`selectScheduleOccurrenceIdentity(long)` errors. Later R2/R3 tests remained behind that compile
+fence until the plan-first API was implemented.
+
+### R1: one production lock order
+
+- Completion now reads occurrence identity without a lock, locks the owning plan first, and only
+  then reloads the joined occurrence/window/plan context `FOR UPDATE`. It rejects any identity or
+  plan-status change across the fence.
+- Mapper contract tests prove the identity lookup is non-locking and the authoritative context is
+  locking. Service tests prove the exact identity -> plan -> joined-context call order.
+- The real-MySQL race no longer manually restates mapper calls. Its materializer invokes
+  `TodoRoutingService.createScheduledNext`, its completion invokes
+  `TodoScheduleService.completeOccurrence`, and a latch only pauses the real materializer mapper
+  invocation immediately after its production plan lock. The test observes the completion session
+  waiting on `todo_schedule_plan`, releases the materializer, and proves both production operations
+  commit without MySQL error 1213.
+
+### R2: configured call-attempt semantics
+
+- A retry attempt is now one immutable `biz_lead_call_record` bound to the authoritative lead and
+  TD-003 Todo. The actual attempt number is the real count for that lead/Todo, not
+  `occurrence_no`.
+- The idempotency key is `LEAD_RETRY_ATTEMPT:{occurrenceId}:{callRecordId}`. Exact replay requires
+  the same immutable call fact and compatible server-owned outcome; a conflicting terminal outcome
+  is rejected without schedule or lead mutation.
+- Unconnected attempts below `max_attempts` persist `CONTINUE_CURRENT_WINDOW`, update the real
+  attempt count, and retain the same Todo/window. At the configured limit, the schedule service,
+  not caller stage/time fields, derives `NEXT_WINDOW` when a later window exists and `EXHAUSTED`
+  otherwise. A client cannot force early exhaustion.
+- Tests cover attempts 1, 2 and 3, early exhaustion, configured maximum 2, terminal next/exhausted
+  derivation, connected completion, matching replay, and conflicting replay.
+
+### R3: immutable policy audit snapshot
+
+- Flyway `V0_20_49__todo_schedule_policy_snapshot.sql` adds
+  `assignment_policy_id` and `assignment_policy_version` to `todo_schedule_plan`, and expands the
+  immutable retry-result constraint for the internal continuation outcome.
+- First-contact plan creation passes the resolved policy ID and row version through the schedule
+  command, plan insert, plan lock, authoritative context and completion result.
+- The real-MySQL lead-flow test creates an exact-source and wildcard policy with different row
+  versions, rules and attempt limits. It resolves both through `LeadAssignmentPolicyService`,
+  creates plans through `TodoScheduleService`, and queries the real plan/window rows to prove the
+  selected policy ID/version and configured values were snapshotted exactly.
+
+### CI closure
+
+- `LeadFlowMapperExternalMysqlIT` is explicitly present in the migration MySQL Maven list.
+- The external Surefire report assertion requires its report and rejects zero, skipped, failed or
+  errored evidence.
+- A repository contract test verifies both workflow execution and the non-skip assertion; the
+  report gate's negative contract also passes.
+
+### Final verification
+
+Focused schedule and Task 6 service gate:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,LeadTagConfirmationServiceTest,LeadCallRecordServiceTest,LeadFirstContactServiceTest,LeadInvalidReviewServiceTest,LeadRetryServiceTest,LeadDeadPoolServiceTest,LeadAssignmentPolicyServiceTest,LeadPoolServiceTest,OutboxBusinessEventPublisherTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 77 tests passed (37 `law-todo`, 40 `ruoyi-system`), 0
+failures/errors/skips. The final exact-replay addition was also rerun independently:
+`LeadRetryServiceTest` passed 11/11.
+
+Broad lead regression:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,Lead*Test,BusinessEventCommandTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 112 tests passed (4 `law-business`, 44 `law-todo`, 64
+`ruoyi-system`), 0 failures/errors/skips.
+
+An isolated MySQL 8 schema was initialized from the exact eleven-file CI v0.15 baseline.
+`FlywayMigrationTest` migrated it through `0.20.49` and passed its real
+`information_schema` assertion. The final production-path MySQL/gate command:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am "-Dtest=TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadFlowMysqlGateContractTest,TodoScheduleLockOrderMysqlGateContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 7 tests passed (lead flow 4, production lock race 1, CI contracts 2),
+0 failures/errors/skips. `node ruoyi-ui/scripts/check-external-db-reports-contract.js` also passed.
+
+`git diff --check` passes. The user-owned Task 7 report, UI proxy edit,
+`.playwright-cli/`, `.runtime-logs/`, `output/`, and `test-results/` remain unstaged.
