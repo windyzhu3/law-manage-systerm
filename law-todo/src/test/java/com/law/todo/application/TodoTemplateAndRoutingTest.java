@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.domain.TodoException;
@@ -156,7 +158,7 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        activeScheduleFence();
         when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
                 any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
 
@@ -169,6 +171,35 @@ class TodoTemplateAndRoutingTest
         verify(mapper).insertScheduledSlaRecord(org.mockito.ArgumentMatchers.argThat(row->dueAt.equals(row.get("dueAt"))));
     }
 
+    @Test void scheduledRoutingExplicitlyLocksPlanBeforeOccurrenceAndWindow()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
+        LocalDateTime dueAt=LocalDateTime.of(2026,7,26,11,0);
+        when(mapper.selectScheduleOccurrenceIdentityByKey("3:T1_AM:1")).thenReturn(Map.of(
+                "occurrenceId",9L,"planId",3L,"windowId",12L,"occurrenceKey","3:T1_AM:1"));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of(
+                "planId",3L,"status","ACTIVE","templateVersionId",22L));
+        when(mapper.selectScheduleOccurrenceWindowForUpdate("3:T1_AM:1",3L)).thenReturn(Map.of(
+                "occurrenceId",9L,"planId",3L,"windowId",12L,"occurrenceKey","3:T1_AM:1",
+                "version",0,"status","CLAIMED","windowStatus","PROCESSING"));
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
+                "work_end","23:59:59","exception_json","{}"));
+        when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
+                any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
+
+        new TodoRoutingService(mapper).createScheduledNext(previous,22L,"3:T1_AM:1",dueAt);
+
+        InOrder lockOrder=inOrder(mapper);
+        lockOrder.verify(mapper).selectScheduleOccurrenceIdentityByKey("3:T1_AM:1");
+        lockOrder.verify(mapper).selectSchedulePlanForUpdate(3L);
+        lockOrder.verify(mapper).selectScheduleOccurrenceWindowForUpdate("3:T1_AM:1",3L);
+    }
+
     @Test void scheduledRoutingRejectsBlankOccurrenceAndUnpublishedTemplate()
     {
         TodoRoutingService service=new TodoRoutingService(mapper);
@@ -179,7 +210,7 @@ class TodoTemplateAndRoutingTest
 
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"business_type","LEAD","status","DRAFT"));
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        activeScheduleFence();
         TodoException draft=assertThrows(TodoException.class,
                 ()->service.createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now()));
         assertEquals("TODO_SCHEDULE_TEMPLATE_NOT_PUBLISHED",draft.getBusinessCode());
@@ -200,7 +231,7 @@ class TodoTemplateAndRoutingTest
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
         when(mapper.selectUserDeptId(9L)).thenReturn(4L);
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        activeScheduleFence();
         when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
                 any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
 
@@ -216,7 +247,7 @@ class TodoTemplateAndRoutingTest
         TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
         previous.setCreatedAt(LocalDateTime.of(2026,7,24,8,0));
         LocalDateTime dueAt=LocalDateTime.of(2026,7,24,11,0);
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        activeScheduleFence();
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
@@ -241,15 +272,16 @@ class TodoTemplateAndRoutingTest
 
     @Test void cancelledClaimFencesScheduledTodoCreation()
     {
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(Map.of(
-                "occurrenceId",9L,"version",1,"status","CANCELLED",
-                "planStatus","CANCELLED","windowStatus","CANCELLED"));
+        when(mapper.selectScheduleOccurrenceIdentityByKey("3:T1_AM:1")).thenReturn(scheduleIdentity());
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of(
+                "planId",3L,"status","CANCELLED","templateVersionId",22L));
 
         TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
                 .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now()));
 
         assertEquals("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED",error.getBusinessCode());
         verify(mapper,never()).insertInstance(any());
+        verify(mapper,never()).selectScheduleOccurrenceWindowForUpdate(any(),any());
     }
 
     @Test void legacyScheduledOwnerMustPassProductionResolution()
@@ -258,7 +290,7 @@ class TodoTemplateAndRoutingTest
         when(resolver.resolve(any(com.law.todo.definition.model.TodoDefinitionDocument.OwnerRule.class),
                 any(com.law.todo.assignment.OwnerResolutionContext.class)))
                 .thenReturn(OwnerResolutionResult.empty());
-        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        activeScheduleFence();
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","USER:9","status","PUBLISHED",
@@ -271,10 +303,20 @@ class TodoTemplateAndRoutingTest
         verify(mapper,never()).insertInstance(any());
     }
 
-    private Map<String,Object> activeFence()
+    private void activeScheduleFence()
     {
-        return Map.of("occurrenceId",9L,"version",0,"status","CLAIMED",
-                "planStatus","ACTIVE","windowStatus","PROCESSING","templateVersionId",22L);
+        when(mapper.selectScheduleOccurrenceIdentityByKey("3:T1_AM:1")).thenReturn(scheduleIdentity());
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of(
+                "planId",3L,"status","ACTIVE","templateVersionId",22L));
+        when(mapper.selectScheduleOccurrenceWindowForUpdate("3:T1_AM:1",3L)).thenReturn(Map.of(
+                "occurrenceId",9L,"planId",3L,"windowId",12L,"occurrenceKey","3:T1_AM:1",
+                "version",0,"status","CLAIMED","windowStatus","PROCESSING"));
+    }
+
+    private Map<String,Object> scheduleIdentity()
+    {
+        return Map.of("occurrenceId",9L,"planId",3L,"windowId",12L,
+                "occurrenceKey","3:T1_AM:1");
     }
 
     private TodoInstance todo(){TodoInstance t=new TodoInstance();t.setTodoId(1L);t.setBusinessType("LEAD");t.setBusinessId(7L);t.setRootTodoId(1L);return t;}

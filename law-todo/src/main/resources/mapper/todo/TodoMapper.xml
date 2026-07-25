@@ -398,14 +398,17 @@
            status,result_code resultCode,version
     from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
   </select>
-  <select id="selectScheduleOccurrenceFenceForUpdate" resultType="java.util.Map">
-    select o.occurrence_id occurrenceId,o.occurrence_key occurrenceKey,o.todo_id todoId,
-           o.status,o.version,p.status planStatus,w.status windowStatus,
-           p.template_version_id templateVersionId
-    from todo_schedule_plan p
-    join todo_schedule_window w on w.plan_id=p.plan_id
-    join todo_schedule_occurrence o on o.window_id=w.window_id and o.plan_id=p.plan_id
-    where o.occurrence_key=#{occurrenceKey}
+  <select id="selectScheduleOccurrenceIdentityByKey" resultType="java.util.Map">
+    select occurrence_id occurrenceId,plan_id planId,window_id windowId,occurrence_key occurrenceKey
+    from todo_schedule_occurrence where occurrence_key=#{occurrenceKey}
+  </select>
+  <select id="selectScheduleOccurrenceWindowForUpdate" resultType="java.util.Map">
+    select o.occurrence_id occurrenceId,o.plan_id planId,o.window_id windowId,
+           o.occurrence_key occurrenceKey,o.todo_id todoId,o.status,o.version,
+           w.status windowStatus
+    from todo_schedule_occurrence o
+    join todo_schedule_window w on w.window_id=o.window_id and w.plan_id=o.plan_id
+    where o.occurrence_key=#{occurrenceKey} and o.plan_id=#{planId}
     for update
   </select>
   <update id="claimScheduleOccurrence">
@@ -445,7 +448,8 @@
     where plan_id=#{planId} and status='ACTIVE'
   </update>
   <select id="selectSchedulePlanForUpdate" resultType="java.util.Map">
-    select plan_id planId,status,completion_reason completionReason,version
+    select plan_id planId,template_version_id templateVersionId,status,
+           completion_reason completionReason,version
     from todo_schedule_plan where plan_id=#{planId}
     for update
   </select>

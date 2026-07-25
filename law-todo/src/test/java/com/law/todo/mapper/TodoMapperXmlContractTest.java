@@ -248,10 +248,13 @@ class TodoMapperXmlContractTest
             assertTrue(claimWindow.contains("status='PROCESSING' and claimed_at&lt;=#{staleBefore}"));
             String claimOccurrence=statement(xml,"update","claimScheduleOccurrence");
             assertTrue(claimOccurrence.contains("status='CLAIMED' and claimed_at&lt;=#{staleBefore}"));
-            String fence=statement(xml,"select","selectScheduleOccurrenceFenceForUpdate");
-            assertTrue(fence.contains("p.status planStatus"));
-            assertTrue(fence.contains("w.status windowStatus"));
-            assertTrue(fence.contains("for update"));
+            String identity=statement(xml,"select","selectScheduleOccurrenceIdentityByKey");
+            assertTrue(identity.contains("occurrence_id occurrenceId,plan_id planId,window_id windowId"));
+            assertFalse(identity.contains("for update"));
+            String occurrenceLock=statement(xml,"select","selectScheduleOccurrenceWindowForUpdate");
+            assertTrue(occurrenceLock.contains("w.status windowStatus"));
+            assertTrue(occurrenceLock.contains("o.occurrence_key=#{occurrenceKey} and o.plan_id=#{planId}"));
+            assertTrue(occurrenceLock.contains("for update"));
             String link=statement(xml,"update","linkScheduleOccurrenceByKey");
             assertTrue(link.contains("w.status='PROCESSING'"));
             assertTrue(link.contains("p.status='ACTIVE'"));

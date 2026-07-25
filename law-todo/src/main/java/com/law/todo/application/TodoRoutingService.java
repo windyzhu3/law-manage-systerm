@@ -170,9 +170,20 @@ public class TodoRoutingService
             throw new TodoException("TODO_SCHEDULE_DUE_AT_REQUIRED","Schedule due time is required");
         String normalizedOccurrenceKey=occurrenceKey.trim();
         String key="SCHEDULE:"+normalizedOccurrenceKey;
-        Map<String,Object> fence=mapper.selectScheduleOccurrenceFenceForUpdate(normalizedOccurrenceKey);
-        if(fence==null)
+        Map<String,Object> identity=mapper.selectScheduleOccurrenceIdentityByKey(normalizedOccurrenceKey);
+        if(identity==null||!normalizedOccurrenceKey.equals(text(identity.get("occurrenceKey"))))
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence claim does not exist");
+        Long planId=longValue(identity.get("planId"));
+        Map<String,Object> plan=planId==null?null:mapper.selectSchedulePlanForUpdate(planId);
+        if(plan==null||!"ACTIVE".equals(text(plan.get("status"))))
+            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule plan is no longer active");
+        Long fencedTemplateVersionId=longValue(plan.get("templateVersionId"));
+        if(fencedTemplateVersionId!=null&&!fencedTemplateVersionId.equals(templateVersionId))
+            throw new TodoException("TODO_SCHEDULE_TEMPLATE_MISMATCH","Schedule occurrence template version changed");
+        Map<String,Object> fence=mapper.selectScheduleOccurrenceWindowForUpdate(normalizedOccurrenceKey,planId);
+        if(fence==null||!normalizedOccurrenceKey.equals(text(fence.get("occurrenceKey")))
+                ||!sameIdentity(identity,fence,"occurrenceId")||!sameIdentity(identity,fence,"windowId"))
+            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence identity changed");
         String occurrenceStatus=text(fence.get("status"));
         TodoInstance existing=mapper.selectByNextKey(key);
         if("MATERIALIZED".equals(occurrenceStatus))
@@ -181,12 +192,8 @@ public class TodoRoutingService
             if(existing!=null&&(linkedTodoId==null||linkedTodoId.equals(existing.getTodoId())))return existing;
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_LINK_INVALID","Materialized occurrence has no matching Todo");
         }
-        if(!"CLAIMED".equals(occurrenceStatus)||!"ACTIVE".equals(text(fence.get("planStatus")))
-                ||!"PROCESSING".equals(text(fence.get("windowStatus"))))
+        if(!"CLAIMED".equals(occurrenceStatus)||!"PROCESSING".equals(text(fence.get("windowStatus"))))
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence is no longer claimable");
-        Long fencedTemplateVersionId=longValue(fence.get("templateVersionId"));
-        if(fencedTemplateVersionId!=null&&!fencedTemplateVersionId.equals(templateVersionId))
-            throw new TodoException("TODO_SCHEDULE_TEMPLATE_MISMATCH","Schedule occurrence template version changed");
         int occurrenceVersion=Integer.parseInt(String.valueOf(fence.get("version")));
         if(existing!=null)
         {
@@ -231,6 +238,13 @@ public class TodoRoutingService
         insertScheduledSla(next,previous,version);
         linkScheduleOccurrence(normalizedOccurrenceKey,next.getTodoId(),occurrenceVersion);
         return next;
+    }
+
+    private boolean sameIdentity(Map<String,Object> expected,Map<String,Object> actual,String key)
+    {
+        Long expectedValue=longValue(expected.get(key));
+        Long actualValue=longValue(actual.get(key));
+        return expectedValue!=null&&expectedValue.equals(actualValue);
     }
 
     private TodoInstance build(TodoInstance previous, Map<String, Object> version, Assignment assignment, Long versionId,
