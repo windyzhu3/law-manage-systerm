@@ -56,7 +56,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.45", current.getVersion().getVersion());
+        assertEquals("0.20.48", current.getVersion().getVersion());
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -151,7 +151,7 @@ class FlywayMigrationTest
         try (Connection connection = DriverManager.getConnection(url, System.getenv("TODO_MIGRATION_DB_USER"),
             System.getenv("TODO_MIGRATION_DB_PASSWORD")))
         {
-            assertEquals(36L, count(connection,
+            assertEquals(43L, count(connection,
                 "select count(*) from todo_event_catalog where status='ACTIVE' and schema_status='READY' "
                     + "and json_length(json_extract(payload_schema_json,'$.properties'))>0 "
                     + "and sample_payload_json is not null"));

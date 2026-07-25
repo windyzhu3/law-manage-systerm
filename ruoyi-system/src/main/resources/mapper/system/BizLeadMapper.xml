@@ -13,8 +13,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="wechat" column="wechat" />
         <result property="companyName" column="company_name" />
         <result property="sourceCode" column="source_code" />
+        <result property="tagConfirmStatus" column="tag_confirm_status" />
+        <result property="tagConfirmTime" column="tag_confirm_time" />
+        <result property="tagConfirmBy" column="tag_confirm_by" />
+        <result property="firstContactStatus" column="first_contact_status" />
+        <result property="firstContactTime" column="first_contact_time" />
+        <result property="firstContactResult" column="first_contact_result" />
+        <result property="city" column="city" />
+        <result property="visited" column="visited" />
         <result property="status" column="status" />
         <result property="poolStatus" column="pool_status" />
+        <result property="disposition" column="disposition" />
+        <result property="deadPoolTime" column="dead_pool_time" />
+        <result property="deadPoolReason" column="dead_pool_reason" />
         <result property="priority" column="priority" />
         <result property="legalDemand" column="legal_demand" />
         <result property="estimatedAmount" column="estimated_amount" />
@@ -27,6 +38,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="convertedTime" column="converted_time" />
         <result property="customerId" column="customer_id" />
         <result property="invalidReason" column="invalid_reason" />
+        <result property="invalidReasonCode" column="invalid_reason_code" />
+        <result property="invalidSourceNode" column="invalid_source_node" />
+        <result property="invalidReviewStatus" column="invalid_review_status" />
+        <result property="retryStage" column="retry_stage" />
+        <result property="retryAttemptCount" column="retry_attempt_count" />
+        <result property="nextRetryTime" column="next_retry_time" />
         <result property="poolReason" column="pool_reason" />
         <result property="delFlag" column="del_flag" />
         <result property="deleteTime" column="delete_time" />
@@ -35,6 +52,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="updateBy" column="update_by" />
         <result property="updateTime" column="update_time" />
         <result property="remark" column="remark" />
+        <result property="rowVersion" column="row_version" />
     </resultMap>
 
     <sql id="selectLeadVo">
@@ -74,6 +92,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="mobile != null and mobile != ''">and l.mobile like concat('%', #{mobile}, '%')</if>
             <if test="sourceCode != null and sourceCode != ''">and l.source_code = #{sourceCode}</if>
             <if test="status != null and status != ''">and l.status = #{status}</if>
+            <if test="tagConfirmStatus != null and tagConfirmStatus != ''">and l.tag_confirm_status = #{tagConfirmStatus}</if>
+            <if test="firstContactStatus != null and firstContactStatus != ''">and l.first_contact_status = #{firstContactStatus}</if>
+            <if test="firstContactResult != null and firstContactResult != ''">and l.first_contact_result = #{firstContactResult}</if>
+            <if test="invalidReviewStatus != null and invalidReviewStatus != ''">and l.invalid_review_status = #{invalidReviewStatus}</if>
+            <if test="retryStage != null and retryStage != ''">and l.retry_stage = #{retryStage}</if>
+            <if test="disposition != null and disposition != ''">and l.disposition = #{disposition}</if>
             <if test="priority != null and priority != ''">and l.priority = #{priority}</if>
             <include refid="leadDataScope"/>
         </where>
@@ -88,12 +112,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertLead" parameterType="BizLead" useGeneratedKeys="true" keyProperty="leadId">
         insert into biz_lead (
             lead_no, lead_name, contact_name, mobile, wechat, company_name, source_code,
-            status, pool_status, priority, legal_demand, estimated_amount, owner_id, dept_id,
+            status, pool_status, disposition, priority, legal_demand, estimated_amount, owner_id, dept_id,
             next_follow_time, remark, create_by, create_time, update_time
         ) values (
             #{leadNo},
             #{leadName}, #{contactName}, #{mobile}, #{wechat}, #{companyName}, #{sourceCode},
-            #{status}, #{poolStatus}, #{priority}, #{legalDemand}, #{estimatedAmount}, #{ownerId}, #{deptId},
+            #{status}, #{poolStatus}, case when #{poolStatus}='1' then 'PUBLIC_POOL' else 'ACTIVE' end,
+            #{priority}, #{legalDemand}, #{estimatedAmount}, #{ownerId}, #{deptId},
             #{nextFollowTime}, #{remark}, #{createBy}, sysdate(), sysdate()
         )
     </insert>
@@ -114,17 +139,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="nextFollowTime != null">next_follow_time = #{nextFollowTime},</if>
             <if test="invalidReason != null">invalid_reason = #{invalidReason},</if>
             <if test="remark != null">remark = #{remark},</if>
-            update_by = #{updateBy}, update_time = sysdate()
+            row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
         </set>
         where lead_id = #{leadId}
     </update>
 
     <update id="softDeleteLead">
-        update biz_lead set del_flag = '2', delete_time = sysdate(), update_by = #{updateBy}, update_time = sysdate()
+        update biz_lead set del_flag = '2', delete_time = sysdate(), row_version = row_version + 1,
+        update_by = #{updateBy}, update_time = sysdate()
         where lead_id in <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </update>
     <update id="restoreLead">
-        update biz_lead set del_flag = '0', delete_time = null, update_by = #{updateBy}, update_time = sysdate()
+        update biz_lead set del_flag = '0', delete_time = null, row_version = row_version + 1,
+        update_by = #{updateBy}, update_time = sysdate()
         where lead_id in <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </update>
     <delete id="purgeLeadFollowups">
@@ -143,23 +170,28 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </delete>
 
     <update id="assignLead">
-        update biz_lead set owner_id = #{ownerId}, dept_id = (select dept_id from sys_user where user_id = #{ownerId}), pool_status = '0',
-        status = case when status = '0' then '1' else status end, pool_reason = null,
-        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and status = #{expectedStatus}
+        update biz_lead set owner_id = #{ownerId}, dept_id = (select dept_id from sys_user where user_id = #{ownerId}),
+        pool_status = '0', disposition = 'ACTIVE', status = case when status = '0' then '1' else status end,
+        pool_reason = null, row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and del_flag = '0' and status = #{expectedStatus}
     </update>
     <update id="moveToPool">
-        update biz_lead set owner_id = null, dept_id = null, pool_status = '1', status = '0', pool_reason = #{reason},
-        update_by = #{updateBy}, update_time = sysdate() where lead_id = #{leadId} and del_flag = '0' and pool_status = '0' and status = #{expectedStatus}
+        update biz_lead set owner_id = null, dept_id = null, pool_status = '1', disposition = 'PUBLIC_POOL',
+        status = '0', pool_reason = #{reason}, row_version = row_version + 1,
+        update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and del_flag = '0' and pool_status = '0'
+        and disposition = 'ACTIVE' and status = #{expectedStatus}
     </update>
     <update id="claimLead">
-        update biz_lead set owner_id = #{ownerId}, dept_id = #{deptId}, pool_status = '0',
+        update biz_lead set owner_id = #{ownerId}, dept_id = #{deptId}, pool_status = '0', disposition = 'ACTIVE',
         status = case when status = '0' then '1' else status end, pool_reason = null,
-        update_by = #{updateBy}, update_time = sysdate()
-        where lead_id = #{leadId} and pool_status = '1' and owner_id is null and del_flag = '0' and status = #{expectedStatus}
+        row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
+        where lead_id = #{leadId} and pool_status = '1' and disposition = 'PUBLIC_POOL'
+        and owner_id is null and del_flag = '0' and status = #{expectedStatus}
     </update>
     <update id="bindCustomerConditionally">
-        update biz_lead set customer_id = #{customerId}, status = '3', converted_time = sysdate(),
-        update_by = #{updateBy}, update_time = sysdate()
+        update biz_lead set customer_id = #{customerId}, status = '3', disposition = 'CONVERTED',
+        converted_time = sysdate(), row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and del_flag = '0' and customer_id is null and status = #{expectedStatus}
     </update>
     <insert id="insertAssignmentLog" parameterType="map" useGeneratedKeys="true" keyProperty="logId">
@@ -201,14 +233,74 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <delete id="deleteFollowup">delete from biz_lead_followup where followup_id = #{followupId} and lead_id = #{leadId}</delete>
     <update id="touchLeadFollowTime">
         update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime},
-        status=case when status in ('0','1') then '2' else status end, update_by=#{updateBy}, update_time=sysdate()
+        status=case when status in ('0','1') then '2' else status end, row_version=row_version+1,
+        update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null and status in ('1','2')
     </update>
     <update id="touchLeadFollowTimeConditionally">
         update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime}, status='2',
+        row_version=row_version+1,
         update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null
         and status=#{expectedStatus}
+    </update>
+
+    <update id="confirmLeadTags">
+        update biz_lead
+        set tag_confirm_status='CONFIRMED', tag_confirm_time=sysdate(), tag_confirm_by=#{confirmBy},
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and status=#{expectedStatus}
+        and tag_confirm_status in ('PENDING','CORRECTED') and row_version=#{rowVersion}
+    </update>
+
+    <update id="completeFirstContact">
+        update biz_lead
+        set first_contact_status='COMPLETED', first_contact_time=sysdate(), first_contact_result=#{result},
+        invalid_review_status=case when #{result}='SUSPECT_INVALID' then 'PENDING' else invalid_review_status end,
+        retry_stage=case when #{result}='UNREACHABLE' then 'T0' else retry_stage end,
+        retry_attempt_count=case when #{result}='UNREACHABLE' then 0 else retry_attempt_count end,
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and status=#{expectedStatus} and (first_contact_status is null or first_contact_status='PENDING')
+        and row_version=#{rowVersion}
+    </update>
+
+    <update id="markInvalidReviewed">
+        update biz_lead
+        set invalid_review_status=case when #{reviewResult}='TRUE_INVALID' then 'CONFIRMED' else 'MISJUDGED' end,
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and invalid_review_status=#{expectedReviewStatus} and row_version=#{rowVersion}
+    </update>
+
+    <update id="advanceRetryStage">
+        update biz_lead
+        set retry_stage=#{nextStage}, retry_attempt_count=#{attemptCount}, next_retry_time=#{nextRetryTime},
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and ((#{expectedStage} is null and retry_stage is null) or retry_stage=#{expectedStage})
+        and row_version=#{rowVersion}
+    </update>
+
+    <update id="moveToDeadPool">
+        update biz_lead
+        set disposition='DEAD_POOL', status='4', pool_status='0', owner_id=null, dept_id=null,
+        dead_pool_time=sysdate(), dead_pool_reason=#{reason}, next_retry_time=null, retry_stage='EXHAUSTED',
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition=#{expectedDisposition}
+        and row_version=#{rowVersion}
+    </update>
+
+    <update id="restoreFromDeadPool">
+        update biz_lead
+        set disposition='PUBLIC_POOL', status='0', pool_status='1', owner_id=null, dept_id=null,
+        pool_reason=#{reason}, dead_pool_time=null, dead_pool_reason=null, first_contact_status=null,
+        first_contact_time=null, first_contact_result=null, invalid_reason_code=null,
+        invalid_source_node=null, invalid_review_status=null, retry_stage=null,
+        retry_attempt_count=0, next_retry_time=null,
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='DEAD_POOL'
+        and row_version=#{rowVersion}
     </update>
 
     <select id="countLeadInDataScope" resultType="int">

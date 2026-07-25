@@ -1,5 +1,6 @@
 package com.ruoyi.system.mapper;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -33,6 +34,24 @@ public interface BizLeadMapper
     public int touchLeadFollowTimeConditionally(@Param("leadId") Long leadId,
             @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy,
             @Param("expectedStatus") String expectedStatus);
+    public int confirmLeadTags(@Param("leadId") Long leadId, @Param("expectedStatus") String expectedStatus,
+            @Param("confirmBy") Long confirmBy, @Param("rowVersion") Integer rowVersion,
+            @Param("updateBy") String updateBy);
+    public int completeFirstContact(@Param("leadId") Long leadId,
+            @Param("expectedStatus") String expectedStatus, @Param("result") String result,
+            @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
+    public int markInvalidReviewed(@Param("leadId") Long leadId,
+            @Param("expectedReviewStatus") String expectedReviewStatus, @Param("reviewResult") String reviewResult,
+            @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
+    public int advanceRetryStage(@Param("leadId") Long leadId, @Param("expectedStage") String expectedStage,
+            @Param("nextStage") String nextStage, @Param("attemptCount") Integer attemptCount,
+            @Param("nextRetryTime") Date nextRetryTime, @Param("rowVersion") Integer rowVersion,
+            @Param("updateBy") String updateBy);
+    public int moveToDeadPool(@Param("leadId") Long leadId,
+            @Param("expectedDisposition") String expectedDisposition, @Param("reason") String reason,
+            @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
+    public int restoreFromDeadPool(@Param("leadId") Long leadId, @Param("reason") String reason,
+            @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
     public int countLeadInDataScope(@Param("leadId") Long leadId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("includeDeleted") Boolean includeDeleted);
     public List<BizLeadSetting> selectSettingList(BizLeadSetting setting);
     public int insertSetting(BizLeadSetting setting);
