@@ -29,6 +29,7 @@ import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
 import com.law.todo.expression.ConditionEvaluator;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
+import com.law.todo.definition.validation.TodoEventPayloadValidator;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.assignment.OwnerResolutionContext;
@@ -43,12 +44,13 @@ public class TodoEventService
     private final ConditionEvaluator conditionEvaluator;
     private final ConditionValidator conditionValidator;
     private final TodoEventCatalogService eventCatalog;
+    private final TodoEventPayloadValidator payloadValidator = new TodoEventPayloadValidator();
     public TodoEventService(TodoMapper mapper,TodoAssignmentResolver resolver){this(mapper,resolver,new ConditionEvaluator(),new ConditionValidator(),new TodoEventCatalogService(mapper));}
     @Autowired public TodoEventService(TodoMapper mapper,TodoAssignmentResolver resolver,ConditionEvaluator conditionEvaluator,ConditionValidator conditionValidator,TodoEventCatalogService eventCatalog){this.mapper=mapper;this.resolver=resolver;this.conditionEvaluator=conditionEvaluator;this.conditionValidator=conditionValidator;this.eventCatalog=eventCatalog;}
     public boolean supports(String eventType,String aggregateType){List<Map<String,Object>> rules=mapper.selectTriggerRules(eventType,aggregateType);return rules!=null&&!rules.isEmpty();}
     @Transactional public List<TodoInstance> handle(TodoEvent event)
     {
-        List<TodoInstance> result=new ArrayList<>();String eventSchema=eventCatalog.payloadSchema(event.eventType(),event.payloadVersion());if(eventSchema==null)throw new TodoException("TODO_EVENT_CATALOG_REQUIRED","Event type and payload version must be active");List<Map<String,Object>> rules=mapper.selectTriggerRules(event.eventType(),event.aggregateType());if(rules==null)return result;
+        List<TodoInstance> result=new ArrayList<>();String eventSchema=eventCatalog.payloadSchema(event.eventType(),event.payloadVersion());if(eventSchema==null)throw new TodoException("TODO_EVENT_CATALOG_REQUIRED","Event type and payload version must be active");payloadValidator.validate(eventSchema,event.payload());List<Map<String,Object>> rules=mapper.selectTriggerRules(event.eventType(),event.aggregateType());if(rules==null)return result;
         for(Map<String,Object> rule:rules)
         {
             int payloadVersion=intValue(value(rule,"payload_version","payloadVersion"),1);if(payloadVersion!=event.payloadVersion())continue;

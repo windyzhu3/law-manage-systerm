@@ -2,6 +2,7 @@ package com.ruoyi.system.service.lead;
 
 import java.util.HashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
@@ -12,8 +13,10 @@ import com.law.business.security.BusinessActorProvider;
 import com.law.business.shared.error.BusinessErrorCode;
 import com.law.business.shared.status.LeadStatus;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.mapper.SysUserMapper;
 
 @Service
 public class LeadAssignmentService
@@ -22,14 +25,23 @@ public class LeadAssignmentService
     private final LeadAccessPolicy access;
     private final BusinessActorProvider actors;
     private final BusinessEventPublisher events;
+    private final SysUserMapper users;
 
     public LeadAssignmentService(BizLeadMapper mapper, LeadAccessPolicy access,
             BusinessActorProvider actors, BusinessEventPublisher events)
+    {
+        this(mapper, access, actors, events, null);
+    }
+
+    @Autowired
+    public LeadAssignmentService(BizLeadMapper mapper, LeadAccessPolicy access,
+            BusinessActorProvider actors, BusinessEventPublisher events, SysUserMapper users)
     {
         this.mapper = mapper;
         this.access = access;
         this.actors = actors;
         this.events = events;
+        this.users = users;
     }
 
     @Transactional
@@ -44,7 +56,10 @@ public class LeadAssignmentService
         Long logId = insertLog(leadId, lead.getOwnerId(), ownerId, "assign", reason, actor.userName());
         Map<String, Object> payload = payload(actor);
         payload.put("fromOwnerId", lead.getOwnerId() == null ? "" : lead.getOwnerId());
-        payload.put("toOwnerId", ownerId);
+        payload.put("assignmentId", logId);
+        payload.put("ownerId", ownerId);
+        SysUser owner = users == null ? null : users.selectUserById(ownerId);
+        payload.put("ownerDeptId", owner == null ? null : owner.getDeptId());
         publish(BusinessEventType.LEAD_ASSIGNED, lead, "LEAD_ASSIGNED:" + leadId + ":" + logId, payload);
         return rows;
     }

@@ -59,6 +59,19 @@ class TodoEventServiceTest
                 .isAnnotationPresent(Autowired.class));
     }
 
+    @Test void rejectsInvalidPayloadBeforeSelectingTriggerRules()
+    {
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED", 1)).thenReturn(Map.of("status", "ACTIVE",
+                "payload_schema_json", "{\"type\":\"object\",\"required\":[\"ownerId\"],\"properties\":{\"ownerId\":{\"type\":\"integer\"}}}"));
+        TodoEvent invalid = new TodoEvent("evt-invalid", "LEAD_ASSIGNED", "LEAD", 7L, "L-7", Map.of());
+
+        TodoException error = assertThrows(TodoException.class,
+                () -> new TodoEventService(mapper, new TodoAssignmentResolver()).handle(invalid));
+
+        assertEquals("TODO_EVENT_PAYLOAD_INVALID", error.getBusinessCode());
+        verify(mapper, never()).selectTriggerRules(any(), any());
+    }
+
     @Test void duplicateEventReturnsExistingTodo()
     {
         TodoInstance existing=new TodoInstance();existing.setTodoId(4L);

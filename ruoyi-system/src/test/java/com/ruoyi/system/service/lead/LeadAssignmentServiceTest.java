@@ -18,6 +18,8 @@ import com.law.business.security.BusinessActorProvider;
 import com.law.business.shared.status.LeadStatus;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.mapper.SysUserMapper;
+import com.ruoyi.common.core.domain.entity.SysUser;
 
 @ExtendWith(MockitoExtension.class)
 class LeadAssignmentServiceTest
@@ -26,12 +28,13 @@ class LeadAssignmentServiceTest
     @Mock private LeadAccessPolicy access;
     @Mock private BusinessActorProvider actors;
     @Mock private BusinessEventPublisher events;
+    @Mock private SysUserMapper users;
     private LeadAssignmentService service;
 
     @BeforeEach
     void setUp()
     {
-        service = new LeadAssignmentService(mapper, access, actors, events);
+        service = new LeadAssignmentService(mapper, access, actors, events, users);
     }
 
     @Test
@@ -44,10 +47,17 @@ class LeadAssignmentServiceTest
         when(mapper.assignLead(7L, 9L, "alice", LeadStatus.UNASSIGNED.code())).thenReturn(1);
         when(mapper.insertAssignmentLog(argThat(log -> "assign".equals(log.get("actionType")))))
                 .thenAnswer(invocation -> { ((Map<String, Object>) invocation.getArgument(0)).put("logId", 21L); return 1; });
+        SysUser owner = new SysUser();
+        owner.setDeptId(3L);
+        when(users.selectUserById(9L)).thenReturn(owner);
 
         assertEquals(1, service.assign(7L, 9L, "首次分配"));
 
         verify(events).publish(argThat(event -> "LEAD_ASSIGNED:7:21".equals(event.getIdempotencyKey())
-                && Long.valueOf(9L).equals(event.getPayload().get("toOwnerId"))));
+                && Long.valueOf(21L).equals(event.getPayload().get("assignmentId"))
+                && Long.valueOf(9L).equals(event.getPayload().get("ownerId"))
+                && event.getPayload().containsKey("ownerDeptId")
+                && Long.valueOf(3L).equals(event.getPayload().get("ownerDeptId"))
+                && !event.getPayload().containsKey("toOwnerId")));
     }
 }
