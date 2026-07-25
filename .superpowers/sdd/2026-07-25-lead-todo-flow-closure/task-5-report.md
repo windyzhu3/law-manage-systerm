@@ -205,3 +205,143 @@ User-owned `.superpowers/sdd/task-7-report.md`, `ruoyi-ui/vue.config.js`, `.play
 ## Concerns
 
 - Task 6 must add the transactional business services and fact-table insert/read mappers; Task 5 intentionally provides only stable facts and contracts.
+
+## Review fix round 1
+
+### Result
+
+All four review findings are resolved without changing `V0_20_48__lead_todo_flow.sql` or weakening the canonical `LEAD_ASSIGNED` schema.
+
+1. Permanent purge now deletes every lead-owned Task 5 fact before deleting `biz_lead`.
+2. Every pre-existing lead state write that increments `row_version` now accepts and checks the loaded expected row version.
+3. Dead-Pool entry is restricted to confirmed-invalid active leads and no longer overwrites retry stage.
+4. Assignment validates the target user and department before assignment, log, or outbox mutation.
+
+The assignment-policy and assignment-policy-candidate tables are not purged: neither contains a `lead_id`; they are reusable department/source routing configuration rather than lead-owned facts.
+
+### Review RED evidence
+
+Lead-owned purge:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=LeadCommandServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Expected `BUILD FAILURE` at test compilation with six absent typed mapper methods:
+`purgeLeadCallRecords`, `purgeLeadInvalidReviews`, `purgeLeadRetryRecords`,
+`purgeLeadQualityRecords`, `purgeLeadDeadPoolLogs`, and `purgeLeadTagRelations`.
+
+Legacy optimistic locking:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=LeadAssignmentServiceTest,LeadPoolServiceTest,LeadConversionServiceTest,LeadFollowupServiceTest,LeadFirstContactHandlerTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Expected `BUILD FAILURE` with 19 test-compilation errors because the six legacy mapper writes did not yet accept expected row version:
+`assignLead`, `moveToPool`, `claimLead`, `bindCustomerConditionally`,
+`touchLeadFollowTime`, and `touchLeadFollowTimeConditionally`.
+
+Dead-Pool transition:
+
+```powershell
+mvn -pl law-todo -Dtest=LeadTodoFlowMigrationContractTest test
+```
+
+Expected `BUILD FAILURE`; 3 tests ran and the new transition test failed because `moveToDeadPool` accepted caller-supplied disposition, lacked the confirmed-invalid guard, and wrote `retry_stage='EXHAUSTED'`.
+
+Assignment target validation:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=LeadAssignmentServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Expected `BUILD FAILURE`; 7 tests ran with 4 failures. Missing, disabled, deleted, and department-less targets reached the old mutation path instead of producing the stable precondition error before writes.
+
+### Review GREEN evidence
+
+The individual GREEN runs passed:
+
+- purge: 3/3 `LeadCommandServiceTest`;
+- optimistic-lock propagation: 13/13 across assignment, pool, conversion, followup, first-contact handler, and conversion flow;
+- Dead-Pool transition contract: 3/3;
+- assignment target validation plus conversion flow: 8/8;
+- strengthened exact migration/mapper contract: 6/6.
+
+Final focused gate:
+
+```powershell
+mvn -pl law-todo,ruoyi-system -am "-Dtest=LeadTodoFlowMigrationContractTest,TodoMapperXmlContractTest,LeadCommandServiceTest,LeadAssignmentServiceTest,LeadPoolServiceTest,LeadConversionServiceTest,LeadFollowupServiceTest,LeadFirstContactHandlerTest,LeadCustomerConversionFlowTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 44 tests passed:
+
+- `law-todo`: 24;
+- `ruoyi-system`: 20;
+- 0 failures/errors/skips.
+
+Lead/business regression gate:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=BusinessEventCommandTest,Lead*Test" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 37 tests passed:
+
+- `law-business`: 4;
+- `law-todo`: 7;
+- `ruoyi-system`: 26;
+- 0 failures/errors/skips.
+
+`git diff --check` passed. The migration file did not change in this review round, so the already-green fresh-baseline Flyway/MySQL evidence above remains the applicable migration gate; it was not rerun for Java/mapper-only fixes.
+
+### Review implementation details
+
+Permanent purge is one transaction and deletes, in order:
+
+1. `biz_lead_call_record`;
+2. `biz_lead_invalid_review`;
+3. `biz_lead_retry_record`;
+4. `biz_lead_quality_record`;
+5. `biz_lead_dead_pool_log`;
+6. `biz_business_tag_rel` where `business_type='LEAD'`;
+7. legacy `biz_lead_followup`;
+8. legacy `biz_lead_assignment_log`;
+9. `biz_lead`.
+
+Each dependent delete retains the recycle-bin guard (`biz_lead.del_flag='2'`).
+
+The six legacy lead state writes now require `expectedRowVersion`, increment `row_version`, and return zero for a stale caller. The services propagate the version from the loaded `BizLead`; stale assignment, pool, claim, conversion, and follow-time paths fail before publishing a duplicate event. The Todo first-contact completion handler now loads the lead version and raises `LEAD_CONCURRENT_MODIFICATION` when its guarded touch loses the race.
+
+`moveToDeadPool` now requires both `disposition='ACTIVE'` and `invalid_review_status='CONFIRMED'`. It clears the pending retry time but preserves `retry_stage`; retry exhaustion remains a public-pool concern.
+
+`LeadAssignmentService` now loads the target `SysUser` before mutation and requires:
+
+- the user exists;
+- `status='0'`;
+- `del_flag='0'`;
+- non-null `deptId`.
+
+Failure returns stable `PRECONDITION_FAILED` and invokes neither assignment mapper, assignment log, nor event publisher. A valid assignment publishes the required non-null `ownerDeptId` from that validated user.
+
+The migration contract now checks exact dictionary type/value pairs, exact properties/required/sample key shapes for all ten Task 5 events plus canonical `LEAD_ASSIGNED`, all lead-owned purge statements and recycle guards, and all six legacy expected-row-version SQL guards.
+
+### Review changed files
+
+- `.superpowers/sdd/2026-07-25-lead-todo-flow-closure/task-5-report.md`
+- `law-todo/src/test/java/com/law/todo/integration/LeadTodoFlowMigrationContractTest.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/mapper/BizLeadMapper.java`
+- `ruoyi-system/src/main/resources/mapper/system/BizLeadMapper.xml`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/event/LeadFirstContactHandler.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/lead/LeadAssignmentService.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/lead/LeadCommandService.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/lead/LeadConversionService.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/lead/LeadFollowupService.java`
+- `ruoyi-system/src/main/java/com/ruoyi/system/service/lead/LeadPoolService.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/integration/LeadCustomerConversionFlowTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/integration/LeadFirstContactHandlerTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/customer/CustomerCommandServiceTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/lead/LeadAssignmentServiceTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/lead/LeadCommandServiceTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/lead/LeadConversionServiceTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/lead/LeadFollowupServiceTest.java`
+- `ruoyi-system/src/test/java/com/ruoyi/system/service/lead/LeadPoolServiceTest.java`

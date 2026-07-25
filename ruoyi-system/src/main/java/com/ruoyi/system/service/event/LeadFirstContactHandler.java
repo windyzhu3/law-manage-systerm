@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.mapper.BizLeadMapper;
 
@@ -29,6 +30,9 @@ public class LeadFirstContactHandler implements TodoCompletionHandler
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
     {
+        BizLead lead = mapper.selectLeadById(todo.getBusinessId());
+        if (lead == null)
+            throw new TodoException("LEAD_NOT_FOUND","线索不存在");
         BizLeadFollowup followup = new BizLeadFollowup();
         followup.setLeadId(todo.getBusinessId());
         followup.setFollowType(text(payload.getOrDefault("followType","phone")));
@@ -40,7 +44,8 @@ public class LeadFirstContactHandler implements TodoCompletionHandler
         followup.setCreateBy(operatorName);
         if(mapper.insertFollowup(followup)<=0)
             throw new TodoException("LEAD_FOLLOWUP_CREATE_FAILED","首联跟进记录创建失败");
-        mapper.touchLeadFollowTime(todo.getBusinessId(),null,operatorName);
+        if (mapper.touchLeadFollowTime(todo.getBusinessId(),null,operatorName,lead.getRowVersion()) <= 0)
+            throw new TodoException("LEAD_CONCURRENT_MODIFICATION","线索状态已变化，请刷新后重试");
     }
 
     private String text(Object value)

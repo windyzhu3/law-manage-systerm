@@ -51,7 +51,7 @@ class LeadConversionServiceTest
         assertEquals(31L, service.convert(7L, false));
 
         verify(customers, never()).createFromLead(any());
-        verify(mapper, never()).bindCustomerConditionally(any(), any(), any(), any());
+        verify(mapper, never()).bindCustomerConditionally(any(), any(), any(), any(), any());
         verify(events, never()).publish(any());
     }
 
@@ -61,11 +61,12 @@ class LeadConversionServiceTest
         BizLead lead = lead(7L, LeadStatus.FOLLOWING.code(), "0");
         lead.setLeadNo("XS0007");
         lead.setOwnerId(8L);
+        lead.setRowVersion(7);
         BizCustomer converted = customer(31L, "0", "0");
         when(access.requireOperable(7L)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
         when(customers.createFromLead(lead)).thenReturn(converted.getCustomerId());
-        when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code())).thenReturn(1);
+        when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code(), 7)).thenReturn(1);
 
         assertEquals(31L, service.convert(7L, false));
 
@@ -80,10 +81,11 @@ class LeadConversionServiceTest
     {
         BizLead lead = lead(7L, LeadStatus.FOLLOWING.code(), "0");
         lead.setOwnerId(8L);
+        lead.setRowVersion(7);
         when(access.requireOperable(7L)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
         when(customers.createFromLead(lead)).thenReturn(customer(31L, "0", "0").getCustomerId());
-        when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code())).thenReturn(0);
+        when(mapper.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.FOLLOWING.code(), 7)).thenReturn(0);
 
         ServiceException exception = assertThrows(ServiceException.class, () -> service.convert(7L, false));
 

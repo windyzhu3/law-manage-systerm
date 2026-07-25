@@ -1,11 +1,19 @@
 package com.law.todo.integration;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -109,6 +117,113 @@ class LeadTodoFlowMigrationContractTest
         assertTrue(statement(xml,"bindCustomerConditionally").contains("disposition = 'converted'"));
     }
 
+    @Test
+    void deadPoolTransitionRequiresConfirmedInvalidReviewAndPreservesRetryState() throws Exception
+    {
+        String xml=normalized(ROOT.resolve(Path.of("ruoyi-system","src","main","resources","mapper","system",
+                "BizLeadMapper.xml")));
+        String update=statement(xml,"moveToDeadPool");
+
+        assertTrue(update.contains("disposition='active'"));
+        assertTrue(update.contains("invalid_review_status='confirmed'"));
+        assertFalse(update.contains("retry_stage="));
+    }
+
+    @Test
+    void dictionariesPairEveryControlledValueWithItsExactType() throws Exception
+    {
+        Map<String,Set<String>> expected=new LinkedHashMap<>();
+        expected.put("law_first_contact_result",Set.of("VALID","SUSPECT_INVALID","UNREACHABLE"));
+        expected.put("law_lead_tag_confirm_status",Set.of("PENDING","CONFIRMED","CORRECTED"));
+        expected.put("law_lead_invalid_reason",
+                Set.of("NO_DEMAND","DENY_SUBMISSION","COMPETITOR_INTERFERENCE","OTHER"));
+        expected.put("law_lead_invalid_review_result",Set.of("TRUE_INVALID","MISJUDGED_VALID"));
+        expected.put("law_retry_stage",
+                Set.of("T0","T1_AM","T1_NOON","T1_PM","T2_AM","T2_NOON","T2_PM","EXHAUSTED"));
+        expected.put("law_retry_result",Set.of("CONNECTED","NEXT_WINDOW","EXHAUSTED"));
+        expected.put("law_call_channel",Set.of("MANUAL","APP","OUTBOUND_SYSTEM"));
+        expected.put("law_lead_disposition",Set.of("ACTIVE","PUBLIC_POOL","DEAD_POOL","CONVERTED"));
+
+        assertEquals(expected,dictPairs(Files.readString(MIGRATION)));
+    }
+
+    @Test
+    void eventSchemasHaveExactPropertiesRequiredFieldsAndSampleShapes() throws Exception
+    {
+        String sql=normalized(MIGRATION);
+        Map<String,EventShape> expected=Map.ofEntries(
+                Map.entry("LEAD_ASSIGNED",shape(
+                        "schemaVersion,assignmentId,ownerId,ownerDeptId,operatorId",
+                        "schemaVersion,assignmentId,ownerId,ownerDeptId,operatorId")),
+                Map.entry("LEAD_TAG_CONFIRMED",shape(
+                        "schemaVersion,tagRelationId,confirmStatus,operatorId,leadId",
+                        "schemaVersion,tagRelationId,confirmStatus,operatorId")),
+                Map.entry("LEAD_FIRST_CONTACT_VALID",shape(
+                        "schemaVersion,followupId,ownerId,contactResult,operatorId,leadId",
+                        "schemaVersion,followupId,ownerId,contactResult,operatorId")),
+                Map.entry("LEAD_SUSPECT_INVALID_MARKED",shape(
+                        "schemaVersion,reviewId,ownerId,reviewerId,reasonCode,operatorId,leadId",
+                        "schemaVersion,reviewId,ownerId,reviewerId,reasonCode,operatorId")),
+                Map.entry("LEAD_FIRST_CONTACT_UNREACHABLE",shape(
+                        "schemaVersion,planId,ownerId,attempts,nextContactAt,operatorId,leadId",
+                        "schemaVersion,planId,ownerId,attempts,nextContactAt,operatorId")),
+                Map.entry("LEAD_INVALID_REVIEW_CONFIRMED",shape(
+                        "schemaVersion,reviewId,reviewerId,reviewResult,operatorId,leadId",
+                        "schemaVersion,reviewId,reviewerId,reviewResult,operatorId")),
+                Map.entry("LEAD_INVALID_REVIEW_MISJUDGED",shape(
+                        "schemaVersion,reviewId,reviewerId,reviewResult,ownerId,operatorId,leadId",
+                        "schemaVersion,reviewId,reviewerId,reviewResult,ownerId,operatorId")),
+                Map.entry("LEAD_RETRY_WINDOW_DUE",shape(
+                        "schemaVersion,planId,windowCode,occurrenceNo,ownerId,leadId",
+                        "schemaVersion,planId,windowCode,occurrenceNo,ownerId")),
+                Map.entry("LEAD_RETRY_CONNECTED",shape(
+                        "schemaVersion,planId,retryRecordId,ownerId,operatorId,leadId",
+                        "schemaVersion,planId,retryRecordId,ownerId,operatorId")),
+                Map.entry("LEAD_RETRY_EXHAUSTED",shape(
+                        "schemaVersion,planId,operatorId,leadId",
+                        "schemaVersion,planId,operatorId")),
+                Map.entry("LEAD_MOVED_TO_DEAD_POOL",shape(
+                        "schemaVersion,deadPoolLogId,reasonCode,operatorId,leadId",
+                        "schemaVersion,deadPoolLogId,reasonCode,operatorId")));
+
+        for(Map.Entry<String,EventShape> entry:expected.entrySet())
+        {
+            String update=eventUpdate(sql,entry.getKey());
+            EventShape shape=entry.getValue();
+            assertEquals(shape.properties(),propertyNames(update),entry.getKey()+" properties");
+            assertEquals(shape.required(),requiredNames(update),entry.getKey()+" required");
+            assertEquals(shape.sample(),sampleNames(update),entry.getKey()+" sample");
+            assertTrue(update.contains("schema_status='ready'"),entry.getKey()+" READY");
+            assertTrue(update.contains("status='active'"),entry.getKey()+" ACTIVE");
+        }
+    }
+
+    @Test
+    void purgeAndLegacyStateWritesHaveExactSafetyGuards() throws Exception
+    {
+        String xml=normalized(ROOT.resolve(Path.of("ruoyi-system","src","main","resources","mapper","system",
+                "BizLeadMapper.xml")));
+        Map<String,String> purgeTables=Map.of(
+                "purgeLeadCallRecords","biz_lead_call_record",
+                "purgeLeadInvalidReviews","biz_lead_invalid_review",
+                "purgeLeadRetryRecords","biz_lead_retry_record",
+                "purgeLeadQualityRecords","biz_lead_quality_record",
+                "purgeLeadDeadPoolLogs","biz_lead_dead_pool_log",
+                "purgeLeadTagRelations","biz_business_tag_rel");
+        for(Map.Entry<String,String> purge:purgeTables.entrySet())
+        {
+            String delete=statement(xml,purge.getKey());
+            assertTrue(delete.contains("delete from "+purge.getValue()),purge.getKey());
+            assertTrue(delete.contains("l.del_flag = '2'"),purge.getKey()+" recycle guard");
+        }
+        assertTrue(statement(xml,"purgeLeadTagRelations").contains("business_type = 'lead'"));
+
+        for(String update:List.of("assignLead","moveToPool","claimLead","bindCustomerConditionally",
+                "touchLeadFollowTime","touchLeadFollowTimeConditionally"))
+            assertTrue(statement(xml,update).replace(" ","")
+                    .contains("row_version=#{expectedrowversion}"),update);
+    }
+
     private String normalized(Path path) throws Exception
     {
         return Files.readString(path).toLowerCase().replaceAll("--[^\\r\\n]*","").replaceAll("\\s+"," ");
@@ -124,8 +239,97 @@ class LeadTodoFlowMigrationContractTest
             start=xml.indexOf("<insert id=\""+normalizedId+"\"");
             closing="</insert>";
         }
+        if(start<0)
+        {
+            start=xml.indexOf("<delete id=\""+normalizedId+"\"");
+            closing="</delete>";
+        }
         int end=xml.indexOf(closing,start);
         assertTrue(start>=0&&end>start,id);
         return xml.substring(start,end);
     }
+
+    private Map<String,Set<String>> dictPairs(String sql)
+    {
+        int start=sql.indexOf("insert into sys_dict_data(");
+        int end=sql.indexOf("-- Permissions",start);
+        assertTrue(start>=0&&end>start);
+        Matcher matcher=Pattern.compile("'([A-Z][A-Z0-9_]*)'(?:\\s+dict_value)?\\s*,\\s*"
+                        +"'(law_[a-z0-9_]+)'")
+                .matcher(sql.substring(start,end));
+        Map<String,Set<String>> result=new LinkedHashMap<>();
+        while(matcher.find())
+            result.computeIfAbsent(matcher.group(2),ignored->new LinkedHashSet<>()).add(matcher.group(1));
+        return result;
+    }
+
+    private String eventUpdate(String sql,String eventType)
+    {
+        String where="where event_type='"+eventType.toLowerCase()+"' and payload_version=1";
+        int end=sql.indexOf(where);
+        int start=sql.lastIndexOf("update todo_event_catalog",end);
+        assertTrue(start>=0&&end>start,eventType);
+        return sql.substring(start,end+where.length());
+    }
+
+    private List<String> propertyNames(String update)
+    {
+        String marker="'properties',json_object(";
+        int start=update.indexOf(marker);
+        int end=update.indexOf("'required',json_array(",start);
+        assertTrue(start>=0&&end>start);
+        Matcher matcher=Pattern.compile("'([a-z0-9]+)'\\s*,\\s*json_object\\(")
+                .matcher(update.substring(start+marker.length(),end));
+        List<String> result=new ArrayList<>();
+        while(matcher.find()) result.add(matcher.group(1));
+        return result;
+    }
+
+    private List<String> requiredNames(String update)
+    {
+        String marker="'required',json_array(";
+        int start=update.indexOf(marker);
+        int end=update.indexOf(")",start+marker.length());
+        assertTrue(start>=0&&end>start);
+        return quotedNames(update.substring(start+marker.length(),end));
+    }
+
+    private List<String> sampleNames(String update)
+    {
+        String marker="sample_payload_json=json_object(";
+        int start=update.indexOf(marker);
+        int end=update.indexOf("), schema_status=",start+marker.length());
+        assertTrue(start>=0&&end>start);
+        String[] arguments=update.substring(start+marker.length(),end).split(",");
+        List<String> result=new ArrayList<>();
+        for(int index=0;index<arguments.length;index+=2)
+        {
+            String key=arguments[index].trim();
+            assertTrue(key.startsWith("'")&&key.endsWith("'"),key);
+            result.add(key.substring(1,key.length()-1));
+        }
+        return result;
+    }
+
+    private List<String> quotedNames(String value)
+    {
+        Matcher matcher=Pattern.compile("'([^']+)'").matcher(value);
+        List<String> result=new ArrayList<>();
+        while(matcher.find()) result.add(matcher.group(1));
+        return result;
+    }
+
+    private EventShape shape(String properties,String required)
+    {
+        List<String> propertyList=lowerNames(properties);
+        List<String> requiredList=lowerNames(required);
+        return new EventShape(propertyList,requiredList,requiredList);
+    }
+
+    private List<String> lowerNames(String value)
+    {
+        return java.util.Arrays.stream(value.toLowerCase().split(",")).toList();
+    }
+
+    private record EventShape(List<String> properties,List<String> required,List<String> sample) { }
 }

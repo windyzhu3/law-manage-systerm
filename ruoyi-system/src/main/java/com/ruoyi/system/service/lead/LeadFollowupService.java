@@ -61,7 +61,7 @@ public class LeadFollowupService
             throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, "跟进记录创建失败");
         }
         int touched = mapper.touchLeadFollowTimeConditionally(lead.getLeadId(), command.getNextFollowTime(),
-                actor.userName(), lead.getStatus());
+                actor.userName(), lead.getStatus(), lead.getRowVersion());
         if (touched <= 0)
         {
             throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, "线索状态已变化，请刷新后重试");

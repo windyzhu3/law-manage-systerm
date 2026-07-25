@@ -133,6 +133,12 @@ public class LeadCommandService
                 throw error(BusinessErrorCode.STATE_CONFLICT, "只有回收站线索可以彻底删除");
             }
         }
+        mapper.purgeLeadCallRecords(leadIds);
+        mapper.purgeLeadInvalidReviews(leadIds);
+        mapper.purgeLeadRetryRecords(leadIds);
+        mapper.purgeLeadQualityRecords(leadIds);
+        mapper.purgeLeadDeadPoolLogs(leadIds);
+        mapper.purgeLeadTagRelations(leadIds);
         mapper.purgeLeadFollowups(leadIds);
         mapper.purgeLeadAssignmentLogs(leadIds);
         int rows = mapper.purgeLead(leadIds);

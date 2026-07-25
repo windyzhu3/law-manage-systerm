@@ -44,7 +44,7 @@ public class LeadPoolService
         requireActive(lead);
         if (IN_POOL.equals(lead.getPoolStatus())) throw error(BusinessErrorCode.STATE_CONFLICT, "线索已在公海");
         BusinessActor actor = actors.current();
-        int rows = mapper.moveToPool(leadId, reason, actor.userName(), lead.getStatus());
+        int rows = mapper.moveToPool(leadId, reason, actor.userName(), lead.getStatus(), lead.getRowVersion());
         changed(rows);
         Long logId = insertLog(leadId, lead.getOwnerId(), null, "pool", reason, actor.userName());
         Map<String, Object> payload = payload(actor); payload.put("reason", reason == null ? "" : reason);
@@ -59,7 +59,8 @@ public class LeadPoolService
         requireActive(lead);
         if (!IN_POOL.equals(lead.getPoolStatus())) throw error(BusinessErrorCode.STATE_CONFLICT, "线索已被领取");
         BusinessActor actor = actors.current();
-        int rows = mapper.claimLead(leadId, actor.userId(), actor.deptId(), actor.userName(), lead.getStatus());
+        int rows = mapper.claimLead(leadId, actor.userId(), actor.deptId(), actor.userName(), lead.getStatus(),
+                lead.getRowVersion());
         changed(rows);
         Long logId = insertLog(leadId, null, actor.userId(), "claim", "claim from public pool", actor.userName());
         Map<String, Object> payload = payload(actor); payload.put("ownerId", actor.userId());

@@ -154,6 +154,36 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update_by = #{updateBy}, update_time = sysdate()
         where lead_id in <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </update>
+    <delete id="purgeLeadCallRecords">
+        delete from biz_lead_call_record where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_call_record.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadInvalidReviews">
+        delete from biz_lead_invalid_review where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_invalid_review.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadRetryRecords">
+        delete from biz_lead_retry_record where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_retry_record.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadQualityRecords">
+        delete from biz_lead_quality_record where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_quality_record.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadDeadPoolLogs">
+        delete from biz_lead_dead_pool_log where lead_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_lead_dead_pool_log.lead_id and l.del_flag = '2')
+    </delete>
+    <delete id="purgeLeadTagRelations">
+        delete from biz_business_tag_rel where business_type = 'LEAD' and business_id in
+        <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and exists (select 1 from biz_lead l where l.lead_id = biz_business_tag_rel.business_id and l.del_flag = '2')
+    </delete>
     <delete id="purgeLeadFollowups">
         delete from biz_lead_followup where lead_id in
         <foreach collection="leadIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -174,6 +204,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         pool_status = '0', disposition = 'ACTIVE', status = case when status = '0' then '1' else status end,
         pool_reason = null, row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and del_flag = '0' and status = #{expectedStatus}
+        and row_version = #{expectedRowVersion}
     </update>
     <update id="moveToPool">
         update biz_lead set owner_id = null, dept_id = null, pool_status = '1', disposition = 'PUBLIC_POOL',
@@ -181,6 +212,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and del_flag = '0' and pool_status = '0'
         and disposition = 'ACTIVE' and status = #{expectedStatus}
+        and row_version = #{expectedRowVersion}
     </update>
     <update id="claimLead">
         update biz_lead set owner_id = #{ownerId}, dept_id = #{deptId}, pool_status = '0', disposition = 'ACTIVE',
@@ -188,11 +220,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and pool_status = '1' and disposition = 'PUBLIC_POOL'
         and owner_id is null and del_flag = '0' and status = #{expectedStatus}
+        and row_version = #{expectedRowVersion}
     </update>
     <update id="bindCustomerConditionally">
         update biz_lead set customer_id = #{customerId}, status = '3', disposition = 'CONVERTED',
         converted_time = sysdate(), row_version = row_version + 1, update_by = #{updateBy}, update_time = sysdate()
         where lead_id = #{leadId} and del_flag = '0' and customer_id is null and status = #{expectedStatus}
+        and row_version = #{expectedRowVersion}
     </update>
     <insert id="insertAssignmentLog" parameterType="map" useGeneratedKeys="true" keyProperty="logId">
         insert into biz_lead_assignment_log(lead_id, from_owner_id, to_owner_id, action_type, reason, create_by, create_time)
@@ -236,13 +270,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         status=case when status in ('0','1') then '2' else status end, row_version=row_version+1,
         update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null and status in ('1','2')
+        and row_version=#{expectedRowVersion}
     </update>
     <update id="touchLeadFollowTimeConditionally">
         update biz_lead set last_follow_time=sysdate(), next_follow_time=#{nextFollowTime}, status='2',
         row_version=row_version+1,
         update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and pool_status='0' and owner_id is not null
-        and status=#{expectedStatus}
+        and status=#{expectedStatus} and row_version=#{expectedRowVersion}
     </update>
 
     <update id="confirmLeadTags">
@@ -285,9 +320,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="moveToDeadPool">
         update biz_lead
         set disposition='DEAD_POOL', status='4', pool_status='0', owner_id=null, dept_id=null,
-        dead_pool_time=sysdate(), dead_pool_reason=#{reason}, next_retry_time=null, retry_stage='EXHAUSTED',
+        dead_pool_time=sysdate(), dead_pool_reason=#{reason}, next_retry_time=null,
         row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
-        where lead_id=#{leadId} and del_flag='0' and disposition=#{expectedDisposition}
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and invalid_review_status='CONFIRMED'
         and row_version=#{rowVersion}
     </update>
 

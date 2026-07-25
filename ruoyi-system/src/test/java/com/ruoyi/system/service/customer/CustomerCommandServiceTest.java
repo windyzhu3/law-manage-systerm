@@ -84,7 +84,7 @@ class CustomerCommandServiceTest
 
         verify(mapper).insertContact(argThat((Map<String, Object> contact) ->
                 "1".equals(contact.get("keyContact")) && Long.valueOf(31L).equals(contact.get("customerId"))));
-        verify(leads, never()).bindCustomerConditionally(any(), any(), any(), any());
+        verify(leads, never()).bindCustomerConditionally(any(), any(), any(), any(), any());
     }
 
     private BizCustomer customer(String mobile, String creditCode, String name)

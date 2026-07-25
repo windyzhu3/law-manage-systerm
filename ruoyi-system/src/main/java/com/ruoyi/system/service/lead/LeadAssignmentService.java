@@ -44,18 +44,30 @@ public class LeadAssignmentService
         if (ownerId == null) throw error(BusinessErrorCode.VALIDATION_FAILED, "负责人不能为空");
         BizLead lead = access.requireReadable(leadId, false, true);
         requireActive(lead, "分配");
+        SysUser owner = requireAssignableOwner(ownerId);
         BusinessActor actor = actors.current();
-        int rows = mapper.assignLead(leadId, ownerId, actor.userName(), lead.getStatus());
+        int rows = mapper.assignLead(leadId, ownerId, actor.userName(), lead.getStatus(), lead.getRowVersion());
         changed(rows, "线索状态已变化，请刷新后重试");
         Long logId = insertLog(leadId, lead.getOwnerId(), ownerId, "assign", reason, actor.userName());
         Map<String, Object> payload = payload(actor);
         payload.put("fromOwnerId", lead.getOwnerId() == null ? "" : lead.getOwnerId());
         payload.put("assignmentId", logId);
         payload.put("ownerId", ownerId);
-        SysUser owner = users == null ? null : users.selectUserById(ownerId);
-        payload.put("ownerDeptId", owner == null ? null : owner.getDeptId());
+        payload.put("ownerDeptId", owner.getDeptId());
         publish(BusinessEventType.LEAD_ASSIGNED, lead, "LEAD_ASSIGNED:" + leadId + ":" + logId, payload);
         return rows;
+    }
+
+    private SysUser requireAssignableOwner(Long ownerId)
+    {
+        SysUser owner = users == null ? null : users.selectUserById(ownerId);
+        if (owner == null)
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "目标负责人不存在");
+        if (!"0".equals(owner.getStatus()) || !"0".equals(owner.getDelFlag()))
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "目标负责人已停用或删除");
+        if (owner.getDeptId() == null)
+            throw error(BusinessErrorCode.PRECONDITION_FAILED, "目标负责人未配置部门");
+        return owner;
     }
 
     private Long insertLog(Long leadId, Long fromOwnerId, Long toOwnerId, String actionType,

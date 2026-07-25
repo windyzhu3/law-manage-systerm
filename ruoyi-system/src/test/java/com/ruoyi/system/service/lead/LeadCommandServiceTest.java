@@ -5,6 +5,7 @@ import static com.ruoyi.system.support.BusinessFixtures.lead;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.event.BusinessEventPublisher;
@@ -69,6 +71,31 @@ class LeadCommandServiceTest
 
         assertEquals("STATE_CONFLICT", exception.getBusinessCode());
         verify(mapper, never()).softDeleteLead(new Long[] { 11L }, "alice");
+    }
+
+    @Test
+    void purgeDeletesEveryLeadOwnedFactBeforeTheLead()
+    {
+        Long[] leadIds = { 11L, 12L };
+        BizLead first = lead(11L, LeadStatus.INVALID.code(), "2");
+        BizLead second = lead(12L, LeadStatus.CLOSED.code(), "2");
+        when(access.requireReadable(11L, true, false)).thenReturn(first);
+        when(access.requireReadable(12L, true, false)).thenReturn(second);
+        when(mapper.purgeLead(leadIds)).thenReturn(2);
+
+        assertEquals(2, service.purge(leadIds));
+
+        InOrder order = inOrder(mapper);
+        order.verify(mapper).purgeLeadCallRecords(leadIds);
+        order.verify(mapper).purgeLeadInvalidReviews(leadIds);
+        order.verify(mapper).purgeLeadRetryRecords(leadIds);
+        order.verify(mapper).purgeLeadQualityRecords(leadIds);
+        order.verify(mapper).purgeLeadDeadPoolLogs(leadIds);
+        order.verify(mapper).purgeLeadTagRelations(leadIds);
+        order.verify(mapper).purgeLeadFollowups(leadIds);
+        order.verify(mapper).purgeLeadAssignmentLogs(leadIds);
+        order.verify(mapper).purgeLead(leadIds);
+        order.verifyNoMoreInteractions();
     }
 
     private BizLead validLead()

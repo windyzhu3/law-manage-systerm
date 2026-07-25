@@ -54,7 +54,8 @@ public class LeadConversionService
 
         Long customerId = customers.createFromLead(lead);
         if (customerId == null) throw error(BusinessErrorCode.PRECONDITION_FAILED, "客户创建失败");
-        int rows = mapper.bindCustomerConditionally(leadId, customerId, actor.userName(), lead.getStatus());
+        int rows = mapper.bindCustomerConditionally(leadId, customerId, actor.userName(), lead.getStatus(),
+                lead.getRowVersion());
         if (rows <= 0)
         {
             throw error(BusinessErrorCode.CONCURRENT_MODIFICATION, "线索状态已变化，请刷新后重试");

@@ -60,23 +60,27 @@ class LeadCustomerConversionFlowTest
 
         when(leadAccess.requireReadable(7L, false, true)).thenReturn(lead);
         when(leadAccess.requireOperable(7L)).thenReturn(lead);
-        when(leads.assignLead(7L, 8L, "alice", LeadStatus.UNASSIGNED.code())).thenReturn(1);
+        when(leads.assignLead(7L, 8L, "alice", LeadStatus.UNASSIGNED.code(), 0)).thenReturn(1);
         when(leads.insertAssignmentLog(any())).thenAnswer(invocation -> {
             invocation.<Map<String, Object>>getArgument(0).put("logId", 21L);
             return 1;
         });
         com.ruoyi.common.core.domain.entity.SysUser owner = new com.ruoyi.common.core.domain.entity.SysUser();
         owner.setDeptId(3L);
+        owner.setStatus("0");
+        owner.setDelFlag("0");
         when(users.selectUserById(8L)).thenReturn(owner);
         new LeadAssignmentService(leads, leadAccess, actors, events, users).assign(7L, 8L, "首次分配");
-        lead.setOwnerId(8L); lead.setDeptId(3L); lead.setPoolStatus("0"); lead.setStatus(LeadStatus.WAIT_FOLLOW.code());
+        lead.setOwnerId(8L); lead.setDeptId(3L); lead.setPoolStatus("0");
+        lead.setStatus(LeadStatus.WAIT_FOLLOW.code()); lead.setRowVersion(1);
 
         when(leads.insertFollowup(any())).thenReturn(1);
-        when(leads.touchLeadFollowTimeConditionally(anyLong(), any(), any(), any())).thenReturn(1);
+        when(leads.touchLeadFollowTimeConditionally(anyLong(), any(), any(), any(), any())).thenReturn(1);
         LeadFollowupCommand followup = new LeadFollowupCommand();
         followup.setLeadId(7L); followup.setFollowType("phone"); followup.setFollowResult("interested");
         followup.setContent("客户确认需要合同服务");
         new LeadFollowupService(leads, leadAccess, actors, dictionaries).add(followup, true);
+        lead.setRowVersion(2);
 
         when(customers.selectCustomerByLeadId(7L)).thenReturn(null);
         when(customers.selectDuplicateCustomerInScope(any(), any(), any(), anyLong(), anyLong(), any(), any())).thenReturn(null);
@@ -86,7 +90,7 @@ class LeadCustomerConversionFlowTest
         });
         when(customers.countContactByCustomerAndMobileOrName(anyLong(), any(), any())).thenReturn(0);
         when(customers.insertContact(any())).thenReturn(1);
-        when(leads.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.WAIT_FOLLOW.code())).thenReturn(1);
+        when(leads.bindCustomerConditionally(7L, 31L, "alice", LeadStatus.WAIT_FOLLOW.code(), 2)).thenReturn(1);
         CustomerCommandService customerCommands = new CustomerCommandService(customers, leads, dictionaries,
                 actors, customerAccess);
         LeadConversionService conversion = new LeadConversionService(leads, leadAccess, actors, events,
@@ -98,7 +102,7 @@ class LeadCustomerConversionFlowTest
 
         verify(customers, times(1)).insertCustomer(any(BizCustomer.class));
         verify(customers, times(1)).insertContact(any());
-        verify(leads, times(1)).bindCustomerConditionally(7L, 31L, "alice", LeadStatus.WAIT_FOLLOW.code());
+        verify(leads, times(1)).bindCustomerConditionally(7L, 31L, "alice", LeadStatus.WAIT_FOLLOW.code(), 2);
         ArgumentCaptor<BusinessEventCommand> captured = ArgumentCaptor.forClass(BusinessEventCommand.class);
         verify(events, times(3)).publish(captured.capture());
         assertEquals(List.of("LEAD_CREATED:7", "LEAD_ASSIGNED:7:21", "LEAD_CONVERTED:7:31"),
@@ -108,6 +112,7 @@ class LeadCustomerConversionFlowTest
     private BizLead lead()
     {
         BizLead lead = new BizLead();
+        lead.setRowVersion(0);
         lead.setLeadName("张三咨询"); lead.setContactName("张三"); lead.setMobile("13800000000");
         lead.setSourceCode("web"); lead.setPriority("2"); lead.setLegalDemand("合同审查");
         return lead;

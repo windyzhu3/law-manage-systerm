@@ -3,7 +3,10 @@ package com.ruoyi.system.service.lead;
 import static com.ruoyi.system.support.BusinessFixtures.actor;
 import static com.ruoyi.system.support.BusinessFixtures.lead;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +21,7 @@ import com.law.business.lead.dto.LeadFollowupCommand;
 import com.law.business.security.BusinessActorProvider;
 import com.law.business.shared.status.LeadStatus;
 import com.ruoyi.common.core.domain.entity.SysDictData;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.mapper.BizLeadMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
@@ -42,13 +46,14 @@ class LeadFollowupServiceTest
     {
         BizLead lead = lead(7L, LeadStatus.WAIT_FOLLOW.code(), "0");
         lead.setOwnerId(8L);
+        lead.setRowVersion(3);
         when(access.requireOperable(7L)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
         when(dictionaries.selectDictDataByType("law_lead_follow_type")).thenReturn(List.of(dict("phone")));
         when(mapper.insertFollowup(argThat(followup -> Long.valueOf(8L).equals(followup.getFollowUserId())
                 && "alice".equals(followup.getCreateBy())))).thenReturn(1);
         Date next = new Date(1_800_000_000_000L);
-        when(mapper.touchLeadFollowTimeConditionally(7L, next, "alice", LeadStatus.WAIT_FOLLOW.code())).thenReturn(1);
+        when(mapper.touchLeadFollowTimeConditionally(7L, next, "alice", LeadStatus.WAIT_FOLLOW.code(), 3)).thenReturn(1);
 
         LeadFollowupCommand command = new LeadFollowupCommand();
         command.setLeadId(7L);
@@ -59,7 +64,31 @@ class LeadFollowupServiceTest
 
         assertEquals(1, service.add(command, false));
 
-        verify(mapper).touchLeadFollowTimeConditionally(7L, next, "alice", LeadStatus.WAIT_FOLLOW.code());
+        verify(mapper).touchLeadFollowTimeConditionally(7L, next, "alice", LeadStatus.WAIT_FOLLOW.code(), 3);
+    }
+
+    @Test
+    void staleFollowTimeUpdateFailsTheFollowupTransaction()
+    {
+        BizLead lead = lead(7L, LeadStatus.WAIT_FOLLOW.code(), "0");
+        lead.setOwnerId(8L);
+        lead.setRowVersion(3);
+        when(access.requireOperable(7L)).thenReturn(lead);
+        when(actors.current()).thenReturn(actor());
+        when(dictionaries.selectDictDataByType("law_lead_follow_type")).thenReturn(List.of(dict("phone")));
+        when(mapper.insertFollowup(any())).thenReturn(1);
+        when(mapper.touchLeadFollowTimeConditionally(7L, null, "alice", LeadStatus.WAIT_FOLLOW.code(), 3))
+                .thenReturn(0);
+        LeadFollowupCommand command = new LeadFollowupCommand();
+        command.setLeadId(7L);
+        command.setFollowType("phone");
+        command.setFollowResult("connected");
+        command.setContent("stale");
+
+        assertThrows(ServiceException.class, () -> service.add(command, false));
+
+        verify(mapper, never()).touchLeadFollowTimeConditionally(7L, null, "alice",
+                LeadStatus.WAIT_FOLLOW.code(), 4);
     }
 
     private SysDictData dict(String value)

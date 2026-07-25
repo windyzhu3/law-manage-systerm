@@ -16,24 +16,39 @@ public interface BizLeadMapper
     public int updateLead(BizLead lead);
     public int softDeleteLead(@Param("leadIds") Long[] leadIds, @Param("updateBy") String updateBy);
     public int restoreLead(@Param("leadIds") Long[] leadIds, @Param("updateBy") String updateBy);
+    public int purgeLeadCallRecords(@Param("leadIds") Long[] leadIds);
+    public int purgeLeadInvalidReviews(@Param("leadIds") Long[] leadIds);
+    public int purgeLeadRetryRecords(@Param("leadIds") Long[] leadIds);
+    public int purgeLeadQualityRecords(@Param("leadIds") Long[] leadIds);
+    public int purgeLeadDeadPoolLogs(@Param("leadIds") Long[] leadIds);
+    public int purgeLeadTagRelations(@Param("leadIds") Long[] leadIds);
     public int purgeLeadFollowups(@Param("leadIds") Long[] leadIds);
     public int purgeLeadAssignmentLogs(@Param("leadIds") Long[] leadIds);
     public int purgeLead(@Param("leadIds") Long[] leadIds);
-    public int assignLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
-    public int moveToPool(@Param("leadId") Long leadId, @Param("reason") String reason, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
-    public int claimLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId, @Param("deptId") Long deptId, @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
+    public int assignLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId,
+            @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus,
+            @Param("expectedRowVersion") Integer expectedRowVersion);
+    public int moveToPool(@Param("leadId") Long leadId, @Param("reason") String reason,
+            @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus,
+            @Param("expectedRowVersion") Integer expectedRowVersion);
+    public int claimLead(@Param("leadId") Long leadId, @Param("ownerId") Long ownerId,
+            @Param("deptId") Long deptId, @Param("updateBy") String updateBy,
+            @Param("expectedStatus") String expectedStatus, @Param("expectedRowVersion") Integer expectedRowVersion);
     public int bindCustomerConditionally(@Param("leadId") Long leadId, @Param("customerId") Long customerId,
-            @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus);
+            @Param("updateBy") String updateBy, @Param("expectedStatus") String expectedStatus,
+            @Param("expectedRowVersion") Integer expectedRowVersion);
     public int insertAssignmentLog(Map<String, Object> assignmentLog);
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup);
     public BizLeadFollowup selectFollowupById(Long followupId);
     public int insertFollowup(BizLeadFollowup followup);
     public int updateFollowup(BizLeadFollowup followup);
     public int deleteFollowup(@Param("followupId") Long followupId, @Param("leadId") Long leadId);
-    public int touchLeadFollowTime(@Param("leadId") Long leadId, @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy);
+    public int touchLeadFollowTime(@Param("leadId") Long leadId,
+            @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy,
+            @Param("expectedRowVersion") Integer expectedRowVersion);
     public int touchLeadFollowTimeConditionally(@Param("leadId") Long leadId,
             @Param("nextFollowTime") java.util.Date nextFollowTime, @Param("updateBy") String updateBy,
-            @Param("expectedStatus") String expectedStatus);
+            @Param("expectedStatus") String expectedStatus, @Param("expectedRowVersion") Integer expectedRowVersion);
     public int confirmLeadTags(@Param("leadId") Long leadId, @Param("expectedStatus") String expectedStatus,
             @Param("confirmBy") Long confirmBy, @Param("rowVersion") Integer rowVersion,
             @Param("updateBy") String updateBy);
@@ -47,8 +62,7 @@ public interface BizLeadMapper
             @Param("nextStage") String nextStage, @Param("attemptCount") Integer attemptCount,
             @Param("nextRetryTime") Date nextRetryTime, @Param("rowVersion") Integer rowVersion,
             @Param("updateBy") String updateBy);
-    public int moveToDeadPool(@Param("leadId") Long leadId,
-            @Param("expectedDisposition") String expectedDisposition, @Param("reason") String reason,
+    public int moveToDeadPool(@Param("leadId") Long leadId, @Param("reason") String reason,
             @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
     public int restoreFromDeadPool(@Param("leadId") Long leadId, @Param("reason") String reason,
             @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
