@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.LeadFlowMapper">
+    <insert id="insertCallRecordIfAbsent" parameterType="BizLeadCallRecord" useGeneratedKeys="true" keyProperty="callRecordId">
+        insert ignore into biz_lead_call_record(
+          lead_id,todo_id,call_channel,external_call_id,started_at,ended_at,duration_seconds,call_result,
+          recording_file_object_id,manual_notes,provider_summary_hash,idempotency_key,create_by,create_time)
+        values(#{leadId},#{todoId},#{callChannel},#{externalCallId},#{startedAt},#{endedAt},#{durationSeconds},
+          #{callResult},#{recordingFileObjectId},#{manualNotes},#{providerSummaryHash},#{idempotencyKey},#{createBy},sysdate())
+    </insert>
+    <select id="selectCallRecordByIdempotencyKey" resultType="BizLeadCallRecord">
+        select call_record_id callRecordId,lead_id leadId,todo_id todoId,call_channel callChannel,
+          external_call_id externalCallId,started_at startedAt,ended_at endedAt,duration_seconds durationSeconds,
+          call_result callResult,recording_file_object_id recordingFileObjectId,manual_notes manualNotes,
+          provider_summary_hash providerSummaryHash,idempotency_key idempotencyKey,create_by createBy
+        from biz_lead_call_record where idempotency_key=#{idempotencyKey}
+    </select>
+
+    <insert id="insertInvalidReviewIfAbsent" parameterType="BizLeadInvalidReview" useGeneratedKeys="true" keyProperty="reviewId">
+        insert ignore into biz_lead_invalid_review(
+          lead_id,reason_code,sales_explanation,submitted_by,submitted_at,todo_id,status,idempotency_key,create_by,create_time,row_version)
+        values(#{leadId},#{reasonCode},#{salesExplanation},#{submittedBy},sysdate(),#{todoId},'PENDING',
+          #{idempotencyKey},#{createBy},sysdate(),0)
+    </insert>
+    <select id="selectInvalidReviewById" resultType="BizLeadInvalidReview">
+        select review_id reviewId,lead_id leadId,reason_code reasonCode,sales_explanation salesExplanation,
+          submitted_by submittedBy,submitted_at submittedAt,reviewer_id reviewerId,review_result reviewResult,
+          review_comment reviewComment,reviewed_at reviewedAt,system_default systemDefault,todo_id todoId,
+          status,idempotency_key idempotencyKey,row_version rowVersion
+        from biz_lead_invalid_review where review_id=#{reviewId}
+    </select>
+    <select id="selectInvalidReviewByIdempotencyKey" resultType="BizLeadInvalidReview">
+        select review_id reviewId,lead_id leadId,reason_code reasonCode,sales_explanation salesExplanation,
+          submitted_by submittedBy,submitted_at submittedAt,reviewer_id reviewerId,review_result reviewResult,
+          review_comment reviewComment,reviewed_at reviewedAt,system_default systemDefault,todo_id todoId,
+          status,idempotency_key idempotencyKey,row_version rowVersion
+        from biz_lead_invalid_review where idempotency_key=#{idempotencyKey}
+    </select>
+    <update id="completeInvalidReview">
+        update biz_lead_invalid_review
+        set reviewer_id=#{reviewerId},review_result=#{result},review_comment=#{comment},reviewed_at=sysdate(),
+          system_default=#{systemDefault},status='COMPLETED',row_version=row_version+1,
+          update_by=#{updateBy},update_time=sysdate()
+        where review_id=#{reviewId} and status='PENDING' and row_version=#{expectedRowVersion}
+    </update>
+
+    <insert id="insertRetryRecordIfAbsent" parameterType="BizLeadRetryRecord" useGeneratedKeys="true" keyProperty="retryRecordId">
+        insert ignore into biz_lead_retry_record(
+          lead_id,plan_id,window_code,attempt_no,contact_result,next_window_code,todo_id,call_record_id,
+          occurred_at,idempotency_key,create_by,create_time)
+        values(#{leadId},#{planId},#{windowCode},#{attemptNo},#{contactResult},#{nextWindowCode},#{todoId},
+          #{callRecordId},sysdate(),#{idempotencyKey},#{createBy},sysdate())
+    </insert>
+    <select id="selectRetryRecordByIdempotencyKey" resultType="BizLeadRetryRecord">
+        select retry_record_id retryRecordId,lead_id leadId,plan_id planId,window_code windowCode,
+          attempt_no attemptNo,contact_result contactResult,next_window_code nextWindowCode,todo_id todoId,
+          call_record_id callRecordId,occurred_at occurredAt,idempotency_key idempotencyKey
+        from biz_lead_retry_record where idempotency_key=#{idempotencyKey}
+    </select>
+
+    <insert id="insertQualityRecordIfAbsent" parameterType="BizLeadQualityRecord" useGeneratedKeys="true" keyProperty="qualityRecordId">
+        insert ignore into biz_lead_quality_record(
+          lead_id,sales_user_id,reason_code,reviewer_id,source_todo_id,source_review_id,quality_type,
+          idempotency_key,create_by,create_time)
+        values(#{leadId},#{salesUserId},#{reasonCode},#{reviewerId},#{sourceTodoId},#{sourceReviewId},
+          #{qualityType},#{idempotencyKey},#{createBy},sysdate())
+    </insert>
+    <select id="selectQualityRecordByIdempotencyKey" resultType="BizLeadQualityRecord">
+        select quality_record_id qualityRecordId,lead_id leadId,sales_user_id salesUserId,reason_code reasonCode,
+          reviewer_id reviewerId,source_todo_id sourceTodoId,source_review_id sourceReviewId,
+          quality_type qualityType,idempotency_key idempotencyKey
+        from biz_lead_quality_record where idempotency_key=#{idempotencyKey}
+    </select>
+
+    <insert id="insertDeadPoolLogIfAbsent" parameterType="BizLeadDeadPoolLog" useGeneratedKeys="true" keyProperty="deadPoolLogId">
+        insert ignore into biz_lead_dead_pool_log(
+          lead_id,action_type,reason_code,reason_detail,from_disposition,to_disposition,operator_id,
+          source_todo_id,action_time,idempotency_key,create_by,create_time)
+        values(#{leadId},#{actionType},#{reasonCode},#{reasonDetail},#{fromDisposition},#{toDisposition},
+          #{operatorId},#{sourceTodoId},sysdate(),#{idempotencyKey},#{createBy},sysdate())
+    </insert>
+    <select id="selectDeadPoolLogByIdempotencyKey" resultType="BizLeadDeadPoolLog">
+        select dead_pool_log_id deadPoolLogId,lead_id leadId,action_type actionType,reason_code reasonCode,
+          reason_detail reasonDetail,from_disposition fromDisposition,to_disposition toDisposition,
+          operator_id operatorId,source_todo_id sourceTodoId,action_time actionTime,idempotency_key idempotencyKey
+        from biz_lead_dead_pool_log where idempotency_key=#{idempotencyKey}
+    </select>
+
+    <update id="confirmTagRelation">
+        update biz_business_tag_rel set confirm_status=#{confirmStatus},confirmed_by=#{confirmedBy},
+          confirmed_at=sysdate(),update_by=#{updateBy},update_time=sysdate()
+        where tag_rel_id=#{tagRelationId} and business_type='LEAD' and business_id=#{leadId}
+          and confirm_status in ('PENDING','CORRECTED')
+    </update>
+
+    <select id="selectActiveRetryPlanId" resultType="long">
+        select plan_id from todo_schedule_plan
+        where business_type='LEAD' and business_id=#{leadId} and status='ACTIVE'
+        order by plan_id desc limit 1
+    </select>
+    <select id="selectActiveAssignmentPolicy" resultType="BizLeadAssignmentPolicy">
+        select policy_id policyId,sales_dept_id salesDeptId,source_code sourceCode,business_type businessType,
+          retry_rule_json retryRuleJson,status
+        from biz_lead_assignment_policy
+        where sales_dept_id=#{salesDeptId} and business_type='LEAD' and status='ACTIVE'
+          and source_code in (#{sourceCode},'*')
+        order by case when source_code=#{sourceCode} then 0 else 1 end,policy_id limit 1
+    </select>
+    <select id="selectActivePolicyCandidates" resultType="long">
+        select user_id from biz_lead_assignment_policy_candidate
+        where policy_id=#{policyId} and status='ACTIVE' order by sort_order,user_id
+    </select>
+</mapper>

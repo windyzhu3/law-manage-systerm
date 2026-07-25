@@ -43,6 +43,7 @@ class LeadPoolServiceTest
     {
         BizLead lead = lead(7L, LeadStatus.UNASSIGNED.code(), "0");
         lead.setPoolStatus("1");
+        lead.setDisposition("PUBLIC_POOL");
         lead.setRowVersion(5);
         when(access.requireReadable(7L, false, true)).thenReturn(lead);
         when(actors.current()).thenReturn(actor());
@@ -53,6 +54,21 @@ class LeadPoolServiceTest
         assertEquals("CONCURRENT_MODIFICATION", exception.getBusinessCode());
         verify(mapper, never()).insertAssignmentLog(any());
         verify(events, never()).publish(any());
+    }
+
+    @Test
+    void public_pool_claim_cannot_read_dead_pool_lead()
+    {
+        BizLead lead = lead(7L, LeadStatus.UNASSIGNED.code(), "0");
+        lead.setPoolStatus("1");
+        lead.setDisposition("DEAD_POOL");
+        lead.setRowVersion(5);
+        when(access.requireReadable(7L, false, true)).thenReturn(lead);
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.claim(7L));
+
+        assertEquals("ACCESS_DENIED", error.getBusinessCode());
+        verify(mapper, never()).claimLead(any(), any(), any(), any(), any(), any());
     }
 
     @Test

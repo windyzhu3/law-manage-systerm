@@ -398,6 +398,16 @@
            status,result_code resultCode,version
     from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
   </select>
+  <select id="selectNextScheduleWindow" resultType="java.util.Map">
+    select next_window.window_id windowId,next_window.window_code windowCode,
+           next_window.start_at startAt,next_window.due_at dueAt,next_window.window_order windowOrder
+    from todo_schedule_window current_window
+    join todo_schedule_window next_window on next_window.plan_id=current_window.plan_id
+      and next_window.window_order&gt;current_window.window_order
+      and next_window.status in ('PENDING','PROCESSING','MATERIALIZED')
+    where current_window.plan_id=#{planId} and current_window.window_id=#{currentWindowId}
+    order by next_window.window_order limit 1
+  </select>
   <select id="selectScheduleOccurrenceIdentityByKey" resultType="java.util.Map">
     select occurrence_id occurrenceId,plan_id planId,window_id windowId,occurrence_key occurrenceKey
     from todo_schedule_occurrence where occurrence_key=#{occurrenceKey}

@@ -21,6 +21,7 @@ import com.law.business.security.LeadPermissions;
 public class LeadPoolService
 {
     private static final String IN_POOL = "1";
+    private static final BusinessActor SYSTEM = new BusinessActor(0L, "system", "system", null, false);
     private final BizLeadMapper mapper;
     private final LeadAccessPolicy access;
     private final BusinessActorProvider actors;
@@ -56,6 +57,8 @@ public class LeadPoolService
     public int claim(Long leadId)
     {
         BizLead lead = access.requireReadable(leadId, false, true);
+        if (!"PUBLIC_POOL".equals(lead.getDisposition()))
+            throw error(BusinessErrorCode.ACCESS_DENIED, "LEAD_DEAD_POOL_ACCESS_DENIED");
         requireActive(lead);
         if (!IN_POOL.equals(lead.getPoolStatus())) throw error(BusinessErrorCode.STATE_CONFLICT, "线索已被领取");
         BusinessActor actor = actors.current();
@@ -65,6 +68,22 @@ public class LeadPoolService
         Long logId = insertLog(leadId, null, actor.userId(), "claim", "claim from public pool", actor.userName());
         Map<String, Object> payload = payload(actor); payload.put("ownerId", actor.userId());
         publish(BusinessEventType.LEAD_CLAIMED, lead, "LEAD_CLAIMED:" + leadId + ":" + logId, payload);
+        return rows;
+    }
+
+    @Transactional
+    public int moveToPoolBySystem(BizLead lead, int expectedRowVersion, String reason)
+    {
+        if (lead == null || !"ACTIVE".equals(lead.getDisposition()))
+            throw error(BusinessErrorCode.STATE_CONFLICT, "Lead is not active");
+        int rows = mapper.moveToPool(lead.getLeadId(), reason, SYSTEM.userName(), lead.getStatus(),
+                expectedRowVersion);
+        changed(rows);
+        Long logId = insertLog(lead.getLeadId(), lead.getOwnerId(), null, "pool", reason, SYSTEM.userName());
+        Map<String, Object> payload = payload(SYSTEM);
+        payload.put("reason", reason == null ? "" : reason);
+        publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead,
+                "LEAD_MOVED_TO_POOL:" + lead.getLeadId() + ":" + logId, payload);
         return rows;
     }
 

@@ -170,7 +170,7 @@ public class TodoScheduleService
     }
 
     @Transactional
-    public void completeOccurrence(Long occurrenceId,String result,LocalDateTime completedAt)
+    public ScheduleCompletion completeOccurrence(Long occurrenceId,String result,LocalDateTime completedAt)
     {
         if(occurrenceId==null||occurrenceId<=0||result==null||result.isBlank()||completedAt==null)
             throw new TodoException("TODO_SCHEDULE_RESULT_INVALID","Schedule occurrence result is incomplete");
@@ -184,6 +184,7 @@ public class TodoScheduleService
                 throw new TodoException("TODO_SCHEDULE_PLAN_NOT_FOUND","Schedule plan does not exist");
         }
         int accepted=mapper.recordScheduleOccurrenceResult(occurrenceId,result,completedAt);
+        boolean replayed=accepted!=1;
         if(accepted!=1)
         {
             Map<String,Object> current=mapper.selectScheduleOccurrenceById(occurrenceId);
@@ -195,6 +196,18 @@ public class TodoScheduleService
         }
         if("CONNECTED".equals(result))
             terminateLockedPlan(planId,occurrenceId,"CONTACTED",completedAt);
+        Map<String,Object> next=null;
+        if("NEXT_WINDOW".equals(result))
+        {
+            next=mapper.selectNextScheduleWindow(planId,requiredLong(occurrence,"windowId","window_id"));
+            if(next==null)
+                throw new TodoException("TODO_SCHEDULE_NEXT_WINDOW_NOT_FOUND",
+                        "Retry result requires a later configured window");
+        }
+        return new ScheduleCompletion(planId,text(occurrence,"windowCode","window_code"),
+                intValue(occurrence,"occurrenceNo","occurrence_no"),
+                next==null?null:text(next,"windowCode","window_code"),
+                next==null?null:dateTime(next,"startAt","start_at"),replayed);
     }
 
     @Transactional
@@ -293,6 +306,9 @@ public class TodoScheduleService
         if(value!=null)return LocalDateTime.parse(String.valueOf(value).replace(' ','T'));
         throw new TodoException("TODO_SCHEDULE_ROW_INVALID","Schedule row is missing "+camel);
     }
+
+    public record ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
+            String nextWindowCode,LocalDateTime nextStartAt,boolean replayed) { }
 
     public record CreateSchedulePlanCommand(
             Long previousTodoId,

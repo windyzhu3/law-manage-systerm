@@ -40,7 +40,8 @@ public class LeadAccessPolicy
         {
             return lead;
         }
-        if (allowPool && !DELETED.equals(lead.getDelFlag()) && IN_POOL.equals(lead.getPoolStatus()))
+        if (allowPool && !DELETED.equals(lead.getDelFlag()) && IN_POOL.equals(lead.getPoolStatus())
+                && "PUBLIC_POOL".equals(lead.getDisposition()))
         {
             return lead;
         }

@@ -54,6 +54,9 @@ public interface BizLeadMapper
             @Param("updateBy") String updateBy);
     public int completeFirstContact(@Param("leadId") Long leadId,
             @Param("expectedStatus") String expectedStatus, @Param("result") String result,
+            @Param("contactName") String contactName, @Param("city") String city,
+            @Param("legalDemand") String legalDemand, @Param("visited") String visited,
+            @Param("invalidReasonCode") String invalidReasonCode, @Param("invalidSourceNode") String invalidSourceNode,
             @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
     public int markInvalidReviewed(@Param("leadId") Long leadId,
             @Param("expectedReviewStatus") String expectedReviewStatus, @Param("reviewResult") String reviewResult,
@@ -65,6 +68,12 @@ public interface BizLeadMapper
     public int moveToDeadPool(@Param("leadId") Long leadId, @Param("reason") String reason,
             @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
     public int restoreFromDeadPool(@Param("leadId") Long leadId, @Param("reason") String reason,
+            @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
+    public int reopenFirstContact(@Param("leadId") Long leadId, @Param("rowVersion") Integer rowVersion,
+            @Param("updateBy") String updateBy);
+    public int completeRetryConnected(@Param("leadId") Long leadId, @Param("expectedStage") String expectedStage,
+            @Param("contactName") String contactName, @Param("city") String city,
+            @Param("legalDemand") String legalDemand, @Param("visited") String visited,
             @Param("rowVersion") Integer rowVersion, @Param("updateBy") String updateBy);
     public int countLeadInDataScope(@Param("leadId") Long leadId, @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("includeDeleted") Boolean includeDeleted);
     public List<BizLeadSetting> selectSettingList(BizLeadSetting setting);

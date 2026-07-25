@@ -140,6 +140,25 @@ class TodoScheduleServiceTest
     }
 
     @Test
+    void nextWindowResultReturnsScheduleOwnedStageAndStartTime()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(Map.of(
+                "planId",3L,"windowId",12L,"windowCode","T1_AM","occurrenceNo",1,
+                "status","MATERIALIZED"));
+        when(mapper.recordScheduleOccurrenceResult(9L,"NEXT_WINDOW",NOW)).thenReturn(1);
+        when(mapper.selectNextScheduleWindow(3L,12L)).thenReturn(Map.of(
+                "windowCode","T1_NOON","startAt",LocalDateTime.of(2026,7,26,12,0)));
+
+        TodoScheduleService.ScheduleCompletion outcome =
+                new TodoScheduleService(mapper,mock(TodoRoutingService.class))
+                        .completeOccurrence(9L,"NEXT_WINDOW",NOW);
+
+        assertEquals("T1_NOON",outcome.nextWindowCode());
+        assertEquals(LocalDateTime.of(2026,7,26,12,0),outcome.nextStartAt());
+    }
+
+    @Test
     void workerFirstConnectedResultCancelsLinkedFutureTodoAndRowsIdempotently()
     {
         TodoMapper mapper=mock(TodoMapper.class);

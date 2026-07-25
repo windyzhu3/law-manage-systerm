@@ -291,6 +291,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <update id="completeFirstContact">
         update biz_lead
         set first_contact_status='COMPLETED', first_contact_time=sysdate(), first_contact_result=#{result},
+        contact_name=case when #{result}='VALID' then #{contactName} else contact_name end,
+        city=case when #{result}='VALID' then #{city} else city end,
+        legal_demand=case when #{result}='VALID' then #{legalDemand} else legal_demand end,
+        visited=case when #{result}='VALID' then #{visited} else visited end,
+        invalid_reason_code=case when #{result}='SUSPECT_INVALID' then #{invalidReasonCode} else invalid_reason_code end,
+        invalid_source_node=case when #{result}='SUSPECT_INVALID' then #{invalidSourceNode} else invalid_source_node end,
         invalid_review_status=case when #{result}='SUSPECT_INVALID' then 'PENDING' else invalid_review_status end,
         retry_stage=case when #{result}='UNREACHABLE' then 'T0' else retry_stage end,
         retry_attempt_count=case when #{result}='UNREACHABLE' then 0 else retry_attempt_count end,
@@ -336,6 +342,25 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         retry_attempt_count=0, next_retry_time=null,
         row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
         where lead_id=#{leadId} and del_flag='0' and disposition='DEAD_POOL'
+        and row_version=#{rowVersion}
+    </update>
+
+    <update id="reopenFirstContact">
+        update biz_lead
+        set first_contact_status='PENDING', row_version=row_version+1,
+        update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and invalid_review_status='MISJUDGED' and row_version=#{rowVersion}
+    </update>
+
+    <update id="completeRetryConnected">
+        update biz_lead
+        set first_contact_status='COMPLETED', first_contact_time=sysdate(), first_contact_result='VALID',
+        contact_name=#{contactName}, city=#{city}, legal_demand=#{legalDemand}, visited=#{visited},
+        retry_stage=null, retry_attempt_count=0, next_retry_time=null,
+        row_version=row_version+1, update_by=#{updateBy}, update_time=sysdate()
+        where lead_id=#{leadId} and del_flag='0' and disposition='ACTIVE'
+        and first_contact_result='UNREACHABLE' and retry_stage=#{expectedStage}
         and row_version=#{rowVersion}
     </update>
 
