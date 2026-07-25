@@ -186,14 +186,19 @@ public interface TodoMapper
     int returnToPoolConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("operator") String operator);
     int insertSchedulePlan(Map<String,Object> plan);
     int insertScheduleWindow(Map<String,Object> window);
-    List<Map<String,Object>> selectDueScheduleWindows(@Param("now") LocalDateTime now,@Param("limit") int limit);
-    int claimScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
+    List<Map<String,Object>> selectDueScheduleWindows(@Param("now") LocalDateTime now,@Param("staleBefore") LocalDateTime staleBefore,@Param("limit") int limit);
+    int claimScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,
+            @Param("now") LocalDateTime now,@Param("staleBefore") LocalDateTime staleBefore);
     int retryScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("errorCode") String errorCode,@Param("now") LocalDateTime now);
     int completeScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
     int insertScheduleOccurrenceIfAbsent(Map<String,Object> occurrence);
     Map<String,Object> selectScheduleOccurrenceByKey(String occurrenceKey);
     Map<String,Object> selectScheduleOccurrenceById(Long occurrenceId);
-    int claimScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
+    Map<String,Object> selectScheduleOccurrenceFenceForUpdate(String occurrenceKey);
+    int claimScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("expectedVersion") int expectedVersion,
+            @Param("now") LocalDateTime now,@Param("staleBefore") LocalDateTime staleBefore);
+    int linkScheduleOccurrenceByKey(@Param("occurrenceKey") String occurrenceKey,@Param("todoId") Long todoId,
+            @Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
     int completeScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
     int retryScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("expectedVersion") int expectedVersion,
             @Param("errorCode") String errorCode,@Param("errorMessage") String errorMessage,@Param("now") LocalDateTime now);
@@ -202,4 +207,5 @@ public interface TodoMapper
     int cancelFutureScheduleWindows(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
     int cancelFutureScheduleOccurrences(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
     int completeSchedulePlan(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
+    int insertScheduledSlaRecord(Map<String,Object> record);
 }

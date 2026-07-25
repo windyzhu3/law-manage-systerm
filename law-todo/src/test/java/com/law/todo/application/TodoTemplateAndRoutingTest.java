@@ -9,15 +9,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.ArgumentMatchers.anyMap;
 import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.domain.TodoException;
+import com.law.todo.assignment.OwnerResolutionResult;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoBusinessValidator;
@@ -32,6 +35,15 @@ import com.law.todo.routing.TodoRoutingEngine.RoutingResult;
 class TodoTemplateAndRoutingTest
 {
     @Mock TodoMapper mapper;
+
+    @BeforeEach void generatedTodoIdentity()
+    {
+        lenient().when(mapper.insertInstance(any())).thenAnswer(invocation->{
+            TodoInstance value=invocation.getArgument(0);
+            if(value.getTodoId()==null)value.setTodoId(77L);
+            return 1;
+        });
+    }
 
     @Test void dodRejectsMissingRequiredField()
     {
@@ -144,6 +156,9 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
+                any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
 
         TodoInstance next=new TodoRoutingService(mapper).createScheduledNext(previous,22L,"3:T1_AM:1",dueAt);
 
@@ -151,7 +166,7 @@ class TodoTemplateAndRoutingTest
         assertEquals("3:T1_AM:1",next.getOccurrenceKey());
         assertEquals(dueAt,next.getDueAt());
         verify(mapper).insertInstance(next);verify(mapper).insertRelation(anyMap());
-        verify(mapper).insertSlaRecord(org.mockito.ArgumentMatchers.argThat(row->dueAt.equals(row.get("dueAt"))));
+        verify(mapper).insertScheduledSlaRecord(org.mockito.ArgumentMatchers.argThat(row->dueAt.equals(row.get("dueAt"))));
     }
 
     @Test void scheduledRoutingRejectsBlankOccurrenceAndUnpublishedTemplate()
@@ -164,6 +179,7 @@ class TodoTemplateAndRoutingTest
 
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"business_type","LEAD","status","DRAFT"));
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
         TodoException draft=assertThrows(TodoException.class,
                 ()->service.createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now()));
         assertEquals("TODO_SCHEDULE_TEMPLATE_NOT_PUBLISHED",draft.getBusinessCode());
@@ -184,12 +200,81 @@ class TodoTemplateAndRoutingTest
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
         when(mapper.selectUserDeptId(9L)).thenReturn(4L);
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
+                any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
 
         TodoInstance next=new TodoRoutingService(mapper).createScheduledNext(previous,22L,
                 "3:T1_AM:1",LocalDateTime.of(2026,7,26,11,0));
 
         assertEquals(9L,next.getOwnerId());
         assertEquals(4L,next.getOwnerDeptId());
+    }
+
+    @Test void overdueScheduledRoutingCreatesAnOverdueAuditableSla()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
+        previous.setCreatedAt(LocalDateTime.of(2026,7,24,8,0));
+        LocalDateTime dueAt=LocalDateTime.of(2026,7,24,11,0);
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
+                "work_end","23:59:59","exception_json","{}"));
+        when(mapper.linkScheduleOccurrenceByKey(org.mockito.ArgumentMatchers.eq("3:T1_AM:1"),
+                any(),org.mockito.ArgumentMatchers.eq(0),any())).thenReturn(1);
+
+        TodoInstance next=new TodoRoutingService(mapper).createScheduledNext(
+                previous,22L,"3:T1_AM:1",dueAt);
+
+        assertEquals(dueAt,next.getDueAt());
+        assertEquals("OVERDUE",next.getSlaStatus());
+        verify(mapper).insertScheduledSlaRecord(org.mockito.ArgumentMatchers.argThat(row->
+                dueAt.equals(row.get("dueAt"))
+                && dueAt.equals(row.get("overdue100DueAt"))
+                && row.get("overdue100At")!=null
+                && ((LocalDateTime)row.get("startAt")).isBefore(dueAt)));
+    }
+
+    @Test void cancelledClaimFencesScheduledTodoCreation()
+    {
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(Map.of(
+                "occurrenceId",9L,"version",1,"status","CANCELLED",
+                "planStatus","CANCELLED","windowStatus","CANCELLED"));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now()));
+
+        assertEquals("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void legacyScheduledOwnerMustPassProductionResolution()
+    {
+        TodoAssignmentResolver resolver=mock(TodoAssignmentResolver.class);
+        when(resolver.resolve(any(com.law.todo.definition.model.TodoDefinitionDocument.OwnerRule.class),
+                any(com.law.todo.assignment.OwnerResolutionContext.class)))
+                .thenReturn(OwnerResolutionResult.empty());
+        when(mapper.selectScheduleOccurrenceFenceForUpdate("3:T1_AM:1")).thenReturn(activeFence());
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","owner_rule_json","USER:9","status","PUBLISHED",
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper,resolver)
+                .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_OWNER_UNRESOLVED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
+    private Map<String,Object> activeFence()
+    {
+        return Map.of("occurrenceId",9L,"version",0,"status","CLAIMED",
+                "planStatus","ACTIVE","windowStatus","PROCESSING","templateVersionId",22L);
     }
 
     private TodoInstance todo(){TodoInstance t=new TodoInstance();t.setTodoId(1L);t.setBusinessType("LEAD");t.setBusinessId(7L);t.setRootTodoId(1L);return t;}

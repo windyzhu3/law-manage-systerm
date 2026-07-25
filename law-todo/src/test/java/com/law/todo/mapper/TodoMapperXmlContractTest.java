@@ -237,6 +237,33 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test void scheduleClaimsUseLeasesAndFenceTodoLinkingAgainstCancellation() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8).replaceAll("\\s+"," ");
+            String due=statement(xml,"select","selectDueScheduleWindows");
+            assertTrue(due.contains("w.status='PROCESSING' and w.claimed_at&lt;=#{staleBefore}"));
+            String claimWindow=statement(xml,"update","claimScheduleWindow");
+            assertTrue(claimWindow.contains("status='PROCESSING' and claimed_at&lt;=#{staleBefore}"));
+            String claimOccurrence=statement(xml,"update","claimScheduleOccurrence");
+            assertTrue(claimOccurrence.contains("status='CLAIMED' and claimed_at&lt;=#{staleBefore}"));
+            String fence=statement(xml,"select","selectScheduleOccurrenceFenceForUpdate");
+            assertTrue(fence.contains("p.status planStatus"));
+            assertTrue(fence.contains("w.status windowStatus"));
+            assertTrue(fence.contains("for update"));
+            String link=statement(xml,"update","linkScheduleOccurrenceByKey");
+            assertTrue(link.contains("w.status='PROCESSING'"));
+            assertTrue(link.contains("p.status='ACTIVE'"));
+            assertTrue(link.contains("o.status='CLAIMED'"));
+            String result=statement(xml,"update","recordScheduleOccurrenceResult");
+            assertTrue(result.contains("status='MATERIALIZED'"));
+            assertFalse(result.contains("'COMPLETED','MATERIALIZED'"));
+            String sla=statement(xml,"insert","insertScheduledSlaRecord");
+            assertTrue(sla.contains("remind80_at,overdue100_at"));
+        }
+    }
+
     @Test void triggerWritesAuditTheServerActorAndKeepOptimisticVersionGuards() throws Exception
     {
         try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))

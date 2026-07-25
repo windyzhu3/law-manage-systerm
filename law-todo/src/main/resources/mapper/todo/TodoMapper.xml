@@ -357,18 +357,21 @@
   </insert>
   <select id="selectDueScheduleWindows" resultType="java.util.Map">
     select w.window_id windowId,w.plan_id planId,w.window_code windowCode,w.occurrence_no occurrenceNo,
-           w.due_at dueAt,w.version,p.previous_todo_id previousTodoId,p.template_version_id templateVersionId
+           w.due_at dueAt,w.status,w.claimed_at claimedAt,w.version,
+           p.previous_todo_id previousTodoId,p.template_version_id templateVersionId
     from todo_schedule_window w
     join todo_schedule_plan p on p.plan_id=w.plan_id and p.status='ACTIVE'
-    where w.status='PENDING' and w.materialize_at&lt;=#{now}
+    where ((w.status='PENDING' and w.materialize_at&lt;=#{now})
+      or (w.status='PROCESSING' and w.claimed_at&lt;=#{staleBefore}))
     order by w.materialize_at,w.window_id
     limit #{limit}
   </select>
   <update id="claimScheduleWindow">
     update todo_schedule_window
     set status='PROCESSING',claimed_at=#{now},error_code=null,version=version+1,update_time=#{now}
-    where window_id=#{windowId} and status='PENDING' and version=#{expectedVersion}
-      and materialize_at&lt;=#{now}
+    where window_id=#{windowId} and version=#{expectedVersion}
+      and ((status='PENDING' and materialize_at&lt;=#{now})
+        or (status='PROCESSING' and claimed_at&lt;=#{staleBefore}))
   </update>
   <update id="retryScheduleWindow">
     update todo_schedule_window
@@ -391,18 +394,40 @@
   </select>
   <select id="selectScheduleOccurrenceById" resultType="java.util.Map">
     select occurrence_id occurrenceId,plan_id planId,window_id windowId,window_code windowCode,
-           occurrence_no occurrenceNo,occurrence_key occurrenceKey,due_at dueAt,todo_id todoId,status,version
+           occurrence_no occurrenceNo,occurrence_key occurrenceKey,due_at dueAt,todo_id todoId,
+           status,result_code resultCode,version
     from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
+  </select>
+  <select id="selectScheduleOccurrenceFenceForUpdate" resultType="java.util.Map">
+    select o.occurrence_id occurrenceId,o.occurrence_key occurrenceKey,o.todo_id todoId,
+           o.status,o.version,p.status planStatus,w.status windowStatus,
+           p.template_version_id templateVersionId
+    from todo_schedule_plan p
+    join todo_schedule_window w on w.plan_id=p.plan_id
+    join todo_schedule_occurrence o on o.window_id=w.window_id and o.plan_id=p.plan_id
+    where o.occurrence_key=#{occurrenceKey}
+    for update
   </select>
   <update id="claimScheduleOccurrence">
     update todo_schedule_occurrence
     set status='CLAIMED',claimed_at=#{now},error_code=null,error_message=null,version=version+1,update_time=#{now}
-    where occurrence_id=#{occurrenceId} and status='RETRY' and version=#{expectedVersion}
+    where occurrence_id=#{occurrenceId} and version=#{expectedVersion}
+      and (status='RETRY' or (status='CLAIMED' and claimed_at&lt;=#{staleBefore}))
+  </update>
+  <update id="linkScheduleOccurrenceByKey">
+    update todo_schedule_occurrence o
+    join todo_schedule_window w on w.window_id=o.window_id and w.status='PROCESSING'
+    join todo_schedule_plan p on p.plan_id=o.plan_id and p.status='ACTIVE'
+    set o.status='MATERIALIZED',o.todo_id=#{todoId},o.error_code=null,o.error_message=null,
+        o.version=o.version+1,o.update_time=#{now}
+    where o.occurrence_key=#{occurrenceKey} and o.status='CLAIMED'
+      and o.todo_id is null and o.version=#{expectedVersion}
   </update>
   <update id="completeScheduleOccurrence">
     update todo_schedule_occurrence
     set status='MATERIALIZED',todo_id=#{todoId},error_code=null,error_message=null,version=version+1,update_time=#{now}
-    where occurrence_id=#{occurrenceId} and status='CLAIMED' and todo_id is null
+    where occurrence_id=#{occurrenceId}
+      and ((status='CLAIMED' and todo_id is null) or (status='MATERIALIZED' and todo_id=#{todoId}))
   </update>
   <update id="retryScheduleOccurrence">
     update todo_schedule_occurrence
@@ -412,7 +437,7 @@
   <update id="recordScheduleOccurrenceResult">
     update todo_schedule_occurrence
     set status='COMPLETED',result_code=#{result},completed_at=#{now},version=version+1,update_time=#{now}
-    where occurrence_id=#{occurrenceId} and status in ('MATERIALIZED','COMPLETED')
+    where occurrence_id=#{occurrenceId} and status='MATERIALIZED'
   </update>
   <update id="updateSchedulePlanWindow">
     update todo_schedule_plan
@@ -435,4 +460,10 @@
         completion_reason=#{reason},completed_at=#{now},version=version+1,update_time=#{now}
     where plan_id=#{planId} and status='ACTIVE'
   </update>
+  <insert id="insertScheduledSlaRecord">
+    insert into todo_sla_record(todo_id,calendar_id,start_at,due_at,original_due_at,
+      remind80_due_at,overdue100_due_at,escalate150_due_at,remind80_at,overdue100_at,status)
+    values(#{todoId},#{calendarId},#{startAt},#{dueAt},#{dueAt},
+      #{remind80DueAt},#{overdue100DueAt},#{escalate150DueAt},#{remind80At},#{overdue100At},'RUNNING')
+  </insert>
 </mapper>

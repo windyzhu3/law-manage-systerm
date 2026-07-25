@@ -3,6 +3,7 @@ package com.law.todo.schedule;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,6 +22,7 @@ import com.law.todo.mapper.TodoMapper;
 public class TodoScheduleService
 {
     public static final String DEFAULT_TIMEZONE="Asia/Shanghai";
+    public static final Duration CLAIM_LEASE=Duration.ofMinutes(5);
 
     private final TodoMapper mapper;
     private final TodoRoutingService routing;
@@ -104,13 +106,14 @@ public class TodoScheduleService
     public int materializeDue(LocalDateTime now,int limit)
     {
         if(now==null||limit<=0) return 0;
+        LocalDateTime staleBefore=now.minus(CLAIM_LEASE);
         int created=0;
-        for(Map<String,Object> window:mapper.selectDueScheduleWindows(now,limit))
+        for(Map<String,Object> window:mapper.selectDueScheduleWindows(now,staleBefore,limit))
         {
             long windowId=requiredLong(window,"windowId","window_id");
             long planId=requiredLong(window,"planId","plan_id");
             int windowVersion=intValue(window,"version");
-            if(mapper.claimScheduleWindow(windowId,windowVersion,now)!=1) continue;
+            if(mapper.claimScheduleWindow(windowId,windowVersion,now,staleBefore)!=1) continue;
             int claimedWindowVersion=windowVersion+1;
             String code=text(window,"windowCode","window_code");
             int occurrenceNo=intValue(window,"occurrenceNo","occurrence_no");
@@ -129,7 +132,7 @@ public class TodoScheduleService
             }
             long occurrenceId=requiredLong(persisted,"occurrenceId","occurrence_id");
             int occurrenceVersion=intValue(persisted,"version");
-            if(mapper.claimScheduleOccurrence(occurrenceId,occurrenceVersion,now)!=1)
+            if(mapper.claimScheduleOccurrence(occurrenceId,occurrenceVersion,now,staleBefore)!=1)
             {
                 if("MATERIALIZED".equals(text(persisted,"status","status")))
                     mapper.completeScheduleWindow(windowId,claimedWindowVersion,now);
@@ -172,7 +175,16 @@ public class TodoScheduleService
         Map<String,Object> occurrence=mapper.selectScheduleOccurrenceById(occurrenceId);
         if(occurrence==null)
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_FOUND","Schedule occurrence does not exist");
-        mapper.recordScheduleOccurrenceResult(occurrenceId,result,completedAt);
+        int accepted=mapper.recordScheduleOccurrenceResult(occurrenceId,result,completedAt);
+        if(accepted!=1)
+        {
+            Map<String,Object> current=mapper.selectScheduleOccurrenceById(occurrenceId);
+            if(current==null||!"COMPLETED".equals(text(current,"status","status"))
+                    ||!result.equals(text(current,"resultCode","result_code")))
+                throw new TodoException("TODO_SCHEDULE_RESULT_NOT_ACCEPTED",
+                        "Schedule occurrence is not materialized or already has another result");
+            occurrence=current;
+        }
         if("CONNECTED".equals(result))
             cancelPlan(requiredLong(occurrence,"planId","plan_id"),"CONTACTED",completedAt);
     }
@@ -182,9 +194,9 @@ public class TodoScheduleService
     {
         if(planId==null||planId<=0||reason==null||reason.isBlank()||cancelledAt==null)
             throw new TodoException("TODO_SCHEDULE_CANCEL_INVALID","Schedule cancellation is incomplete");
+        mapper.completeSchedulePlan(planId,reason,cancelledAt);
         mapper.cancelFutureScheduleWindows(planId,reason,cancelledAt);
         mapper.cancelFutureScheduleOccurrences(planId,reason,cancelledAt);
-        mapper.completeSchedulePlan(planId,reason,cancelledAt);
     }
 
     private void validate(CreateSchedulePlanCommand command)
