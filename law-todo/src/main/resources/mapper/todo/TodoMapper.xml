@@ -150,6 +150,13 @@
     where delegation.from_user_id=#{userId} and delegation.status='ACTIVE'
       and delegation.effective_from&lt;=#{effectiveAt}
       and (delegation.effective_to is null or delegation.effective_to>#{effectiveAt})
+      and not exists(
+        select 1 from sys_user_availability delegate_availability
+        where delegate_availability.user_id=delegate_user.user_id
+          and delegate_availability.status='UNAVAILABLE'
+          and delegate_availability.effective_from&lt;=#{effectiveAt}
+          and (delegate_availability.effective_to is null or delegate_availability.effective_to>#{effectiveAt})
+      )
     order by delegation.effective_from desc,delegation.delegation_id desc
     limit 1
   </select>

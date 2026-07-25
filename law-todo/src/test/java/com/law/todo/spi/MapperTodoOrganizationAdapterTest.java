@@ -8,6 +8,8 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -101,5 +103,20 @@ class MapperTodoOrganizationAdapterTest
 
         assertFalse(adapter.isAvailable(11L,NOW));
         assertEquals(12L,adapter.delegateFor(11L,NOW).orElseThrow());
+    }
+
+    @Test
+    void activeDelegateQuerySkipsUnavailableNewestTargetBeforeLimit() throws Exception
+    {
+        String xml=Files.readString(Path.of("src","main","resources","mapper","todo","TodoMapper.xml"));
+        int start=xml.indexOf("<select id=\"selectActiveDelegate\"");
+        String sql=xml.substring(start,xml.indexOf("</select>",start)).replaceAll("\\s+"," ");
+
+        int exclusion=sql.indexOf("not exists(");
+        int ordering=sql.indexOf("order by delegation.effective_from");
+        assertTrue(exclusion>0&&exclusion<ordering
+                        &&sql.contains("delegate_availability.user_id=delegate_user.user_id")
+                        &&sql.contains("delegate_availability.status='UNAVAILABLE'"),
+                "active delegation must exclude an effective UNAVAILABLE target before ordering and limit");
     }
 }
