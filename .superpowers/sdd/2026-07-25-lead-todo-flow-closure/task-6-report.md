@@ -319,6 +319,99 @@ Result: `BUILD SUCCESS`; 7 tests passed (lead flow 4, production lock race 1, CI
 `git diff --check` passes. The user-owned Task 7 report, UI proxy edit,
 `.playwright-cli/`, `.runtime-logs/`, `output/`, and `test-results/` remain unstaged.
 
+## Independent review fix round 4
+
+Status: complete. N3 from `task-6-rereview3.md` is addressed without changing the N1/N2 runtime
+behavior delivered in round 3.
+
+### RED evidence
+
+The immutable-history and forward-migration contracts were introduced before restoring V0.20.49
+or creating V0.20.50:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl law-todo "-Dtest=TodoScheduleMigrationContractTest" test
+```
+
+The expected RED ran 4 tests with 1 failure and 1 error:
+
+- the published V0.20.49 SHA-256 was expected to be
+  `4eb9dc7bf1f8ac41814d19eaa25ffe20a5d8e80066be8e62ddb6a7b7b5597ffa`, but the round-three
+  file was `c6a4d1b24c4aa9a8a13110a762b40b50d449db46b2b549e12316b3c013b136a5`;
+- `V0_20_50__todo_schedule_policy_provenance.sql` did not exist.
+
+The new real-MySQL upgrade gate was also run before V0.20.50 existed. Its frozen 309e7904
+migration set successfully applied all 61 migrations through the published V0.20.49 and inserted
+an active resolved-policy schedule. The expected RED then stopped because current HEAD had no
+0.20.50 target.
+
+### N3: immutable history and forward-only provenance
+
+- `V0_20_49__todo_schedule_policy_snapshot.sql` is restored byte-for-byte to commit `309e7904`.
+  Its length is 694 bytes and its SHA-256 is permanently asserted as
+  `4eb9dc7bf1f8ac41814d19eaa25ffe20a5d8e80066be8e62ddb6a7b7b5597ffa`.
+  `git diff 309e7904 -- V0_20_49__todo_schedule_policy_snapshot.sql` is empty.
+- New immutable `V0_20_50__todo_schedule_policy_provenance.sql` owns the provenance change.
+  Before any persistent DDL, a temporary check-guard rejects partial identity pairs, non-positive
+  policy IDs, and negative policy versions.
+- Both-null historical rows are backfilled as `LEGACY_PRE_0_20_49`. Existing valid
+  ID/version pairs from the published 0.20.49 runtime are backfilled as `RESOLVED_POLICY`.
+  The discriminator is then made non-null and a permanent check constraint preserves exactly those
+  two valid combinations.
+- The clean Flyway/runtime expectation is now 0.20.50. No checksum repair or history rewrite is
+  used.
+
+### Real upgrade coverage
+
+The existing fresh-upgrade test remains and now runs from 0.20.48 to current HEAD 0.20.50. It
+creates an active materialized pre-policy schedule and proves production lock/completion succeeds
+with explicit legacy provenance and null policy ID/version.
+
+The new published-database gate builds an isolated schema from the exact eleven-file v0.15 baseline
+and a frozen copy of the 309e7904 migration set. It asserts the actual Flyway V0.20.49 history
+checksum is `1353770454`, inserts an active materialized schedule with policy ID `77` and version
+`6`, and then migrates with current HEAD to 0.20.50. Production `TodoScheduleService`
+lock/completion succeeds, and both runtime results and database rows retain
+`RESOLVED_POLICY`, ID `77`, and version `6`.
+
+A separate disposable-schema real-MySQL case baselines at published V0.20.49 with a partial policy
+identity (ID present, version null). V0.20.50 fails at the pre-DDL validation guard as required,
+and the test confirms that the persistent provenance column was not added.
+
+### Final verification
+
+Focused schedule and Task 6 service gate:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,LeadTagConfirmationServiceTest,LeadCallRecordServiceTest,LeadFirstContactServiceTest,LeadInvalidReviewServiceTest,LeadRetryServiceTest,LeadDeadPoolServiceTest,LeadAssignmentPolicyServiceTest,LeadPoolServiceTest,OutboxBusinessEventPublisherTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 83 tests passed (41 `law-todo`, 42 `ruoyi-system`), 0
+failures/errors/skips.
+
+Broad lead regression:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,Lead*Test,BusinessEventCommandTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 117 tests passed (4 `law-business`, 48 `law-todo`, 65
+`ruoyi-system`), 0 failures/errors/skips.
+
+The exact eleven-file CI baseline was reinitialized and `FlywayMigrationTest` migrated it through
+0.20.50: 1/1 passed, including the provenance column and check constraint.
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am "-Dtest=TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadFlowMysqlGateContractTest,TodoScheduleLockOrderMysqlGateContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 10 tests passed with zero skips: 7 real lead-flow tests, 1 production lock
+race, and 2 CI contracts. `node ruoyi-ui/scripts/check-external-db-reports-contract.js` also
+passed.
+
+`git diff --check` passes. The user-owned Task 7 report, UI proxy edit,
+`.playwright-cli/`, `.runtime-logs/`, `output/`, and `test-results/` remain unstaged.
+
 ## Independent review fix round 3
 
 Status: complete. N1 and N2 from `task-6-rereview2.md` are addressed.

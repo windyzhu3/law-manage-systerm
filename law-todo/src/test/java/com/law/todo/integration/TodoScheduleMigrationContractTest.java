@@ -1,9 +1,13 @@
 package com.law.todo.integration;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +17,13 @@ class TodoScheduleMigrationContractTest
             "db","migration","V0_20_47__todo_schedule_windows.sql");
     private static final Path POLICY_SNAPSHOT_MIGRATION=Path.of("..","ruoyi-admin","src","main",
             "resources","db","migration","V0_20_49__todo_schedule_policy_snapshot.sql");
+    private static final Path POLICY_PROVENANCE_MIGRATION=Path.of("..","ruoyi-admin","src","main",
+            "resources","db","migration","V0_20_50__todo_schedule_policy_provenance.sql");
+    private static final Path PUBLISHED_V049_FIXTURE=Path.of("..","ruoyi-admin","src","test",
+            "resources","db","published-309e7904",
+            "V0_20_49__todo_schedule_policy_snapshot.sql");
+    private static final String PUBLISHED_V049_SHA256=
+            "4eb9dc7bf1f8ac41814d19eaa25ffe20a5d8e80066be8e62ddb6a7b7b5597ffa";
 
     @Test
     void createsVersionedPlansWindowsAndUniqueOccurrences() throws Exception
@@ -32,17 +43,44 @@ class TodoScheduleMigrationContractTest
     }
 
     @Test
-    void addsAuditableResolvedAndLegacyPolicySnapshotsAndInternalContinuationOutcome() throws Exception
+    void publishedPolicySnapshotMigrationRemainsByteForByteImmutable() throws Exception
+    {
+        assertEquals(-1L,Files.mismatch(POLICY_SNAPSHOT_MIGRATION,PUBLISHED_V049_FIXTURE));
+        byte[] normalized=Files.readString(POLICY_SNAPSHOT_MIGRATION,StandardCharsets.UTF_8)
+                .replace("\r\n","\n").getBytes(StandardCharsets.UTF_8);
+        String sha256=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(normalized));
+
+        assertEquals(PUBLISHED_V049_SHA256,sha256);
+    }
+
+    @Test
+    void publishedPolicySnapshotMigrationAddsIdentityAndInternalContinuationOnly() throws Exception
     {
         String sql=Files.readString(POLICY_SNAPSHOT_MIGRATION).toLowerCase().replaceAll("\\s+"," ");
 
         assertTrue(sql.contains("add column assignment_policy_id bigint"));
         assertTrue(sql.contains("add column assignment_policy_version int"));
+        assertTrue(sql.contains("continue_current_window"));
+    }
+
+    @Test
+    void addsAuditableResolvedAndLegacyPolicyProvenanceAsForwardMigration() throws Exception
+    {
+        String sql=Files.readString(POLICY_PROVENANCE_MIGRATION).toLowerCase()
+                .replaceAll("\\s+"," ");
+
         assertTrue(sql.contains("assignment_policy_snapshot_source"));
         assertTrue(sql.contains("legacy_pre_0_20_49"));
         assertTrue(sql.contains("resolved_policy"));
         assertTrue(sql.contains("assignment_policy_id is null"));
         assertTrue(sql.contains("assignment_policy_id is not null"));
-        assertTrue(sql.contains("continue_current_window"));
+        assertTrue(sql.contains("assignment_policy_id>0"));
+        assertTrue(sql.contains("assignment_policy_version>=0"));
+        assertTrue(sql.contains("tmp_todo_schedule_policy_provenance_guard"));
+        assertTrue(sql.contains("check (valid_snapshot=1)"));
+        assertTrue(sql.contains("where not ("));
+        assertTrue(sql.contains("modify column assignment_policy_snapshot_source varchar(32) not null"));
+        assertTrue(sql.contains("chk_todo_schedule_plan_policy_snapshot"));
     }
 }

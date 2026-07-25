@@ -10,12 +10,14 @@ import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
@@ -30,6 +32,7 @@ import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.apache.ibatis.jdbc.ScriptRunner;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.law.business.event.BusinessEventCommand;
@@ -65,9 +68,13 @@ class LeadFlowMapperExternalMysqlIT
             "customer_contract_dict_patch_20260611.sql","case_module_20260611.sql",
             "matter_module_20260615.sql","matter_menu_patch_20260617.sql",
             "finance_module_20260624.sql","customer_tag_assign_permission_fix_20260627.sql");
+    private static final String V049_FILE=
+            "V0_20_49__todo_schedule_policy_snapshot.sql";
+    private static final String V050_FILE=
+            "V0_20_50__todo_schedule_policy_provenance.sql";
 
     @Test
-    void pre049ActiveScheduleGetsExplicitLegacyProvenanceAndRemainsOperable() throws Exception
+    void pre050ActiveScheduleGetsExplicitLegacyProvenanceAndRemainsOperable() throws Exception
     {
         String adminUrl=requiredEnvironment("TODO_MIGRATION_DB_URL");
         String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
@@ -83,7 +90,7 @@ class LeadFlowMapperExternalMysqlIT
                     "com.mysql.cj.jdbc.Driver",schemaUrl,user,password);
             LegacyScheduleIds ids=insertPre049Schedule(dataSource);
 
-            migrate(schemaUrl,user,password,"0.20.49");
+            migrate(schemaUrl,user,password,"0.20.50");
 
             SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
             try(SqlSession session=sessions.openSession(false))
@@ -107,6 +114,112 @@ class LeadFlowMapperExternalMysqlIT
                 session.commit();
             }
             assertLegacyCompletion(dataSource,ids);
+        }
+        finally
+        {
+            dropSchema(adminUrl,user,password,schema);
+        }
+    }
+
+    @Test
+    void published049DatabaseMigratesForwardAndCompletesActiveResolvedSchedule() throws Exception
+    {
+        String adminUrl=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        String schema="task6_published_049_"+UUID.randomUUID().toString().replace("-","");
+        Path publishedMigrations=publishedV049MigrationSet();
+        createSchema(adminUrl,user,password,schema);
+        try
+        {
+            String schemaUrl=withSchema(adminUrl,schema);
+            initializeV015Baseline(schemaUrl,user,password);
+            migrate(schemaUrl,user,password,"0.20.49",publishedMigrations);
+            DataSource dataSource=new UnpooledDataSource(
+                    "com.mysql.cj.jdbc.Driver",schemaUrl,user,password);
+            assertPublishedV049Checksum(dataSource);
+            LegacyScheduleIds ids=insertPublished049Schedule(dataSource);
+
+            migrate(schemaUrl,user,password,"0.20.50");
+
+            SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
+            try(SqlSession session=sessions.openSession(false))
+            {
+                TodoMapper mapper=session.getMapper(TodoMapper.class);
+                TodoScheduleService schedules=new TodoScheduleService(
+                        mapper,new TodoRoutingService(mapper));
+                TodoScheduleService.ScheduleOccurrenceContext context=
+                        schedules.lockOccurrenceContext(ids.occurrenceId());
+                assertEquals(TodoScheduleService.RESOLVED_POLICY,
+                        context.assignmentPolicySnapshotSource());
+                assertEquals(77L,context.assignmentPolicyId());
+                assertEquals(6,context.assignmentPolicyVersion());
+
+                TodoScheduleService.ScheduleCompletion completion=schedules.completeOccurrence(
+                        context,"CONNECTED",LocalDateTime.of(2026,7,25,11,0));
+                assertEquals(TodoScheduleService.RESOLVED_POLICY,
+                        completion.assignmentPolicySnapshotSource());
+                assertEquals(77L,completion.assignmentPolicyId());
+                assertEquals(6,completion.assignmentPolicyVersion());
+                session.commit();
+            }
+            assertResolvedCompletion(dataSource,ids);
+        }
+        finally
+        {
+            dropSchema(adminUrl,user,password,schema);
+            deleteRecursively(publishedMigrations);
+        }
+    }
+
+    private static void assertPublishedV049Checksum(DataSource dataSource) throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+            PreparedStatement query=connection.prepareStatement(
+                    "select checksum from flyway_schema_history where version='0.20.49' "
+                    +"and success=1"))
+        {
+            try(ResultSet row=query.executeQuery())
+            {
+                if(!row.next())throw new AssertionError(
+                        "Published 0.20.49 Flyway history was not found");
+                assertEquals(1_353_770_454,row.getInt("checksum"));
+            }
+        }
+    }
+
+    @Test
+    void provenanceMigrationRejectsPartialPublished049PolicyIdentity() throws Exception
+    {
+        String adminUrl=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        String schema="task6_invalid_policy_"+UUID.randomUUID().toString().replace("-","");
+        createSchema(adminUrl,user,password,schema);
+        try
+        {
+            String schemaUrl=withSchema(adminUrl,schema);
+            try(Connection connection=DriverManager.getConnection(schemaUrl,user,password);
+                Statement statement=connection.createStatement())
+            {
+                statement.execute("create table todo_schedule_plan("
+                        +"plan_id bigint not null primary key,"
+                        +"assignment_policy_id bigint null,"
+                        +"assignment_policy_version int null) engine=innodb");
+                statement.executeUpdate("insert into todo_schedule_plan values(1,77,null)");
+            }
+
+            assertThrows(FlywayException.class,
+                    ()->migrateFromPublishedV049Baseline(schemaUrl,user,password));
+
+            try(Connection connection=DriverManager.getConnection(schemaUrl,user,password);
+                Statement statement=connection.createStatement())
+            {
+                assertEquals(0,count(statement,
+                        "select count(*) from information_schema.columns "
+                        +"where table_schema=database() and table_name='todo_schedule_plan' "
+                        +"and column_name='assignment_policy_snapshot_source'"));
+            }
         }
         finally
         {
@@ -339,6 +452,50 @@ class LeadFlowMapperExternalMysqlIT
                 .target(target).load().migrate();
     }
 
+    private static void migrate(String url,String user,String password,String target,
+            Path migrationDirectory)
+    {
+        String location="filesystem:"+migrationDirectory.toAbsolutePath().toString()
+                .replace('\\','/');
+        Flyway.configure().dataSource(url,user,password).baselineOnMigrate(true)
+                .baselineVersion("0.15.0").locations(location)
+                .target(target).load().migrate();
+    }
+
+    private static void migrateFromPublishedV049Baseline(String url,String user,String password)
+    {
+        Flyway.configure().dataSource(url,user,password).baselineOnMigrate(true)
+                .baselineVersion("0.20.49").locations("classpath:db/migration")
+                .target("0.20.50").load().migrate();
+    }
+
+    private static Path publishedV049MigrationSet() throws Exception
+    {
+        Path directory=Files.createTempDirectory("task6-published-309e7904-");
+        Path current=Path.of("src","main","resources","db","migration");
+        try(var migrations=Files.list(current))
+        {
+            for(Path source:migrations.filter(path->path.getFileName().toString().endsWith(".sql"))
+                    .filter(path->!V049_FILE.equals(path.getFileName().toString()))
+                    .filter(path->!V050_FILE.equals(path.getFileName().toString())).toList())
+                Files.copy(source,directory.resolve(source.getFileName()),
+                        StandardCopyOption.REPLACE_EXISTING);
+        }
+        Path published=Path.of("src","test","resources","db","published-309e7904",V049_FILE);
+        Files.copy(published,directory.resolve(V049_FILE),StandardCopyOption.REPLACE_EXISTING);
+        return directory;
+    }
+
+    private static void deleteRecursively(Path root) throws Exception
+    {
+        if(root==null||!Files.exists(root))return;
+        try(var paths=Files.walk(root))
+        {
+            for(Path path:paths.sorted(Comparator.reverseOrder()).toList())
+                Files.deleteIfExists(path);
+        }
+    }
+
     private static LegacyScheduleIds insertPre049Schedule(DataSource dataSource) throws Exception
     {
         try(Connection connection=dataSource.getConnection();Statement statement=connection.createStatement())
@@ -366,6 +523,36 @@ class LeadFlowMapperExternalMysqlIT
         }
     }
 
+    private static LegacyScheduleIds insertPublished049Schedule(DataSource dataSource)
+            throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+            Statement statement=connection.createStatement())
+        {
+            statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,"
+                    +"template_version_id,business_type,business_id,timezone,rule_version_id,"
+                    +"assignment_policy_id,assignment_policy_version,first_contact_at,status,"
+                    +"create_time,update_time,version) values("
+                    +"991000001,1,'LEAD',991000002,'Asia/Shanghai',11,77,6,"
+                    +"'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long planId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_window(plan_id,window_code,"
+                    +"window_order,day_offset,start_time,end_time,materialize_at,due_at,"
+                    +"max_attempts,occurrence_no,status,create_time,update_time,version) values("
+                    +planId+",'T1_AM',1,1,'09:00:00','11:00:00','2026-07-26 09:00:00',"
+                    +"'2026-07-26 11:00:00',3,1,'MATERIALIZED',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long windowId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_occurrence(plan_id,window_id,"
+                    +"window_code,occurrence_no,occurrence_key,due_at,todo_id,status,create_time,"
+                    +"update_time,version) values("+planId+","+windowId+",'T1_AM',1,'"
+                    +planId+":T1_AM:1','2026-07-26 11:00:00',991000003,'MATERIALIZED',"
+                    +"sysdate(),sysdate(),0)",Statement.RETURN_GENERATED_KEYS);
+            return new LegacyScheduleIds(planId,windowId,generated(statement));
+        }
+    }
+
     private static void assertLegacyCompletion(DataSource dataSource,LegacyScheduleIds ids)
             throws Exception
     {
@@ -384,6 +571,32 @@ class LeadFlowMapperExternalMysqlIT
                 assertNull(row.getObject("assignment_policy_id"));
                 assertNull(row.getObject("assignment_policy_version"));
                 assertEquals(TodoScheduleService.LEGACY_POLICY,
+                        row.getString("assignment_policy_snapshot_source"));
+                assertEquals("COMPLETED",row.getString("occurrence_status"));
+                assertEquals("CONNECTED",row.getString("result_code"));
+            }
+        }
+    }
+
+    private static void assertResolvedCompletion(DataSource dataSource,LegacyScheduleIds ids)
+            throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+            PreparedStatement query=connection.prepareStatement(
+                    "select p.status,p.assignment_policy_id,p.assignment_policy_version,"
+                    +"p.assignment_policy_snapshot_source,o.status occurrence_status,o.result_code "
+                    +"from todo_schedule_plan p join todo_schedule_occurrence o "
+                    +"on o.plan_id=p.plan_id where p.plan_id=? and o.occurrence_id=?"))
+        {
+            query.setLong(1,ids.planId());query.setLong(2,ids.occurrenceId());
+            try(ResultSet row=query.executeQuery())
+            {
+                if(!row.next())throw new AssertionError(
+                        "Published 0.20.49 schedule was not found after upgrade");
+                assertEquals("CONTACTED",row.getString("status"));
+                assertEquals(77L,row.getLong("assignment_policy_id"));
+                assertEquals(6,row.getInt("assignment_policy_version"));
+                assertEquals(TodoScheduleService.RESOLVED_POLICY,
                         row.getString("assignment_policy_snapshot_source"));
                 assertEquals("COMPLETED",row.getString("occurrence_status"));
                 assertEquals("CONNECTED",row.getString("result_code"));
