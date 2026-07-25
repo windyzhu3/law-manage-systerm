@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.anyMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -130,6 +131,65 @@ class TodoTemplateAndRoutingTest
 
         assertEquals("TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED",error.getBusinessCode());
         verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void scheduledRoutingUsesOccurrenceBoundaryAndPersistedWindowDueAt()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);previous.setBusinessNo("L-7");
+        LocalDateTime dueAt=LocalDateTime.of(2026,7,26,11,0);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","owner_rule_json","OWNER","sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "status","PUBLISHED"));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
+                "work_end","23:59:59","exception_json","{}"));
+
+        TodoInstance next=new TodoRoutingService(mapper).createScheduledNext(previous,22L,"3:T1_AM:1",dueAt);
+
+        assertEquals("SCHEDULE:3:T1_AM:1",next.getNextIdempotencyKey());
+        assertEquals("3:T1_AM:1",next.getOccurrenceKey());
+        assertEquals(dueAt,next.getDueAt());
+        verify(mapper).insertInstance(next);verify(mapper).insertRelation(anyMap());
+        verify(mapper).insertSlaRecord(org.mockito.ArgumentMatchers.argThat(row->dueAt.equals(row.get("dueAt"))));
+    }
+
+    @Test void scheduledRoutingRejectsBlankOccurrenceAndUnpublishedTemplate()
+    {
+        TodoRoutingService service=new TodoRoutingService(mapper);
+        TodoException blank=assertThrows(TodoException.class,
+                ()->service.createScheduledNext(todo(),22L," ",LocalDateTime.now()));
+        assertEquals("TODO_SCHEDULE_OCCURRENCE_KEY_REQUIRED",blank.getBusinessCode());
+        verify(mapper,never()).selectTemplateVersionById(any());
+
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"business_type","LEAD","status","DRAFT"));
+        TodoException draft=assertThrows(TodoException.class,
+                ()->service.createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now()));
+        assertEquals("TODO_SCHEDULE_TEMPLATE_NOT_PUBLISHED",draft.getBusinessCode());
+    }
+
+    @Test void scheduledRoutingResolvesThePublishedCanonicalOwnerDefinition()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","status","PUBLISHED","sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "compiled_json","""
+                  {"schemaVersion":1,"templateCode":"TD-003",
+                   "owner":{"config":{"type":"USER","operand":9}},
+                   "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                  """));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
+                "work_end","23:59:59","exception_json","{}"));
+        when(mapper.selectUserDeptId(9L)).thenReturn(4L);
+
+        TodoInstance next=new TodoRoutingService(mapper).createScheduledNext(previous,22L,
+                "3:T1_AM:1",LocalDateTime.of(2026,7,26,11,0));
+
+        assertEquals(9L,next.getOwnerId());
+        assertEquals(4L,next.getOwnerDeptId());
     }
 
     private TodoInstance todo(){TodoInstance t=new TodoInstance();t.setTodoId(1L);t.setBusinessType("LEAD");t.setBusinessId(7L);t.setRootTodoId(1L);return t;}

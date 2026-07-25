@@ -184,4 +184,22 @@ public interface TodoMapper
     int completeAutoActionExecution(Map<String,Object> outcome);
     int insertAutoActionAudit(Map<String,Object> audit);
     int returnToPoolConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("operator") String operator);
+    int insertSchedulePlan(Map<String,Object> plan);
+    int insertScheduleWindow(Map<String,Object> window);
+    List<Map<String,Object>> selectDueScheduleWindows(@Param("now") LocalDateTime now,@Param("limit") int limit);
+    int claimScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
+    int retryScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("errorCode") String errorCode,@Param("now") LocalDateTime now);
+    int completeScheduleWindow(@Param("windowId") Long windowId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
+    int insertScheduleOccurrenceIfAbsent(Map<String,Object> occurrence);
+    Map<String,Object> selectScheduleOccurrenceByKey(String occurrenceKey);
+    Map<String,Object> selectScheduleOccurrenceById(Long occurrenceId);
+    int claimScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("expectedVersion") int expectedVersion,@Param("now") LocalDateTime now);
+    int completeScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("todoId") Long todoId,@Param("now") LocalDateTime now);
+    int retryScheduleOccurrence(@Param("occurrenceId") Long occurrenceId,@Param("expectedVersion") int expectedVersion,
+            @Param("errorCode") String errorCode,@Param("errorMessage") String errorMessage,@Param("now") LocalDateTime now);
+    int recordScheduleOccurrenceResult(@Param("occurrenceId") Long occurrenceId,@Param("result") String result,@Param("now") LocalDateTime now);
+    int updateSchedulePlanWindow(@Param("planId") Long planId,@Param("windowCode") String windowCode,@Param("now") LocalDateTime now);
+    int cancelFutureScheduleWindows(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
+    int cancelFutureScheduleOccurrences(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
+    int completeSchedulePlan(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
 }

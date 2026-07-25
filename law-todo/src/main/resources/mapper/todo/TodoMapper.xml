@@ -347,4 +347,92 @@
   <update id="completeAutoActionExecution">update todo_auto_action_execution set status=#{status},next_retry_at=#{nextRetryAt},last_error_code=#{errorCode},last_error_message=#{errorMessage},completed_at=case when #{status} in ('SUCCESS','DEAD') then #{now} else null end,update_time=#{now} where execution_key=#{executionKey} and status='CLAIMED' and attempt_count=#{attemptNo}</update>
   <insert id="insertAutoActionAudit">insert into todo_auto_action_audit(execution_key,attempt_no,todo_id,rule_key,action_type,status,service_actor_id,service_actor_name,error_code,error_message,executed_at) values(#{executionKey},#{attemptNo},#{todoId},#{ruleKey},#{actionType},#{status},#{serviceActorId},#{serviceActorName},#{errorCode},#{errorMessage},#{now})</insert>
   <update id="returnToPoolConditionally">update todo_instance set status='CREATED',owner_id=null,owner_dept_id=null,claimed_at=null,started_at=null,submitted_at=null,version=version+1,update_by=#{operator},update_time=sysdate() where todo_id=#{todoId} and status=#{fromStatus} and status not in ('COMPLETED','CANCELLED')</update>
+  <insert id="insertSchedulePlan" useGeneratedKeys="true" keyProperty="planId">
+    insert into todo_schedule_plan(previous_todo_id,template_version_id,business_type,business_id,timezone,rule_version_id,first_contact_at,status,create_time,update_time,version)
+    values(#{previousTodoId},#{templateVersionId},#{businessType},#{businessId},#{timezone},#{ruleVersionId},#{firstContactAt},#{status},sysdate(),sysdate(),0)
+  </insert>
+  <insert id="insertScheduleWindow" useGeneratedKeys="true" keyProperty="windowId">
+    insert into todo_schedule_window(plan_id,window_code,window_order,day_offset,start_time,end_time,materialize_at,due_at,max_attempts,occurrence_no,status,create_time,update_time,version)
+    values(#{planId},#{windowCode},#{windowOrder},#{dayOffset},#{startTime},#{endTime},#{materializeAt},#{dueAt},#{maxAttempts},#{occurrenceNo},#{status},sysdate(),sysdate(),0)
+  </insert>
+  <select id="selectDueScheduleWindows" resultType="java.util.Map">
+    select w.window_id windowId,w.plan_id planId,w.window_code windowCode,w.occurrence_no occurrenceNo,
+           w.due_at dueAt,w.version,p.previous_todo_id previousTodoId,p.template_version_id templateVersionId
+    from todo_schedule_window w
+    join todo_schedule_plan p on p.plan_id=w.plan_id and p.status='ACTIVE'
+    where w.status='PENDING' and w.materialize_at&lt;=#{now}
+    order by w.materialize_at,w.window_id
+    limit #{limit}
+  </select>
+  <update id="claimScheduleWindow">
+    update todo_schedule_window
+    set status='PROCESSING',claimed_at=#{now},error_code=null,version=version+1,update_time=#{now}
+    where window_id=#{windowId} and status='PENDING' and version=#{expectedVersion}
+      and materialize_at&lt;=#{now}
+  </update>
+  <update id="retryScheduleWindow">
+    update todo_schedule_window
+    set status='PENDING',claimed_at=null,error_code=#{errorCode},version=version+1,update_time=#{now}
+    where window_id=#{windowId} and status='PROCESSING' and version=#{expectedVersion}
+  </update>
+  <update id="completeScheduleWindow">
+    update todo_schedule_window
+    set status='MATERIALIZED',completed_at=#{now},error_code=null,version=version+1,update_time=#{now}
+    where window_id=#{windowId} and status='PROCESSING' and version=#{expectedVersion}
+  </update>
+  <insert id="insertScheduleOccurrenceIfAbsent" useGeneratedKeys="true" keyProperty="occurrenceId">
+    insert ignore into todo_schedule_occurrence(plan_id,window_id,window_code,occurrence_no,occurrence_key,due_at,status,create_time,update_time,version)
+    values(#{planId},#{windowId},#{windowCode},#{occurrenceNo},#{occurrenceKey},#{dueAt},#{status},sysdate(),sysdate(),0)
+  </insert>
+  <select id="selectScheduleOccurrenceByKey" resultType="java.util.Map">
+    select occurrence_id occurrenceId,plan_id planId,window_id windowId,window_code windowCode,
+           occurrence_no occurrenceNo,occurrence_key occurrenceKey,due_at dueAt,todo_id todoId,status,version
+    from todo_schedule_occurrence where occurrence_key=#{occurrenceKey}
+  </select>
+  <select id="selectScheduleOccurrenceById" resultType="java.util.Map">
+    select occurrence_id occurrenceId,plan_id planId,window_id windowId,window_code windowCode,
+           occurrence_no occurrenceNo,occurrence_key occurrenceKey,due_at dueAt,todo_id todoId,status,version
+    from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
+  </select>
+  <update id="claimScheduleOccurrence">
+    update todo_schedule_occurrence
+    set status='CLAIMED',claimed_at=#{now},error_code=null,error_message=null,version=version+1,update_time=#{now}
+    where occurrence_id=#{occurrenceId} and status='RETRY' and version=#{expectedVersion}
+  </update>
+  <update id="completeScheduleOccurrence">
+    update todo_schedule_occurrence
+    set status='MATERIALIZED',todo_id=#{todoId},error_code=null,error_message=null,version=version+1,update_time=#{now}
+    where occurrence_id=#{occurrenceId} and status='CLAIMED' and todo_id is null
+  </update>
+  <update id="retryScheduleOccurrence">
+    update todo_schedule_occurrence
+    set status='RETRY',claimed_at=null,error_code=#{errorCode},error_message=#{errorMessage},version=version+1,update_time=#{now}
+    where occurrence_id=#{occurrenceId} and status='CLAIMED' and version=#{expectedVersion} and todo_id is null
+  </update>
+  <update id="recordScheduleOccurrenceResult">
+    update todo_schedule_occurrence
+    set status='COMPLETED',result_code=#{result},completed_at=#{now},version=version+1,update_time=#{now}
+    where occurrence_id=#{occurrenceId} and status in ('MATERIALIZED','COMPLETED')
+  </update>
+  <update id="updateSchedulePlanWindow">
+    update todo_schedule_plan
+    set current_window_code=#{windowCode},version=version+1,update_time=#{now}
+    where plan_id=#{planId} and status='ACTIVE'
+  </update>
+  <update id="cancelFutureScheduleWindows">
+    update todo_schedule_window
+    set status='CANCELLED',cancel_reason=#{reason},completed_at=#{now},claimed_at=null,version=version+1,update_time=#{now}
+    where plan_id=#{planId} and status in ('PENDING','PROCESSING')
+  </update>
+  <update id="cancelFutureScheduleOccurrences">
+    update todo_schedule_occurrence
+    set status='CANCELLED',result_code=#{reason},completed_at=#{now},claimed_at=null,version=version+1,update_time=#{now}
+    where plan_id=#{planId} and status in ('RETRY','CLAIMED')
+  </update>
+  <update id="completeSchedulePlan">
+    update todo_schedule_plan
+    set status=case when #{reason}='CONTACTED' then 'CONTACTED' when #{reason}='EXHAUSTED' then 'EXHAUSTED' else 'CANCELLED' end,
+        completion_reason=#{reason},completed_at=#{now},version=version+1,update_time=#{now}
+    where plan_id=#{planId} and status='ACTIVE'
+  </update>
 </mapper>

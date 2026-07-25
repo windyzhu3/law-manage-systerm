@@ -1,0 +1,160 @@
+package com.law.todo.schedule;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import com.law.todo.application.TodoRoutingService;
+import com.law.todo.domain.TodoException;
+import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.mapper.TodoMapper;
+import com.law.todo.schedule.TodoScheduleService.CreateSchedulePlanCommand;
+
+class TodoScheduleServiceTest
+{
+    private static final LocalDateTime NOW=LocalDateTime.of(2026,7,25,8,30);
+
+    @Test
+    void createsImmutableDefaultWindowsInAsiaShanghai()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        doAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("planId",3L);return 1;})
+                .when(mapper).insertSchedulePlan(anyMap());
+        List<Map<String,Object>> inserted=new ArrayList<>();
+        doAnswer(invocation->{inserted.add(new HashMap<>(invocation.getArgument(0)));return 1;})
+                .when(mapper).insertScheduleWindow(anyMap());
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        long planId=service.createPlan(new CreateSchedulePlanCommand(
+                7L,22L,"LEAD",91L,NOW,null,4L));
+
+        assertEquals(3L,planId);
+        assertEquals(List.of("T0","T1_AM","T1_NOON","T1_PM","T2_AM","T2_NOON","T2_PM"),
+                inserted.stream().map(row->row.get("windowCode")).toList());
+        assertEquals(NOW,inserted.get(0).get("startAt"));
+        assertEquals(NOW.plusHours(2),inserted.get(0).get("dueAt"));
+        assertEquals(3,inserted.get(0).get("maxAttempts"));
+        assertEquals(LocalDateTime.of(2026,7,26,9,0),inserted.get(1).get("startAt"));
+        assertEquals(LocalDateTime.of(2026,7,26,11,0),inserted.get(1).get("dueAt"));
+        assertEquals(LocalDateTime.of(2026,7,27,18,0),inserted.get(6).get("dueAt"));
+        verify(mapper).insertSchedulePlan(org.mockito.ArgumentMatchers.argThat(
+                row->"Asia/Shanghai".equals(row.get("timezone")) && "ACTIVE".equals(row.get("status"))));
+    }
+
+    @Test
+    void rejectsPlanWithoutAStableSourceIdentity()
+    {
+        TodoScheduleService service=new TodoScheduleService(mock(TodoMapper.class),mock(TodoRoutingService.class));
+        TodoException error=assertThrows(TodoException.class,()->service.createPlan(
+                new CreateSchedulePlanCommand(null,22L,"LEAD",91L,NOW,null,4L)));
+        assertEquals("TODO_SCHEDULE_PLAN_INVALID",error.getBusinessCode());
+    }
+
+    @Test
+    void materializesEachDueWindowOnce()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        TodoRoutingService routing=mock(TodoRoutingService.class);
+        Map<String,Object> due=dueWindow();
+        when(mapper.selectDueScheduleWindows(NOW,100)).thenReturn(List.of(due),List.of());
+        when(mapper.claimScheduleWindow(12L,0,NOW)).thenReturn(1);
+        when(mapper.insertScheduleOccurrenceIfAbsent(anyMap())).thenAnswer(invocation->{
+            invocation.<Map<String,Object>>getArgument(0).put("occurrenceId",9L);return 1;
+        });
+        when(mapper.claimScheduleOccurrence(9L,0,NOW)).thenReturn(1);
+        TodoInstance previous=new TodoInstance();previous.setTodoId(7L);
+        when(mapper.selectById(7L)).thenReturn(previous);
+        TodoInstance created=new TodoInstance();created.setTodoId(55L);
+        when(routing.createScheduledNext(previous,22L,"3:T1_AM:1",
+                LocalDateTime.of(2026,7,26,11,0))).thenReturn(created);
+        when(mapper.completeScheduleOccurrence(9L,55L,NOW)).thenReturn(1);
+        TodoScheduleService service=new TodoScheduleService(mapper,routing);
+
+        assertEquals(1,service.materializeDue(NOW,100));
+        assertEquals(0,service.materializeDue(NOW,100));
+
+        verify(mapper,times(1)).insertScheduleOccurrenceIfAbsent(
+                org.mockito.ArgumentMatchers.argThat(row->
+                        "T1_AM".equals(row.get("windowCode"))
+                        && "3:T1_AM:1".equals(row.get("occurrenceKey"))));
+        verify(mapper).completeScheduleWindow(12L,1,NOW);
+    }
+
+    @Test
+    void failedTodoCreationRestoresRetryableStateWithStableErrorCode()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        TodoRoutingService routing=mock(TodoRoutingService.class);
+        when(mapper.selectDueScheduleWindows(NOW,10)).thenReturn(List.of(dueWindow()));
+        when(mapper.claimScheduleWindow(12L,0,NOW)).thenReturn(1);
+        when(mapper.insertScheduleOccurrenceIfAbsent(anyMap())).thenAnswer(invocation->{
+            invocation.<Map<String,Object>>getArgument(0).put("occurrenceId",9L);return 1;
+        });
+        when(mapper.claimScheduleOccurrence(9L,0,NOW)).thenReturn(1);
+        TodoInstance previous=new TodoInstance();previous.setTodoId(7L);
+        when(mapper.selectById(7L)).thenReturn(previous);
+        when(routing.createScheduledNext(any(),eq(22L),eq("3:T1_AM:1"),any()))
+                .thenThrow(new TodoException("TODO_OWNER_UNRESOLVED","owner missing"));
+        TodoScheduleService service=new TodoScheduleService(mapper,routing);
+
+        assertEquals(0,service.materializeDue(NOW,10));
+
+        verify(mapper).retryScheduleOccurrence(9L,1,"TODO_OWNER_UNRESOLVED","owner missing",NOW);
+        verify(mapper).retryScheduleWindow(12L,1,"TODO_OWNER_UNRESOLVED",NOW);
+        verify(mapper,never()).completeScheduleWindow(any(),any(Integer.class),any());
+    }
+
+    @Test
+    void connectedResultCancelsFutureWindows()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(Map.of("planId",3L));
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        service.completeOccurrence(9L,"CONNECTED",NOW);
+
+        verify(mapper).recordScheduleOccurrenceResult(9L,"CONNECTED",NOW);
+        verify(mapper).cancelFutureScheduleWindows(3L,"CONTACTED",NOW);
+        verify(mapper).cancelFutureScheduleOccurrences(3L,"CONTACTED",NOW);
+        verify(mapper).completeSchedulePlan(3L,"CONTACTED",NOW);
+    }
+
+    @Test
+    void cancellingPlanCancelsWindowsAndUnmaterializedOccurrences()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        service.cancelPlan(3L,"CONVERTED",NOW);
+
+        verify(mapper).cancelFutureScheduleWindows(3L,"CONVERTED",NOW);
+        verify(mapper).cancelFutureScheduleOccurrences(3L,"CONVERTED",NOW);
+        verify(mapper).completeSchedulePlan(3L,"CONVERTED",NOW);
+    }
+
+    private Map<String,Object> dueWindow()
+    {
+        Map<String,Object> row=new HashMap<>();
+        row.put("windowId",12L);row.put("planId",3L);row.put("windowCode","T1_AM");
+        row.put("occurrenceNo",1);row.put("previousTodoId",7L);row.put("templateVersionId",22L);
+        row.put("dueAt",LocalDateTime.of(2026,7,26,11,0));row.put("version",0);
+        return row;
+    }
+}

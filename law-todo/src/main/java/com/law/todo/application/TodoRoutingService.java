@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.law.todo.application.TodoAssignmentResolver.Assignment;
+import com.law.todo.assignment.OwnerResolutionContext;
+import com.law.todo.assignment.OwnerResolutionResult;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.domain.service.WorkingTimeCalculator;
@@ -32,6 +34,7 @@ import com.law.todo.routing.RouteToken;
 import com.law.todo.routing.RouteTokenStatus;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.definition.model.TodoDefinitionDocument.OwnerRule;
 
 @Service
 public class TodoRoutingService
@@ -153,6 +156,51 @@ public class TodoRoutingService
         insertRelation(next);insertCandidate(next, assignment);insertSla(next, version);return next;
     }
 
+    /**
+     * Materializes one persisted schedule occurrence. Its identity intentionally does not collapse
+     * with graph or legacy next-task identity.
+     */
+    @Transactional
+    public TodoInstance createScheduledNext(TodoInstance previous,Long templateVersionId,
+            String occurrenceKey,LocalDateTime dueAt)
+    {
+        if(occurrenceKey==null||occurrenceKey.isBlank())
+            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_KEY_REQUIRED","Schedule occurrence key is required");
+        if(dueAt==null)
+            throw new TodoException("TODO_SCHEDULE_DUE_AT_REQUIRED","Schedule due time is required");
+        String key="SCHEDULE:"+occurrenceKey.trim();
+        TodoInstance existing=mapper.selectByNextKey(key);
+        if(existing!=null)return existing;
+        Map<String,Object> version=mapper.selectTemplateVersionById(templateVersionId);
+        if(version==null||version.isEmpty())
+            throw new TodoException("TODO_NEXT_TEMPLATE_NOT_FOUND","Scheduled Todo template version does not exist");
+        if(!"PUBLISHED".equals(text(version.get("status"))))
+            throw new TodoException("TODO_SCHEDULE_TEMPLATE_NOT_PUBLISHED","Schedule must reference a published template version");
+        String templateBusinessType=text(value(version,"business_type","businessType"));
+        if(templateBusinessType!=null&&!templateBusinessType.equals(previous.getBusinessType()))
+            throw new TodoException("TODO_SCHEDULE_TEMPLATE_BUSINESS_MISMATCH","Scheduled template business type does not match the previous Todo");
+        Assignment assignment=scheduledAssignment(version,previous);
+        if(assignment.ownerId()==null&&assignment.candidateType()==null)
+            throw new TodoException("TODO_OWNER_UNRESOLVED","Scheduled Todo owner could not be resolved");
+        TodoInstance next=build(previous,version,assignment,templateVersionId,null,
+                previous.getBusinessType(),previous.getBusinessId(),key);
+        next.setOccurrenceKey(occurrenceKey.trim());
+        next.setDefinitionHash(text(value(version,"definition_hash","definitionHash")));
+        next.setRouteDefinitionVersionId(templateVersionId);
+        next.setUiSchemaSnapshot(text(value(version,"ui_schema_json","uiSchemaJson")));
+        next.setSlaSnapshot(text(value(version,"sla_rule_json","slaRuleJson")));
+        snapshotScheduledGraph(next,version);
+        next.setDueAt(dueAt);
+        try { mapper.insertInstance(next); }
+        catch(DuplicateKeyException duplicate)
+        {
+            TodoInstance concurrent=mapper.selectByNextKey(key);
+            if(concurrent!=null)return concurrent;
+            throw duplicate;
+        }
+        insertRelation(next);insertCandidate(next,assignment);insertSla(next,version);return next;
+    }
+
     private TodoInstance build(TodoInstance previous, Map<String, Object> version, Assignment assignment, Long versionId,
         String title, String businessType, Long businessId, String key)
     {
@@ -182,6 +230,83 @@ public class TodoRoutingService
         return resolved;
     }
 
+    private Assignment scheduledAssignment(Map<String,Object> version,TodoInstance previous)
+    {
+        String document=text(value(version,"compiled_json","compiledJson"));
+        if(document==null||document.isBlank())document=text(value(version,"definition_json","definitionJson"));
+        if(document==null||document.isBlank())return assignment(version,previous);
+        try
+        {
+            TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
+            if(definition.owner()==null)
+                throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical definition is missing its owner rule");
+            Map<String,Object> payload=new HashMap<>();payload.put("ownerId",previous.getOwnerId());
+            OwnerResolutionResult resolved=resolver.resolve(resolveStableOwnerReferences(definition.owner()),
+                    new OwnerResolutionContext(payload,previous.getBusinessType(),previous.getBusinessId(),LocalDateTime.now()));
+            if(resolved.ownerId()!=null)return new Assignment(resolved.ownerId(),null,null);
+            if(!resolved.candidateUserIds().isEmpty())
+                return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
+            throw new TodoException("TODO_OWNER_UNRESOLVED","No eligible owner or candidate is available");
+        }
+        catch(TodoException explicit){throw explicit;}
+        catch(RuntimeException invalid)
+        {
+            throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical owner definition cannot be resolved");
+        }
+    }
+
+    private OwnerRule resolveStableOwnerReferences(OwnerRule owner)
+    {
+        Object normalized=normalizeStableOwnerReferences(owner.config());
+        if(!(normalized instanceof Map<?,?> raw))
+            throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED","Canonical owner rule must be an object");
+        Map<String,Object> config=new java.util.LinkedHashMap<>();
+        raw.forEach((key,entry)->config.put(String.valueOf(key),entry));
+        return new OwnerRule(config);
+    }
+
+    private Object normalizeStableOwnerReferences(Object input)
+    {
+        if(input instanceof java.util.Collection<?> entries)
+        {
+            java.util.List<Object> normalized=new java.util.ArrayList<>();
+            for(Object entry:entries)normalized.add(normalizeStableOwnerReferences(entry));
+            return normalized;
+        }
+        if(!(input instanceof Map<?,?> raw))return input;
+        Map<String,Object> config=new java.util.LinkedHashMap<>();
+        raw.forEach((key,entry)->config.put(String.valueOf(key),entry));
+        Object roleKey=config.get("roleKey");
+        if(roleKey!=null&&!String.valueOf(roleKey).isBlank())
+        {
+            Long id=mapper.selectRoleIdByKey(String.valueOf(roleKey));
+            if(id==null)throw new TodoException("TODO_OWNER_ROLE_KEY_NOT_FOUND","Owner roleKey is unknown or disabled");
+            config.put("operand",id);
+        }
+        Object departmentCode=config.get("departmentCode");
+        if(departmentCode!=null&&!String.valueOf(departmentCode).isBlank())
+        {
+            Long id=mapper.selectDepartmentIdByCode(String.valueOf(departmentCode));
+            if(id==null)throw new TodoException("TODO_OWNER_DEPARTMENT_CODE_NOT_FOUND","Owner departmentCode is unknown or disabled");
+            config.put("operand",id);
+        }
+        for(Map.Entry<String,Object> entry:new java.util.ArrayList<>(config.entrySet()))
+            if(entry.getValue() instanceof Map<?,?>||entry.getValue() instanceof java.util.Collection<?>)
+                config.put(entry.getKey(),normalizeStableOwnerReferences(entry.getValue()));
+        return config;
+    }
+
+    private void snapshotScheduledGraph(TodoInstance todo,Map<String,Object> version)
+    {
+        String document=text(value(version,"compiled_json","compiledJson"));
+        if(document==null||document.isBlank())document=text(value(version,"definition_json","definitionJson"));
+        if(document==null||document.isBlank())return;
+        TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
+        if(definition.event()!=null)todo.setPayloadSchemaVersion(definition.event().payloadVersion());
+        if(definition.routing()!=null&&definition.routing().config().containsKey("nodes"))
+            todo.setRouteNodeKey(text(definition.routing().config().get("start")));
+    }
+
     private void insertRelation(TodoInstance todo)
     {
         Map<String, Object> value = new HashMap<>();value.put("todoId", todo.getTodoId());value.put("businessType", todo.getBusinessType());value.put("businessId", todo.getBusinessId());value.put("businessNo", todo.getBusinessNo());value.put("relationType", "PRIMARY");mapper.insertRelation(value);
@@ -205,7 +330,12 @@ public class TodoRoutingService
     private void insertSla(TodoInstance todo, Map<String, Object> version)
     {
         if (todo.getDueAt() == null) return;
-        JSONObject rule = JSON.parseObject(text(value(version, "sla_rule_json", "slaRuleJson")));Map<String, Object> calendar = mapper.selectCalendarByCode(rule.getString("calendarCode"));
+        String json=text(value(version, "sla_rule_json", "slaRuleJson"));
+        if(json==null||json.isBlank())
+            throw new TodoException("TODO_SLA_RULE_REQUIRED","A due Todo must have an SLA rule");
+        JSONObject rule = JSON.parseObject(json);Map<String, Object> calendar = mapper.selectCalendarByCode(rule.getString("calendarCode"));
+        if(calendar==null||calendar.isEmpty())
+            throw new TodoException("TODO_SLA_CALENDAR_NOT_FOUND","The Todo SLA work calendar does not exist");
         TodoSlaService.ThresholdPlan plan=new TodoSlaService(mapper,null).planThresholds(todo.getCreatedAt(),todo.getDueAt(),calendar(calendar));
         Map<String, Object> record = new HashMap<>();record.put("todoId", todo.getTodoId());record.put("calendarId", longValue(value(calendar, "calendar_id", "calendarId")));record.put("startAt", todo.getCreatedAt());record.put("dueAt", todo.getDueAt());record.put("remind80DueAt",plan.remind80DueAt());record.put("overdue100DueAt",plan.overdue100DueAt());record.put("escalate150DueAt",plan.escalate150DueAt());mapper.insertSlaRecord(record);
     }
