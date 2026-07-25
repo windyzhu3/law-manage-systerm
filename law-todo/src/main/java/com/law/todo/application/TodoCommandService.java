@@ -22,6 +22,7 @@ import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
 
 @Service
 public class TodoCommandService
@@ -120,7 +121,11 @@ public class TodoCommandService
     private TodoInstance complete(TodoInstance todo,ActionCommand command,Actor actor,String actionType)
     {
         validateAction(todo,command,"COMPLETE",actor);TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
-        for(TodoCompletionHandler handler:completionHandlers)if(handler.supports(completed))handler.complete(completed,command.payload(),actor.userId(),actor.userName());
+        boolean controlledAutomatic="COMPLETE_DEFAULT".equals(actionType)
+                &&actor==TodoAutoActionService.SERVICE_ACTOR;
+        CompletionContext context=new CompletionContext(completed,command.payload(),
+                actor.userId(),actor.userName(),controlledAutomatic);
+        for(TodoCompletionHandler handler:completionHandlers)if(handler.supports(completed))handler.complete(context);
         if(routing!=null)routing.advance(completed,command.payload());return completed;
     }
 
@@ -134,7 +139,7 @@ public class TodoCommandService
     private void writeAction(TodoInstance todo,ActionCommand command,Actor actor,String action,String from,String to)
     {
         Map<String,Object> log=new HashMap<>();log.put("todoId",todo.getTodoId());log.put("actionId",command.actionId());
-        log.put("actionType",action);log.put("actionSource",TodoAutoActionService.SERVICE_ACTOR.equals(actor)?"SYSTEM":"HUMAN");
+        log.put("actionType",action);log.put("actionSource",actor==TodoAutoActionService.SERVICE_ACTOR?"SYSTEM":"HUMAN");
         log.put("fromStatus",from);log.put("toStatus",to);log.put("operatorId",actor.userId());log.put("operatorName",actor.userName());
         log.put("opinion",command.opinion());log.put("payloadJson",JSON.toJSONString(command.payload()));
         if(mapper.insertActionIfAbsent(log)<=0&&mapper.selectActionById(command.actionId())==null)
@@ -174,7 +179,7 @@ public class TodoCommandService
     private void concurrent(){throw new TodoException("TODO_CONCURRENT_MODIFICATION","Todo state changed concurrently");}
     private void terminal(String action){throw new TodoException("TODO_TERMINAL","Terminal todo cannot be "+action);}
     private Long positiveOwner(Object value){if(value==null)throw new TodoException("TODO_TRANSFER_OWNER_REQUIRED","targetOwnerId is required");try{Long owner=Long.valueOf(String.valueOf(value));if(owner<=0)throw new NumberFormatException();return owner;}catch(NumberFormatException invalid){throw new TodoException("TODO_TRANSFER_OWNER_INVALID","targetOwnerId must be a positive integer");}}
-    private void requireServiceActor(Actor actor){if(!TodoAutoActionService.SERVICE_ACTOR.equals(actor))throw new TodoException("TODO_AUTO_ACTION_ACTOR_REQUIRED","Controlled auto actions require the service actor");}
+    private void requireServiceActor(Actor actor){if(actor!=TodoAutoActionService.SERVICE_ACTOR)throw new TodoException("TODO_AUTO_ACTION_ACTOR_REQUIRED","Controlled auto actions require the service actor");}
     private void requireHumanActionId(ActionCommand command){if(command!=null&&command.actionId()!=null&&command.actionId().regionMatches(true,0,"AUTO:",0,5))throw new TodoException("TODO_ACTION_ID_RESERVED","AUTO: action ids are reserved for controlled service actions");}
     private void requireAutoActionId(ActionCommand command){if(command==null||command.actionId()==null||!command.actionId().startsWith("AUTO:"))throw new TodoException("TODO_AUTO_ACTION_ID_REQUIRED","Controlled auto actions require a reserved AUTO: action id");}
 

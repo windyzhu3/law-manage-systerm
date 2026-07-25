@@ -11,6 +11,15 @@
         )
     </insert>
 
+    <select id="selectEventById" resultType="com.ruoyi.system.domain.BusinessEventRecord">
+        select event_id eventId, event_type eventType, payload_version payloadVersion,
+               aggregate_type aggregateType, aggregate_id aggregateId, aggregate_no aggregateNo,
+               idempotency_key idempotencyKey, payload, event_status eventStatus,
+               retry_count retryCount, create_by createBy
+        from business_event
+        where event_id=#{eventId}
+    </select>
+
     <select id="selectPendingEvents" resultType="com.ruoyi.system.domain.BusinessEventRecord">
         select event_id eventId, event_type eventType, payload_version payloadVersion, aggregate_type aggregateType,
                aggregate_id aggregateId, aggregate_no aggregateNo, idempotency_key idempotencyKey,

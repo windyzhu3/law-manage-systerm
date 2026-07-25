@@ -8,6 +8,8 @@ public interface BusinessEventMapper
 {
     int insertBusinessEvent(BusinessEventRecord event);
 
+    BusinessEventRecord selectEventById(Long eventId);
+
     List<BusinessEventRecord> selectPendingEvents(@Param("limit") int limit);
 
     List<BusinessEventRecord> selectEventList(BusinessEventRecord query);

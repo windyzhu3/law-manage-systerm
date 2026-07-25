@@ -32,6 +32,23 @@ class TodoScheduleServiceTest
     private static final LocalDateTime NOW=LocalDateTime.of(2026,7,25,8,30);
 
     @Test
+    void resolves_occurrence_only_when_persisted_key_is_linked_to_the_source_todo()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectScheduleOccurrenceIdentityByKey("81:T1_AM:1")).thenReturn(Map.of(
+                "occurrenceId",91L,"planId",81L,"windowId",82L,"occurrenceKey","81:T1_AM:1"));
+        when(mapper.selectScheduleOccurrenceById(91L)).thenReturn(Map.of(
+                "occurrenceId",91L,"todoId",31L,"occurrenceKey","81:T1_AM:1","status","MATERIALIZED"));
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertEquals(91L,service.requireOccurrenceIdForTodo("81:T1_AM:1",31L));
+        TodoException error=assertThrows(TodoException.class,
+                ()->service.requireOccurrenceIdForTodo("81:T1_AM:1",999L));
+
+        assertEquals("TODO_SCHEDULE_SOURCE_TODO_INVALID",error.getBusinessCode());
+    }
+
+    @Test
     void createsImmutableDefaultWindowsInAsiaShanghai()
     {
         TodoMapper mapper=mock(TodoMapper.class);

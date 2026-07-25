@@ -24,6 +24,7 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
 
 @ExtendWith(MockitoExtension.class)
 class TodoCommandServiceTest
@@ -153,6 +154,43 @@ class TodoCommandServiceTest
         verify(mapper,never()).selectById(1L);
     }
 
+    @Test void controlledEntryPointRejectsAValueEqualServiceActorLookalike()
+    {
+        Actor lookalike=new Actor(TodoAutoActionService.SERVICE_ACTOR.userId(),
+                TodoAutoActionService.SERVICE_ACTOR.userName(),
+                TodoAutoActionService.SERVICE_ACTOR.deptId());
+
+        TodoException error=assertThrows(TodoException.class,()->service.autoComplete(1L,
+                new ActionCommand("AUTO:1:r",null,Map.of()),lookalike));
+
+        assertEquals("TODO_AUTO_ACTION_ACTOR_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).selectAutoActionExecutionForUpdate(any());
+    }
+
+    @Test void fenced_auto_completion_passes_a_trusted_automatic_context_to_handlers()
+    {
+        TodoInstance todo=todo(17L,"SUBMITTED",7L);
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:17:r")).thenReturn(
+                execution("AUTO:17:r",17L,"COMPLETE_DEFAULT","CLAIMED"));
+        when(mapper.selectById(17L)).thenReturn(todo);
+        when(mapper.updateStatusConditionally(17L,"SUBMITTED","COMPLETED",null,
+                TodoAutoActionService.SERVICE_ACTOR.userName())).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        when(completionHandler.supports(todo)).thenReturn(true);
+        TodoCommandService guarded=new TodoCommandService(mapper,access,
+                new TodoDodService(List.of()),List.of(completionHandler),null);
+
+        guarded.autoComplete(17L,new ActionCommand("AUTO:17:r",null,
+                Map.of("reviewResult","MISJUDGED_VALID")),
+                TodoAutoActionService.SERVICE_ACTOR);
+
+        verify(completionHandler).complete(org.mockito.ArgumentMatchers.argThat(
+                context->context.todo()==todo
+                        &&context.controlledAutomatic()
+                        &&context.operatorId().equals(-1L)
+                        &&context.payload().get("reviewResult").equals("MISJUDGED_VALID")));
+    }
+
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
     @Test void returnValidatesActionSpecificRule()
     {
@@ -187,7 +225,12 @@ class TodoCommandServiceTest
         guarded.complete(8L,new ActionCommand("done-8",null,Map.of("approved",true)),new Actor(7L,"alice",3L));
 
         InOrder order=org.mockito.Mockito.inOrder(completionHandler,routing);
-        order.verify(completionHandler).complete(todo,Map.of("approved",true),7L,"alice");
+        order.verify(completionHandler).complete(org.mockito.ArgumentMatchers.argThat(
+                context->context.todo()==todo
+                        &&context.payload().equals(Map.of("approved",true))
+                        &&context.operatorId().equals(7L)
+                        &&context.operatorName().equals("alice")
+                        &&!context.controlledAutomatic()));
         order.verify(routing).advance(todo,Map.of("approved",true));
     }
 

@@ -2,54 +2,46 @@ package com.ruoyi.system.service.event;
 
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import com.law.todo.domain.TodoException;
+import com.law.business.lead.dto.LeadFirstContactCommand;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
-import com.ruoyi.system.domain.BizLead;
-import com.ruoyi.system.domain.BizLeadFollowup;
-import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.service.lead.LeadFirstContactService;
 
+/** Typed TD-001 adapter. Business facts and branch events remain owned by the lead service. */
 @Component
 public class LeadFirstContactHandler implements TodoCompletionHandler
 {
-    private final BizLeadMapper mapper;
+    private final LeadFirstContactService firstContacts;
 
-    public LeadFirstContactHandler(BizLeadMapper mapper)
+    public LeadFirstContactHandler(LeadFirstContactService firstContacts)
     {
-        this.mapper = mapper;
+        this.firstContacts=firstContacts;
     }
 
     @Override
     public boolean supports(TodoInstance todo)
     {
-        return "LEAD_FIRST_CONTACT".equals(todo.getTemplateCode())
-                || (todo.getTemplateCode() == null && "LEAD".equals(todo.getBusinessType())
-                    && "线索首联".equals(todo.getTitle()));
+        return todo!=null&&("TD-001".equals(todo.getTemplateCode())
+                ||"LEAD_FIRST_CONTACT".equals(todo.getTemplateCode()));
     }
+
+    @Override public String catalogCode(){return "TD-001_COMPLETE";}
 
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
     {
-        BizLead lead = mapper.selectLeadById(todo.getBusinessId());
-        if (lead == null)
-            throw new TodoException("LEAD_NOT_FOUND","线索不存在");
-        BizLeadFollowup followup = new BizLeadFollowup();
-        followup.setLeadId(todo.getBusinessId());
-        followup.setFollowType(text(payload.getOrDefault("followType","phone")));
-        followup.setFollowResult(text(payload.get("contactResult")));
-        followup.setContent(text(payload.getOrDefault("content","完成首次联系")));
-        followup.setFollowUserId(operatorId);
-        followup.setFollowUserName(operatorName);
-        followup.setTaskStatus("completed");
-        followup.setCreateBy(operatorName);
-        if(mapper.insertFollowup(followup)<=0)
-            throw new TodoException("LEAD_FOLLOWUP_CREATE_FAILED","首联跟进记录创建失败");
-        if (mapper.touchLeadFollowTime(todo.getBusinessId(),null,operatorName,lead.getRowVersion()) <= 0)
-            throw new TodoException("LEAD_CONCURRENT_MODIFICATION","线索状态已变化，请刷新后重试");
-    }
-
-    private String text(Object value)
-    {
-        return value == null ? null : String.valueOf(value);
+        Map<String,Object> values=LeadTodoPayloadMapper.values(payload);
+        LeadFirstContactCommand command=new LeadFirstContactCommand();
+        command.setLeadId(todo.getBusinessId());
+        command.setTodoId(todo.getTodoId());
+        command.setContactResult(LeadTodoPayloadMapper.text(values,"contactResult"));
+        command.setContactName(LeadTodoPayloadMapper.text(values,"contactName","name"));
+        command.setCity(LeadTodoPayloadMapper.text(values,"city"));
+        command.setLegalDemand(LeadTodoPayloadMapper.text(values,"legalDemand","demand"));
+        command.setVisited(LeadTodoPayloadMapper.text(values,"visited"));
+        command.setInvalidReasonCode(LeadTodoPayloadMapper.text(values,"invalidReasonCode","reasonCode"));
+        command.setSalesExplanation(LeadTodoPayloadMapper.text(values,"salesExplanation"));
+        command.setCallRecord(LeadTodoPayloadMapper.manualCall(todo,values));
+        firstContacts.complete(command);
     }
 }

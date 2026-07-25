@@ -17,6 +17,8 @@ public interface LeadFlowMapper
 
     int insertInvalidReviewIfAbsent(BizLeadInvalidReview review);
     BizLeadInvalidReview selectInvalidReviewById(Long reviewId);
+    BizLeadInvalidReview selectInvalidReviewBySourceTodo(@Param("leadId") Long leadId,
+            @Param("todoId") Long todoId);
     BizLeadInvalidReview selectInvalidReviewByIdempotencyKey(String idempotencyKey);
     int completeInvalidReview(@Param("reviewId") Long reviewId, @Param("result") String result,
             @Param("comment") String comment, @Param("reviewerId") Long reviewerId,

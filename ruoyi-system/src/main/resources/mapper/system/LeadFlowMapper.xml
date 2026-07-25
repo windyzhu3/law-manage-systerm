@@ -33,6 +33,16 @@
           status,idempotency_key idempotencyKey,row_version rowVersion
         from biz_lead_invalid_review where review_id=#{reviewId}
     </select>
+    <select id="selectInvalidReviewBySourceTodo" resultType="BizLeadInvalidReview">
+        select review_id reviewId,lead_id leadId,reason_code reasonCode,sales_explanation salesExplanation,
+          submitted_by submittedBy,submitted_at submittedAt,reviewer_id reviewerId,review_result reviewResult,
+          review_comment reviewComment,reviewed_at reviewedAt,system_default systemDefault,todo_id todoId,
+          status,idempotency_key idempotencyKey,row_version rowVersion
+        from biz_lead_invalid_review
+        where lead_id=#{leadId} and todo_id=#{todoId}
+        order by review_id desc
+        limit 1
+    </select>
     <select id="selectInvalidReviewByIdempotencyKey" resultType="BizLeadInvalidReview">
         select review_id reviewId,lead_id leadId,reason_code reasonCode,sales_explanation salesExplanation,
           submitted_by submittedBy,submitted_at submittedAt,reviewer_id reviewerId,review_result reviewResult,

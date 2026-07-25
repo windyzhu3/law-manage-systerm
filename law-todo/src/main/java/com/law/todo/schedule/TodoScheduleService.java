@@ -38,6 +38,29 @@ public class TodoScheduleService
     }
 
     /**
+     * Resolves a scheduled completion identity from immutable Todo context. User payload must never
+     * choose an occurrence because that would allow one Todo to target another schedule.
+     */
+    @Transactional(readOnly=true)
+    public Long requireOccurrenceIdForTodo(String occurrenceKey,Long todoId)
+    {
+        if(occurrenceKey==null||occurrenceKey.isBlank()||todoId==null)
+            throw new TodoException("TODO_SCHEDULE_SOURCE_TODO_INVALID",
+                    "Scheduled Todo identity is incomplete");
+        Map<String,Object> identity=mapper.selectScheduleOccurrenceIdentityByKey(occurrenceKey.trim());
+        if(identity==null)
+            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_FOUND",
+                    "Schedule occurrence does not exist");
+        Long occurrenceId=requiredLong(identity,"occurrenceId","occurrence_id");
+        Map<String,Object> occurrence=mapper.selectScheduleOccurrenceById(occurrenceId);
+        if(occurrence==null||!occurrenceKey.trim().equals(text(occurrence,"occurrenceKey","occurrence_key"))
+                ||!todoId.equals(longValue(occurrence,"todoId","todo_id")))
+            throw new TodoException("TODO_SCHEDULE_SOURCE_TODO_INVALID",
+                    "Schedule occurrence is not linked to this Todo");
+        return occurrenceId;
+    }
+
+    /**
      * The input timestamp is local to {@code timezone}. Absolute LocalDateTime values are calculated
      * once and persisted, so a later policy edit cannot move an existing plan.
      */
