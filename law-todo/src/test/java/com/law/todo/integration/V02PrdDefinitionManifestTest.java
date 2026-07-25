@@ -33,6 +33,8 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.CompilationContext;
+import com.law.todo.definition.compiler.TodoDefinitionCompiler.TemplateVersion;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.definition.model.TodoDefinitionDocument.AutoActionRule;
 import com.law.todo.domain.model.TodoInstance;
@@ -50,6 +52,7 @@ class V02PrdDefinitionManifestTest
     private static List<JSONObject> envelopes;
     private static Path repositoryRoot;
     private static String migrationSql;
+    private static String leadPublicationSql;
     private static final Map<String, String> DECISIONS = new LinkedHashMap<>();
 
     static
@@ -74,6 +77,8 @@ class V02PrdDefinitionManifestTest
         repositoryRoot = locateRepositoryRoot();
         migrationSql = Files.readString(repositoryRoot.resolve(
                 "ruoyi-admin/src/main/resources/db/migration/V0_20_10__v02_prd_definition_catalog.sql"));
+        leadPublicationSql = Files.readString(repositoryRoot.resolve(
+                "ruoyi-admin/src/main/resources/db/migration/V0_20_51__publish_lead_todo_templates.sql"));
         envelopes = new ArrayList<>();
         for (String code : EXPECTED_CODES)
             envelopes.add(readJson(code + ".json"));
@@ -118,7 +123,15 @@ class V02PrdDefinitionManifestTest
             for (String section : List.of("event", "owner", "dod", "sla", "ui", "routing"))
                 assertNotNull(definition.getJSONObject(section), code + " missing " + section);
             JSONObject owner = definition.getJSONObject("owner").getJSONObject("config");
-            assertNotNull(owner.getJSONObject("fallback"), code + " owner must define an explicit fallback");
+            if(Set.of("TD-001","TD-002","TD-003","TD-004").contains(code))
+            {
+                assertFalse(owner.containsKey("fallback"),code+" uses a stable business authority");
+                assertEquals(Boolean.FALSE,owner.getBoolean("skipUnavailable"),code);
+                assertEquals(Boolean.FALSE,owner.getBoolean("useDelegation"),code);
+                assertEquals(Boolean.TRUE,owner.getBoolean("requireAvailable"),code);
+            }
+            else assertNotNull(owner.getJSONObject("fallback"),
+                    code + " owner must define an explicit fallback");
             assertNotNull(definition.getJSONArray("autoActions"), code + " autoActions");
             assertNotNull(definition.getJSONArray("decisionRefs"), code + " decisionRefs");
             Set<String> supportedFieldTypes = Set.of("text", "textarea", "number", "date", "datetime",
@@ -185,8 +198,17 @@ class V02PrdDefinitionManifestTest
             JSONObject event = envelope.getJSONObject("definition").getJSONObject("event");
             String eventType = event.getString("eventType");
             String businessType = envelope.getString("businessType");
-            assertTrue(migrationSql.contains("select '" + eventType + "',1,'" + businessType + "'"),
-                    envelope.getString("templateCode") + " event contract missing from migration");
+            if (Set.of("TD-001","TD-002","TD-003","TD-004")
+                    .contains(envelope.getString("templateCode")))
+            {
+                assertTrue(leadPublicationSql.contains("'" + eventType + "'"),
+                        envelope.getString("templateCode") + " event contract missing from publication");
+                assertTrue(leadPublicationSql.contains("'" + businessType + "'"),
+                        envelope.getString("templateCode") + " business type missing from publication");
+            }
+            else
+                assertTrue(migrationSql.contains("select '" + eventType + "',1,'" + businessType + "'"),
+                        envelope.getString("templateCode") + " event contract missing from migration");
             when(mapper.selectEventCatalog(eventType, 1)).thenReturn(Map.of(
                     "event_type", eventType, "payload_version", 1,
                     "payload_schema_json", "{\"type\":\"object\",\"additionalProperties\":true}",
@@ -207,7 +229,16 @@ class V02PrdDefinitionManifestTest
         {
             String code = envelope.getString("templateCode");
             TodoDefinitionDocument definition = codec.read(envelope.getJSONObject("definition").toJSONString());
-            DefinitionValidationReport report = compiler.compile(definition);
+            CompilationContext context = switch (code)
+            {
+                case "TD-001" -> publishedContext(1L);
+                case "TD-002" -> publishedContext(2L);
+                case "TD-003" -> publishedContext(3L);
+                case "TD-004" -> publishedContext(4L);
+                default -> null;
+            };
+            DefinitionValidationReport report = context == null
+                    ? compiler.compile(definition) : compiler.compile(definition, context);
             Set<String> expectedDecisionErrors = new HashSet<>(definition.decisionRefs());
             Set<String> actualDecisionErrors = report.errors().stream()
                     .filter(issue -> "TODO_DECISION_UNRESOLVED".equals(issue.code()))
@@ -335,6 +366,12 @@ class V02PrdDefinitionManifestTest
             @Override public AutoActionResult execute(TodoInstance todo, AutoActionRule rule, Actor actor)
             { return AutoActionResult.success(); }
         };
+    }
+
+    private static CompilationContext publishedContext(long currentVersionId)
+    {
+        return new CompilationContext(currentVersionId,false,
+                versionId->new TemplateVersion(versionId,"PUBLISHED"));
     }
 
     private static boolean hasBlocker(JSONArray blockers, String type, String ref)

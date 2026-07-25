@@ -1,5 +1,6 @@
 package com.ruoyi.system.service.event;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import com.law.business.lead.dto.LeadInvalidReviewCommand;
@@ -9,6 +10,7 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.lead.LeadInvalidReviewService;
+import com.ruoyi.system.service.lead.LeadInvalidReviewService.InvalidReviewOutcome;
 
 /** Typed TD-002 adapter. Automatic defaulting is selected only by the fenced service actor. */
 @Component
@@ -37,8 +39,8 @@ public class LeadInvalidReviewTodoHandler implements TodoCompletionHandler
     {
         if(!completion.controlledAutomatic())
         {
-            reviewHuman(completion.todo(),completion.payload());
-            return CompletionResult.completeTodo(completion.payload());
+            InvalidReviewOutcome outcome=reviewHuman(completion.todo(),completion.payload());
+            return CompletionResult.completeTodo(routing(outcome));
         }
         TodoInstance todo=completion.todo();
         Map<String,Object> values=LeadTodoPayloadMapper.values(completion.payload());
@@ -51,7 +53,7 @@ public class LeadInvalidReviewTodoHandler implements TodoCompletionHandler
                 "sourceTodoId",context.sourceTodoId()));
     }
 
-    private void reviewHuman(TodoInstance todo,Map<String,Object> payload)
+    private InvalidReviewOutcome reviewHuman(TodoInstance todo,Map<String,Object> payload)
     {
         Map<String,Object> values=LeadTodoPayloadMapper.values(payload);
         LeadTodoSourceContextService.InvalidReviewContext context=source(todo,values);
@@ -61,7 +63,16 @@ public class LeadInvalidReviewTodoHandler implements TodoCompletionHandler
         command.setReviewId(context.reviewId());
         command.setReviewResult(LeadTodoPayloadMapper.text(values,"reviewResult"));
         command.setReviewComment(LeadTodoPayloadMapper.text(values,"reviewComment","reviewOpinion"));
-        reviews.review(command);
+        return reviews.review(command);
+    }
+
+    private Map<String,Object> routing(InvalidReviewOutcome outcome)
+    {
+        Map<String,Object> routing=new LinkedHashMap<>();
+        routing.put("reviewResult",outcome.result());
+        routing.put("reviewId",outcome.reviewId());
+        if(outcome.ownerId()!=null)routing.put("ownerId",outcome.ownerId());
+        return routing;
     }
 
     private LeadTodoSourceContextService.InvalidReviewContext source(TodoInstance todo,

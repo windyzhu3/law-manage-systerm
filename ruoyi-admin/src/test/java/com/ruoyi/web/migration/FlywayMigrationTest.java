@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -45,6 +47,15 @@ class FlywayMigrationTest
         baselineFlyway.migrate();
         assertNoHistoricalMigrationExportRoleGrant(url);
         RoleSnapshot beforeFoundationGovernanceMigration = snapshotRoleState(url);
+        Flyway prePublishFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.50")
+            .load();
+        prePublishFlyway.migrate();
+        verifyLeadPublicationRollbackAfterInjectedFailure(url);
         Flyway flyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
             .baselineOnMigrate(true)
@@ -56,8 +67,9 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.50", current.getVersion().getVersion());
+        assertEquals("0.20.51", current.getVersion().getVersion());
         verifyTodoSchedulePolicySnapshotSchema(url);
+        verifyPublishedLeadTodoFlow(url);
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -101,6 +113,104 @@ class FlywayMigrationTest
             throw new AssertionError("Todo schedule policy snapshot schema invariants failed",exception);
         }
     }
+
+    private void verifyLeadPublicationRollbackAfterInjectedFailure(String url)
+    {
+        Path directory=null;
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD"));
+            InputStream input=getClass().getResourceAsStream(
+                    "/db/migration/V0_20_51__publish_lead_todo_templates.sql"))
+        {
+            assertTrue(input!=null,"0.20.51 migration resource is required");
+            PublicationState before=publicationState(connection);
+            String sql=new String(input.readAllBytes(),StandardCharsets.UTF_8);
+            String marker="-- FAILURE_INJECTION_POINT_AFTER_VERSION_INSERT";
+            assertTrue(sql.contains(marker),"Publication failure-injection marker is required");
+            String injected=sql.replace(marker,
+                    "signal sqlstate '45000' set message_text='INJECTED_AFTER_VERSION_INSERT';");
+            directory=Files.createTempDirectory("todo-publish-atomicity-");
+            Files.writeString(directory.resolve(
+                    "V0_20_50_1__lead_publish_atomicity_probe.sql"),injected,StandardCharsets.UTF_8);
+
+            String filesystem="filesystem:"+directory.toAbsolutePath().toString().replace('\\','/');
+            Flyway probe=Flyway.configure()
+                    .dataSource(url,System.getenv("TODO_MIGRATION_DB_USER"),
+                            System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+                    .locations(filesystem)
+                    .table("flyway_atomicity_probe_history")
+                    .baselineOnMigrate(true)
+                    .baselineVersion("0.20.50")
+                    .validateOnMigrate(false)
+                    .load();
+            assertThrows(RuntimeException.class,probe::migrate);
+
+            assertEquals(before,publicationState(connection),
+                    "Every permanent publication mutation must roll back together");
+            assertEquals(0L,count(connection,
+                    "select count(*) from flyway_schema_history where version='0.20.50.1' "
+                    +"and success=1"));
+            assertEquals("0.20.50",text(connection,
+                    "select version from flyway_schema_history where success=1 "
+                    +"order by installed_rank desc limit 1"));
+            try(Statement cleanup=connection.createStatement())
+            {
+                cleanup.execute("drop table if exists flyway_atomicity_probe_history");
+            }
+        }
+        catch(Exception exception)
+        {
+            throw new AssertionError("Lead publication atomicity failure injection failed",exception);
+        }
+        finally
+        {
+            if(directory!=null)
+            {
+                try
+                {
+                    Files.deleteIfExists(directory.resolve(
+                            "V0_20_50_1__lead_publish_atomicity_probe.sql"));
+                    Files.deleteIfExists(directory);
+                }
+                catch(IOException ignored){ }
+            }
+        }
+    }
+
+    private PublicationState publicationState(Connection connection) throws SQLException
+    {
+        return new PublicationState(
+                text(connection,"select coalesce(group_concat(concat(template_code,':',current_version) "
+                        +"order by template_code separator '|'),'') from todo_template "
+                        +"where template_code between 'TD-001' and 'TD-004'"),
+                text(connection,"select coalesce(group_concat(concat(r.rule_code,':',r.enabled,':',"
+                        +"r.template_version_id) order by r.rule_code separator '|'),'') "
+                        +"from todo_trigger_rule r where r.event_type='LEAD_ASSIGNED' "
+                        +"or r.rule_code='TRIGGER_LEAD_ASSIGNED_TD001_V02051'"),
+                text(connection,"select coalesce(group_concat(concat(template_code,':',"
+                        +"definition_package_state,':',foundation_state,':',production_state,':',"
+                        +"sha2(cast(definition_json as char),256)) order by template_code separator '|'),'') "
+                        +"from todo_prd_definition_catalog where template_code between 'TD-001' and 'TD-004'"),
+                count(connection,"select count(*) from todo_template_version v join todo_template t "
+                        +"on t.template_id=v.template_id where t.template_code between 'TD-001' and 'TD-004'"),
+                count(connection,"select count(*) from sys_dict_type "
+                        +"where dict_type='law_lead_progress_type'"),
+                count(connection,"select count(*) from sys_dict_data "
+                        +"where dict_type='law_lead_progress_type'"));
+    }
+
+    private String text(Connection connection,String sql) throws SQLException
+    {
+        try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery(sql))
+        {
+            assertTrue(rows.next());
+            return rows.getString(1);
+        }
+    }
+
+    private record PublicationState(String currentVersions,String triggers,String catalogue,
+            long versionRows,long dictionaryTypes,long dictionaryRows) { }
 
     private void verifyTodoTemplateVersionEditMetadata(String url)
     {
@@ -805,7 +915,7 @@ class FlywayMigrationTest
                     + "and owner_user_id is null and reviewer_user_id is null"));
             assertEquals(0L, count(connection, "select count(*) from todo_acceptance_scenario"));
             assertEquals(0L, count(connection, "select count(*) from todo_acceptance_action"));
-            assertEquals(0L, count(connection,
+            assertEquals(1L, count(connection,
                 "select count(*) from todo_trigger_rule r join todo_template t on t.template_id=r.template_id "
                     + "where t.template_code in ('TD-001','TD-002','TD-003','TD-004','TD-005','TD-006',"
                     + "'TD-007','TD-008','TD-009','TD-010','TD-011','TD-012','TD-013','TD-014','TD-015',"
@@ -972,13 +1082,17 @@ class FlywayMigrationTest
             assertEquals(25L, count(connection, "select count(*) from todo_prd_definition_catalog"));
             assertEquals(25L, count(connection,
                 "select count(*) from todo_prd_definition_catalog where definition_package_state='READY'"));
-            assertEquals(25L, count(connection,
+            assertEquals(21L, count(connection,
                 "select count(*) from todo_prd_definition_catalog where production_state='BLOCKED'"));
-            assertEquals(25L, count(connection,
+            assertEquals(4L, count(connection,
+                "select count(*) from todo_prd_definition_catalog where template_code between 'TD-001' and 'TD-004' "
+                    + "and foundation_state='READY' and production_state='READY'"));
+            assertEquals(21L, count(connection,
                 "select count(*) from todo_prd_definition_catalog c join todo_template t on t.template_code=c.template_code "
                     + "join todo_template_version v on v.template_id=t.template_id "
-                    + "where v.status='DRAFT' and cast(v.definition_json as char)=cast(c.definition_json as char)"));
-            assertEquals(0L, count(connection,
+                    + "where c.template_code>'TD-004' and v.status='DRAFT' "
+                    + "and cast(v.definition_json as char)=cast(c.definition_json as char)"));
+            assertEquals(1L, count(connection,
                 "select count(*) from todo_trigger_rule r join todo_template t on t.template_id=r.template_id "
                     + "where t.template_code between 'TD-001' and 'TD-025' and r.enabled='Y'"));
             assertEquals(12L, count(connection,
@@ -988,6 +1102,88 @@ class FlywayMigrationTest
         catch (SQLException exception)
         {
             throw new AssertionError("v0.2 PRD catalogue database invariants failed", exception);
+        }
+    }
+
+    private void verifyPublishedLeadTodoFlow(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(4L,count(connection,
+                    "select count(*) from todo_template t join todo_template_version v "
+                    +"on v.template_id=t.template_id and v.version_no=t.current_version "
+                    +"where t.template_code between 'TD-001' and 'TD-004' "
+                    +"and t.business_type='LEAD' and v.status='PUBLISHED' "
+                    +"and v.version_id<>v.source_version_id"));
+            assertEquals(2L,count(connection,
+                    "select count(distinct routes.template_version_id) "
+                    +"from todo_template root "
+                    +"join todo_template_version root_version "
+                    +"on root_version.template_id=root.template_id "
+                    +"and root_version.version_no=root.current_version "
+                    +"join json_table(root_version.definition_json,'$.routing.config.nodes[*]' "
+                    +"columns(template_version_id bigint path '$.templateVersionId')) routes "
+                    +"where root.template_code='TD-001' "
+                    +"and routes.template_version_id in ("
+                    +"select target_version.version_id from todo_template target "
+                    +"join todo_template_version target_version "
+                    +"on target_version.template_id=target.template_id "
+                    +"and target_version.version_no=target.current_version "
+                    +"where target.template_code in ('TD-002','TD-004') "
+                    +"and target_version.status='PUBLISHED')"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_template t join todo_template_version v "
+                    +"on v.template_id=t.template_id and v.version_no=t.current_version "
+                    +"join todo_template retry on retry.template_code='TD-003' "
+                    +"join todo_template_version retry_version on retry_version.template_id=retry.template_id "
+                    +"and retry_version.version_no=retry.current_version "
+                    +"where t.template_code='TD-003' "
+                    +"and cast(json_unquote(json_extract(v.definition_json,"
+                    +"'$.sla.config.schedule.targetTemplateVersionId')) as unsigned)=retry_version.version_id"));
+            assertEquals(4L,count(connection,
+                    "select count(*) from todo_template t join todo_template_version v "
+                    +"on v.template_id=t.template_id and v.version_no=t.current_version "
+                    +"where t.template_code between 'TD-001' and 'TD-004' "
+                    +"and json_extract(v.definition_json,'$.owner.config.skipUnavailable')=false "
+                    +"and json_extract(v.definition_json,'$.owner.config.useDelegation')=false "
+                    +"and json_extract(v.definition_json,'$.owner.config.requireAvailable')=true "
+                    +"and json_extract(v.definition_json,'$.owner.config.fallback') is null"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from todo_trigger_rule r join todo_template t "
+                    +"on t.template_id=r.template_id "
+                    +"where t.template_code='LEAD_FIRST_CONTACT' and r.enabled='Y'"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_trigger_rule r join todo_template t "
+                    +"on t.template_id=r.template_id "
+                    +"where r.event_type='LEAD_ASSIGNED' and r.enabled='Y' "
+                    +"and t.template_code='TD-001' and r.payload_version=1"));
+            assertEquals(4L,count(connection,
+                    "select count(*) from todo_prd_definition_catalog "
+                    +"where template_code between 'TD-001' and 'TD-004' "
+                    +"and json_unquote(json_extract(handler_capability_json,'$.repositoryStatus'))='PRESENT'"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_template t join todo_template_version v "
+                    +"on v.template_id=t.template_id and v.version_no=t.current_version "
+                    +"where t.template_code='TD-002' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.autoActions[0].config.fields.reviewResult'))='TRUE_INVALID'"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from todo_template t join todo_template_version v "
+                    +"on v.template_id=t.template_id and v.version_no=t.current_version "
+                    +"where t.template_code between 'TD-001' and 'TD-004' "
+                    +"and json_search(v.definition_json,'one','CONTRACT_SIGN') is not null"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from sys_dict_type where dict_type='law_lead_progress_type' "
+                    +"and status='0'"));
+            assertEquals(6L,count(connection,
+                    "select count(*) from sys_dict_data where dict_type='law_lead_progress_type' "
+                    +"and status='0'"));
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Published lead Todo flow invariants failed",exception);
         }
     }
 

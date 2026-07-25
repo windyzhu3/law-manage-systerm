@@ -71,12 +71,14 @@ class LeadTodoTransactionRollbackTest
     @org.springframework.beans.factory.annotation.Autowired BizLeadMapper leads;
     @org.springframework.beans.factory.annotation.Autowired LeadFlowMapper facts;
     @org.springframework.beans.factory.annotation.Autowired TodoAccessPolicy todoAccess;
+    @org.springframework.beans.factory.annotation.Autowired TodoOrganizationPort organization;
     @org.springframework.beans.factory.annotation.Autowired MutableOutboxPublisher outbox;
 
     @BeforeEach
     void setUp()
     {
-        org.mockito.Mockito.reset(AopTestUtils.getUltimateTargetObject(todos),leads,facts,todoAccess);
+        org.mockito.Mockito.reset(AopTestUtils.getUltimateTargetObject(todos),leads,facts,todoAccess,
+                organization);
         jdbc.execute("drop all objects");
         jdbc.execute("create table todo_instance(todo_id bigint primary key,status varchar(32))");
         jdbc.execute("create table todo_action(action_id varchar(128) primary key,todo_id bigint)");
@@ -93,6 +95,7 @@ class LeadTodoTransactionRollbackTest
         outbox.routingFailure=false;
 
         when(todoAccess.canOperate(any(),anyLong())).thenReturn(true);
+        when(organization.isAvailable(anyLong(),any(LocalDateTime.class))).thenReturn(true);
         when(todos.selectById(21L)).thenAnswer(invocation->todo());
         when(todos.selectActionById(anyString())).thenAnswer(invocation->{
             List<Map<String,Object>> rows=jdbc.queryForList(

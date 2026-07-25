@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.definition.model.TodoDefinitionDocument.RoutingGraph;
+import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.routing.TodoRoutingEngine.RouteContext;
@@ -112,6 +115,31 @@ class TodoRoutingEngineTest
         assertEquals(RouteStatus.ADVANCED,result.status());
         assertEquals("first",result.tasks().get(0).nodeKey());
         assertEquals(201L,result.tasks().get(0).templateVersionId());
+    }
+
+    @Test void publishedLeadGraphConsumesOnlyTask7AuthoritativeOutcomeFields() throws Exception
+    {
+        RoutingGraph graph=leadGraph("TD-001");
+        assertEquals(4L,advanceCompleted(graph,"td001",Map.of(
+                "contactResult","VALID","reviewResult","TRUE_INVALID","result","EXHAUSTED"))
+                .tasks().get(0).templateVersionId());
+        assertEquals(2L,advanceCompleted(graph,"td001",Map.of(
+                "contactResult","SUSPECT_INVALID")).tasks().get(0).templateVersionId());
+        assertEquals(RouteStatus.ENDED,advanceCompleted(graph,"td001",Map.of(
+                "contactResult","UNREACHABLE")).status());
+
+        assertEquals(1L,advanceCompleted(graph,"td002",Map.of(
+                "reviewResult","MISJUDGED_VALID")).tasks().get(0).templateVersionId());
+        assertEquals(RouteStatus.ENDED,advanceCompleted(graph,"td002",Map.of(
+                "reviewResult","TRUE_INVALID")).status());
+
+        RoutingGraph retryGraph=leadGraph("TD-003");
+        assertEquals(4L,advanceCompleted(retryGraph,"td003",Map.of(
+                "result","CONNECTED")).tasks().get(0).templateVersionId());
+        assertEquals(RouteStatus.ENDED,advanceCompleted(retryGraph,"td003",Map.of(
+                "result","NEXT_WINDOW")).status());
+        assertEquals(RouteStatus.ENDED,advanceCompleted(retryGraph,"td003",Map.of(
+                "result","EXHAUSTED")).status());
     }
 
     @Test void forkProducesStableBranchTokens()
@@ -314,6 +342,29 @@ class TodoRoutingEngineTest
         TodoInstance todo = new TodoInstance();
         todo.setTodoId(9L);todo.setRootTodoId(1L);todo.setBusinessType("LEAD");todo.setBusinessId(7L);
         return new RouteContext(graph, "hash", 1, todo, token, payload);
+    }
+
+    private TodoRoutingEngine.RoutingResult advanceCompleted(RoutingGraph graph,String node,
+            Map<String,Object> payload)
+    {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(9L);todo.setRootTodoId(1L);todo.setBusinessType("LEAD");
+        todo.setBusinessId(7L);todo.setStatus("COMPLETED");todo.setRouteNodeKey(node);
+        return new TodoRoutingEngine(mapper).advance(new RouteContext(graph,"hash",1,todo,
+                new RouteToken(1L,node,null,0,RouteTokenStatus.ACTIVE),payload));
+    }
+
+    private RoutingGraph leadGraph(String code) throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream(
+                "/todo-definitions/v0.2/"+code+".json"))
+        {
+            if(input==null)throw new IllegalStateException("Missing "+code);
+            String envelope=new String(input.readAllBytes(),StandardCharsets.UTF_8);
+            String definition=com.alibaba.fastjson2.JSON.parseObject(envelope)
+                    .getJSONObject("definition").toJSONString();
+            return new TodoDefinitionCodec().read(definition).routing();
+        }
     }
 
     private RouteToken token(String branch, int occurrence)

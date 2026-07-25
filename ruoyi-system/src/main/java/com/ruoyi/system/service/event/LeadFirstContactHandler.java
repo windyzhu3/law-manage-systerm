@@ -1,11 +1,15 @@
 package com.ruoyi.system.service.event;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import com.law.business.lead.dto.LeadFirstContactCommand;
+import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.lead.LeadFirstContactService;
+import com.ruoyi.system.service.lead.LeadFirstContactService.FirstContactOutcome;
 
 /** Typed TD-001 adapter. Business facts and branch events remain owned by the lead service. */
 @Component
@@ -29,6 +33,22 @@ public class LeadFirstContactHandler implements TodoCompletionHandler
 
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
+    {execute(todo,payload);}
+
+    @Override
+    public CompletionResult handle(CompletionContext context)
+    {
+        FirstContactOutcome outcome=execute(context.todo(),context.payload());
+        Map<String,Object> routing=new LinkedHashMap<>();
+        routing.put("contactResult",outcome.result());
+        routing.put("ownerId",outcome.ownerId());
+        if(outcome.reviewId()!=null)routing.put("reviewId",outcome.reviewId());
+        if(outcome.reviewerId()!=null)routing.put("reviewerId",outcome.reviewerId());
+        if(outcome.schedulePlanId()!=null)routing.put("planId",outcome.schedulePlanId());
+        return CompletionResult.completeTodo(routing);
+    }
+
+    private FirstContactOutcome execute(TodoInstance todo,Map<String,Object> payload)
     {
         Map<String,Object> values=LeadTodoPayloadMapper.values(payload);
         LeadFirstContactCommand command=new LeadFirstContactCommand();
@@ -42,6 +62,6 @@ public class LeadFirstContactHandler implements TodoCompletionHandler
         command.setInvalidReasonCode(LeadTodoPayloadMapper.text(values,"invalidReasonCode","reasonCode"));
         command.setSalesExplanation(LeadTodoPayloadMapper.text(values,"salesExplanation"));
         command.setCallRecord(LeadTodoPayloadMapper.manualCall(todo,values));
-        firstContacts.complete(command);
+        return firstContacts.complete(command);
     }
 }

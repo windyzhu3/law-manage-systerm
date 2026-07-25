@@ -2,10 +2,10 @@
   "templateCode": "TD-004",
   "templateName": "5天实质进展待办",
   "stage": "阶段3",
-  "businessType": "CUSTOMER",
+  "businessType": "LEAD",
   "definitionPackageState": "READY",
-  "foundationState": "BLOCKED",
-  "productionState": "BLOCKED",
+  "foundationState": "READY",
+  "productionState": "READY",
   "definition": {
     "schemaVersion": 1,
     "templateCode": "TD-004",
@@ -18,10 +18,9 @@
       "config": {
         "type": "PAYLOAD",
         "field": "ownerId",
-        "fallback": {
-          "type": "ROLE",
-          "roleKey": "sales"
-        }
+        "skipUnavailable": false,
+        "useDelegation": false,
+        "requireAvailable": true
       }
     },
     "dod": {
@@ -36,7 +35,9 @@
             "minCount": 1,
             "label": "录音、截图、报价或外访凭证"
           }
-        ]
+        ],
+        "conditionalRequired": [],
+        "validatorRefs": []
       }
     },
     "sla": {
@@ -48,17 +49,22 @@
           100,
           150
         ],
-        "repeat": true
+        "thresholdActions": {
+          "SLA_80": "REMIND_OWNER",
+          "SLA_100": "MARK_OVERDUE_SUPERVISOR_VISIBLE",
+          "SLA_150": "ESCALATE_SUPERVISOR"
+        }
       }
     },
     "ui": {
       "config": {
         "formCode": "TD-004",
-        "businessType": "CUSTOMER",
+        "businessType": "LEAD",
         "fields": [
           {
             "key": "progressType",
             "type": "dict",
+            "dictType": "law_lead_progress_type",
             "label": "实质进展类型"
           },
           {
@@ -75,31 +81,32 @@
       }
     },
     "routing": {
-      "config": {}
+      "config": {
+        "identityBinding": "MIGRATION_DYNAMIC",
+        "start": "td004",
+        "nodes": [
+          {
+            "key": "td004",
+            "type": "TASK",
+            "templateCode": "TD-004",
+            "templateVersionId": 4
+          },
+          {
+            "key": "end",
+            "type": "END"
+          }
+        ],
+        "edges": [
+          {
+            "key": "td004-end",
+            "from": "td004",
+            "to": "end",
+            "priority": 0
+          }
+        ]
+      }
     },
     "autoActions": [
-      {
-        "config": {
-          "ruleKey": "td004-sla-80",
-          "actionType": "ESCALATE",
-          "capability": "ESCALATE",
-          "triggerAt": "SLA_80",
-          "maxAttempts": 3,
-          "retryDelayMinutes": 5,
-          "claimTimeoutMinutes": 15
-        }
-      },
-      {
-        "config": {
-          "ruleKey": "td004-sla-100",
-          "actionType": "ESCALATE",
-          "capability": "ESCALATE",
-          "triggerAt": "SLA_100",
-          "maxAttempts": 3,
-          "retryDelayMinutes": 5,
-          "claimTimeoutMinutes": 15
-        }
-      },
       {
         "config": {
           "ruleKey": "td004-sla-150",
@@ -123,56 +130,40 @@
     ]
   },
   "routingPlan": {
-    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "binding": "PUBLISHED_NUMERIC_VERSION",
     "start": "TD-004",
     "transitions": [
       {
-        "on": "PROGRESS",
+        "on": "COMPLETE",
         "to": [
-          "TD-004"
+          "END"
         ],
-        "businessAction": "REFRESH_FIVE_DAY_WINDOW"
-      },
-      {
-        "on": "NO_PROGRESS_30_DAYS",
-        "to": [
-          "TD-005"
-        ],
-        "businessAction": "MARK_NO_PROGRESS"
+        "businessAction": "RECORD_PROGRESS_HANDOFF"
       }
     ],
-    "notes": []
+    "notes": [
+      "TD-004 is the approved stage-3 handoff boundary; it does not route to TD-005 or CONTRACT_SIGN."
+    ]
   },
   "handlerCapability": {
     "requiredCode": "TD-004_COMPLETE",
-    "repositoryStatus": "MISSING",
+    "repositoryStatus": "PRESENT",
     "existingCandidate": null,
     "requireBusinessWriteback": true
   },
   "businessDependencies": [
     {
-      "code": "CUSTOMER_PROGRESS_EVENT",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少首联有效到客户跟进事件"
+      "code": "LEAD_PROGRESS_HANDOFF_EVENT",
+      "repositoryStatus": "PRESENT",
+      "reason": "LEAD_FIRST_CONTACT_VALID supplies the governed stage-3 handoff."
     },
     {
-      "code": "CUSTOMER_PROGRESS_HANDLER",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少六类进展留痕和刷新周期处理器"
+      "code": "LEAD_PROGRESS_HANDOFF_HANDLER",
+      "repositoryStatus": "PRESENT",
+      "reason": "TD-004 completion is implemented as the approved action-audit boundary."
     }
   ],
-  "blockers": [
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "CUSTOMER_PROGRESS_EVENT",
-      "reason": "缺少首联有效到客户跟进事件"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "CUSTOMER_PROGRESS_HANDLER",
-      "reason": "缺少六类进展留痕和刷新周期处理器"
-    }
-  ],
+  "blockers": [],
   "acceptanceRefs": [
     "AT-TD-004-OWNER",
     "AT-TD-004-SLA",

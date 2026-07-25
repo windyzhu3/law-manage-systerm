@@ -4,8 +4,8 @@
   "stage": "阶段1-2",
   "businessType": "LEAD",
   "definitionPackageState": "READY",
-  "foundationState": "BLOCKED",
-  "productionState": "BLOCKED",
+  "foundationState": "READY",
+  "productionState": "READY",
   "definition": {
     "schemaVersion": 1,
     "templateCode": "TD-001",
@@ -18,10 +18,9 @@
       "config": {
         "type": "PAYLOAD",
         "field": "ownerId",
-        "fallback": {
-          "type": "ROLE",
-          "roleKey": "sales"
-        }
+        "skipUnavailable": false,
+        "useDelegation": false,
+        "requireAvailable": true
       }
     },
     "dod": {
@@ -65,7 +64,24 @@
               "equals": "VALID"
             },
             "field": "visited"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "SUSPECT_INVALID"
+            },
+            "field": "invalidReasonCode"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "SUSPECT_INVALID"
+            },
+            "field": "salesExplanation"
           }
+        ],
+        "validatorRefs": [
+          "LeadFirstContactValidator"
         ]
       }
     },
@@ -77,7 +93,12 @@
           80,
           100,
           150
-        ]
+        ],
+        "thresholdActions": {
+          "SLA_80": "REMIND_OWNER",
+          "SLA_100": "MARK_OVERDUE_SUPERVISOR_VISIBLE",
+          "SLA_150": "ESCALATE_SUPERVISOR"
+        }
       }
     },
     "ui": {
@@ -88,6 +109,7 @@
           {
             "key": "contactResult",
             "type": "dict",
+            "dictType": "law_first_contact_result",
             "label": "首联结果"
           },
           {
@@ -98,52 +120,227 @@
           {
             "key": "name",
             "type": "text",
-            "label": "姓名"
+            "label": "姓名",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "VALID"
+            }
           },
           {
             "key": "city",
             "type": "text",
-            "label": "城市"
+            "label": "城市",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "VALID"
+            }
           },
           {
             "key": "demand",
             "type": "textarea",
-            "label": "诉求"
+            "label": "诉求",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "VALID"
+            }
           },
           {
             "key": "visited",
             "type": "dict",
-            "label": "是否到所"
+            "dictType": "law_yes_no_flag",
+            "label": "是否到所",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "VALID"
+            }
+          },
+          {
+            "key": "invalidReasonCode",
+            "type": "dict",
+            "dictType": "law_lead_invalid_reason",
+            "label": "无效原因",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "SUSPECT_INVALID"
+            }
+          },
+          {
+            "key": "salesExplanation",
+            "type": "textarea",
+            "label": "销售说明",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "SUSPECT_INVALID"
+            }
           }
         ]
       }
     },
     "routing": {
-      "config": {}
+      "config": {
+        "identityBinding": "MIGRATION_DYNAMIC",
+        "start": "td001",
+        "nodes": [
+          {
+            "key": "td001",
+            "type": "TASK",
+            "templateCode": "TD-001",
+            "templateVersionId": 1
+          },
+          {
+            "key": "firstResult",
+            "type": "DECISION"
+          },
+          {
+            "key": "td002",
+            "type": "TASK",
+            "templateCode": "TD-002",
+            "templateVersionId": 2
+          },
+          {
+            "key": "reviewResult",
+            "type": "DECISION"
+          },
+          {
+            "key": "td004",
+            "type": "TASK",
+            "templateCode": "TD-004",
+            "templateVersionId": 4
+          },
+          {
+            "key": "reopenedTd001",
+            "type": "TASK",
+            "templateCode": "TD-001",
+            "templateVersionId": 1
+          },
+          {
+            "key": "end",
+            "type": "END"
+          }
+        ],
+        "edges": [
+          {
+            "key": "td001-result",
+            "from": "td001",
+            "to": "firstResult",
+            "priority": 0
+          },
+          {
+            "key": "first-valid",
+            "from": "firstResult",
+            "to": "td004",
+            "priority": 30,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "contactResult",
+                  "operator": "EQ",
+                  "value": "VALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "first-suspect",
+            "from": "firstResult",
+            "to": "td002",
+            "priority": 20,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "contactResult",
+                  "operator": "EQ",
+                  "value": "SUSPECT_INVALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "first-unreachable",
+            "from": "firstResult",
+            "to": "end",
+            "priority": 10,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "contactResult",
+                  "operator": "EQ",
+                  "value": "UNREACHABLE"
+                }
+              }
+            }
+          },
+          {
+            "key": "first-default",
+            "from": "firstResult",
+            "to": "end",
+            "priority": -1,
+            "default": true
+          },
+          {
+            "key": "td002-result",
+            "from": "td002",
+            "to": "reviewResult",
+            "priority": 0
+          },
+          {
+            "key": "review-invalid",
+            "from": "reviewResult",
+            "to": "end",
+            "priority": 20,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "reviewResult",
+                  "operator": "EQ",
+                  "value": "TRUE_INVALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "review-reopen",
+            "from": "reviewResult",
+            "to": "reopenedTd001",
+            "priority": 10,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "reviewResult",
+                  "operator": "EQ",
+                  "value": "MISJUDGED_VALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "review-default",
+            "from": "reviewResult",
+            "to": "end",
+            "priority": -1,
+            "default": true
+          },
+          {
+            "key": "reopened-end",
+            "from": "reopenedTd001",
+            "to": "end",
+            "priority": 0
+          },
+          {
+            "key": "td004-end",
+            "from": "td004",
+            "to": "end",
+            "priority": 0
+          }
+        ]
+      }
     },
     "autoActions": [
-      {
-        "config": {
-          "ruleKey": "td001-sla-80",
-          "actionType": "ESCALATE",
-          "capability": "ESCALATE",
-          "triggerAt": "SLA_80",
-          "maxAttempts": 3,
-          "retryDelayMinutes": 5,
-          "claimTimeoutMinutes": 15
-        }
-      },
-      {
-        "config": {
-          "ruleKey": "td001-sla-100",
-          "actionType": "ESCALATE",
-          "capability": "ESCALATE",
-          "triggerAt": "SLA_100",
-          "maxAttempts": 3,
-          "retryDelayMinutes": 5,
-          "claimTimeoutMinutes": 15
-        }
-      },
       {
         "config": {
           "ruleKey": "td001-sla-150",
@@ -156,9 +353,7 @@
         }
       }
     ],
-    "decisionRefs": [
-      "Q-006"
-    ],
+    "decisionRefs": [],
     "acceptanceRefs": [
       "AT-TD-001-OWNER",
       "AT-TD-001-SLA",
@@ -169,7 +364,7 @@
     ]
   },
   "routingPlan": {
-    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "binding": "PUBLISHED_NUMERIC_VERSION",
     "start": "TD-001",
     "transitions": [
       {
@@ -189,48 +384,35 @@
       {
         "on": "UNREACHABLE",
         "to": [
-          "TD-003"
+          "END"
         ],
         "businessAction": "START_RETRY"
       }
     ],
-    "notes": []
+    "notes": [
+      "UNREACHABLE ends ordinary routing after the business service creates the retry schedule.",
+      "Only the schedule materializer may create TD-003."
+    ]
   },
   "handlerCapability": {
     "requiredCode": "TD-001_COMPLETE",
-    "repositoryStatus": "ADAPTER_REQUIRED",
+    "repositoryStatus": "PRESENT",
     "existingCandidate": "LEAD_FIRST_CONTACT",
     "requireBusinessWriteback": true
   },
   "businessDependencies": [
     {
       "code": "TD001_HANDLER_ALIAS",
-      "repositoryStatus": "ADAPTER_REQUIRED",
-      "reason": "现有LEAD_FIRST_CONTACT处理器未绑定TD-001"
+      "repositoryStatus": "PRESENT",
+      "reason": "TD-001 and legacy LEAD_FIRST_CONTACT are bound to the typed completion handler."
     },
     {
       "code": "OUTBOUND_CALL_ADAPTER",
-      "repositoryStatus": "MISSING",
-      "reason": "外呼/APP证据接入方案未确认"
+      "repositoryStatus": "PRESENT",
+      "reason": "The governed manual evidence boundary and provider-neutral outbound adapter contract are available."
     }
   ],
-  "blockers": [
-    {
-      "type": "DECISION",
-      "ref": "Q-006",
-      "reason": "外呼软件是否确定接入？APP直连ERP是否为P0还是P1？"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "TD001_HANDLER_ALIAS",
-      "reason": "现有LEAD_FIRST_CONTACT处理器未绑定TD-001"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "OUTBOUND_CALL_ADAPTER",
-      "reason": "外呼/APP证据接入方案未确认"
-    }
-  ],
+  "blockers": [],
   "acceptanceRefs": [
     "AT-TD-001-OWNER",
     "AT-TD-001-SLA",

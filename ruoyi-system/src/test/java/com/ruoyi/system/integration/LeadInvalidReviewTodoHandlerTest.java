@@ -108,6 +108,25 @@ class LeadInvalidReviewTodoHandlerTest
         verifyNoMoreInteractions(reviews);
     }
 
+    @Test
+    void misjudgedReviewRoutesBackToPersistedLeadOwnerNotClientPayload()
+    {
+        LeadInvalidReviewTodoHandler handler=new LeadInvalidReviewTodoHandler(reviews,contexts);
+        TodoInstance todo=todo();
+        when(contexts.requireInvalidReview(todo,61L)).thenReturn(
+                new LeadTodoSourceContextService.InvalidReviewContext(61L,11L));
+        when(reviews.review(any())).thenReturn(
+                new LeadInvalidReviewService.InvalidReviewOutcome(
+                        "MISJUDGED_VALID",61L,71L,null,false,8L));
+
+        var result=handler.handle(com.law.todo.application.CompletionContext.human(todo,Map.of(
+                "reviewId",61L,"reviewResult","MISJUDGED_VALID",
+                "reviewOpinion","valid","ownerId",999L),9L,"manager"));
+
+        assertEquals(8L,result.routingPayload().get("ownerId"));
+        assertEquals("MISJUDGED_VALID",result.routingPayload().get("reviewResult"));
+    }
+
     private TodoInstance todo()
     {
         TodoInstance todo = new TodoInstance();

@@ -110,10 +110,13 @@ public final class CompositeOwnerResolver
     {
         boolean skipUnavailable = !simulation && bool(config.get("skipUnavailable"), true);
         boolean useDelegation = bool(config.get("useDelegation"), true);
+        boolean requireAvailable = !simulation && bool(config.get("requireAvailable"), false);
         List<String> trace = new ArrayList<>(raw.trace());
-        Long owner = availablePrimary(raw.ownerId(), skipUnavailable, useDelegation, context, trace);
-        List<Long> candidates = new ArrayList<>(available(raw.candidateUserIds(), skipUnavailable, context));
-        List<Long> cc = new ArrayList<>(available(raw.ccUserIds(), skipUnavailable, context));
+        boolean filterUnavailable = skipUnavailable || requireAvailable;
+        Long owner = availablePrimary(raw.ownerId(), filterUnavailable,
+                useDelegation && !requireAvailable, requireAvailable, context, trace);
+        List<Long> candidates = new ArrayList<>(available(raw.candidateUserIds(), filterUnavailable, context));
+        List<Long> cc = new ArrayList<>(available(raw.ccUserIds(), filterUnavailable, context));
 
         for (OwnerRule candidateRule : nestedRules(config.get("candidates"), active))
         {
@@ -130,11 +133,12 @@ public final class CompositeOwnerResolver
             cc.addAll(nested.ccUserIds());
             trace.addAll(nested.trace());
         }
-        candidates = available(candidates, skipUnavailable, context);
-        cc = new ArrayList<>(available(cc, skipUnavailable, context));
+        candidates = available(candidates, filterUnavailable, context);
+        cc = new ArrayList<>(available(cc, filterUnavailable, context));
 
         if (owner == null && candidates.isEmpty())
         {
+            if (requireAvailable) return result(null, List.of(), cc, false, trace);
             OwnerRule fallback = nestedRule(config.get("fallback"), active);
             if (fallback != null)
             {
@@ -149,7 +153,7 @@ public final class CompositeOwnerResolver
     }
 
     private Long availablePrimary(Long primary, boolean skipUnavailable, boolean useDelegation,
-            OwnerResolutionContext context, List<String> trace)
+            boolean requireAvailable, OwnerResolutionContext context, List<String> trace)
     {
         if (primary == null) return null;
         if (!skipUnavailable || organization.isAvailable(primary, context.effectiveAt()))
@@ -158,7 +162,8 @@ public final class CompositeOwnerResolver
             return primary;
         }
 
-        trace.add("primary:" + primary + ":unavailable");
+        trace.add("primary:" + primary
+                + (requireAvailable ? ":unavailable-required" : ":unavailable"));
         if (!useDelegation) return null;
         Optional<Long> delegate = organization.delegateFor(primary, context.effectiveAt());
         if (delegate.isEmpty()) return null;

@@ -448,6 +448,7 @@ class TodoDefinitionServiceTest
         Map<String,Object> discountApproval=blockedPrdDraft(60L,"TD-006");
         when(mapper.selectTemplateVersionById(20L)).thenReturn(invalidReview);
         when(mapper.selectTemplateVersionById(60L)).thenReturn(discountApproval);
+        stubPublishedLeadRouteTargets();
         when(mapper.selectEventCatalog(anyString(),org.mockito.ArgumentMatchers.eq(1))).thenAnswer(invocation->Map.of(
                 "event_type",invocation.getArgument(0),"payload_version",1,
                 "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));
@@ -473,6 +474,7 @@ class TodoDefinitionServiceTest
         blocked.put("prd_foundation_state","READY");
         blocked.put("prd_production_state","BLOCKED");
         when(mapper.selectTemplateVersionById(20L)).thenReturn(blocked);
+        stubPublishedLeadRouteTargets();
         when(mapper.selectEventCatalog(anyString(),org.mockito.ArgumentMatchers.eq(1))).thenAnswer(invocation->Map.of(
                 "event_type",invocation.getArgument(0),"payload_version",1,
                 "payload_schema_json","{\"type\":\"object\",\"additionalProperties\":true}","status","ACTIVE"));
@@ -693,6 +695,11 @@ class TodoDefinitionServiceTest
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}
     private TodoDefinitionCompiler compiler(){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
     private void registeredEvent(){when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of("event_type","LEAD_CREATED","payload_version",1,"payload_schema_json","{\"type\":\"object\"}","status","ACTIVE"));}
+    private void stubPublishedLeadRouteTargets()
+    {
+        when(mapper.selectTemplateVersionById(1L)).thenReturn(Map.of("version_id",1L,"status","PUBLISHED"));
+        when(mapper.selectTemplateVersionById(2L)).thenReturn(Map.of("version_id",2L,"status","PUBLISHED"));
+    }
 
     private Map<String,Object> blockedPrdDraft(Long versionId,String code)
     {

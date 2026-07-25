@@ -5,16 +5,19 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.ArgumentMatchers.anyMap;
 import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
+import com.alibaba.fastjson2.JSON;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +48,7 @@ class TodoTemplateAndRoutingTest
             if(value.getTodoId()==null)value.setTodoId(77L);
             return 1;
         });
+        lenient().when(mapper.updateInitialRouteSnapshot(any(),any(),any(),any())).thenReturn(1);
     }
 
     @Test void dodRejectsMissingRequiredField()
@@ -103,6 +107,67 @@ class TodoTemplateAndRoutingTest
         assertTrue(next.getRouteToken().contains("\"branchKey\":\"legal\""));
     }
 
+    @Test void graphRoutingResolvesPublishedCanonicalOwnerFromAuthoritativePayload()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setRouteDefinitionVersionId(9L);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of(
+                "definition_hash","root-hash","compiled_json","""
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "routing":{"config":{"start":"td001","nodes":[],"edges":[]}},
+                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """));
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-002","template_name","Invalid review",
+                "business_type","LEAD","status","PUBLISHED",
+                "compiled_json","""
+                {"schemaVersion":1,"templateCode":"TD-002",
+                 "owner":{"config":{"type":"PAYLOAD","field":"reviewerId",
+                    "skipUnavailable":false,"useDelegation":false,"requireAvailable":true}},
+                 "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """));
+        TodoRoutingEngine engine=mock(TodoRoutingEngine.class);
+        RouteToken token=new RouteToken(1L,"td002","suspect",0,RouteTokenStatus.ACTIVE);
+        when(engine.advance(any())).thenReturn(new RoutingResult(RouteStatus.ADVANCED,
+                List.of(new NextTask("td002",22L,token))));
+
+        new TodoRoutingService(mapper,new TodoAssignmentResolver(),engine)
+                .advance(previous,Map.of("reviewerId",91L,"ownerId",999L));
+
+        verify(mapper).insertInstance(org.mockito.ArgumentMatchers.argThat(next->
+                Long.valueOf(91L).equals(next.getOwnerId())
+                &&"TD-002".equals(next.getTemplateCode())));
+    }
+
+    @Test void graphRoutingFailsClosedBeforeInsertWhenCanonicalOwnerIsUnresolved()
+    {
+        TodoInstance previous=todo();previous.setRouteDefinitionVersionId(9L);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(Map.of(
+                "definition_hash","root-hash","compiled_json","""
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "routing":{"config":{"start":"td001","nodes":[],"edges":[]}},
+                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """));
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
+                "template_id",5L,"template_code","TD-002","template_name","Invalid review",
+                "business_type","LEAD","status","PUBLISHED",
+                "compiled_json","""
+                {"schemaVersion":1,"templateCode":"TD-002",
+                 "owner":{"config":{"type":"PAYLOAD","field":"reviewerId",
+                    "skipUnavailable":false,"useDelegation":false,"requireAvailable":true}},
+                 "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """));
+        TodoRoutingEngine engine=mock(TodoRoutingEngine.class);
+        when(engine.advance(any())).thenReturn(new RoutingResult(RouteStatus.ADVANCED,
+                List.of(new NextTask("td002",22L,
+                        new RouteToken(1L,"td002","suspect",0,RouteTokenStatus.ACTIVE)))));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(
+                mapper,new TodoAssignmentResolver(),engine).advance(previous,Map.of()));
+
+        assertEquals("TODO_OWNER_UNRESOLVED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+    }
+
     @Test void downstreamTemplateContinuesGraphOwnedByOriginalDefinition()
     {
         TodoInstance previous=todo();previous.setTemplateVersionId(22L);previous.setRouteDefinitionVersionId(9L);previous.setDefinitionHash("hash");previous.setRouteNodeKey("review");
@@ -154,7 +219,7 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","OWNER","sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
-                "status","PUBLISHED"));
+                "status","PUBLISHED","definition_json",scheduledDefinition(8L)));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
@@ -167,8 +232,69 @@ class TodoTemplateAndRoutingTest
         assertEquals("SCHEDULE:3:T1_AM:1",next.getNextIdempotencyKey());
         assertEquals("3:T1_AM:1",next.getOccurrenceKey());
         assertEquals(dueAt,next.getDueAt());
+        assertEquals(77L,next.getRootTodoId());
+        RouteToken token=JSON.parseObject(next.getRouteToken(),RouteToken.class);
+        assertEquals(77L,token.rootTodoId());assertEquals("td003",token.nodeKey());
+        assertEquals(0,token.occurrence());assertEquals(RouteTokenStatus.ACTIVE,token.status());
         verify(mapper).insertInstance(next);verify(mapper).insertRelation(anyMap());
+        verify(mapper).updateInitialRouteSnapshot(77L,77L,next.getRouteToken(),"3:T1_AM:1");
         verify(mapper).insertScheduledSlaRecord(org.mockito.ArgumentMatchers.argThat(row->dueAt.equals(row.get("dueAt"))));
+    }
+
+    @Test void materializedScheduledReplayRejectsMissingLinkedTodoIdentity()
+    {
+        TodoInstance existing=scheduledExisting(88L);
+        materializedScheduleFence(null);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.selectByNextKey("SCHEDULE:3:T1_AM:1")).thenReturn(existing);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_SCHEDULE_OCCURRENCE_LINK_INVALID",error.getBusinessCode());
+        verifyMaterializedReplayHasNoWrites();
+    }
+
+    @Test void materializedScheduledReplayRejectsMismatchedLinkedTodoIdentity()
+    {
+        TodoInstance existing=scheduledExisting(88L);
+        materializedScheduleFence(89L);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.selectByNextKey("SCHEDULE:3:T1_AM:1")).thenReturn(existing);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_SCHEDULE_OCCURRENCE_LINK_INVALID",error.getBusinessCode());
+        verifyMaterializedReplayHasNoWrites();
+    }
+
+    @Test void materializedScheduledReplayRejectsMalformedRouteToken()
+    {
+        TodoInstance existing=scheduledExisting(88L);existing.setRouteToken("{malformed");
+        materializedScheduleFence(88L);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.selectByNextKey("SCHEDULE:3:T1_AM:1")).thenReturn(existing);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",error.getBusinessCode());
+        verifyMaterializedReplayHasNoWrites();
+    }
+
+    @Test void materializedScheduledReplayReturnsOnlyTheExactValidatedTodo()
+    {
+        TodoInstance existing=scheduledExisting(88L);
+        materializedScheduleFence(88L);
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.selectByNextKey("SCHEDULE:3:T1_AM:1")).thenReturn(existing);
+
+        TodoInstance replayed=new TodoRoutingService(mapper).createScheduledNext(
+                todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1));
+
+        assertSame(existing,replayed);
+        verifyMaterializedReplayHasNoWrites();
     }
 
     @Test void scheduledRoutingExplicitlyLocksPlanBeforeOccurrenceAndWindow()
@@ -185,7 +311,8 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
-                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "definition_json",scheduledDefinition(8L)));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
@@ -225,7 +352,9 @@ class TodoTemplateAndRoutingTest
                 "compiled_json","""
                   {"schemaVersion":1,"templateCode":"TD-003",
                    "owner":{"config":{"type":"USER","operand":9}},
-                   "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                    "routing":{"config":{"start":"td003","nodes":[
+                      {"key":"td003","type":"TASK","templateCode":"TD-003","templateVersionId":22}
+                    ]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                   """));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
@@ -251,7 +380,8 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
-                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "definition_json",scheduledDefinition(8L)));
         when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
                 "calendar_id",1L,"work_days","1,2,3,4,5,6,7","work_start","00:00:00",
                 "work_end","23:59:59","exception_json","{}"));
@@ -294,13 +424,47 @@ class TodoTemplateAndRoutingTest
         when(mapper.selectTemplateVersionById(22L)).thenReturn(Map.of(
                 "template_id",5L,"template_code","TD-003","template_name","Retry contact",
                 "business_type","LEAD","owner_rule_json","USER:9","status","PUBLISHED",
-                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}"));
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "definition_json",scheduledDefinition(9L)));
 
         TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper,resolver)
                 .createScheduledNext(todo(),22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
 
         assertEquals("TODO_OWNER_UNRESOLVED",error.getBusinessCode());
         verify(mapper,never()).insertInstance(any());
+    }
+
+    @Test void scheduledRoutingFailsClosedWhenInitialSnapshotCannotBePersisted()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
+        activeScheduleFence();
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.updateInitialRouteSnapshot(any(),any(),any(),any())).thenReturn(0);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(previous,22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_SCHEDULE_ROUTE_SNAPSHOT_PERSIST_FAILED",error.getBusinessCode());
+        verify(mapper,never()).insertRelation(anyMap());
+        verify(mapper,never()).linkScheduleOccurrenceByKey(any(),any(),anyInt(),any());
+    }
+
+    @Test void concurrentScheduledDuplicateWithIncompleteSnapshotFailsClosed()
+    {
+        TodoInstance previous=todo();previous.setOwnerId(8L);previous.setOwnerDeptId(3L);
+        TodoInstance incomplete=new TodoInstance();incomplete.setTodoId(88L);
+        incomplete.setOccurrenceKey("3:T1_AM:1");incomplete.setRouteNodeKey("td003");
+        activeScheduleFence();
+        when(mapper.selectTemplateVersionById(22L)).thenReturn(scheduledVersion());
+        when(mapper.selectByNextKey("SCHEDULE:3:T1_AM:1")).thenReturn(null,incomplete);
+        doThrow(new org.springframework.dao.DuplicateKeyException("concurrent"))
+                .when(mapper).insertInstance(any());
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoRoutingService(mapper)
+                .createScheduledNext(previous,22L,"3:T1_AM:1",LocalDateTime.now().plusHours(1)));
+
+        assertEquals("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",error.getBusinessCode());
+        verify(mapper,never()).linkScheduleOccurrenceByKey(any(),any(),anyInt(),any());
     }
 
     private void activeScheduleFence()
@@ -313,10 +477,61 @@ class TodoTemplateAndRoutingTest
                 "version",0,"status","CLAIMED","windowStatus","PROCESSING"));
     }
 
+    private void materializedScheduleFence(Long todoId)
+    {
+        when(mapper.selectScheduleOccurrenceIdentityByKey("3:T1_AM:1")).thenReturn(scheduleIdentity());
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of(
+                "planId",3L,"status","ACTIVE","templateVersionId",22L));
+        Map<String,Object> fence=new java.util.LinkedHashMap<>();
+        fence.put("occurrenceId",9L);fence.put("planId",3L);fence.put("windowId",12L);
+        fence.put("occurrenceKey","3:T1_AM:1");fence.put("version",0);
+        fence.put("status","MATERIALIZED");fence.put("windowStatus","MATERIALIZED");
+        fence.put("todoId",todoId);
+        when(mapper.selectScheduleOccurrenceWindowForUpdate("3:T1_AM:1",3L)).thenReturn(fence);
+    }
+
+    private TodoInstance scheduledExisting(Long todoId)
+    {
+        TodoInstance existing=new TodoInstance();existing.setTodoId(todoId);
+        existing.setRootTodoId(todoId);existing.setTemplateVersionId(22L);
+        existing.setBusinessType("LEAD");existing.setBusinessId(7L);
+        existing.setRouteNodeKey("td003");existing.setOccurrenceKey("3:T1_AM:1");
+        existing.setRouteToken(JSON.toJSONString(new RouteToken(todoId,"td003",null,0,
+                RouteTokenStatus.ACTIVE)));
+        return existing;
+    }
+
+    private void verifyMaterializedReplayHasNoWrites()
+    {
+        verify(mapper,never()).insertInstance(any());
+        verify(mapper,never()).updateInitialRouteSnapshot(any(),any(),any(),any());
+        verify(mapper,never()).insertRelation(anyMap());
+        verify(mapper,never()).linkScheduleOccurrenceByKey(any(),any(),anyInt(),any());
+    }
+
     private Map<String,Object> scheduleIdentity()
     {
         return Map.of("occurrenceId",9L,"planId",3L,"windowId",12L,
                 "occurrenceKey","3:T1_AM:1");
+    }
+
+    private Map<String,Object> scheduledVersion()
+    {
+        return Map.of("template_id",5L,"template_code","TD-003","template_name","Retry contact",
+                "business_type","LEAD","owner_rule_json","OWNER","status","PUBLISHED",
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}",
+                "definition_json",scheduledDefinition(8L));
+    }
+
+    private String scheduledDefinition(long ownerId)
+    {
+        return """
+                {"schemaVersion":1,"templateCode":"TD-003",
+                 "owner":{"config":{"type":"USER","operand":%d}},
+                 "routing":{"config":{"start":"td003","nodes":[
+                   {"key":"td003","type":"TASK","templateCode":"TD-003","templateVersionId":22}
+                 ]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """.formatted(ownerId);
     }
 
     private TodoInstance todo(){TodoInstance t=new TodoInstance();t.setTodoId(1L);t.setBusinessType("LEAD");t.setBusinessId(7L);t.setRootTodoId(1L);return t;}

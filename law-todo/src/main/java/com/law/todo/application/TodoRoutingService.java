@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -87,7 +88,8 @@ public class TodoRoutingService
                         : definition.event() == null ? 1 : definition.event().payloadVersion();
                 String hash = previous.getDefinitionHash() == null ? text(value(version, "definition_hash", "definitionHash")) : previous.getDefinitionHash();
                 RoutingResult result = engine.advance(new RouteContext(definition.routing(), hash, schemaVersion, previous, token, payload));
-                for (NextTask task : result.tasks()) createNext(previous, task, hash, schemaVersion);
+                for (NextTask task : result.tasks())
+                    createNext(previous, task, hash, schemaVersion, payload);
                 return result;
             }
         }
@@ -108,7 +110,8 @@ public class TodoRoutingService
 
         Map<String, Object> version = mapper.selectTemplateVersionById(templateVersionId);
         if (version == null || version.isEmpty()) throw new TodoException("TODO_NEXT_TEMPLATE_NOT_FOUND", "下一待办模板版本不存在");
-        Assignment assignment = assignment(version, previous);
+        Assignment assignment = assignment(version, previous, Map.of());
+        requireAssignment(assignment);
         TodoInstance next = build(previous, version, assignment, templateVersionId, title, businessType, businessId, key);
         applySla(next, text(value(version, "sla_rule_json", "slaRuleJson")));
         try
@@ -131,6 +134,13 @@ public class TodoRoutingService
     @Transactional
     public TodoInstance createNext(TodoInstance previous, NextTask task, String definitionHash, int payloadSchemaVersion)
     {
+        return createNext(previous,task,definitionHash,payloadSchemaVersion,Map.of());
+    }
+
+    @Transactional
+    public TodoInstance createNext(TodoInstance previous, NextTask task, String definitionHash,
+            int payloadSchemaVersion,Map<String,Object> routingPayload)
+    {
         String businessType = previous.getBusinessType();Long businessId = previous.getBusinessId();
         String key = task.token().rootTodoId() + ":" + task.nodeKey() + ":" + businessType + ":" + businessId + ":" + task.token().occurrence();
         TodoInstance existing = mapper.selectByNextKey(key);
@@ -139,7 +149,8 @@ public class TodoRoutingService
         if (version == null || version.isEmpty()) throw new TodoException("TODO_NEXT_TEMPLATE_NOT_FOUND", "Next Todo template version does not exist");
         if (!"PUBLISHED".equals(text(version.get("status"))))
             throw new TodoException("TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED", "TASK must reference a published template version");
-        Assignment assignment = assignment(version, previous);
+        Assignment assignment = assignment(version, previous, routingPayload);
+        requireAssignment(assignment);
         TodoInstance next = build(previous, version, assignment, task.templateVersionId(), null, businessType, businessId, key);
         next.setDefinitionHash(definitionHash);
         next.setRouteDefinitionVersionId(previous.getRouteDefinitionVersionId() == null ? previous.getTemplateVersionId() : previous.getRouteDefinitionVersionId());
@@ -184,22 +195,6 @@ public class TodoRoutingService
         if(fence==null||!normalizedOccurrenceKey.equals(text(fence.get("occurrenceKey")))
                 ||!sameIdentity(identity,fence,"occurrenceId")||!sameIdentity(identity,fence,"windowId"))
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence identity changed");
-        String occurrenceStatus=text(fence.get("status"));
-        TodoInstance existing=mapper.selectByNextKey(key);
-        if("MATERIALIZED".equals(occurrenceStatus))
-        {
-            Long linkedTodoId=longValue(fence.get("todoId"));
-            if(existing!=null&&(linkedTodoId==null||linkedTodoId.equals(existing.getTodoId())))return existing;
-            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_LINK_INVALID","Materialized occurrence has no matching Todo");
-        }
-        if(!"CLAIMED".equals(occurrenceStatus)||!"PROCESSING".equals(text(fence.get("windowStatus"))))
-            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence is no longer claimable");
-        int occurrenceVersion=Integer.parseInt(String.valueOf(fence.get("version")));
-        if(existing!=null)
-        {
-            linkScheduleOccurrence(normalizedOccurrenceKey,existing.getTodoId(),occurrenceVersion);
-            return existing;
-        }
         Map<String,Object> version=mapper.selectTemplateVersionById(templateVersionId);
         if(version==null||version.isEmpty())
             throw new TodoException("TODO_NEXT_TEMPLATE_NOT_FOUND","Scheduled Todo template version does not exist");
@@ -208,17 +203,40 @@ public class TodoRoutingService
         String templateBusinessType=text(value(version,"business_type","businessType"));
         if(templateBusinessType!=null&&!templateBusinessType.equals(previous.getBusinessType()))
             throw new TodoException("TODO_SCHEDULE_TEMPLATE_BUSINESS_MISMATCH","Scheduled template business type does not match the previous Todo");
+        ScheduledGraph graph=scheduledGraph(version);
+        String occurrenceStatus=text(fence.get("status"));
+        TodoInstance existing=mapper.selectByNextKey(key);
+        if("MATERIALIZED".equals(occurrenceStatus))
+        {
+            Long linkedTodoId=longValue(fence.get("todoId"));
+            if(linkedTodoId==null||existing==null||!linkedTodoId.equals(existing.getTodoId()))
+                throw new TodoException("TODO_SCHEDULE_OCCURRENCE_LINK_INVALID",
+                        "Materialized occurrence has no exact linked Todo");
+            return requireScheduledRouteSnapshot(existing,normalizedOccurrenceKey,graph.start(),
+                    templateVersionId,previous);
+        }
+        if(!"CLAIMED".equals(occurrenceStatus)||!"PROCESSING".equals(text(fence.get("windowStatus"))))
+            throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_CLAIMED","Schedule occurrence is no longer claimable");
+        int occurrenceVersion=Integer.parseInt(String.valueOf(fence.get("version")));
+        if(existing!=null)
+        {
+            requireScheduledRouteSnapshot(existing,normalizedOccurrenceKey,graph.start(),
+                    templateVersionId,previous);
+            linkScheduleOccurrence(normalizedOccurrenceKey,existing.getTodoId(),occurrenceVersion);
+            return existing;
+        }
         Assignment assignment=scheduledAssignment(version,previous);
         if(assignment.ownerId()==null&&assignment.candidateType()==null)
             throw new TodoException("TODO_OWNER_UNRESOLVED","Scheduled Todo owner could not be resolved");
         TodoInstance next=build(previous,version,assignment,templateVersionId,null,
                 previous.getBusinessType(),previous.getBusinessId(),key);
+        next.setRootTodoId(null);
         next.setOccurrenceKey(normalizedOccurrenceKey);
         next.setDefinitionHash(text(value(version,"definition_hash","definitionHash")));
         next.setRouteDefinitionVersionId(templateVersionId);
         next.setUiSchemaSnapshot(text(value(version,"ui_schema_json","uiSchemaJson")));
         next.setSlaSnapshot(text(value(version,"sla_rule_json","slaRuleJson")));
-        snapshotScheduledGraph(next,version);
+        snapshotScheduledGraph(next,graph);
         next.setDueAt(dueAt);
         if(!dueAt.isAfter(next.getCreatedAt()))next.setSlaStatus("OVERDUE");
         try { mapper.insertInstance(next); }
@@ -227,6 +245,8 @@ public class TodoRoutingService
             TodoInstance concurrent=mapper.selectByNextKey(key);
             if(concurrent!=null)
             {
+                requireScheduledRouteSnapshot(concurrent,normalizedOccurrenceKey,graph.start(),
+                        templateVersionId,previous);
                 linkScheduleOccurrence(normalizedOccurrenceKey,concurrent.getTodoId(),occurrenceVersion);
                 return concurrent;
             }
@@ -234,6 +254,7 @@ public class TodoRoutingService
         }
         if(next.getTodoId()==null)
             throw new TodoException("TODO_SCHEDULE_TODO_ID_MISSING","Scheduled Todo identity was not generated");
+        initializeScheduledRootRoute(next);
         insertRelation(next);insertCandidate(next,assignment);
         insertScheduledSla(next,previous,version);
         linkScheduleOccurrence(normalizedOccurrenceKey,next.getTodoId(),occurrenceVersion);
@@ -266,14 +287,54 @@ public class TodoRoutingService
         return next;
     }
 
-    private Assignment assignment(Map<String, Object> version, TodoInstance previous)
+    private Assignment assignment(Map<String, Object> version, TodoInstance previous,
+            Map<String,Object> routingPayload)
     {
+        String document=text(value(version,"compiled_json","compiledJson"));
+        if(document==null||document.isBlank())document=text(value(version,"definition_json","definitionJson"));
+        if(document!=null&&!document.isBlank())
+        {
+            try
+            {
+                TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
+                if(definition.owner()==null)
+                    throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED",
+                            "Canonical definition is missing its owner rule");
+                Map<String,Object> payload=new LinkedHashMap<>();
+                if(previous.getOwnerId()!=null)payload.put("ownerId",previous.getOwnerId());
+                if(routingPayload!=null)payload.putAll(routingPayload);
+                OwnerResolutionResult resolved=resolver.resolve(
+                        resolveStableOwnerReferences(definition.owner()),
+                        new OwnerResolutionContext(payload,previous.getBusinessType(),
+                                previous.getBusinessId(),LocalDateTime.now()));
+                if(resolved.ownerId()!=null)
+                    return new Assignment(resolved.ownerId(),"USER",resolved.ownerId());
+                if(!resolved.candidateUserIds().isEmpty())
+                    return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
+                return new Assignment(null,null,null);
+            }
+            catch(TodoException explicit){throw explicit;}
+            catch(RuntimeException invalid)
+            {
+                throw new TodoException("TODO_OWNER_RULE_RESOLUTION_FAILED",
+                        "Canonical owner definition cannot be resolved");
+            }
+        }
         String ownerRule = text(value(version, "owner_rule_json", "ownerRuleJson"));
-        Map<String, Object> payload = new HashMap<>();payload.put("ownerId", previous.getOwnerId());
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("ownerId", previous.getOwnerId());
+        if(routingPayload!=null)payload.putAll(routingPayload);
         Assignment resolved = resolver.resolve(ownerRule, payload);
         if (resolved.ownerId() == null && resolved.candidateType() == null && (ownerRule == null || ownerRule.isBlank()))
             return new Assignment(previous.getOwnerId(), previous.getOwnerId() == null ? null : "USER", previous.getOwnerId());
         return resolved;
+    }
+
+    private void requireAssignment(Assignment assignment)
+    {
+        if(assignment.ownerId()==null&&assignment.candidateType()==null)
+            throw new TodoException("TODO_OWNER_UNRESOLVED",
+                    "Todo owner or candidate could not be resolved");
     }
 
     private Assignment scheduledAssignment(Map<String,Object> version,TodoInstance previous)
@@ -383,16 +444,73 @@ public class TodoRoutingService
         return config;
     }
 
-    private void snapshotScheduledGraph(TodoInstance todo,Map<String,Object> version)
+    private ScheduledGraph scheduledGraph(Map<String,Object> version)
     {
         String document=text(value(version,"compiled_json","compiledJson"));
         if(document==null||document.isBlank())document=text(value(version,"definition_json","definitionJson"));
-        if(document==null||document.isBlank())return;
+        if(document==null||document.isBlank())
+            throw new TodoException("TODO_SCHEDULE_ROUTE_DEFINITION_REQUIRED",
+                    "Scheduled Todo requires an executable route definition");
         TodoDefinitionDocument definition=new TodoDefinitionCodec().read(document);
-        if(definition.event()!=null)todo.setPayloadSchemaVersion(definition.event().payloadVersion());
-        if(definition.routing()!=null&&definition.routing().config().containsKey("nodes"))
-            todo.setRouteNodeKey(text(definition.routing().config().get("start")));
+        String start=definition.routing()==null?null:text(definition.routing().config().get("start"));
+        if(start==null||start.isBlank()||!definition.routing().config().containsKey("nodes"))
+            throw new TodoException("TODO_SCHEDULE_ROUTE_DEFINITION_REQUIRED",
+                    "Scheduled Todo requires an executable route start node");
+        return new ScheduledGraph(start,definition.event()==null?1:definition.event().payloadVersion());
     }
+
+    private void snapshotScheduledGraph(TodoInstance todo,ScheduledGraph graph)
+    {
+        todo.setPayloadSchemaVersion(graph.payloadVersion());
+        todo.setRouteNodeKey(graph.start());
+    }
+
+    private void initializeScheduledRootRoute(TodoInstance todo)
+    {
+        if(todo.getTodoId()==null||todo.getRouteNodeKey()==null)
+            throw new TodoException("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",
+                    "Scheduled Todo route identity cannot be initialized");
+        RouteToken token=new RouteToken(todo.getTodoId(),todo.getRouteNodeKey(),null,0,
+                RouteTokenStatus.ACTIVE);
+        todo.setRootTodoId(todo.getTodoId());
+        todo.setRouteToken(JSON.toJSONString(token));
+        if(mapper.updateInitialRouteSnapshot(todo.getTodoId(),todo.getTodoId(),
+                todo.getRouteToken(),todo.getOccurrenceKey())!=1)
+            throw new TodoException("TODO_SCHEDULE_ROUTE_SNAPSHOT_PERSIST_FAILED",
+                    "Scheduled Todo route identity could not be persisted");
+    }
+
+    private TodoInstance requireScheduledRouteSnapshot(TodoInstance todo,String occurrenceKey,
+            String start,Long templateVersionId,TodoInstance previous)
+    {
+        if(todo==null||todo.getTodoId()==null||!todo.getTodoId().equals(todo.getRootTodoId())
+                ||!start.equals(todo.getRouteNodeKey())
+                ||!occurrenceKey.equals(todo.getOccurrenceKey())
+                ||!java.util.Objects.equals(templateVersionId,todo.getTemplateVersionId())
+                ||!java.util.Objects.equals(previous.getBusinessType(),todo.getBusinessType())
+                ||!java.util.Objects.equals(previous.getBusinessId(),todo.getBusinessId())
+                ||todo.getRouteToken()==null||todo.getRouteToken().isBlank())
+            throw new TodoException("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",
+                    "Existing scheduled Todo has an incomplete route identity");
+        try
+        {
+            RouteToken token=JSON.parseObject(todo.getRouteToken(),RouteToken.class);
+            if(token==null||!todo.getTodoId().equals(token.rootTodoId())
+                    ||!start.equals(token.nodeKey())||token.branchKey()!=null
+                    ||token.occurrence()!=0||token.status()!=RouteTokenStatus.ACTIVE)
+                throw new TodoException("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",
+                        "Existing scheduled Todo route token does not match its persisted identity");
+        }
+        catch(TodoException explicit){throw explicit;}
+        catch(RuntimeException malformed)
+        {
+            throw new TodoException("TODO_SCHEDULE_ROUTE_SNAPSHOT_INVALID",
+                    "Existing scheduled Todo route token is malformed");
+        }
+        return todo;
+    }
+
+    private record ScheduledGraph(String start,int payloadVersion) { }
 
     private void insertRelation(TodoInstance todo)
     {

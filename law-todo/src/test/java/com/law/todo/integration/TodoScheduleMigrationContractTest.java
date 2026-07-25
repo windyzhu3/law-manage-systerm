@@ -24,6 +24,11 @@ class TodoScheduleMigrationContractTest
             "V0_20_49__todo_schedule_policy_snapshot.sql");
     private static final String PUBLISHED_V049_SHA256=
             "4eb9dc7bf1f8ac41814d19eaa25ffe20a5d8e80066be8e62ddb6a7b7b5597ffa";
+    private static final Path PUBLISHED_V050_FIXTURE=Path.of("..","ruoyi-admin","src","test",
+            "resources","db","published-309e7904",
+            "V0_20_50__todo_schedule_policy_provenance.sql");
+    private static final String PUBLISHED_V050_SHA256=
+            "a6285b773d29195e7d9f34128882e169111a2b4421c48509c557ff5293d34820";
 
     @Test
     void createsVersionedPlansWindowsAndUniqueOccurrences() throws Exception
@@ -82,5 +87,17 @@ class TodoScheduleMigrationContractTest
         assertTrue(sql.contains("where not ("));
         assertTrue(sql.contains("modify column assignment_policy_snapshot_source varchar(32) not null"));
         assertTrue(sql.contains("chk_todo_schedule_plan_policy_snapshot"));
+    }
+
+    @Test
+    void publishedPolicyProvenanceMigrationRemainsByteForByteImmutable() throws Exception
+    {
+        assertEquals(-1L,Files.mismatch(POLICY_PROVENANCE_MIGRATION,PUBLISHED_V050_FIXTURE));
+        byte[] normalized=Files.readString(POLICY_PROVENANCE_MIGRATION,StandardCharsets.UTF_8)
+                .replace("\r\n","\n").getBytes(StandardCharsets.UTF_8);
+        String sha256=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(normalized));
+
+        assertEquals(PUBLISHED_V050_SHA256,sha256);
     }
 }

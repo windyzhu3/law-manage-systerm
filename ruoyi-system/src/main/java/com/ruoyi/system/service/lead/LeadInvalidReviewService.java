@@ -1,8 +1,10 @@
 package com.ruoyi.system.service.lead;
 
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
@@ -15,6 +17,7 @@ import com.law.business.security.LeadPermissions;
 import com.law.business.shared.error.BusinessErrorCode;
 import com.law.todo.application.TodoAutoActionService;
 import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.spi.TodoOrganizationPort;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
@@ -36,10 +39,20 @@ public class LeadInvalidReviewService
     private final LeadPermissionPolicy permissions;
     private final LeadDeadPoolService deadPool;
     private final BusinessEventPublisher events;
+    private final TodoOrganizationPort organization;
 
     public LeadInvalidReviewService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
             BusinessActorProvider actors, ISysDictTypeService dictionaries, LeadPermissionPolicy permissions,
             LeadDeadPoolService deadPool, BusinessEventPublisher events)
+    {
+        this(leads,facts,access,actors,dictionaries,permissions,deadPool,events,
+                TodoOrganizationPort.legacyCompatible());
+    }
+
+    @Autowired
+    public LeadInvalidReviewService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
+            BusinessActorProvider actors, ISysDictTypeService dictionaries, LeadPermissionPolicy permissions,
+            LeadDeadPoolService deadPool, BusinessEventPublisher events,TodoOrganizationPort organization)
     {
         this.leads = leads;
         this.facts = facts;
@@ -49,6 +62,7 @@ public class LeadInvalidReviewService
         this.permissions = permissions;
         this.deadPool = deadPool;
         this.events = events;
+        this.organization=organization;
     }
 
     @Transactional
@@ -67,6 +81,8 @@ public class LeadInvalidReviewService
         require(review.getReviewerId() != null
                 && (actor.administrator() || actor.userId().equals(review.getReviewerId())),
                 "LEAD_INVALID_REVIEW_REVIEWER_INVALID");
+        require(organization.isAvailable(review.getReviewerId(),LocalDateTime.now()),
+                "TODO_OWNER_UNAVAILABLE");
         String result = trim(command.getReviewResult());
         requireDict("law_lead_invalid_review_result", result);
         return apply(command,lead,review,result,actor,false);
@@ -127,7 +143,8 @@ public class LeadInvalidReviewService
         else require(false, "Unknown review result");
 
         publish(lead, review, result, qualityId, actor);
-        return new InvalidReviewOutcome(result, review.getReviewId(), qualityId, deadPoolLogId, false);
+        return new InvalidReviewOutcome(result, review.getReviewId(), qualityId, deadPoolLogId, false,
+                "MISJUDGED_VALID".equals(result)?lead.getOwnerId():null);
     }
 
     private Long insertQuality(BizLead lead, BizLeadInvalidReview review, LeadInvalidReviewCommand command,
@@ -198,7 +215,8 @@ public class LeadInvalidReviewService
         }
         if ("MISJUDGED_VALID".equals(review.getReviewResult())) requireEvidence(qualityId != null);
         return new InvalidReviewOutcome(review.getReviewResult(), review.getReviewId(), qualityId,
-                deadPoolLogId, true);
+                deadPoolLogId, true,"MISJUDGED_VALID".equals(review.getReviewResult())
+                        ?lead.getOwnerId():null);
     }
 
     private void requireDict(String type, String value)
@@ -224,5 +242,5 @@ public class LeadInvalidReviewService
     private String trim(String value) { return value == null ? null : value.trim(); }
 
     public record InvalidReviewOutcome(String result, Long reviewId, Long qualityRecordId,
-            Long deadPoolLogId, boolean replayed) { }
+            Long deadPoolLogId, boolean replayed,Long ownerId) { }
 }

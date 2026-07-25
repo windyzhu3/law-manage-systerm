@@ -5,6 +5,7 @@ import static com.ruoyi.system.support.BusinessFixtures.lead;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,6 +59,7 @@ class LeadFirstContactServiceTest
         stored.setDisposition("ACTIVE");
         stored.setFirstContactStatus("PENDING");
         stored.setRowVersion(4);
+        when(organization.isAvailable(anyLong(),any())).thenReturn(true);
     }
 
     @Test

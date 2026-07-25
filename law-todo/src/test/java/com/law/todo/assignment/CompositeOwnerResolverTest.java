@@ -242,6 +242,25 @@ class CompositeOwnerResolverTest
     }
 
     @Test
+    void stableBusinessActorRejectsUnavailableOwnerWithoutDelegationOrFallback()
+    {
+        organization.unavailable.add(11L);
+        organization.delegate = 22L;
+
+        OwnerResolutionResult result = resolve(new OwnerRule(Map.of(
+                "type", "USER", "value", 11L,
+                "skipUnavailable", false,
+                "useDelegation", false,
+                "requireAvailable", true,
+                "fallback", Map.of("type", "USER", "value", 33L))));
+
+        assertEquals(null, result.ownerId());
+        assertEquals(List.of(), result.candidateUserIds());
+        assertFalse(result.fallbackUsed());
+        assertTrue(result.trace().contains("primary:11:unavailable-required"));
+    }
+
+    @Test
     void recursiveRuleObjectFailsWithStableCycleCode()
     {
         OwnerRule cyclic = mock(OwnerRule.class);

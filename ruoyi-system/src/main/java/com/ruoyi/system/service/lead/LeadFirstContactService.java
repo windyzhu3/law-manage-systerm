@@ -63,6 +63,8 @@ public class LeadFirstContactService
         BizLead lead = access.requireOperable(command.getLeadId());
         BusinessActor actor = actors.current();
         requireOwner(lead, actor);
+        require(lead.getOwnerId()!=null&&organization.isAvailable(lead.getOwnerId(),LocalDateTime.now()),
+                BusinessErrorCode.PRECONDITION_FAILED,"TODO_OWNER_UNAVAILABLE");
         require("ACTIVE".equals(lead.getDisposition())
                 && (lead.getFirstContactStatus() == null || "PENDING".equals(lead.getFirstContactStatus())),
                 BusinessErrorCode.STATE_CONFLICT, "LEAD_FIRST_CONTACT_STATE_INVALID");
@@ -124,7 +126,8 @@ public class LeadFirstContactService
         }
         events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload),
                 actor);
-        return new FirstContactOutcome(result, businessFactId, followupId, call.callRecordId(), reviewId, planId);
+        return new FirstContactOutcome(result, businessFactId, followupId, call.callRecordId(),
+                reviewId, planId,lead.getOwnerId(),review==null?null:review.reviewerId());
     }
 
     private Long insertFollowup(LeadFirstContactCommand command, BusinessActor actor, String result)
@@ -149,6 +152,8 @@ public class LeadFirstContactService
         Long reviewerId=organization.supervisor(lead.getOwnerId(),1)
                 .orElseThrow(()->new ServiceException("TODO_OWNER_UNRESOLVED",
                         BusinessErrorCode.PRECONDITION_FAILED.name()));
+        require(organization.isAvailable(reviewerId,LocalDateTime.now()),
+                BusinessErrorCode.PRECONDITION_FAILED,"TODO_OWNER_UNAVAILABLE");
         String key = "LEAD_INVALID_REVIEW:" + lead.getLeadId() + ":" + command.getTodoId();
         BizLeadInvalidReview review = new BizLeadInvalidReview();
         review.setLeadId(lead.getLeadId());
@@ -227,6 +232,6 @@ public class LeadFirstContactService
     private String trim(String value) { return value == null ? null : value.trim(); }
 
     public record FirstContactOutcome(String result, Long businessFactId, Long followupId, Long callRecordId,
-            Long reviewId, Long schedulePlanId) { }
+            Long reviewId, Long schedulePlanId,Long ownerId,Long reviewerId) { }
     private record ReviewSubmission(Long reviewId,Long reviewerId) { }
 }

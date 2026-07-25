@@ -4,8 +4,8 @@
   "stage": "阶段1-2",
   "businessType": "LEAD",
   "definitionPackageState": "READY",
-  "foundationState": "BLOCKED",
-  "productionState": "BLOCKED",
+  "foundationState": "READY",
+  "productionState": "READY",
   "definition": {
     "schemaVersion": 1,
     "templateCode": "TD-002",
@@ -16,13 +16,11 @@
     },
     "owner": {
       "config": {
-        "type": "SUPERVISOR",
-        "sourceField": "ownerId",
-        "levels": 1,
-        "fallback": {
-          "type": "ROLE",
-          "roleKey": "law_partner_manager"
-        }
+        "type": "PAYLOAD",
+        "field": "reviewerId",
+        "skipUnavailable": false,
+        "useDelegation": false,
+        "requireAvailable": true
       }
     },
     "dod": {
@@ -31,14 +29,16 @@
           "reviewResult",
           "reviewOpinion"
         ],
-        "materials": []
+        "materials": [],
+        "conditionalRequired": [],
+        "validatorRefs": []
       }
     },
     "sla": {
       "config": {
         "calendarCode": "DEFAULT",
         "minutes": 1440,
-        "onDue": "DEFAULT_APPROVE"
+        "onDue": "COMPLETE_DEFAULT"
       }
     },
     "ui": {
@@ -49,6 +49,7 @@
           {
             "key": "reviewResult",
             "type": "dict",
+            "dictType": "law_lead_invalid_review_result",
             "label": "复核结果"
           },
           {
@@ -60,15 +61,97 @@
       }
     },
     "routing": {
-      "config": {}
+      "config": {
+        "identityBinding": "MIGRATION_DYNAMIC",
+        "start": "td002",
+        "nodes": [
+          {
+            "key": "td002",
+            "type": "TASK",
+            "templateCode": "TD-002",
+            "templateVersionId": 2
+          },
+          {
+            "key": "reviewResult",
+            "type": "DECISION"
+          },
+          {
+            "key": "reopenedTd001",
+            "type": "TASK",
+            "templateCode": "TD-001",
+            "templateVersionId": 1
+          },
+          {
+            "key": "end",
+            "type": "END"
+          }
+        ],
+        "edges": [
+          {
+            "key": "td002-result",
+            "from": "td002",
+            "to": "reviewResult",
+            "priority": 0
+          },
+          {
+            "key": "review-invalid",
+            "from": "reviewResult",
+            "to": "end",
+            "priority": 20,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "reviewResult",
+                  "operator": "EQ",
+                  "value": "TRUE_INVALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "review-reopen",
+            "from": "reviewResult",
+            "to": "reopenedTd001",
+            "priority": 10,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "reviewResult",
+                  "operator": "EQ",
+                  "value": "MISJUDGED_VALID"
+                }
+              }
+            }
+          },
+          {
+            "key": "review-default",
+            "from": "reviewResult",
+            "to": "end",
+            "priority": -1,
+            "default": true
+          },
+          {
+            "key": "reopened-end",
+            "from": "reopenedTd001",
+            "to": "end",
+            "priority": 0
+          }
+        ]
+      }
     },
     "autoActions": [
       {
         "config": {
-          "ruleKey": "td002-default-approve",
+          "ruleKey": "td002-default-invalid",
           "actionType": "COMPLETE_DEFAULT",
           "capability": "COMPLETE_DEFAULT",
           "triggerAt": "DUE",
+          "fields": {
+            "reviewResult": "TRUE_INVALID",
+            "reviewOpinion": "超过24小时未复核，系统按规则默认确认无效"
+          },
           "maxAttempts": 3,
           "retryDelayMinutes": 5,
           "claimTimeoutMinutes": 15
@@ -86,7 +169,7 @@
     ]
   },
   "routingPlan": {
-    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "binding": "PUBLISHED_NUMERIC_VERSION",
     "start": "TD-002",
     "transitions": [
       {
@@ -102,47 +185,31 @@
           "TD-001"
         ],
         "businessAction": "REOPEN_FIRST_CONTACT"
-      },
-      {
-        "on": "DUE",
-        "to": [
-          "END"
-        ],
-        "businessAction": "DEFAULT_APPROVE_INVALID"
       }
     ],
-    "notes": []
+    "notes": [
+      "The controlled DUE completion emits the same TRUE_INVALID routing payload as a human confirmation."
+    ]
   },
   "handlerCapability": {
     "requiredCode": "TD-002_COMPLETE",
-    "repositoryStatus": "MISSING",
+    "repositoryStatus": "PRESENT",
     "existingCandidate": null,
     "requireBusinessWriteback": true
   },
   "businessDependencies": [
     {
       "code": "LEAD_INVALID_REVIEW_EVENT",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少疑似无效事件生产者"
+      "repositoryStatus": "PRESENT",
+      "reason": "The suspect-invalid business fact producer is implemented."
     },
     {
       "code": "LEAD_INVALID_REVIEW_HANDLER",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少Dead-Pool/重开首联业务处理器"
+      "repositoryStatus": "PRESENT",
+      "reason": "Human and controlled-automatic review handlers are implemented."
     }
   ],
-  "blockers": [
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "LEAD_INVALID_REVIEW_EVENT",
-      "reason": "缺少疑似无效事件生产者"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "LEAD_INVALID_REVIEW_HANDLER",
-      "reason": "缺少Dead-Pool/重开首联业务处理器"
-    }
-  ],
+  "blockers": [],
   "acceptanceRefs": [
     "AT-TD-002-OWNER",
     "AT-TD-002-SLA",

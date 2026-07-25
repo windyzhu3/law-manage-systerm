@@ -1,6 +1,7 @@
 package com.ruoyi.system.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -17,6 +18,7 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,7 @@ import com.law.file.security.FileAccessPolicy;
 import com.law.todo.application.TodoCommandService;
 import com.law.todo.application.TodoDodService;
 import com.law.todo.application.TodoRoutingService;
+import com.law.todo.application.TodoAssignmentResolver;
 import com.law.todo.application.command.TodoActionCommands.ActionCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.domain.TodoAccessPolicy;
@@ -47,6 +50,7 @@ import com.law.todo.routing.TodoRoutingEngine.RoutingResult;
 import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.schedule.TodoScheduleService.ScheduleCompletion;
 import com.law.todo.schedule.TodoScheduleService.ScheduleOccurrenceContext;
+import com.law.todo.spi.TodoOrganizationPort;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadCallRecord;
@@ -63,7 +67,8 @@ import com.ruoyi.system.service.lead.LeadRetryService;
 
 /**
  * Production service path with JDBC-backed mapper ports. Attempts one and two retain TD-003; the
- * configured limit completes it and routes only from the Task 6 server outcome.
+ * configured limit completes it without creating the next TD-003, and only the due schedule job
+ * materializes the next occurrence.
  */
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes=LeadRetryTodoCommandFlowTest.TestConfiguration.class)
@@ -88,14 +93,14 @@ class LeadRetryTodoCommandFlowTest
         reset(AopTestUtils.getUltimateTargetObject(todos),todoAccess,leads,facts,schedules);
         routing.reset();
         jdbc.execute("drop all objects");
-        jdbc.execute("create table todo_instance(todo_id bigint primary key,status varchar(32),template_version_id bigint,next_key varchar(255))");
+        jdbc.execute("create table todo_instance(todo_id bigint primary key,status varchar(32),template_version_id bigint,next_key varchar(255),root_todo_id bigint,route_node_key varchar(128),route_token varchar(1000),occurrence_key varchar(255))");
         jdbc.execute("create table todo_action(action_id varchar(128) primary key,todo_id bigint,action_type varchar(32),from_status varchar(32),to_status varchar(32))");
         jdbc.execute("create table todo_relation(todo_id bigint,business_type varchar(32),business_id bigint)");
         jdbc.execute("create table lead_state(lead_id bigint primary key,retry_stage varchar(32),attempt_count int,row_version int,disposition varchar(32),first_result varchar(32),owner_id bigint,dept_id bigint)");
         jdbc.execute("create table call_fact(call_record_id bigint primary key,lead_id bigint,todo_id bigint,occurrence_key varchar(255) unique)");
         jdbc.execute("create table retry_fact(retry_record_id bigint primary key,lead_id bigint,todo_id bigint,plan_id bigint,window_code varchar(32),attempt_no int,result_code varchar(32),next_stage varchar(32),idempotency_key varchar(255) unique)");
         jdbc.execute("create table schedule_occurrence(occurrence_id bigint primary key,todo_id bigint,occurrence_key varchar(128),status varchar(32),result_code varchar(32))");
-        jdbc.update("insert into todo_instance(todo_id,status,template_version_id,next_key) values(31,'SUBMITTED',13,null)");
+        jdbc.update("insert into todo_instance(todo_id,status,template_version_id,next_key,root_todo_id,route_node_key,route_token,occurrence_key) values(31,'SUBMITTED',13,null,31,'retry','{\"rootTodoId\":31,\"nodeKey\":\"retry\",\"branchKey\":null,\"occurrence\":0,\"status\":\"ACTIVE\"}','81:T0:1')");
         jdbc.update("insert into lead_state values(7,'T0',0,0,'ACTIVE','UNREACHABLE',8,3)");
         jdbc.update("insert into schedule_occurrence values(91,31,'81:T0:1','MATERIALIZED',null)");
 
@@ -106,6 +111,9 @@ class LeadRetryTodoCommandFlowTest
                 (Object)invocation.getArgument(0)));
         when(todos.selectTemplateVersionById(any())).thenAnswer(invocation->
                 version(invocation.getArgument(0)));
+        when(todos.selectCalendarByCode("DEFAULT")).thenReturn(Map.of(
+                "calendar_id",1L,"work_days","1,2,3,4,5,6,7",
+                "work_start","00:00:00","work_end","23:59:59","exception_json","{}"));
         when(todos.updateStatusConditionally(anyLong(),anyString(),anyString(),any(),anyString()))
                 .thenAnswer(invocation->jdbc.update(
                         "update todo_instance set status=? where todo_id=? and status=?",
@@ -126,9 +134,16 @@ class LeadRetryTodoCommandFlowTest
         when(todos.insertInstance(any(TodoInstance.class))).thenAnswer(invocation->{
             TodoInstance next=invocation.getArgument(0);
             next.setTodoId(41L);
-            return jdbc.update("insert into todo_instance values(?,?,?,?)",next.getTodoId(),
-                    next.getStatus(),next.getTemplateVersionId(),next.getNextIdempotencyKey());
+            return jdbc.update("insert into todo_instance(todo_id,status,template_version_id,next_key,root_todo_id,route_node_key,route_token,occurrence_key) values(?,?,?,?,?,?,?,?)",
+                    next.getTodoId(),next.getStatus(),next.getTemplateVersionId(),
+                    next.getNextIdempotencyKey(),next.getRootTodoId(),next.getRouteNodeKey(),
+                    next.getRouteToken(),next.getOccurrenceKey());
         });
+        when(todos.updateInitialRouteSnapshot(anyLong(),anyLong(),anyString(),anyString()))
+                .thenAnswer(invocation->jdbc.update(
+                        "update todo_instance set root_todo_id=?,route_token=?,occurrence_key=? where todo_id=? and root_todo_id is null and route_node_key is not null",
+                        invocation.getArgument(1),invocation.getArgument(2),
+                        invocation.getArgument(3),invocation.getArgument(0)));
         when(todos.insertRelation(anyMap())).thenAnswer(invocation->{
             Map<String,Object> value=invocation.getArgument(0);
             return jdbc.update("insert into todo_relation values(?,?,?)",value.get("todoId"),
@@ -172,7 +187,7 @@ class LeadRetryTodoCommandFlowTest
     }
 
     @Test
-    void attempts_one_two_and_limit_follow_server_terminality_and_exact_route()
+    void attempts_one_two_and_limit_waitForDueScheduleBeforeCreatingNextTd003()
     {
         TodoInstance first=commands.complete(31L,attempt("retry-1","NEXT_WINDOW",1),
                 new Actor(8L,"alice",3L));
@@ -208,8 +223,51 @@ class LeadRetryTodoCommandFlowTest
         assertEquals(Map.of("result","NEXT_WINDOW","retryRecordId",3L,
                 "nextStage","T1_AM","attemptNo",3,"replayed",false),
                 routing.payloads().get(0));
-        assertEquals(14L,scalar(
+        assertEquals(0,count("todo_relation"));
+        assertEquals(0,count("todo_instance where todo_id=41"));
+
+        LocalDateTime due=LocalDateTime.of(2026,7,27,9,0);
+        LocalDateTime materializedAt=LocalDateTime.of(2026,7,27,9,1);
+        Map<String,Object> dueWindow=new LinkedHashMap<>();
+        dueWindow.put("windowId",83L);dueWindow.put("planId",81L);
+        dueWindow.put("version",0);dueWindow.put("windowCode","T1_AM");
+        dueWindow.put("occurrenceNo",1);dueWindow.put("dueAt",due);
+        dueWindow.put("previousTodoId",31L);dueWindow.put("templateVersionId",13L);
+        when(todos.selectDueScheduleWindows(materializedAt,
+                materializedAt.minusMinutes(5),10)).thenReturn(List.of(dueWindow));
+        when(todos.claimScheduleWindow(83L,0,materializedAt,
+                materializedAt.minusMinutes(5))).thenReturn(1);
+        when(todos.insertScheduleOccurrenceIfAbsent(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> occurrence=invocation.getArgument(0);
+            occurrence.put("occurrenceId",92L);occurrence.put("version",0);
+            return 1;
+        });
+        when(todos.claimScheduleOccurrence(92L,0,materializedAt,
+                materializedAt.minusMinutes(5))).thenReturn(1);
+        when(todos.selectScheduleOccurrenceIdentityByKey("81:T1_AM:1")).thenReturn(Map.of(
+                "occurrenceId",92L,"planId",81L,"windowId",83L,
+                "occurrenceKey","81:T1_AM:1"));
+        when(todos.selectSchedulePlanForUpdate(81L)).thenReturn(Map.of(
+                "planId",81L,"status","ACTIVE","templateVersionId",13L));
+        when(todos.selectScheduleOccurrenceWindowForUpdate("81:T1_AM:1",81L)).thenReturn(Map.of(
+                "occurrenceId",92L,"planId",81L,"windowId",83L,
+                "occurrenceKey","81:T1_AM:1","version",0,
+                "status","CLAIMED","windowStatus","PROCESSING"));
+        when(todos.linkScheduleOccurrenceByKey(eq("81:T1_AM:1"),eq(41L),eq(0),any()))
+                .thenReturn(1);
+        when(todos.completeScheduleOccurrence(92L,41L,materializedAt)).thenReturn(1);
+
+        assertEquals(1,new TodoScheduleService(todos,routing).materializeDue(
+                materializedAt,10));
+
+        assertEquals(13L,scalar(
                 "select template_version_id from todo_instance where todo_id=41",Long.class));
+        assertEquals("SCHEDULE:81:T1_AM:1",scalar(
+                "select next_key from todo_instance where todo_id=41",String.class));
+        assertEquals(41L,scalar(
+                "select root_todo_id from todo_instance where todo_id=41",Long.class));
+        assertTrue(scalar("select route_token from todo_instance where todo_id=41",String.class)
+                .contains("\"rootTodoId\":41"));
         assertEquals(1,count("todo_relation"));
     }
 
@@ -234,7 +292,7 @@ class LeadRetryTodoCommandFlowTest
     private TodoInstance todo(Long id)
     {
         Map<String,Object> row=row(
-                "select todo_id todoId,status,template_version_id templateVersionId,next_key nextKey from todo_instance where todo_id=?",
+                "select todo_id todoId,status,template_version_id templateVersionId,next_key nextKey,root_todo_id rootTodoId,route_node_key routeNodeKey,route_token routeToken,occurrence_key occurrenceKey from todo_instance where todo_id=?",
                 (Object)id);
         if(row==null)return null;
         TodoInstance value=new TodoInstance();value.setTodoId(id);
@@ -242,10 +300,12 @@ class LeadRetryTodoCommandFlowTest
         value.setTemplateVersionId(Long.valueOf(String.valueOf(row.get("TEMPLATEVERSIONID"))));
         value.setTemplateCode(id.equals(31L)?"TD-003":"TD-004");
         value.setBusinessType("LEAD");value.setBusinessId(7L);value.setBusinessNo("LEAD-7");
-        value.setOwnerId(8L);value.setOwnerDeptId(3L);value.setRootTodoId(31L);
+        value.setOwnerId(8L);value.setOwnerDeptId(3L);
+        value.setRootTodoId(Long.valueOf(String.valueOf(row.get("ROOTTODOID"))));
         value.setDefinitionHash("retry-hash");value.setRouteDefinitionVersionId(13L);
-        value.setRouteNodeKey(id.equals(31L)?"retry":"next");
-        value.setOccurrenceKey(id.equals(31L)?"81:T0:1":String.valueOf(row.get("NEXTKEY")));
+        value.setRouteNodeKey(String.valueOf(row.get("ROUTENODEKEY")));
+        value.setRouteToken(String.valueOf(row.get("ROUTETOKEN")));
+        value.setOccurrenceKey(String.valueOf(row.get("OCCURRENCEKEY")));
         return value;
     }
 
@@ -268,10 +328,11 @@ class LeadRetryTodoCommandFlowTest
     private Map<String,Object> version(Long id)
     {
         if(Long.valueOf(13L).equals(id))return Map.of(
-                "compiled_json",routeDefinition(),"definition_hash","retry-hash");
-        if(Long.valueOf(14L).equals(id))return Map.of(
-                "status","PUBLISHED","template_id",14L,"template_code","TD-003",
-                "template_name","Next retry","business_type","LEAD","owner_rule_json","OWNER");
+                "compiled_json",routeDefinition(),"definition_json",routeDefinition(),
+                "definition_hash","retry-hash","status","PUBLISHED",
+                "template_id",13L,"template_code","TD-003",
+                "template_name","Retry","business_type","LEAD",
+                "sla_rule_json","{\"calendarCode\":\"DEFAULT\"}");
         if(Long.valueOf(15L).equals(id))return Map.of(
                 "status","PUBLISHED","template_id",15L,"template_code","TD-004",
                 "template_name","Progress","business_type","LEAD","owner_rule_json","OWNER");
@@ -282,21 +343,21 @@ class LeadRetryTodoCommandFlowTest
     {
         return """
                 {"schemaVersion":1,"templateCode":"TD-003",
+                 "owner":{"config":{"type":"BUSINESS_OWNER","businessType":"LEAD",
+                    "skipUnavailable":false,"useDelegation":false,"requireAvailable":true}},
                  "dod":{"config":{}},"ui":{"config":{}},
                  "routing":{"config":{"start":"retry","nodes":[
                    {"key":"retry","type":"TASK","templateVersionId":13},
                    {"key":"result","type":"DECISION"},
-                   {"key":"next","type":"TASK","templateVersionId":14},
                    {"key":"connected","type":"TASK","templateVersionId":15},
                    {"key":"end","type":"END"}],
                  "edges":[
                    {"key":"retry-result","from":"retry","to":"result","priority":0},
-                   {"key":"next-window","from":"result","to":"next","priority":20,
+                   {"key":"next-window","from":"result","to":"end","priority":20,
                     "condition":{"$expression":{"version":1,"root":{"field":"result","operator":"EQ","value":"NEXT_WINDOW"}}}},
                    {"key":"connected-result","from":"result","to":"connected","priority":10,
                     "condition":{"$expression":{"version":1,"root":{"field":"result","operator":"EQ","value":"CONNECTED"}}}},
                    {"key":"exhausted","from":"result","to":"end","priority":0,"default":true},
-                   {"key":"next-end","from":"next","to":"end","priority":0},
                    {"key":"connected-end","from":"connected","to":"end","priority":0}]}} ,
                  "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """;
@@ -363,8 +424,15 @@ class LeadRetryTodoCommandFlowTest
         {return new LeadRetryService(leads,facts,access,calls,actors,dictionaries,schedules,pool,events);}
         @Bean LeadRetryTodoHandler retryHandler(LeadRetryService retries,TodoScheduleService schedules)
         {return new LeadRetryTodoHandler(retries,schedules);}
-        @Bean RecordingRoutingService routing(TodoMapper mapper)
-        {return new RecordingRoutingService(mapper);}
+        @Bean TodoOrganizationPort todoOrganization()
+        {
+            TodoOrganizationPort port=mock(TodoOrganizationPort.class);
+            when(port.businessOwner("LEAD",7L)).thenReturn(Optional.of(8L));
+            when(port.isAvailable(anyLong(),any())).thenReturn(true);
+            return port;
+        }
+        @Bean RecordingRoutingService routing(TodoMapper mapper,TodoOrganizationPort organization)
+        {return new RecordingRoutingService(mapper,new TodoAssignmentResolver(organization));}
         @Bean TodoCommandService commands(TodoMapper mapper,TodoAccessPolicy access,
                 LeadRetryTodoHandler handler,RecordingRoutingService routing)
         {return new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(handler),routing);}
@@ -373,7 +441,8 @@ class LeadRetryTodoCommandFlowTest
     static class RecordingRoutingService extends TodoRoutingService
     {
         final List<Map<String,Object>> payloads=new ArrayList<>();
-        RecordingRoutingService(TodoMapper mapper){super(mapper);}
+        RecordingRoutingService(TodoMapper mapper,TodoAssignmentResolver resolver)
+        {super(mapper,resolver);}
         @Override public RoutingResult advance(TodoInstance previous,Map<String,Object> payload)
         {
             payloads.add(Map.copyOf(new LinkedHashMap<>(payload)));

@@ -14,7 +14,8 @@ const requiredClasses = [
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
   'TodoTriggerRuleMetadataMigrationContractTest',
-  'LeadFlowMapperExternalMysqlIT'
+  'LeadFlowMapperExternalMysqlIT',
+  'LeadTodoProductionPortsExternalMysqlIT'
 ]
 
 function suiteAttributes(xml, className) {

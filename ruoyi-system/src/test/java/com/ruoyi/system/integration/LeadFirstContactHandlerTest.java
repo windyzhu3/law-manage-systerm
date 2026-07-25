@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -15,6 +16,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.lead.dto.LeadFirstContactCommand;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.application.CompletionContext;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.event.LeadFirstContactHandler;
 import com.ruoyi.system.service.lead.LeadFirstContactService;
 
@@ -114,6 +117,25 @@ class LeadFirstContactHandlerTest
         assertEquals("TD-001:21:FIRST_CONTACT",
                 captured.getValue().getCallRecord().getBusinessOccurrenceKey());
         assertEquals("VALID",captured.getValue().getCallRecord().getCallResult());
+    }
+
+    @Test
+    void routingUsesOnlyPersistedLeadOwnerAndReviewerReturnedByBusinessService()
+    {
+        LeadFirstContactHandler handler=new LeadFirstContactHandler(firstContacts);
+        TodoInstance todo=todo("TD-001","First contact");
+        when(firstContacts.complete(any())).thenReturn(
+                new LeadFirstContactService.FirstContactOutcome("SUSPECT_INVALID",51L,52L,53L,
+                        61L,null,8L,91L));
+
+        CompletionResult result=handler.handle(CompletionContext.human(todo,Map.of(
+                "contactResult","SUSPECT_INVALID","ownerId",999L,"reviewerId",998L,
+                "invalidReasonCode","NO_NEED","salesExplanation","client"),
+                8L,"alice"));
+
+        assertEquals(8L,result.routingPayload().get("ownerId"));
+        assertEquals(91L,result.routingPayload().get("reviewerId"));
+        assertEquals(61L,result.routingPayload().get("reviewId"));
     }
 
     private TodoInstance todo(String code,String title)

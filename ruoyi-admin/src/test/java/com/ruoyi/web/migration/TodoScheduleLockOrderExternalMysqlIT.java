@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -118,6 +119,14 @@ class TodoScheduleLockOrderExternalMysqlIT
                 new Class<?>[]{TodoMapper.class},(proxy,method,args)->{
                     try
                     {
+                        if("selectTemplateVersionById".equals(method.getName()))
+                            return Map.of("status","PUBLISHED","business_type","LEAD",
+                                    "definition_json","""
+                                      {"schemaVersion":1,"templateCode":"TD-003",
+                                       "routing":{"config":{"start":"td003","nodes":[
+                                         {"key":"td003","type":"TASK","templateCode":"TD-003","templateVersionId":22}
+                                       ]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                                      """);
                         Object result=method.invoke(delegate,args);
                         if("selectSchedulePlanForUpdate".equals(method.getName()))
                         {
@@ -212,7 +221,14 @@ class TodoScheduleLockOrderExternalMysqlIT
                     create table todo_instance(
                       todo_id bigint not null primary key,
                       next_idempotency_key varchar(255) null,
-                      status varchar(20) not null
+                      status varchar(20) not null,
+                      root_todo_id bigint null,
+                      route_node_key varchar(128) null,
+                      route_token json null,
+                      occurrence_key varchar(192) null,
+                      template_version_id bigint null,
+                      business_type varchar(32) null,
+                      business_id bigint null
                     ) engine=innodb
                     """);
             statement.executeUpdate("""
@@ -235,8 +251,12 @@ class TodoScheduleLockOrderExternalMysqlIT
                     ) values(9,3,12,'T1_AM',1,'3:T1_AM:1',now(),55,'MATERIALIZED',now(),0)
                     """);
             statement.executeUpdate("""
-                    insert into todo_instance(todo_id,next_idempotency_key,status)
-                    values(55,'SCHEDULE:3:T1_AM:1','CREATED')
+                    insert into todo_instance(todo_id,next_idempotency_key,status,root_todo_id,
+                      route_node_key,route_token,occurrence_key,template_version_id,
+                      business_type,business_id)
+                    values(55,'SCHEDULE:3:T1_AM:1','CREATED',55,'td003',
+                      json_object('rootTodoId',55,'nodeKey','td003','branchKey',null,
+                        'occurrence',0,'status','ACTIVE'),'3:T1_AM:1',22,'LEAD',7)
                     """);
         }
     }

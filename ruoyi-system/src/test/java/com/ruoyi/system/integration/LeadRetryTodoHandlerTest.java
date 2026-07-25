@@ -76,7 +76,7 @@ class LeadRetryTodoHandlerTest
 
         assertTrue(connected.completeTodo());
         assertEquals(Map.of("result","CONNECTED","retryRecordId",72L,
-                "attemptNo",1,"replayed",false),connected.routingPayload());
+                "attemptNo",1,"replayed",false,"ownerId",8L),connected.routingPayload());
         assertTrue(next.completeTodo());
         assertEquals(Map.of("result","NEXT_WINDOW","retryRecordId",73L,
                 "nextStage","T2_PM","attemptNo",2,"replayed",false),next.routingPayload());

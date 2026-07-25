@@ -41,6 +41,7 @@ public class LeadRetryTodoHandler implements TodoCompletionHandler
         if(outcome.nextStage()!=null)routing.put("nextStage",outcome.nextStage());
         routing.put("attemptNo",outcome.attemptNo());
         routing.put("replayed",outcome.replayed());
+        if("CONNECTED".equals(outcome.result()))routing.put("ownerId",context.todo().getOwnerId());
         return "CONTINUE_CURRENT_WINDOW".equals(outcome.result())
                 ?CompletionResult.retainCurrentTodo(routing)
                 :CompletionResult.completeTodo(routing);

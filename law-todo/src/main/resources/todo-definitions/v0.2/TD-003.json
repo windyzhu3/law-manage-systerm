@@ -4,31 +4,28 @@
   "stage": "阶段1-2",
   "businessType": "LEAD",
   "definitionPackageState": "READY",
-  "foundationState": "BLOCKED",
-  "productionState": "BLOCKED",
+  "foundationState": "READY",
+  "productionState": "READY",
   "definition": {
     "schemaVersion": 1,
     "templateCode": "TD-003",
     "event": {
-      "eventType": "LEAD_FIRST_CONTACT_UNREACHABLE",
+      "eventType": "LEAD_RETRY_WINDOW_DUE",
       "payloadVersion": 1,
       "condition": {}
     },
     "owner": {
       "config": {
-        "type": "PAYLOAD",
-        "field": "ownerId",
-        "fallback": {
-          "type": "ROLE",
-          "roleKey": "sales"
-        }
+        "type": "BUSINESS_OWNER",
+        "businessType": "LEAD",
+        "skipUnavailable": false,
+        "useDelegation": false,
+        "requireAvailable": true
       }
     },
     "dod": {
       "config": {
         "requiredFields": [
-          "attemptStage",
-          "attemptCount",
           "contactResult"
         ],
         "materials": [
@@ -37,18 +34,104 @@
             "minCount": 1,
             "label": "每次拨号记录"
           }
+        ],
+        "conditionalRequired": [
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            },
+            "field": "name"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            },
+            "field": "city"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            },
+            "field": "demand"
+          },
+          {
+            "when": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            },
+            "field": "visited"
+          }
+        ],
+        "validatorRefs": [
+          "LeadFirstContactValidator"
         ]
       }
     },
     "sla": {
       "config": {
         "calendarCode": "DEFAULT",
-        "schedule": [
-          "T0",
-          "T+1_AM_NOON_PM",
-          "T+2_AM_NOON_PM"
-        ],
-        "configuredBy": "Q-007"
+        "schedule": {
+          "identityBinding": "MIGRATION_DYNAMIC",
+          "timezone": "Asia/Shanghai",
+          "policySource": "LEAD_ASSIGNMENT_POLICY",
+          "targetTemplateCode": "TD-003",
+          "targetTemplateVersionId": 3,
+          "occurrenceKey": "planId:windowCode:occurrenceNo",
+          "windows": [
+            {
+              "windowCode": "T0",
+              "dayOffset": 0,
+              "startOffsetMinutes": 0,
+              "durationMinutes": 120,
+              "maxAttempts": 3
+            },
+            {
+              "windowCode": "T1_AM",
+              "dayOffset": 1,
+              "startTime": "09:00:00",
+              "endTime": "11:00:00",
+              "maxAttempts": 1
+            },
+            {
+              "windowCode": "T1_NOON",
+              "dayOffset": 1,
+              "startTime": "12:00:00",
+              "endTime": "14:00:00",
+              "maxAttempts": 1
+            },
+            {
+              "windowCode": "T1_PM",
+              "dayOffset": 1,
+              "startTime": "15:00:00",
+              "endTime": "18:00:00",
+              "maxAttempts": 1
+            },
+            {
+              "windowCode": "T2_AM",
+              "dayOffset": 2,
+              "startTime": "09:00:00",
+              "endTime": "11:00:00",
+              "maxAttempts": 1
+            },
+            {
+              "windowCode": "T2_NOON",
+              "dayOffset": 2,
+              "startTime": "12:00:00",
+              "endTime": "14:00:00",
+              "maxAttempts": 1
+            },
+            {
+              "windowCode": "T2_PM",
+              "dayOffset": 2,
+              "startTime": "15:00:00",
+              "endTime": "18:00:00",
+              "maxAttempts": 1
+            }
+          ]
+        }
       }
     },
     "ui": {
@@ -59,29 +142,161 @@
           {
             "key": "attemptStage",
             "type": "dict",
-            "label": "重试阶段"
+            "dictType": "law_retry_stage",
+            "label": "重试阶段",
+            "readOnly": true
           },
           {
             "key": "attemptCount",
             "type": "number",
-            "label": "拨号次数"
+            "label": "拨号次数",
+            "readOnly": true
           },
           {
             "key": "contactResult",
             "type": "dict",
+            "dictType": "law_retry_result",
             "label": "联系结果"
+          },
+          {
+            "key": "name",
+            "type": "text",
+            "label": "姓名",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            }
+          },
+          {
+            "key": "city",
+            "type": "text",
+            "label": "城市",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            }
+          },
+          {
+            "key": "demand",
+            "type": "textarea",
+            "label": "诉求",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            }
+          },
+          {
+            "key": "visited",
+            "type": "dict",
+            "dictType": "law_yes_no_flag",
+            "label": "是否到所",
+            "showWhen": {
+              "field": "contactResult",
+              "equals": "CONNECTED"
+            }
           }
         ]
       }
     },
     "routing": {
-      "config": {}
+      "config": {
+        "identityBinding": "MIGRATION_DYNAMIC",
+        "start": "td003",
+        "nodes": [
+          {
+            "key": "td003",
+            "type": "TASK",
+            "templateCode": "TD-003",
+            "templateVersionId": 3
+          },
+          {
+            "key": "retryResult",
+            "type": "DECISION"
+          },
+          {
+            "key": "td004",
+            "type": "TASK",
+            "templateCode": "TD-004",
+            "templateVersionId": 4
+          },
+          {
+            "key": "end",
+            "type": "END"
+          }
+        ],
+        "edges": [
+          {
+            "key": "td003-result",
+            "from": "td003",
+            "to": "retryResult",
+            "priority": 0
+          },
+          {
+            "key": "retry-connected",
+            "from": "retryResult",
+            "to": "td004",
+            "priority": 30,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "result",
+                  "operator": "EQ",
+                  "value": "CONNECTED"
+                }
+              }
+            }
+          },
+          {
+            "key": "retry-next",
+            "from": "retryResult",
+            "to": "end",
+            "priority": 20,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "result",
+                  "operator": "EQ",
+                  "value": "NEXT_WINDOW"
+                }
+              }
+            }
+          },
+          {
+            "key": "retry-exhausted",
+            "from": "retryResult",
+            "to": "end",
+            "priority": 10,
+            "condition": {
+              "$expression": {
+                "version": 1,
+                "root": {
+                  "field": "result",
+                  "operator": "EQ",
+                  "value": "EXHAUSTED"
+                }
+              }
+            }
+          },
+          {
+            "key": "retry-default",
+            "from": "retryResult",
+            "to": "end",
+            "priority": -1,
+            "default": true
+          },
+          {
+            "key": "td004-end",
+            "from": "td004",
+            "to": "end",
+            "priority": 0
+          }
+        ]
+      }
     },
     "autoActions": [],
-    "decisionRefs": [
-      "Q-007",
-      "Q-008"
-    ],
+    "decisionRefs": [],
     "acceptanceRefs": [
       "AT-TD-003-OWNER",
       "AT-TD-003-SLA",
@@ -92,7 +307,7 @@
     ]
   },
   "routingPlan": {
-    "binding": "SYMBOLIC_TEMPLATE_CODE",
+    "binding": "PUBLISHED_NUMERIC_VERSION",
     "start": "TD-003",
     "transitions": [
       {
@@ -105,7 +320,7 @@
       {
         "on": "NEXT_WINDOW",
         "to": [
-          "TD-003"
+          "END"
         ],
         "businessAction": "SCHEDULE_NEXT_RETRY"
       },
@@ -117,48 +332,30 @@
         "businessAction": "TAG_AND_RETURN_POOL"
       }
     ],
-    "notes": []
+    "notes": [
+      "The handler routes on the server-owned result field.",
+      "NEXT_WINDOW ends ordinary routing; only the due schedule occurrence materializes another TD-003."
+    ]
   },
   "handlerCapability": {
     "requiredCode": "TD-003_COMPLETE",
-    "repositoryStatus": "MISSING",
+    "repositoryStatus": "PRESENT",
     "existingCandidate": null,
     "requireBusinessWriteback": true
   },
   "businessDependencies": [
     {
       "code": "LEAD_RETRY_EVENT",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少无法联系事件生产者"
+      "repositoryStatus": "PRESENT",
+      "reason": "The retry schedule publishes governed window occurrences."
     },
     {
       "code": "LEAD_RETRY_HANDLER",
-      "repositoryStatus": "MISSING",
-      "reason": "缺少T0/T+1/T+2状态及回公海处理器"
+      "repositoryStatus": "PRESENT",
+      "reason": "The retry handler uses authoritative schedule and business outcomes."
     }
   ],
-  "blockers": [
-    {
-      "type": "DECISION",
-      "ref": "Q-007",
-      "reason": "T0拨号次数自定义的默认策略是什么？是否按渠道/业务类型/销售组配置？"
-    },
-    {
-      "type": "DECISION",
-      "ref": "Q-008",
-      "reason": "无效线索/客户分级标签的等级和枚举值如何定义？"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "LEAD_RETRY_EVENT",
-      "reason": "缺少无法联系事件生产者"
-    },
-    {
-      "type": "BUSINESS_DEPENDENCY",
-      "ref": "LEAD_RETRY_HANDLER",
-      "reason": "缺少T0/T+1/T+2状态及回公海处理器"
-    }
-  ],
+  "blockers": [],
   "acceptanceRefs": [
     "AT-TD-003-OWNER",
     "AT-TD-003-SLA",

@@ -6,22 +6,22 @@
     {
       "templateCode": "TD-001",
       "resource": "TD-001.json",
-      "foundationState": "BLOCKED"
+      "foundationState": "READY"
     },
     {
       "templateCode": "TD-002",
       "resource": "TD-002.json",
-      "foundationState": "BLOCKED"
+      "foundationState": "READY"
     },
     {
       "templateCode": "TD-003",
       "resource": "TD-003.json",
-      "foundationState": "BLOCKED"
+      "foundationState": "READY"
     },
     {
       "templateCode": "TD-004",
       "resource": "TD-004.json",
-      "foundationState": "BLOCKED"
+      "foundationState": "READY"
     },
     {
       "templateCode": "TD-005",
