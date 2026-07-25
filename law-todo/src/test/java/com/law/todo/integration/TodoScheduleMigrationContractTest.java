@@ -32,12 +32,17 @@ class TodoScheduleMigrationContractTest
     }
 
     @Test
-    void addsAssignmentPolicyIdentityVersionAndInternalContinuationOutcome() throws Exception
+    void addsAuditableResolvedAndLegacyPolicySnapshotsAndInternalContinuationOutcome() throws Exception
     {
         String sql=Files.readString(POLICY_SNAPSHOT_MIGRATION).toLowerCase().replaceAll("\\s+"," ");
 
         assertTrue(sql.contains("add column assignment_policy_id bigint"));
         assertTrue(sql.contains("add column assignment_policy_version int"));
+        assertTrue(sql.contains("assignment_policy_snapshot_source"));
+        assertTrue(sql.contains("legacy_pre_0_20_49"));
+        assertTrue(sql.contains("resolved_policy"));
+        assertTrue(sql.contains("assignment_policy_id is null"));
+        assertTrue(sql.contains("assignment_policy_id is not null"));
         assertTrue(sql.contains("continue_current_window"));
     }
 }

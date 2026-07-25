@@ -349,9 +349,11 @@
   <update id="returnToPoolConditionally">update todo_instance set status='CREATED',owner_id=null,owner_dept_id=null,claimed_at=null,started_at=null,submitted_at=null,version=version+1,update_by=#{operator},update_time=sysdate() where todo_id=#{todoId} and status=#{fromStatus} and status not in ('COMPLETED','CANCELLED')</update>
   <insert id="insertSchedulePlan" useGeneratedKeys="true" keyProperty="planId">
     insert into todo_schedule_plan(previous_todo_id,template_version_id,business_type,business_id,timezone,
-      rule_version_id,assignment_policy_id,assignment_policy_version,first_contact_at,status,create_time,update_time,version)
+      rule_version_id,assignment_policy_id,assignment_policy_version,assignment_policy_snapshot_source,
+      first_contact_at,status,create_time,update_time,version)
     values(#{previousTodoId},#{templateVersionId},#{businessType},#{businessId},#{timezone},
-      #{ruleVersionId},#{assignmentPolicyId},#{assignmentPolicyVersion},#{firstContactAt},#{status},sysdate(),sysdate(),0)
+      #{ruleVersionId},#{assignmentPolicyId},#{assignmentPolicyVersion},
+      #{assignmentPolicySnapshotSource},#{firstContactAt},#{status},sysdate(),sysdate(),0)
   </insert>
   <insert id="insertScheduleWindow" useGeneratedKeys="true" keyProperty="windowId">
     insert into todo_schedule_window(plan_id,window_code,window_order,day_offset,start_time,end_time,materialize_at,due_at,max_attempts,occurrence_no,status,create_time,update_time,version)
@@ -412,7 +414,8 @@
            p.previous_todo_id previousTodoId,p.template_version_id templateVersionId,
            p.business_type businessType,p.business_id businessId,p.timezone,
            p.rule_version_id ruleVersionId,p.assignment_policy_id assignmentPolicyId,
-           p.assignment_policy_version assignmentPolicyVersion,p.status planStatus
+           p.assignment_policy_version assignmentPolicyVersion,
+           p.assignment_policy_snapshot_source assignmentPolicySnapshotSource,p.status planStatus
     from todo_schedule_occurrence o
     join todo_schedule_window w on w.window_id=o.window_id and w.plan_id=o.plan_id
     join todo_schedule_plan p on p.plan_id=o.plan_id
@@ -480,7 +483,8 @@
   </update>
   <select id="selectSchedulePlanForUpdate" resultType="java.util.Map">
     select plan_id planId,template_version_id templateVersionId,assignment_policy_id assignmentPolicyId,
-           assignment_policy_version assignmentPolicyVersion,status,
+           assignment_policy_version assignmentPolicyVersion,
+           assignment_policy_snapshot_source assignmentPolicySnapshotSource,status,
            completion_reason completionReason,version
     from todo_schedule_plan where plan_id=#{planId}
     for update

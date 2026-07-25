@@ -172,10 +172,7 @@ public class LeadRetryService
 
     private boolean replayResultMatches(String requested,String persisted)
     {
-        if("CONNECTED".equals(requested))return "CONNECTED".equals(persisted);
-        if("EXHAUSTED".equals(requested))return "EXHAUSTED".equals(persisted);
-        return "CONTINUE_CURRENT_WINDOW".equals(persisted)
-                ||"NEXT_WINDOW".equals(persisted)||"EXHAUSTED".equals(persisted);
+        return "CONNECTED".equals(requested)=="CONNECTED".equals(persisted);
     }
 
     private void validateSchedule(TodoScheduleService.ScheduleOccurrenceContext context,
@@ -188,8 +185,12 @@ public class LeadRetryService
                 &&context.timezone().equals(schedule.timezone())
                 &&context.templateVersionId().equals(schedule.templateVersionId())
                 &&context.ruleVersionId().equals(schedule.ruleVersionId())
-                &&context.assignmentPolicyId().equals(schedule.assignmentPolicyId())
-                &&context.assignmentPolicyVersion()==schedule.assignmentPolicyVersion(),
+                &&java.util.Objects.equals(context.assignmentPolicyId(),
+                        schedule.assignmentPolicyId())
+                &&java.util.Objects.equals(context.assignmentPolicyVersion(),
+                        schedule.assignmentPolicyVersion())
+                &&java.util.Objects.equals(context.assignmentPolicySnapshotSource(),
+                        schedule.assignmentPolicySnapshotSource()),
                 BusinessErrorCode.STATE_CONFLICT,
                 "Retry command does not match its schedule occurrence");
     }
@@ -242,8 +243,8 @@ public class LeadRetryService
                 && context.windowCode() != null && !context.windowCode().isBlank()
                 && context.occurrenceNo() > 0 && context.maxAttempts()>0
                 && context.timezone() != null && context.templateVersionId() != null
-                && context.ruleVersionId() != null&&context.assignmentPolicyId()!=null
-                && context.assignmentPolicyVersion()>=0
+                && context.ruleVersionId() != null
+                && context.hasValidAssignmentPolicySnapshot()
                 && ("MATERIALIZED".equals(context.status()) || "COMPLETED".equals(context.status())),
                 BusinessErrorCode.STATE_CONFLICT, "LEAD_RETRY_STATE_INVALID");
     }

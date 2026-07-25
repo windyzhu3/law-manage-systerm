@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -230,11 +231,46 @@ class LeadRetryServiceTest
     }
 
     @Test
-    void same_call_cannot_replay_as_a_different_terminal_outcome()
+    void identical_exhausted_retry_replays_server_derived_next_window_without_mutation()
     {
         LeadRetryCompleteCommand command=command("EXHAUSTED");
+        common(command,context(7L,21L),3);
+        java.util.concurrent.atomic.AtomicReference<BizLeadRetryRecord> persisted=
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(facts.insertRetryRecordIfAbsent(any())).thenAnswer(invocation->{
+            BizLeadRetryRecord value=invocation.getArgument(0);
+            value.setRetryRecordId(98L);persisted.set(value);return 1;
+        });
+        when(facts.selectRetryRecordByIdempotencyKey("LEAD_RETRY_ATTEMPT:41:51"))
+                .thenAnswer(invocation->persisted.get());
+        when(schedules.completeAttemptLimit(any(TodoScheduleService.ScheduleOccurrenceContext.class),any()))
+                .thenReturn(completion("T1_NOON",LocalDateTime.of(2026,7,26,12,0)));
+        Date next=Date.from(LocalDateTime.of(2026,7,26,12,0)
+                .atZone(ZoneId.of("Asia/Shanghai")).toInstant());
+        when(leads.advanceRetryStage(7L,"T1_AM","T1_NOON",3,next,5,"alice")).thenReturn(1);
+
+        LeadRetryService.RetryOutcome first=service.completeWindow(command);
+        LeadRetryService.RetryOutcome replay=service.completeWindow(command);
+
+        assertEquals("NEXT_WINDOW",first.result());
+        assertEquals("NEXT_WINDOW",replay.result());
+        assertEquals(true,replay.replayed());
+        assertEquals(first.retryRecordId(),replay.retryRecordId());
+        verify(facts,times(1)).countCallRecordsForLeadTodo(7L,21L);
+        verify(facts,times(1)).insertRetryRecordIfAbsent(any());
+        verify(schedules,times(1)).completeAttemptLimit(
+                any(TodoScheduleService.ScheduleOccurrenceContext.class),any());
+        verify(leads,times(1)).advanceRetryStage(7L,"T1_AM","T1_NOON",3,next,5,"alice");
+    }
+
+    @Test
+    void same_call_cannot_change_from_nonconnected_to_connected_intent()
+    {
+        LeadRetryCompleteCommand command=command("CONNECTED");
+        command.setContactName("Client");command.setCity("Shanghai");
+        command.setLegalDemand("Demand");command.setVisited("0");
         BizLeadRetryRecord existing=new BizLeadRetryRecord();
-        existing.setRetryRecordId(98L);existing.setLeadId(7L);existing.setPlanId(31L);
+        existing.setRetryRecordId(99L);existing.setLeadId(7L);existing.setPlanId(31L);
         existing.setWindowCode("T1_AM");existing.setAttemptNo(3);
         existing.setContactResult("NEXT_WINDOW");existing.setNextWindowCode("T1_NOON");
         existing.setTodoId(21L);existing.setCallRecordId(51L);
@@ -247,8 +283,8 @@ class LeadRetryServiceTest
 
         assertEquals("Retry occurrence belongs to another outcome",error.getMessage());
         verify(facts,never()).countCallRecordsForLeadTodo(any(),any());
-        verify(schedules,never()).completeAttemptLimit(
-                any(TodoScheduleService.ScheduleOccurrenceContext.class),any());
+        verify(schedules,never()).completeOccurrence(
+                any(TodoScheduleService.ScheduleOccurrenceContext.class),any(),any());
     }
 
     @Test

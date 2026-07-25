@@ -318,3 +318,106 @@ Result: `BUILD SUCCESS`; 7 tests passed (lead flow 4, production lock race 1, CI
 
 `git diff --check` passes. The user-owned Task 7 report, UI proxy edit,
 `.playwright-cli/`, `.runtime-logs/`, `output/`, and `test-results/` remain unstaged.
+
+## Independent review fix round 3
+
+Status: complete. N1 and N2 from `task-6-rereview2.md` are addressed.
+
+### RED evidence
+
+The exact two-call replay regression was first run against the round-two implementation:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=LeadRetryServiceTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+The expected RED ran 12 tests and failed the new
+`identical_exhausted_retry_replays_server_derived_next_window_without_mutation` case with
+`Retry occurrence belongs to another outcome`: the first `EXHAUSTED` request had legitimately
+persisted server-derived `NEXT_WINDOW`, but the identical replay was still compared as a literal
+terminal outcome.
+
+The provenance migration contract was also introduced before the migration change:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl law-todo "-Dtest=TodoScheduleMigrationContractTest" test
+```
+
+The expected RED ran 2 tests with 1 failure because
+`assignment_policy_snapshot_source`, `LEGACY_PRE_0_20_49`, and `RESOLVED_POLICY` did not yet
+exist.
+
+### N1: normalized retry intent and exact replay
+
+- Retry replay now treats `CONNECTED` as one distinct intent and all valid non-connected requests
+  as one intent. This preserves the connected/non-connected conflict while allowing an identical
+  `EXHAUSTED` retry to replay a persisted server-derived `NEXT_WINDOW`,
+  `CONTINUE_CURRENT_WINDOW`, or `EXHAUSTED` result.
+- The full two-call regression proves the first maximum-attempt request derives and persists
+  `NEXT_WINDOW`; the second identical command returns that persisted result with `replayed=true`.
+  Call counting, retry insertion, schedule completion, and lead advancement each occur exactly
+  once.
+- A separate regression proves an existing non-connected attempt cannot be replayed as
+  `CONNECTED`.
+
+### N2: explicit historical policy provenance
+
+- `V0_20_49__todo_schedule_policy_snapshot.sql` now adds the non-null
+  `assignment_policy_snapshot_source` discriminator. Rows already present before 0.20.49 are
+  marked `LEGACY_PRE_0_20_49` and retain null policy ID/version; new plans are written as
+  `RESOLVED_POLICY` and require non-null ID/version. A database check constraint admits only those
+  two consistent combinations.
+- Plan insert, plan-first lock, authoritative occurrence context, and completion result all carry
+  the provenance discriminator. Runtime validation rejects inconsistent source/ID/version
+  combinations without inventing a current policy identity for historical work.
+- Unit tests prove new plan creation persists `RESOLVED_POLICY`, marked legacy context remains
+  operable, and inconsistent legacy provenance is rejected.
+- The real-MySQL upgrade test creates a disposable v0.15 schema, runs real Flyway through 0.20.48,
+  inserts an active materialized schedule using the pre-0.20.49 schema, runs real Flyway 0.20.49,
+  and completes it through production `TodoScheduleService` lock/completion APIs. The completed
+  plan/occurrence retain explicit legacy provenance and null policy ID/version.
+
+### Final verification
+
+Focused schedule and Task 6 service gate:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,LeadTagConfirmationServiceTest,LeadCallRecordServiceTest,LeadFirstContactServiceTest,LeadInvalidReviewServiceTest,LeadRetryServiceTest,LeadDeadPoolServiceTest,LeadAssignmentPolicyServiceTest,LeadPoolServiceTest,OutboxBusinessEventPublisherTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 81 tests passed (39 `law-todo`, 42 `ruoyi-system`), 0
+failures/errors/skips.
+
+Broad lead regression:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am "-Dtest=TodoScheduleMigrationContractTest,TodoScheduleServiceTest,TodoMapperXmlContractTest,Lead*Test,BusinessEventCommandTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 115 tests passed (4 `law-business`, 46 `law-todo`, 65
+`ruoyi-system`), 0 failures/errors/skips.
+
+An isolated MySQL 8 schema was reinitialized from the exact eleven-file CI v0.15 baseline.
+`FlywayMigrationTest` migrated it through 0.20.49 and passed 1/1, including the new column and
+check-constraint assertions. The production-path MySQL/gate command:
+
+```powershell
+mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am "-Dtest=TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadFlowMysqlGateContractTest,TodoScheduleLockOrderMysqlGateContractTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; the real lead-flow class passed 5/5, the production lock race passed 1/1,
+and the two CI contracts passed 2/2, all with zero skips. The real lead-flow count includes the new
+0.20.48-to-0.20.49 legacy-schedule upgrade proof.
+`node ruoyi-ui/scripts/check-external-db-reports-contract.js` also passed.
+
+During local verification, the first clean Flyway command omitted CI's existing
+`connectionCollation=utf8mb4_unicode_ci` URL parameter and failed in the unrelated historical
+V0.20.27 collation comparison; rerunning with the CI-equivalent URL passed. An initial
+admin-module-only external-test command also omitted `-am` and failed test discovery because
+reactor dependencies were absent; the CI-equivalent reactor command above passed. Neither was a
+product failure. The upgrade fixture additionally normalizes two same-line prepared-statement
+commands solely for MyBatis `ScriptRunner`; real Flyway migrations and production code are
+unchanged by that parser accommodation.
+
+`git diff --check` passes. The user-owned Task 7 report, UI proxy edit,
+`.playwright-cli/`, `.runtime-logs/`, `output/`, and `test-results/` remain unstaged.

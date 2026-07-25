@@ -25,6 +25,8 @@ import com.law.todo.mapper.TodoMapper;
 public class TodoScheduleService
 {
     public static final String DEFAULT_TIMEZONE="Asia/Shanghai";
+    public static final String RESOLVED_POLICY="RESOLVED_POLICY";
+    public static final String LEGACY_POLICY="LEGACY_PRE_0_20_49";
     public static final Duration CLAIM_LEASE=Duration.ofMinutes(5);
 
     private final TodoMapper mapper;
@@ -63,6 +65,7 @@ public class TodoScheduleService
         plan.put("ruleVersionId",command.ruleVersionId());
         plan.put("assignmentPolicyId",command.assignmentPolicyId());
         plan.put("assignmentPolicyVersion",command.assignmentPolicyVersion());
+        plan.put("assignmentPolicySnapshotSource",RESOLVED_POLICY);
         plan.put("firstContactAt",command.firstContactCompletedAt());
         plan.put("status","ACTIVE");
         mapper.insertSchedulePlan(plan);
@@ -242,6 +245,13 @@ public class TodoScheduleService
                 ||requiredLong(identity,"occurrenceId","occurrence_id")!=context.occurrenceId()
                 ||requiredLong(identity,"windowId","window_id")!=context.windowId()
                 ||!planId.equals(longValue(plan,"planId","plan_id"))
+                ||!java.util.Objects.equals(longValue(plan,"assignmentPolicyId",
+                        "assignment_policy_id"),context.assignmentPolicyId())
+                ||!java.util.Objects.equals(integerValue(plan,"assignmentPolicyVersion",
+                        "assignment_policy_version"),context.assignmentPolicyVersion())
+                ||!java.util.Objects.equals(text(plan,"assignmentPolicySnapshotSource",
+                        "assignment_policy_snapshot_source"),
+                        context.assignmentPolicySnapshotSource())
                 ||!java.util.Objects.equals(text(plan,"status","status"),context.planStatus()))
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_CHANGED",
                     "Schedule occurrence changed while acquiring its plan-first fence");
@@ -317,7 +327,8 @@ public class TodoScheduleService
                 next==null?null:dateTime(next,"startAt","start_at"),replayed,
                 context.businessType(),context.businessId(),context.todoId(),context.timezone(),
                 context.templateVersionId(),context.ruleVersionId(),context.assignmentPolicyId(),
-                context.assignmentPolicyVersion(),context.maxAttempts());
+                context.assignmentPolicyVersion(),context.assignmentPolicySnapshotSource(),
+                context.maxAttempts());
     }
 
     @Transactional
@@ -388,18 +399,25 @@ public class TodoScheduleService
 
     private ScheduleOccurrenceContext context(Map<String,Object> value)
     {
-        return new ScheduleOccurrenceContext(requiredLong(value,"occurrenceId","occurrence_id"),
+        ScheduleOccurrenceContext context=new ScheduleOccurrenceContext(
+                requiredLong(value,"occurrenceId","occurrence_id"),
                 requiredLong(value,"planId","plan_id"),requiredLong(value,"windowId","window_id"),
                 text(value,"windowCode","window_code"),intValue(value,"occurrenceNo","occurrence_no"),
                 longValue(value,"todoId","todo_id"),text(value,"businessType","business_type"),
                 requiredLong(value,"businessId","business_id"),text(value,"timezone","timezone"),
                 requiredLong(value,"templateVersionId","template_version_id"),
                 longValue(value,"ruleVersionId","rule_version_id"),
-                requiredLong(value,"assignmentPolicyId","assignment_policy_id"),
-                intValue(value,"assignmentPolicyVersion","assignment_policy_version"),
+                longValue(value,"assignmentPolicyId","assignment_policy_id"),
+                integerValue(value,"assignmentPolicyVersion","assignment_policy_version"),
+                text(value,"assignmentPolicySnapshotSource",
+                        "assignment_policy_snapshot_source"),
                 intValue(value,"maxAttempts","max_attempts"),
                 text(value,"status","status"),text(value,"resultCode","result_code"),
                 text(value,"planStatus","plan_status"));
+        if(!context.hasValidAssignmentPolicySnapshot())
+            throw new TodoException("TODO_SCHEDULE_POLICY_SNAPSHOT_INVALID",
+                    "Schedule assignment-policy provenance is inconsistent");
+        return context;
     }
 
     private String errorCode(RuntimeException failure)
@@ -423,6 +441,13 @@ public class TodoScheduleService
     {
         Object value=row.containsKey(camel)?row.get(camel):row.get(snake);
         return value==null?null:value instanceof Number number?number.longValue():Long.valueOf(String.valueOf(value));
+    }
+
+    private Integer integerValue(Map<String,Object> row,String camel,String snake)
+    {
+        Object value=row.containsKey(camel)?row.get(camel):row.get(snake);
+        return value==null?null:value instanceof Number number?number.intValue()
+                :Integer.valueOf(String.valueOf(value));
     }
 
     private int intValue(Map<String,Object> row,String camel,String... snake)
@@ -449,27 +474,60 @@ public class TodoScheduleService
     public record ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
             int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
             Long templateVersionId,Long ruleVersionId,Long assignmentPolicyId,
-            int assignmentPolicyVersion,int maxAttempts,String status,String resultCode,String planStatus)
+            Integer assignmentPolicyVersion,String assignmentPolicySnapshotSource,int maxAttempts,
+            String status,String resultCode,String planStatus)
     {
+        public ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
+                int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
+                Long templateVersionId,Long ruleVersionId,Long assignmentPolicyId,
+                int assignmentPolicyVersion,int maxAttempts,String status,String resultCode,
+                String planStatus)
+        {
+            this(occurrenceId,planId,windowId,windowCode,occurrenceNo,todoId,businessType,businessId,
+                    timezone,templateVersionId,ruleVersionId,assignmentPolicyId,
+                    assignmentPolicyVersion,RESOLVED_POLICY,maxAttempts,status,resultCode,planStatus);
+        }
+
         public ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
                 int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
                 Long templateVersionId,Long ruleVersionId,int maxAttempts,String status,String resultCode)
         {
             this(occurrenceId,planId,windowId,windowCode,occurrenceNo,todoId,businessType,businessId,
-                    timezone,templateVersionId,ruleVersionId,1L,0,maxAttempts,status,resultCode,"ACTIVE");
+                    timezone,templateVersionId,ruleVersionId,1L,0,RESOLVED_POLICY,maxAttempts,
+                    status,resultCode,"ACTIVE");
+        }
+
+        public boolean hasValidAssignmentPolicySnapshot()
+        {
+            return RESOLVED_POLICY.equals(assignmentPolicySnapshotSource)
+                    ?assignmentPolicyId!=null&&assignmentPolicyId>0
+                            &&assignmentPolicyVersion!=null&&assignmentPolicyVersion>=0
+                    :LEGACY_POLICY.equals(assignmentPolicySnapshotSource)
+                            &&assignmentPolicyId==null&&assignmentPolicyVersion==null;
         }
     }
 
     public record ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
             String nextWindowCode,LocalDateTime nextStartAt,boolean replayed,String businessType,
             Long businessId,Long todoId,String timezone,Long templateVersionId,Long ruleVersionId,
-            Long assignmentPolicyId,int assignmentPolicyVersion,int maxAttempts)
+            Long assignmentPolicyId,Integer assignmentPolicyVersion,
+            String assignmentPolicySnapshotSource,int maxAttempts)
     {
+        public ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
+                String nextWindowCode,LocalDateTime nextStartAt,boolean replayed,String businessType,
+                Long businessId,Long todoId,String timezone,Long templateVersionId,Long ruleVersionId,
+                Long assignmentPolicyId,int assignmentPolicyVersion,int maxAttempts)
+        {
+            this(planId,windowCode,occurrenceNo,nextWindowCode,nextStartAt,replayed,businessType,
+                    businessId,todoId,timezone,templateVersionId,ruleVersionId,assignmentPolicyId,
+                    assignmentPolicyVersion,RESOLVED_POLICY,maxAttempts);
+        }
+
         public ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
                 String nextWindowCode,LocalDateTime nextStartAt,boolean replayed)
         {
             this(planId,windowCode,occurrenceNo,nextWindowCode,nextStartAt,replayed,
-                    null,null,null,null,null,null,null,0,0);
+                    null,null,null,null,null,null,null,null,null,0);
         }
     }
 

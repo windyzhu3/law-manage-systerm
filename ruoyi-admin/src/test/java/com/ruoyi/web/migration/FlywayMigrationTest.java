@@ -85,10 +85,16 @@ class FlywayMigrationTest
                 System.getenv("TODO_MIGRATION_DB_USER"),
                 System.getenv("TODO_MIGRATION_DB_PASSWORD")))
         {
-            assertEquals(2L,count(connection,
+            assertEquals(3L,count(connection,
                     "select count(*) from information_schema.columns where table_schema=database() "
                     +"and table_name='todo_schedule_plan' and column_name in "
-                    +"('assignment_policy_id','assignment_policy_version')"));
+                    +"('assignment_policy_id','assignment_policy_version',"
+                    +"'assignment_policy_snapshot_source')"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from information_schema.table_constraints "
+                    +"where constraint_schema=database() and table_name='todo_schedule_plan' "
+                    +"and constraint_name='chk_todo_schedule_plan_policy_snapshot' "
+                    +"and constraint_type='CHECK'"));
         }
         catch(SQLException exception)
         {

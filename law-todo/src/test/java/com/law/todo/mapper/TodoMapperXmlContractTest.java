@@ -272,6 +272,8 @@ class TodoMapperXmlContractTest
             assertFalse(result.contains("'COMPLETED','MATERIALIZED'"));
             String planLock=statement(xml,"select","selectSchedulePlanForUpdate");
             assertTrue(planLock.contains("where plan_id=#{planId}"));
+            assertTrue(planLock.contains(
+                    "assignment_policy_snapshot_source assignmentPolicySnapshotSource"));
             assertTrue(planLock.contains("for update"));
             String linkedTodos=statement(xml,"select","selectActiveLinkedScheduleTodosForUpdate");
             assertTrue(linkedTodos.contains("o.occurrence_id&lt;&gt;#{exceptOccurrenceId}"));

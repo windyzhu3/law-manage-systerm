@@ -162,6 +162,7 @@ class TodoScheduleLockOrderExternalMysqlIT
                       rule_version_id bigint not null,
                       assignment_policy_id bigint null,
                       assignment_policy_version int null,
+                      assignment_policy_snapshot_source varchar(32) not null,
                       status varchar(20) not null,
                       completion_reason varchar(64) null,
                       completed_at datetime null,
@@ -218,8 +219,9 @@ class TodoScheduleLockOrderExternalMysqlIT
                     insert into todo_schedule_plan(
                       plan_id,previous_todo_id,template_version_id,business_type,business_id,
                       timezone,rule_version_id,assignment_policy_id,assignment_policy_version,
-                      status,update_time,version
-                    ) values(3,44,22,'LEAD',7,'Asia/Shanghai',99,101,4,'ACTIVE',now(),0)
+                      assignment_policy_snapshot_source,status,update_time,version
+                    ) values(3,44,22,'LEAD',7,'Asia/Shanghai',99,101,4,
+                      'RESOLVED_POLICY','ACTIVE',now(),0)
                     """);
             statement.executeUpdate("""
                     insert into todo_schedule_window(window_id,plan_id,window_code,window_order,

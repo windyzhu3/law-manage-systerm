@@ -1,16 +1,23 @@
 package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 import java.io.InputStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -21,6 +28,8 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.apache.ibatis.jdbc.ScriptRunner;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.law.business.event.BusinessEventCommand;
@@ -50,6 +59,61 @@ import com.ruoyi.system.service.lead.LeadRetryService;
 
 class LeadFlowMapperExternalMysqlIT
 {
+    private static final List<String> V015_BASELINE=List.of(
+            "ry_20260417.sql","quartz.sql","lead_module_20260602.sql",
+            "lead_menu_20260602.sql","customer_contract_module_20260603.sql",
+            "customer_contract_dict_patch_20260611.sql","case_module_20260611.sql",
+            "matter_module_20260615.sql","matter_menu_patch_20260617.sql",
+            "finance_module_20260624.sql","customer_tag_assign_permission_fix_20260627.sql");
+
+    @Test
+    void pre049ActiveScheduleGetsExplicitLegacyProvenanceAndRemainsOperable() throws Exception
+    {
+        String adminUrl=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        String schema="task6_legacy_policy_"+UUID.randomUUID().toString().replace("-","");
+        createSchema(adminUrl,user,password,schema);
+        try
+        {
+            String schemaUrl=withSchema(adminUrl,schema);
+            initializeV015Baseline(schemaUrl,user,password);
+            migrate(schemaUrl,user,password,"0.20.48");
+            DataSource dataSource=new UnpooledDataSource(
+                    "com.mysql.cj.jdbc.Driver",schemaUrl,user,password);
+            LegacyScheduleIds ids=insertPre049Schedule(dataSource);
+
+            migrate(schemaUrl,user,password,"0.20.49");
+
+            SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
+            try(SqlSession session=sessions.openSession(false))
+            {
+                TodoMapper mapper=session.getMapper(TodoMapper.class);
+                TodoScheduleService schedules=new TodoScheduleService(
+                        mapper,new TodoRoutingService(mapper));
+                TodoScheduleService.ScheduleOccurrenceContext context=
+                        schedules.lockOccurrenceContext(ids.occurrenceId());
+                assertEquals(TodoScheduleService.LEGACY_POLICY,
+                        context.assignmentPolicySnapshotSource());
+                assertNull(context.assignmentPolicyId());
+                assertNull(context.assignmentPolicyVersion());
+
+                TodoScheduleService.ScheduleCompletion completion=schedules.completeOccurrence(
+                        context,"CONNECTED",LocalDateTime.of(2026,7,25,11,0));
+                assertEquals(TodoScheduleService.LEGACY_POLICY,
+                        completion.assignmentPolicySnapshotSource());
+                assertNull(completion.assignmentPolicyId());
+                assertNull(completion.assignmentPolicyVersion());
+                session.commit();
+            }
+            assertLegacyCompletion(dataSource,ids);
+        }
+        finally
+        {
+            dropSchema(adminUrl,user,password,schema);
+        }
+    }
+
     @Test
     void sourceSpecificAndWildcardPoliciesPersistTheirExactScheduleSnapshots() throws Exception
     {
@@ -248,6 +312,85 @@ class LeadFlowMapperExternalMysqlIT
         return configuration;
     }
 
+    private static void initializeV015Baseline(String url,String user,String password) throws Exception
+    {
+        try(Connection connection=DriverManager.getConnection(url,user,password))
+        {
+            ScriptRunner runner=new ScriptRunner(connection);
+            runner.setLogWriter(null);runner.setErrorLogWriter(null);
+            runner.setStopOnError(true);
+            for(String file:V015_BASELINE)
+            {
+                String sql=Files.readString(Path.of("..","sql",file),StandardCharsets.UTF_8)
+                        .replace("; execute stmt;",";\nexecute stmt;")
+                        .replace("; deallocate prepare stmt;",";\ndeallocate prepare stmt;");
+                try(var input=new StringReader(sql))
+                {
+                    runner.runScript(input);
+                }
+            }
+        }
+    }
+
+    private static void migrate(String url,String user,String password,String target)
+    {
+        Flyway.configure().dataSource(url,user,password).baselineOnMigrate(true)
+                .baselineVersion("0.15.0").locations("classpath:db/migration")
+                .target(target).load().migrate();
+    }
+
+    private static LegacyScheduleIds insertPre049Schedule(DataSource dataSource) throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();Statement statement=connection.createStatement())
+        {
+            statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,"
+                    +"template_version_id,business_type,business_id,timezone,rule_version_id,"
+                    +"first_contact_at,status,create_time,update_time,version) values("
+                    +"990000001,1,'LEAD',990000002,'Asia/Shanghai',11,"
+                    +"'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long planId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_window(plan_id,window_code,"
+                    +"window_order,day_offset,start_time,end_time,materialize_at,due_at,"
+                    +"max_attempts,occurrence_no,status,create_time,update_time,version) values("
+                    +planId+",'T1_AM',1,1,'09:00:00','11:00:00','2026-07-26 09:00:00',"
+                    +"'2026-07-26 11:00:00',3,1,'MATERIALIZED',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long windowId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_occurrence(plan_id,window_id,"
+                    +"window_code,occurrence_no,occurrence_key,due_at,todo_id,status,create_time,"
+                    +"update_time,version) values("+planId+","+windowId+",'T1_AM',1,'"
+                    +planId+":T1_AM:1','2026-07-26 11:00:00',990000003,'MATERIALIZED',"
+                    +"sysdate(),sysdate(),0)",Statement.RETURN_GENERATED_KEYS);
+            return new LegacyScheduleIds(planId,windowId,generated(statement));
+        }
+    }
+
+    private static void assertLegacyCompletion(DataSource dataSource,LegacyScheduleIds ids)
+            throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+            PreparedStatement query=connection.prepareStatement(
+                    "select p.status,p.assignment_policy_id,p.assignment_policy_version,"
+                    +"p.assignment_policy_snapshot_source,o.status occurrence_status,o.result_code "
+                    +"from todo_schedule_plan p join todo_schedule_occurrence o "
+                    +"on o.plan_id=p.plan_id where p.plan_id=? and o.occurrence_id=?"))
+        {
+            query.setLong(1,ids.planId());query.setLong(2,ids.occurrenceId());
+            try(ResultSet row=query.executeQuery())
+            {
+                if(!row.next())throw new AssertionError("Legacy schedule was not found after upgrade");
+                assertEquals("CONTACTED",row.getString("status"));
+                assertNull(row.getObject("assignment_policy_id"));
+                assertNull(row.getObject("assignment_policy_version"));
+                assertEquals(TodoScheduleService.LEGACY_POLICY,
+                        row.getString("assignment_policy_snapshot_source"));
+                assertEquals("COMPLETED",row.getString("occurrence_status"));
+                assertEquals("CONNECTED",row.getString("result_code"));
+            }
+        }
+    }
+
     private static long td003Version(Connection connection) throws Exception
     {
         try(Statement statement=connection.createStatement();ResultSet row=statement.executeQuery(
@@ -309,7 +452,8 @@ class LeadFlowMapperExternalMysqlIT
     {
         try(PreparedStatement query=connection.prepareStatement(
                 "select p.assignment_policy_id,p.assignment_policy_version,p.rule_version_id,"
-                +"w.max_attempts from todo_schedule_plan p join todo_schedule_window w "
+                +"p.assignment_policy_snapshot_source,w.max_attempts "
+                +"from todo_schedule_plan p join todo_schedule_window w "
                 +"on w.plan_id=p.plan_id where p.plan_id=?"))
         {
             query.setLong(1,planId);
@@ -318,6 +462,8 @@ class LeadFlowMapperExternalMysqlIT
                 if(!row.next())throw new AssertionError("Persisted policy schedule was not found");
                 assertEquals(expectedPolicyId,row.getLong("assignment_policy_id"));
                 assertEquals(expectedPolicyVersion,row.getInt("assignment_policy_version"));
+                assertEquals(TodoScheduleService.RESOLVED_POLICY,
+                        row.getString("assignment_policy_snapshot_source"));
                 assertEquals(expectedRuleVersion,row.getLong("rule_version_id"));
                 assertEquals(expectedAttempts,row.getInt("max_attempts"));
             }
@@ -356,9 +502,11 @@ class LeadFlowMapperExternalMysqlIT
                     +"','Retry B','2','0','ACTIVE','0',1,0,'COMPLETED','UNREACHABLE','T1_AM')");
             statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,template_version_id,"
                     +"business_type,business_id,timezone,rule_version_id,assignment_policy_id,"
-                    +"assignment_policy_version,first_contact_at,status,create_time,"
+                    +"assignment_policy_version,assignment_policy_snapshot_source,"
+                    +"first_contact_at,status,create_time,"
                     +"update_time,version) values("+todoId+",1,'LEAD',"+leadA
-                    +",'Asia/Shanghai',11,1,0,'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
+                    +",'Asia/Shanghai',11,1,0,'RESOLVED_POLICY','2026-07-25 09:00:00',"
+                    +"'ACTIVE',sysdate(),sysdate(),0)",
                     Statement.RETURN_GENERATED_KEYS);
             long planId=generated(statement);
             statement.executeUpdate("insert into todo_schedule_window(plan_id,window_code,window_order,"
@@ -415,6 +563,7 @@ class LeadFlowMapperExternalMysqlIT
     }
 
     private record ScheduleIds(long planId,long windowId,long occurrenceId) { }
+    private record LegacyScheduleIds(long planId,long windowId,long occurrenceId) { }
 
     private static void insertLead(DataSource dataSource,long leadId,String leadNo) throws Exception
     {
@@ -455,6 +604,36 @@ class LeadFlowMapperExternalMysqlIT
             statement.executeUpdate("delete from biz_lead_followup where lead_id="+leadId);
             statement.executeUpdate("delete from biz_lead where lead_id="+leadId);
         }
+    }
+
+    private static void createSchema(String url,String user,String password,String schema) throws Exception
+    {
+        try(Connection connection=DriverManager.getConnection(url,user,password);
+            Statement statement=connection.createStatement())
+        {
+            statement.execute("create database `"+schema
+                    +"` character set utf8mb4 collate utf8mb4_unicode_ci");
+        }
+    }
+
+    private static void dropSchema(String url,String user,String password,String schema) throws Exception
+    {
+        try(Connection connection=DriverManager.getConnection(url,user,password);
+            Statement statement=connection.createStatement())
+        {
+            statement.execute("drop database if exists `"+schema+"`");
+        }
+    }
+
+    private static String withSchema(String url,String schema)
+    {
+        int query=url.indexOf('?');
+        String base=query<0?url:url.substring(0,query);
+        String parameters=query<0?"":url.substring(query);
+        int slash=base.lastIndexOf('/');
+        if(slash<"jdbc:mysql://".length())
+            throw new IllegalArgumentException("TODO_MIGRATION_DB_URL must include a database name");
+        return base.substring(0,slash+1)+schema+parameters;
     }
 
     private static String requiredEnvironment(String name)

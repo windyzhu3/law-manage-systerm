@@ -57,7 +57,10 @@ class TodoScheduleServiceTest
         assertEquals(LocalDateTime.of(2026,7,26,11,0),inserted.get(1).get("dueAt"));
         assertEquals(LocalDateTime.of(2026,7,27,18,0),inserted.get(6).get("dueAt"));
         verify(mapper).insertSchedulePlan(org.mockito.ArgumentMatchers.argThat(
-                row->"Asia/Shanghai".equals(row.get("timezone")) && "ACTIVE".equals(row.get("status"))));
+                row->"Asia/Shanghai".equals(row.get("timezone"))
+                        &&"ACTIVE".equals(row.get("status"))
+                        &&TodoScheduleService.RESOLVED_POLICY.equals(
+                                row.get("assignmentPolicySnapshotSource"))));
     }
 
     @Test
@@ -166,7 +169,9 @@ class TodoScheduleServiceTest
                 Map.entry("businessType","LEAD"),Map.entry("businessId",91L),
                 Map.entry("timezone","Asia/Shanghai"),Map.entry("templateVersionId",22L),
                 Map.entry("ruleVersionId",4L),Map.entry("assignmentPolicyId",11L),
-                Map.entry("assignmentPolicyVersion",2),Map.entry("maxAttempts",3),
+                Map.entry("assignmentPolicyVersion",2),
+                Map.entry("assignmentPolicySnapshotSource",TodoScheduleService.RESOLVED_POLICY),
+                Map.entry("maxAttempts",3),
                 Map.entry("status","MATERIALIZED"),Map.entry("planStatus","ACTIVE"));
         stubPlanFirst(mapper,locked);
 
@@ -187,7 +192,9 @@ class TodoScheduleServiceTest
         when(mapper.selectScheduleOccurrenceIdentity(9L)).thenReturn(
                 Map.of("occurrenceId",9L,"planId",3L,"windowId",12L));
         when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(
-                Map.of("planId",3L,"status","ACTIVE"));
+                Map.of("planId",3L,"assignmentPolicyId",11L,
+                        "assignmentPolicyVersion",2,"assignmentPolicySnapshotSource",
+                        TodoScheduleService.RESOLVED_POLICY,"status","ACTIVE"));
         when(mapper.selectScheduleOccurrenceContextForUpdate(9L))
                 .thenReturn(contextRow("MATERIALIZED",null,"ACTIVE"));
 
@@ -206,7 +213,9 @@ class TodoScheduleServiceTest
         when(mapper.selectScheduleOccurrenceIdentity(900L)).thenReturn(
                 Map.of("occurrenceId",900L,"planId",300L,"windowId",1200L));
         when(mapper.selectSchedulePlanForUpdate(300L)).thenReturn(
-                Map.of("planId",300L,"status","ACTIVE"));
+                Map.of("planId",300L,"assignmentPolicyId",11L,
+                        "assignmentPolicyVersion",2,"assignmentPolicySnapshotSource",
+                        TodoScheduleService.RESOLVED_POLICY,"status","ACTIVE"));
         Map<String,Object> row=new HashMap<>(contextRow("MATERIALIZED",null,"ACTIVE"));
         row.put("occurrenceId",900L);row.put("planId",300L);row.put("windowId",1200L);
         when(mapper.selectScheduleOccurrenceContextForUpdate(900L)).thenReturn(row);
@@ -217,6 +226,51 @@ class TodoScheduleServiceTest
 
         assertEquals(300L,context.planId());
         assertEquals(1200L,context.windowId());
+    }
+
+    @Test
+    void explicitlyMarkedLegacyPolicySnapshotRemainsAuthoritativeAndOperable()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        Map<String,Object> legacy=new HashMap<>(contextRow("MATERIALIZED",null,"ACTIVE"));
+        legacy.remove("assignmentPolicyId");legacy.remove("assignmentPolicyVersion");
+        legacy.put("assignmentPolicySnapshotSource",TodoScheduleService.LEGACY_POLICY);
+        when(mapper.selectScheduleOccurrenceIdentity(9L)).thenReturn(
+                Map.of("occurrenceId",9L,"planId",3L,"windowId",12L));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(
+                Map.of("planId",3L,"assignmentPolicySnapshotSource",
+                        TodoScheduleService.LEGACY_POLICY,"status","ACTIVE"));
+        when(mapper.selectScheduleOccurrenceContextForUpdate(9L)).thenReturn(legacy);
+
+        TodoScheduleService.ScheduleOccurrenceContext context=
+                new TodoScheduleService(mapper,mock(TodoRoutingService.class))
+                        .lockOccurrenceContext(9L);
+
+        assertEquals(TodoScheduleService.LEGACY_POLICY,
+                context.assignmentPolicySnapshotSource());
+        assertEquals(null,context.assignmentPolicyId());
+        assertEquals(null,context.assignmentPolicyVersion());
+    }
+
+    @Test
+    void inconsistentPolicySnapshotProvenanceIsRejected()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        Map<String,Object> inconsistent=new HashMap<>(contextRow("MATERIALIZED",null,"ACTIVE"));
+        inconsistent.put("assignmentPolicySnapshotSource",TodoScheduleService.LEGACY_POLICY);
+        when(mapper.selectScheduleOccurrenceIdentity(9L)).thenReturn(
+                Map.of("occurrenceId",9L,"planId",3L,"windowId",12L));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(
+                Map.of("planId",3L,"assignmentPolicyId",11L,
+                        "assignmentPolicyVersion",2,"assignmentPolicySnapshotSource",
+                        TodoScheduleService.LEGACY_POLICY,"status","ACTIVE"));
+        when(mapper.selectScheduleOccurrenceContextForUpdate(9L)).thenReturn(inconsistent);
+
+        TodoException error=assertThrows(TodoException.class,()->
+                new TodoScheduleService(mapper,mock(TodoRoutingService.class))
+                        .lockOccurrenceContext(9L));
+
+        assertEquals("TODO_SCHEDULE_POLICY_SNAPSHOT_INVALID",error.getBusinessCode());
     }
 
     @Test
@@ -412,6 +466,7 @@ class TodoScheduleServiceTest
         row.put("businessType","LEAD");row.put("businessId",91L);row.put("timezone","Asia/Shanghai");
         row.put("templateVersionId",22L);row.put("ruleVersionId",4L);row.put("maxAttempts",3);
         row.put("assignmentPolicyId",11L);row.put("assignmentPolicyVersion",2);
+        row.put("assignmentPolicySnapshotSource",TodoScheduleService.RESOLVED_POLICY);
         row.put("status",status);row.put("planStatus",planStatus);
         if(result!=null)row.put("resultCode",result);
         return row;
@@ -425,7 +480,13 @@ class TodoScheduleServiceTest
         java.util.concurrent.atomic.AtomicInteger index=new java.util.concurrent.atomic.AtomicInteger();
         when(mapper.selectSchedulePlanForUpdate(3L)).thenAnswer(invocation->{
             Map<String,Object> row=rows[Math.min(index.getAndIncrement(),rows.length-1)];
-            return Map.of("planId",3L,"status",row.getOrDefault("planStatus","ACTIVE"));
+            Map<String,Object> plan=new HashMap<>();
+            plan.put("planId",3L);plan.put("status",row.getOrDefault("planStatus","ACTIVE"));
+            plan.put("assignmentPolicyId",row.get("assignmentPolicyId"));
+            plan.put("assignmentPolicyVersion",row.get("assignmentPolicyVersion"));
+            plan.put("assignmentPolicySnapshotSource",
+                    row.get("assignmentPolicySnapshotSource"));
+            return plan;
         });
         Map<String,Object>[] remainder=java.util.Arrays.copyOfRange(rows,1,rows.length);
         when(mapper.selectScheduleOccurrenceContextForUpdate(9L)).thenReturn(rows[0],remainder);
