@@ -52,6 +52,36 @@ public class LeadAccessPolicy
         return lead;
     }
 
+    public BizLead requireDeadPoolRestorable(Long leadId)
+    {
+        BizLead lead = mapper.selectLeadById(leadId);
+        if (lead == null || DELETED.equals(lead.getDelFlag()))
+        {
+            throw error(BusinessErrorCode.DATA_NOT_FOUND, "线索不存在或已删除");
+        }
+        if (!"DEAD_POOL".equals(lead.getDisposition()))
+        {
+            throw error(BusinessErrorCode.STATE_CONFLICT, "LEAD_DEAD_POOL_STATE_INVALID");
+        }
+        BusinessActor actor = actors.current();
+        if (!actor.administrator()
+                && mapper.countDeadPoolInDataScope(leadId, actor.userId(), actor.deptId()) == 0)
+        {
+            throw error(BusinessErrorCode.ACCESS_DENIED, "LEAD_DEAD_POOL_ACCESS_DENIED");
+        }
+        return lead;
+    }
+
+    public void requireDepartmentAdministerable(Long deptId)
+    {
+        BusinessActor actor = actors.current();
+        if (deptId == null || (!actor.administrator()
+                && mapper.countDepartmentInDataScope(deptId, actor.userId(), actor.deptId()) == 0))
+        {
+            throw error(BusinessErrorCode.ACCESS_DENIED, "Assignment policy department is outside data scope");
+        }
+    }
+
     private ServiceException error(BusinessErrorCode code, String message)
     {
         return new ServiceException(message, code.name());

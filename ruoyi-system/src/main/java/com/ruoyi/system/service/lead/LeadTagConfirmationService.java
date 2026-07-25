@@ -67,6 +67,19 @@ public class LeadTagConfirmationService
                         + command.getTagRelationId(), payload),actor);
     }
 
+    @Transactional
+    public void confirmPersistedRelation(Long tagRelationId)
+    {
+        require(tagRelationId != null && tagRelationId > 0, "Tag relation is required");
+        Long leadId = facts.selectLeadIdByTagRelation(tagRelationId);
+        require(leadId != null, "Tag relation does not belong to a lead");
+        LeadTagConfirmCommand command = new LeadTagConfirmCommand();
+        command.setLeadId(leadId);
+        command.setTagRelationId(tagRelationId);
+        command.setConfirmStatus("CONFIRMED");
+        confirm(command);
+    }
+
     private void changed(int rows)
     {
         if (rows != 1) throw new ServiceException("Tag confirmation state changed",

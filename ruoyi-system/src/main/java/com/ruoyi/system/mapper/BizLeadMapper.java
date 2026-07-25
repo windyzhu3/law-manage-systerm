@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BizLeadSetting;
+import com.ruoyi.system.domain.LeadTodoWorkItemView;
 
 public interface BizLeadMapper
 {
@@ -83,4 +84,19 @@ public interface BizLeadMapper
     public List<Map<String, Object>> selectDashboardCards(@Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
     public List<Map<String, Object>> selectSourceStats(@Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
     public List<Map<String, Object>> selectStatusStats(@Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
+    public List<LeadTodoWorkItemView> selectLeadCallTimeline(Long leadId);
+    public List<LeadTodoWorkItemView> selectLeadInvalidReviewQueue(@Param("status") String status,
+            @Param("keyword") String keyword, @Param("currentUserId") Long currentUserId,
+            @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
+    public List<LeadTodoWorkItemView> selectLeadRetryQueue(@Param("status") String status,
+            @Param("keyword") String keyword, @Param("currentUserId") Long currentUserId,
+            @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
+    public List<LeadTodoWorkItemView> selectLeadRetryTimeline(Long leadId);
+    public List<LeadTodoWorkItemView> selectLeadDeadPoolQueue(@Param("reasonCode") String reasonCode,
+            @Param("keyword") String keyword, @Param("currentUserId") Long currentUserId,
+            @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
+    public int countDeadPoolInDataScope(@Param("leadId") Long leadId,
+            @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId);
+    public int countDepartmentInDataScope(@Param("deptId") Long deptId,
+            @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId);
 }

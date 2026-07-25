@@ -8,6 +8,7 @@ import com.ruoyi.system.domain.BizLeadDeadPoolLog;
 import com.ruoyi.system.domain.BizLeadInvalidReview;
 import com.ruoyi.system.domain.BizLeadQualityRecord;
 import com.ruoyi.system.domain.BizLeadRetryRecord;
+import com.ruoyi.system.domain.LeadAssignmentPolicyCandidateView;
 
 public interface LeadFlowMapper
 {
@@ -37,9 +38,25 @@ public interface LeadFlowMapper
     int confirmTagRelation(@Param("tagRelationId") Long tagRelationId, @Param("leadId") Long leadId,
             @Param("confirmStatus") String confirmStatus, @Param("confirmedBy") Long confirmedBy,
             @Param("updateBy") String updateBy);
+    Long selectLeadIdByTagRelation(Long tagRelationId);
 
     Long selectActiveRetryPlanId(Long leadId);
     BizLeadAssignmentPolicy selectActiveAssignmentPolicy(@Param("salesDeptId") Long salesDeptId,
             @Param("sourceCode") String sourceCode);
     List<Long> selectActivePolicyCandidates(Long policyId);
+    List<BizLeadAssignmentPolicy> selectAssignmentPolicies(@Param("currentUserId") Long currentUserId,
+            @Param("currentDeptId") Long currentDeptId, @Param("dataScope") boolean dataScope);
+    List<LeadAssignmentPolicyCandidateView> selectAssignmentPolicyCandidateViews(
+            @Param("policyIds") List<Long> policyIds);
+    BizLeadAssignmentPolicy selectAssignmentPolicyByIdForUpdate(Long policyId);
+    int insertAssignmentPolicy(BizLeadAssignmentPolicy policy);
+    int updateAssignmentPolicyConditionally(@Param("policyId") Long policyId,
+            @Param("policyName") String policyName, @Param("salesDeptId") Long salesDeptId,
+            @Param("sourceCode") String sourceCode, @Param("retryRuleJson") String retryRuleJson,
+            @Param("expectedVersion") Integer expectedVersion, @Param("updateBy") String updateBy);
+    int deleteAssignmentPolicyCandidates(Long policyId);
+    int insertAssignmentPolicyCandidate(@Param("policyId") Long policyId, @Param("userId") Long userId,
+            @Param("sortOrder") Integer sortOrder, @Param("createBy") String createBy);
+    List<Long> selectActiveCandidateUsersInDepartment(@Param("salesDeptId") Long salesDeptId,
+            @Param("userIds") List<Long> userIds);
 }

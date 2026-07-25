@@ -18,6 +18,16 @@ import com.ruoyi.system.service.lead.LeadPoolService;
 import com.ruoyi.system.service.lead.LeadConversionService;
 import com.ruoyi.system.service.lead.LeadFollowupService;
 import com.law.business.lead.dto.LeadFollowupCommand;
+import com.law.business.lead.dto.LeadAssignmentPolicyCommand;
+import com.law.business.lead.dto.LeadDeadPoolRestoreCommand;
+import com.law.business.lead.dto.LeadInvalidReviewCompleteCommand;
+import com.law.business.lead.dto.LeadManualCallRecordCommand;
+import com.law.todo.domain.model.TodoInstance;
+import com.ruoyi.system.domain.LeadTodoWorkItemView;
+import com.ruoyi.system.service.lead.LeadAssignmentPolicyService.PolicyView;
+import com.ruoyi.system.service.lead.LeadCallRecordService.CallRecordOutcome;
+import com.ruoyi.system.service.lead.LeadDeadPoolService.DeadPoolOutcome;
+import com.ruoyi.system.service.lead.LeadTodoApiService;
 
 @Service
 public class BizLeadServiceImpl implements IBizLeadService
@@ -39,6 +49,9 @@ public class BizLeadServiceImpl implements IBizLeadService
 
     @Autowired
     private LeadFollowupService leadFollowupService;
+
+    @Autowired
+    private LeadTodoApiService leadTodoApiService;
 
     @Override public List<BizLead> selectLeadList(BizLead lead) { return leadQueryService.list(lead); }
     @Override public BizLead selectLeadById(Long leadId) { return leadQueryService.detail(leadId); }
@@ -79,4 +92,16 @@ public class BizLeadServiceImpl implements IBizLeadService
     @Override public int updateSetting(BizLeadSetting setting) { return leadCommandService.updateSetting(setting); }
     @Override public int deleteSetting(Long settingId) { return leadCommandService.deleteSetting(settingId); }
     @Override public Map<String, Object> selectDashboard() { return leadQueryService.dashboard(); }
+
+    @Override public void confirmTag(Long id) { leadTodoApiService.confirmTag(id); }
+    @Override public List<LeadTodoWorkItemView> selectCallTimeline(Long id) { return leadTodoApiService.callTimeline(id); }
+    @Override public CallRecordOutcome addManualCallRecord(Long id,LeadManualCallRecordCommand command) { return leadTodoApiService.addManualCallRecord(id,command); }
+    @Override public List<LeadTodoWorkItemView> selectInvalidReviewQueue(String status,String keyword) { return leadTodoApiService.invalidReviewQueue(status,keyword); }
+    @Override public TodoInstance completeInvalidReview(Long id,LeadInvalidReviewCompleteCommand command) { return leadTodoApiService.completeInvalidReview(id,command); }
+    @Override public List<LeadTodoWorkItemView> selectRetryQueue(String status,String keyword) { return leadTodoApiService.retryQueue(status,keyword); }
+    @Override public List<LeadTodoWorkItemView> selectRetryTimeline(Long id) { return leadTodoApiService.retryTimeline(id); }
+    @Override public List<LeadTodoWorkItemView> selectDeadPoolQueue(String reason,String keyword) { return leadTodoApiService.deadPoolQueue(reason,keyword); }
+    @Override public DeadPoolOutcome restoreDeadPool(Long id,LeadDeadPoolRestoreCommand command) { return leadTodoApiService.restoreDeadPool(id,command); }
+    @Override public List<PolicyView> selectAssignmentPolicies() { return leadTodoApiService.assignmentPolicies(); }
+    @Override public PolicyView saveAssignmentPolicy(LeadAssignmentPolicyCommand command) { return leadTodoApiService.saveAssignmentPolicy(command); }
 }

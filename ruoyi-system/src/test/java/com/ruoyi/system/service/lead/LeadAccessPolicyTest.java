@@ -51,4 +51,30 @@ class LeadAccessPolicyTest
         assertSame(lead, result);
         verify(mapper, never()).countLeadInDataScope(7L, 1L, 1L, false);
     }
+
+    @Test
+    void deadPoolUsesOriginatingSalesScopeAfterOwnerAndDepartmentWereCleared()
+    {
+        BizLead dead = lead(7L, "4", "0");
+        dead.setDisposition("DEAD_POOL");
+        when(mapper.selectLeadById(7L)).thenReturn(dead);
+        when(actors.current()).thenReturn(actor());
+        when(mapper.countDeadPoolInDataScope(7L,8L,3L)).thenReturn(1);
+
+        assertSame(dead,new LeadAccessPolicy(mapper,actors).requireDeadPoolRestorable(7L));
+    }
+
+    @Test
+    void unauthorizedPeerCannotRestoreDeadPoolLead()
+    {
+        BizLead dead = lead(7L, "4", "0");
+        dead.setDisposition("DEAD_POOL");
+        when(mapper.selectLeadById(7L)).thenReturn(dead);
+        when(actors.current()).thenReturn(actor());
+        when(mapper.countDeadPoolInDataScope(7L,8L,3L)).thenReturn(0);
+
+        ServiceException exception=assertThrows(ServiceException.class,
+                ()->new LeadAccessPolicy(mapper,actors).requireDeadPoolRestorable(7L));
+        assertEquals("ACCESS_DENIED",exception.getBusinessCode());
+    }
 }

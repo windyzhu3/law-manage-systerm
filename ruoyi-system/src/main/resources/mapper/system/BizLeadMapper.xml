@@ -55,6 +55,53 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="rowVersion" column="row_version" />
     </resultMap>
 
+    <resultMap type="com.ruoyi.system.domain.LeadTodoWorkItemView" id="LeadTodoWorkItemResult">
+        <id property="leadId" column="lead_id"/>
+        <result property="leadNo" column="lead_no"/>
+        <result property="leadName" column="lead_name"/>
+        <result property="mobile" column="mobile"/>
+        <result property="sourceCode" column="source_code"/>
+        <result property="disposition" column="disposition"/>
+        <result property="businessOwnerId" column="business_owner_id"/>
+        <result property="businessOwnerName" column="business_owner_name"/>
+        <result property="businessDeptId" column="business_dept_id"/>
+        <result property="businessDeptName" column="business_dept_name"/>
+        <result property="callRecordId" column="call_record_id"/>
+        <result property="reviewId" column="review_id"/>
+        <result property="retryRecordId" column="retry_record_id"/>
+        <result property="deadPoolLogId" column="dead_pool_log_id"/>
+        <result property="planId" column="plan_id"/>
+        <result property="windowId" column="window_id"/>
+        <result property="occurrenceId" column="occurrence_id"/>
+        <result property="occurrenceNo" column="occurrence_no"/>
+        <result property="windowCode" column="window_code"/>
+        <result property="nextWindowCode" column="next_window_code"/>
+        <result property="attemptNo" column="attempt_no"/>
+        <result property="factStatus" column="fact_status"/>
+        <result property="result" column="result"/>
+        <result property="reasonCode" column="reason_code"/>
+        <result property="detail" column="detail"/>
+        <result property="reviewerId" column="reviewer_id"/>
+        <result property="reviewerName" column="reviewer_name"/>
+        <result property="callChannel" column="call_channel"/>
+        <result property="externalCallId" column="external_call_id"/>
+        <result property="durationSeconds" column="duration_seconds"/>
+        <result property="recordingFileObjectId" column="recording_file_object_id"/>
+        <result property="factTime" column="fact_time"/>
+        <result property="windowStartAt" column="window_start_at"/>
+        <result property="windowDueAt" column="window_due_at"/>
+        <result property="todoId" column="todo_id"/>
+        <result property="todoTitle" column="todo_title"/>
+        <result property="todoStatus" column="todo_status"/>
+        <result property="todoOwnerId" column="todo_owner_id"/>
+        <result property="todoOwnerName" column="todo_owner_name"/>
+        <result property="dueAt" column="due_at"/>
+        <result property="slaStatus" column="sla_status"/>
+        <result property="overdue" column="overdue"/>
+        <result property="escalated" column="escalated"/>
+        <result property="escalatedAt" column="escalated_at"/>
+    </resultMap>
+
     <sql id="selectLeadVo">
         select l.*, u.nick_name as owner_name, d.dept_name
         from biz_lead l
@@ -78,6 +125,34 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 )
             )
         </if>
+    </sql>
+
+    <sql id="leadTodoDataScope">
+        <if test="dataScope != null and dataScope">
+            and exists (
+                select 1 from sys_user_role ur
+                inner join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+                where ur.user_id=#{currentUserId} and (
+                    role_scope.data_scope='1'
+                    or (role_scope.data_scope='2' and l.dept_id in (
+                        select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+                    or (role_scope.data_scope='3' and l.dept_id=#{currentDeptId})
+                    or (role_scope.data_scope='4' and l.dept_id in (
+                        select sd.dept_id from sys_dept sd
+                        where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+                    or (role_scope.data_scope='5' and l.owner_id=#{currentUserId})
+                )
+            )
+        </if>
+    </sql>
+
+    <sql id="todoProjection">
+        t.todo_id,t.title todo_title,t.status todo_status,t.owner_id todo_owner_id,
+        todo_owner.nick_name todo_owner_name,t.due_at,t.sla_status,
+        case when t.sla_status in ('OVERDUE','ESCALATED')
+          or (t.status not in ('COMPLETED','CANCELLED') and t.due_at&lt;sysdate()) then true else false end overdue,
+        case when t.sla_status='ESCALATED' or sla.escalate150_at is not null then true else false end escalated,
+        sla.escalate150_at escalated_at
     </sql>
 
     <select id="selectLeadList" parameterType="BizLead" resultMap="BizLeadResult">
@@ -418,5 +493,219 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
     <select id="selectStatusStats" resultType="java.util.Map">
         select status itemName, count(*) itemValue from biz_lead l where del_flag='0' <include refid="leadDataScope"/> group by status order by status
+    </select>
+
+    <select id="selectLeadCallTimeline" resultMap="LeadTodoWorkItemResult">
+        select l.lead_id,l.lead_no,l.lead_name,l.mobile,l.source_code,l.disposition,
+          l.owner_id business_owner_id,business_owner.nick_name business_owner_name,
+          l.dept_id business_dept_id,business_dept.dept_name business_dept_name,
+          call_fact.call_record_id,call_fact.call_channel,call_fact.external_call_id,
+          call_fact.duration_seconds,call_fact.recording_file_object_id,
+          call_fact.call_result result,call_fact.started_at fact_time,
+          <include refid="todoProjection"/>
+        from biz_lead_call_record call_fact
+        join biz_lead l on l.lead_id=call_fact.lead_id and l.del_flag='0'
+        left join sys_user business_owner on business_owner.user_id=l.owner_id
+        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        left join todo_instance t on t.todo_id=call_fact.todo_id
+        left join sys_user todo_owner on todo_owner.user_id=t.owner_id
+        left join todo_sla_record sla on sla.todo_id=t.todo_id
+        where call_fact.lead_id=#{leadId}
+        order by call_fact.started_at desc,call_fact.call_record_id desc
+    </select>
+
+    <select id="selectLeadInvalidReviewQueue" resultMap="LeadTodoWorkItemResult">
+        select l.lead_id,l.lead_no,l.lead_name,l.mobile,l.source_code,l.disposition,
+          l.owner_id business_owner_id,business_owner.nick_name business_owner_name,
+          l.dept_id business_dept_id,business_dept.dept_name business_dept_name,
+          review.review_id,review.status fact_status,review.review_result result,
+          review.reason_code,review.sales_explanation detail,review.reviewer_id,
+          reviewer.nick_name reviewer_name,review.submitted_at fact_time,
+          <include refid="todoProjection"/>
+        from biz_lead_invalid_review review
+        join biz_lead l on l.lead_id=review.lead_id and l.del_flag='0'
+        left join sys_user business_owner on business_owner.user_id=l.owner_id
+        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        left join sys_user reviewer on reviewer.user_id=review.reviewer_id
+        left join todo_instance t on t.todo_id=(
+          select max(candidate.todo_id) from todo_instance candidate
+          where candidate.business_type='LEAD' and candidate.business_id=review.lead_id
+            and candidate.template_code='TD-002' and candidate.previous_todo_id=review.todo_id)
+        left join sys_user todo_owner on todo_owner.user_id=t.owner_id
+        left join todo_sla_record sla on sla.todo_id=t.todo_id
+        <where>
+          <if test="status!=null and status!=''">and review.status=#{status}</if>
+          <if test="keyword!=null and keyword!=''">
+            and (l.lead_no like concat('%',#{keyword},'%')
+              or l.lead_name like concat('%',#{keyword},'%')
+              or l.mobile like concat('%',#{keyword},'%'))
+          </if>
+          <if test="dataScope != null and dataScope">
+            and (review.reviewer_id=#{currentUserId} or exists (
+              select 1 from sys_user_role ur
+              inner join sys_role role_scope on role_scope.role_id=ur.role_id
+                and role_scope.status='0'
+              where ur.user_id=#{currentUserId} and (
+                role_scope.data_scope='1'
+                or (role_scope.data_scope='2' and l.dept_id in (
+                  select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+                or (role_scope.data_scope='3' and l.dept_id=#{currentDeptId})
+                or (role_scope.data_scope='4' and l.dept_id in (
+                  select sd.dept_id from sys_dept sd
+                  where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+                or (role_scope.data_scope='5' and l.owner_id=#{currentUserId})
+              )
+            ))
+          </if>
+        </where>
+        order by case when review.status='PENDING' then 0 else 1 end,
+          coalesce(t.due_at,review.submitted_at),review.review_id
+    </select>
+
+    <select id="selectLeadRetryQueue" resultMap="LeadTodoWorkItemResult">
+        select l.lead_id,l.lead_no,l.lead_name,l.mobile,l.source_code,l.disposition,
+          l.owner_id business_owner_id,business_owner.nick_name business_owner_name,
+          l.dept_id business_dept_id,business_dept.dept_name business_dept_name,
+          plan.plan_id,window_item.window_id,occurrence.occurrence_id,occurrence.occurrence_no,
+          window_item.window_code,coalesce(occurrence.status,window_item.status) fact_status,
+          occurrence.result_code result,occurrence.create_time fact_time,
+          window_item.materialize_at window_start_at,window_item.due_at window_due_at,
+          <include refid="todoProjection"/>
+        from todo_schedule_plan plan
+        join biz_lead l on l.lead_id=plan.business_id and plan.business_type='LEAD' and l.del_flag='0'
+        join todo_schedule_window window_item on window_item.plan_id=plan.plan_id
+        left join todo_schedule_occurrence occurrence on occurrence.window_id=window_item.window_id
+        left join todo_instance t on t.todo_id=occurrence.todo_id
+        left join sys_user business_owner on business_owner.user_id=l.owner_id
+        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        left join sys_user todo_owner on todo_owner.user_id=t.owner_id
+        left join todo_sla_record sla on sla.todo_id=t.todo_id
+        <where>
+          <if test="status!=null and status!=''">
+            and coalesce(occurrence.status,window_item.status,plan.status)=#{status}
+          </if>
+          <if test="keyword!=null and keyword!=''">
+            and (l.lead_no like concat('%',#{keyword},'%')
+              or l.lead_name like concat('%',#{keyword},'%')
+              or l.mobile like concat('%',#{keyword},'%'))
+          </if>
+          <include refid="leadTodoDataScope"/>
+        </where>
+        order by window_item.materialize_at,window_item.window_order,occurrence.occurrence_no
+    </select>
+
+    <select id="selectLeadRetryTimeline" resultMap="LeadTodoWorkItemResult">
+        select l.lead_id,l.lead_no,l.lead_name,l.mobile,l.source_code,l.disposition,
+          l.owner_id business_owner_id,business_owner.nick_name business_owner_name,
+          l.dept_id business_dept_id,business_dept.dept_name business_dept_name,
+          retry_fact.retry_record_id,retry_fact.attempt_no,retry_fact.contact_result result,
+          retry_fact.next_window_code,retry_fact.occurred_at fact_time,
+          plan.plan_id,window_item.window_id,occurrence.occurrence_id,occurrence.occurrence_no,
+          window_item.window_code,coalesce(occurrence.status,window_item.status) fact_status,
+          window_item.materialize_at window_start_at,window_item.due_at window_due_at,
+          <include refid="todoProjection"/>
+        from todo_schedule_plan plan
+        join biz_lead l on l.lead_id=plan.business_id and plan.business_type='LEAD' and l.del_flag='0'
+        join todo_schedule_window window_item on window_item.plan_id=plan.plan_id
+        left join todo_schedule_occurrence occurrence on occurrence.window_id=window_item.window_id
+        left join todo_instance t on t.todo_id=occurrence.todo_id
+        left join biz_lead_retry_record retry_fact on retry_fact.todo_id=t.todo_id
+        left join sys_user business_owner on business_owner.user_id=l.owner_id
+        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        left join sys_user todo_owner on todo_owner.user_id=t.owner_id
+        left join todo_sla_record sla on sla.todo_id=t.todo_id
+        where l.lead_id=#{leadId}
+        order by plan.plan_id,window_item.window_order,occurrence.occurrence_no,
+          retry_fact.attempt_no,retry_fact.retry_record_id
+    </select>
+
+    <select id="selectLeadDeadPoolQueue" resultMap="LeadTodoWorkItemResult">
+        select l.lead_id,l.lead_no,l.lead_name,l.mobile,l.source_code,l.disposition,
+          review.submitted_by business_owner_id,origin_user.nick_name business_owner_name,
+          origin_user.dept_id business_dept_id,origin_dept.dept_name business_dept_name,
+          dead_log.dead_pool_log_id,dead_log.reason_code,dead_log.reason_detail detail,
+          dead_log.action_type fact_status,dead_log.action_time fact_time,
+          review.review_id,review.reviewer_id,reviewer.nick_name reviewer_name,
+          <include refid="todoProjection"/>
+        from biz_lead l
+        join biz_lead_dead_pool_log dead_log on dead_log.dead_pool_log_id=(
+          select max(latest.dead_pool_log_id) from biz_lead_dead_pool_log latest
+          where latest.lead_id=l.lead_id and latest.action_type='ENTER')
+        left join biz_lead_invalid_review review on review.review_id=(
+          select max(latest_review.review_id) from biz_lead_invalid_review latest_review
+          where latest_review.lead_id=l.lead_id and latest_review.review_result='TRUE_INVALID')
+        left join sys_user origin_user on origin_user.user_id=review.submitted_by
+        left join sys_dept origin_dept on origin_dept.dept_id=origin_user.dept_id
+        left join sys_user reviewer on reviewer.user_id=review.reviewer_id
+        left join todo_instance t on t.todo_id=(
+          select max(candidate.todo_id) from todo_instance candidate
+          where candidate.business_type='LEAD' and candidate.business_id=l.lead_id
+            and candidate.template_code='TD-002' and candidate.previous_todo_id=review.todo_id)
+        left join sys_user todo_owner on todo_owner.user_id=t.owner_id
+        left join todo_sla_record sla on sla.todo_id=t.todo_id
+        where l.del_flag='0' and l.disposition='DEAD_POOL'
+          <if test="reasonCode!=null and reasonCode!=''">and dead_log.reason_code=#{reasonCode}</if>
+          <if test="keyword!=null and keyword!=''">
+            and (l.lead_no like concat('%',#{keyword},'%')
+              or l.lead_name like concat('%',#{keyword},'%')
+              or l.mobile like concat('%',#{keyword},'%'))
+          </if>
+          <if test="dataScope != null and dataScope">
+            and exists (
+              select 1 from sys_user_role ur
+              join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+              where ur.user_id=#{currentUserId} and (
+                role_scope.data_scope='1'
+                or (role_scope.data_scope='2' and origin_user.dept_id in (
+                  select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+                or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
+                or (role_scope.data_scope='4' and origin_user.dept_id in (
+                  select sd.dept_id from sys_dept sd
+                  where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+                or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+              )
+            )
+          </if>
+        order by dead_log.action_time desc,dead_log.dead_pool_log_id desc
+    </select>
+
+    <select id="countDeadPoolInDataScope" resultType="int">
+        select count(*) from biz_lead l
+        join biz_lead_invalid_review review on review.review_id=(
+          select max(latest_review.review_id) from biz_lead_invalid_review latest_review
+          where latest_review.lead_id=l.lead_id and latest_review.review_result='TRUE_INVALID')
+        join sys_user origin_user on origin_user.user_id=review.submitted_by
+        where l.lead_id=#{leadId} and l.del_flag='0' and l.disposition='DEAD_POOL'
+          and exists (
+            select 1 from sys_user_role ur
+            join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+            where ur.user_id=#{currentUserId} and (
+              role_scope.data_scope='1'
+              or (role_scope.data_scope='2' and origin_user.dept_id in (
+                select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+              or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
+              or (role_scope.data_scope='4' and origin_user.dept_id in (
+                select sd.dept_id from sys_dept sd
+                where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+              or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+            )
+          )
+    </select>
+
+    <select id="countDepartmentInDataScope" resultType="int">
+        select count(*) from sys_dept target
+        where target.dept_id=#{deptId} and target.status='0'
+          and exists (
+            select 1 from sys_user_role ur
+            join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+            where ur.user_id=#{currentUserId} and (
+              role_scope.data_scope='1'
+              or (role_scope.data_scope='2' and target.dept_id in (
+                select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+              or (role_scope.data_scope='3' and target.dept_id=#{currentDeptId})
+              or (role_scope.data_scope='4' and (
+                target.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},target.ancestors)))
+            )
+          )
     </select>
 </mapper>

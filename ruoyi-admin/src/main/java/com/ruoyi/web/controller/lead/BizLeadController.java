@@ -20,6 +20,8 @@ import com.ruoyi.common.exception.ServiceException;
 import com.law.business.lead.dto.LeadAssignCommand;
 import com.law.business.lead.dto.LeadFollowupCommand;
 import com.law.business.lead.dto.LeadPoolCommand;
+import com.law.business.lead.dto.LeadManualCallRecordCommand;
+import com.law.business.lead.dto.LeadTagConfirmationRequest;
 import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.domain.BizLead;
@@ -151,4 +153,27 @@ public class BizLeadController extends BaseController
     @PreAuthorize("@ss.hasPermi('lead:settings:remove')")
     @DeleteMapping("/setting/{settingId}")
     public AjaxResult removeSetting(@PathVariable Long settingId) { return toAjax(leadService.deleteSetting(settingId)); }
+
+    @PreAuthorize("@ss.hasPermi('lead:tag:confirm')")
+    @PostMapping("/tag/confirm")
+    public AjaxResult confirmTag(@Valid @RequestBody LeadTagConfirmationRequest request)
+    {
+        leadService.confirmTag(request.getTagRelationId());
+        return success();
+    }
+
+    @PreAuthorize("@ss.hasPermi('lead:call-record:view')")
+    @GetMapping("/{leadId}/call-records")
+    public AjaxResult callRecords(@PathVariable Long leadId)
+    {
+        return success(leadService.selectCallTimeline(leadId));
+    }
+
+    @PreAuthorize("@ss.hasPermi('lead:call-record:add')")
+    @PostMapping("/{leadId}/call-records")
+    public AjaxResult addCallRecord(@PathVariable Long leadId,
+            @Valid @RequestBody LeadManualCallRecordCommand command)
+    {
+        return success(leadService.addManualCallRecord(leadId,command));
+    }
 }

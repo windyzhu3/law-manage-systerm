@@ -106,6 +106,10 @@
         where tag_rel_id=#{tagRelationId} and business_type='LEAD' and business_id=#{leadId}
           and confirm_status in ('PENDING','CORRECTED')
     </update>
+    <select id="selectLeadIdByTagRelation" resultType="long">
+        select business_id from biz_business_tag_rel
+        where tag_rel_id=#{tagRelationId} and business_type='LEAD'
+    </select>
 
     <select id="selectActiveRetryPlanId" resultType="long">
         select plan_id from todo_schedule_plan
@@ -113,7 +117,8 @@
         order by plan_id desc limit 1
     </select>
     <select id="selectActiveAssignmentPolicy" resultType="BizLeadAssignmentPolicy">
-        select policy_id policyId,sales_dept_id salesDeptId,source_code sourceCode,business_type businessType,
+        select policy_id policyId,policy_code policyCode,policy_name policyName,
+          sales_dept_id salesDeptId,source_code sourceCode,business_type businessType,
           retry_rule_json retryRuleJson,status,row_version rowVersion
         from biz_lead_assignment_policy
         where sales_dept_id=#{salesDeptId} and business_type='LEAD' and status='ACTIVE'
@@ -123,5 +128,88 @@
     <select id="selectActivePolicyCandidates" resultType="long">
         select user_id from biz_lead_assignment_policy_candidate
         where policy_id=#{policyId} and status='ACTIVE' order by sort_order,user_id
+    </select>
+    <select id="selectAssignmentPolicies" resultType="BizLeadAssignmentPolicy">
+        select policy.policy_id policyId,policy.policy_code policyCode,policy.policy_name policyName,
+          policy.sales_dept_id salesDeptId,policy.source_code sourceCode,
+          policy.business_type businessType,policy.retry_rule_json retryRuleJson,
+          policy.status,policy.row_version rowVersion
+        from biz_lead_assignment_policy policy
+        where policy.business_type='LEAD'
+        <if test="dataScope">
+          and exists (
+            select 1 from sys_user_role ur
+            join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+            where ur.user_id=#{currentUserId} and (
+              role_scope.data_scope='1'
+              or (role_scope.data_scope='2' and policy.sales_dept_id in (
+                select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+              or (role_scope.data_scope='3' and policy.sales_dept_id=#{currentDeptId})
+              or (role_scope.data_scope='4' and policy.sales_dept_id in (
+                select sd.dept_id from sys_dept sd
+                where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+            )
+          )
+        </if>
+        order by policy.sales_dept_id,policy.source_code,policy.policy_id
+    </select>
+    <select id="selectAssignmentPolicyCandidateViews"
+            resultType="com.ruoyi.system.domain.LeadAssignmentPolicyCandidateView">
+        select candidate.policy_id policyId,candidate.user_id userId,user.user_name userName,
+          user.nick_name nickName,candidate.sort_order sortOrder,
+          coalesce(availability.status,'AVAILABLE') availabilityStatus,
+          delegation.to_user_id delegateUserId
+        from biz_lead_assignment_policy_candidate candidate
+        join sys_user user on user.user_id=candidate.user_id
+        left join sys_user_availability availability on availability.availability_id=(
+          select max(latest.availability_id) from sys_user_availability latest
+          where latest.user_id=candidate.user_id
+            and latest.effective_from&lt;=sysdate()
+            and (latest.effective_to is null or latest.effective_to&gt;sysdate()))
+        left join sys_user_delegation delegation on delegation.delegation_id=(
+          select max(latest_delegation.delegation_id) from sys_user_delegation latest_delegation
+          where latest_delegation.from_user_id=candidate.user_id
+            and latest_delegation.status='ACTIVE'
+            and latest_delegation.effective_from&lt;=sysdate()
+            and (latest_delegation.effective_to is null or latest_delegation.effective_to&gt;sysdate()))
+        where candidate.status='ACTIVE' and candidate.policy_id in
+        <foreach collection="policyIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by candidate.policy_id,candidate.sort_order,candidate.user_id
+    </select>
+    <select id="selectAssignmentPolicyByIdForUpdate" resultType="BizLeadAssignmentPolicy">
+        select policy_id policyId,policy_code policyCode,policy_name policyName,
+          sales_dept_id salesDeptId,source_code sourceCode,business_type businessType,
+          retry_rule_json retryRuleJson,status,row_version rowVersion
+        from biz_lead_assignment_policy where policy_id=#{policyId} for update
+    </select>
+    <insert id="insertAssignmentPolicy" parameterType="BizLeadAssignmentPolicy"
+            useGeneratedKeys="true" keyProperty="policyId">
+        insert into biz_lead_assignment_policy(
+          policy_code,policy_name,sales_dept_id,source_code,business_type,retry_rule_json,
+          status,row_version,create_by,create_time)
+        values(#{policyCode},#{policyName},#{salesDeptId},#{sourceCode},'LEAD',
+          cast(#{retryRuleJson} as json),'ACTIVE',0,#{createBy},sysdate())
+    </insert>
+    <update id="updateAssignmentPolicyConditionally">
+        update biz_lead_assignment_policy
+        set policy_name=#{policyName},sales_dept_id=#{salesDeptId},source_code=#{sourceCode},
+          retry_rule_json=cast(#{retryRuleJson} as json),row_version=row_version+1,
+          update_by=#{updateBy},update_time=sysdate()
+        where policy_id=#{policyId} and business_type='LEAD' and status='ACTIVE'
+          and row_version=#{expectedVersion}
+    </update>
+    <delete id="deleteAssignmentPolicyCandidates">
+        delete from biz_lead_assignment_policy_candidate where policy_id=#{policyId}
+    </delete>
+    <insert id="insertAssignmentPolicyCandidate">
+        insert into biz_lead_assignment_policy_candidate(
+          policy_id,user_id,sort_order,status,create_by,create_time)
+        values(#{policyId},#{userId},#{sortOrder},'ACTIVE',#{createBy},sysdate())
+    </insert>
+    <select id="selectActiveCandidateUsersInDepartment" resultType="long">
+        select user_id from sys_user
+        where status='0' and del_flag='0' and dept_id=#{salesDeptId} and user_id in
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by user_id
     </select>
 </mapper>

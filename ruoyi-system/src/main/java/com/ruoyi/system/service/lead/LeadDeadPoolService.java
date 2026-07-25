@@ -3,6 +3,7 @@ package com.ruoyi.system.service.lead;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
@@ -10,6 +11,7 @@ import com.law.business.event.BusinessEventPublisher;
 import com.law.business.event.BusinessEventType;
 import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
+import com.law.business.security.LeadPermissions;
 import com.law.business.shared.error.BusinessErrorCode;
 import com.law.todo.schedule.TodoScheduleService;
 import com.ruoyi.common.exception.ServiceException;
@@ -27,9 +29,18 @@ public class LeadDeadPoolService
     private final BusinessActorProvider actors;
     private final TodoScheduleService schedules;
     private final BusinessEventPublisher events;
+    private final LeadPermissionPolicy permissions;
 
     public LeadDeadPoolService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
             BusinessActorProvider actors, TodoScheduleService schedules, BusinessEventPublisher events)
+    {
+        this(leads,facts,access,actors,schedules,events,new LeadPermissionPolicy());
+    }
+
+    @Autowired
+    public LeadDeadPoolService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
+            BusinessActorProvider actors, TodoScheduleService schedules, BusinessEventPublisher events,
+            LeadPermissionPolicy permissions)
     {
         this.leads = leads;
         this.facts = facts;
@@ -37,6 +48,7 @@ public class LeadDeadPoolService
         this.actors = actors;
         this.schedules = schedules;
         this.events = events;
+        this.permissions = permissions;
     }
 
     @Transactional
@@ -88,9 +100,60 @@ public class LeadDeadPoolService
         if (planId != null) schedules.cancelPlan(planId, reason, LocalDateTime.now());
     }
 
+    @Transactional
+    public DeadPoolOutcome restoreToPublicPool(Long leadId, String actionId, String reason)
+    {
+        permissions.require(LeadPermissions.DEAD_POOL_RESTORE);
+        require(leadId != null && leadId > 0 && actionId != null && !actionId.isBlank()
+                && reason != null && !reason.isBlank(), "Dead-Pool restore command is incomplete");
+        String key = "LEAD_DEAD_POOL_RESTORE:" + leadId + ":" + actionId.trim();
+        BizLeadDeadPoolLog existing = facts.selectDeadPoolLogByIdempotencyKey(key);
+        if (existing != null)
+        {
+            require(leadId.equals(existing.getLeadId()) && "RESTORE".equals(existing.getActionType())
+                    && reason.trim().equals(existing.getReasonDetail()),
+                    "Dead-Pool restore action belongs to another request");
+            return new DeadPoolOutcome(existing.getDeadPoolLogId(), true);
+        }
+        BizLead lead = access.requireDeadPoolRestorable(leadId);
+        BusinessActor actor = actors.current();
+        changedRestore(leads.restoreFromDeadPool(leadId, reason.trim(), lead.getRowVersion(),
+                actor.userName()));
+
+        BizLeadDeadPoolLog log = new BizLeadDeadPoolLog();
+        log.setLeadId(leadId);
+        log.setActionType("RESTORE");
+        log.setReasonCode("MANUAL_RESTORE");
+        log.setReasonDetail(reason.trim());
+        log.setFromDisposition("DEAD_POOL");
+        log.setToDisposition("PUBLIC_POOL");
+        log.setOperatorId(actor.userId());
+        log.setIdempotencyKey(key);
+        log.setCreateBy(actor.userName());
+        int inserted = facts.insertDeadPoolLogIfAbsent(log);
+        require(inserted == 1 && log.getDeadPoolLogId() != null,
+                "Dead-Pool restore audit identity was not generated");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("schemaVersion", 1);
+        payload.put("leadId", leadId);
+        payload.put("reason", reason.trim());
+        payload.put("operatorId", actor.userId());
+        payload.put("sourceDisposition", "DEAD_POOL");
+        events.publish(new BusinessEventCommand(BusinessEventType.LEAD_MOVED_TO_POOL, "LEAD",
+                leadId, lead.getLeadNo(), "LEAD_DEAD_POOL_RESTORED:" + leadId + ":"
+                        + log.getDeadPoolLogId(), payload), actor);
+        return new DeadPoolOutcome(log.getDeadPoolLogId(), false);
+    }
+
     private void changed(int rows)
     {
         if (rows != 1) throw new ServiceException("LEAD_INVALID_REVIEW_STATE_INVALID",
+                BusinessErrorCode.CONCURRENT_MODIFICATION.name());
+    }
+    private void changedRestore(int rows)
+    {
+        if (rows != 1) throw new ServiceException("LEAD_DEAD_POOL_STATE_INVALID",
                 BusinessErrorCode.CONCURRENT_MODIFICATION.name());
     }
     private void require(boolean condition, String message)
