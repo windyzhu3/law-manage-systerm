@@ -19,10 +19,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.ruoyi.common.utils.ip.IpUtils;
 
 class FileObjectControllerTest
 {
+    @Test void retirement_requires_the_dedicated_whole_object_permission() throws Exception
+    {
+        var method=FileObjectController.class.getDeclaredMethod("retire",Long.class,
+            FileObjectController.RetireFileObjectRequest.class);
+        assertEquals("@ss.hasPermi('file:object:retire')",method.getAnnotation(PreAuthorize.class).value());
+    }
+
     @Test void completed_upload_response_exposes_file_object_id_but_never_storage_key_or_path() throws Exception
     {
         FileObjectService service=mock(FileObjectService.class);

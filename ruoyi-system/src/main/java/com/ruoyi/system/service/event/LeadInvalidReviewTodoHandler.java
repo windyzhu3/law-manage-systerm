@@ -62,7 +62,7 @@ public class LeadInvalidReviewTodoHandler implements TodoCompletionHandler
         command.setTodoId(context.sourceTodoId());
         command.setReviewId(context.reviewId());
         command.setReviewResult(LeadTodoPayloadMapper.text(values,"reviewResult"));
-        command.setReviewComment(LeadTodoPayloadMapper.text(values,"reviewComment","reviewOpinion"));
+        command.setReviewComment(LeadTodoPayloadMapper.text(values,"reviewOpinion","reviewComment"));
         return reviews.review(command);
     }
 

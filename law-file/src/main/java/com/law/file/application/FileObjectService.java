@@ -26,6 +26,7 @@ import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.domain.FileObject.LifecycleAudit;
 import com.law.file.domain.FileUploadUnavailableException;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
+import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.repository.FileObjectRepository;
@@ -49,6 +50,9 @@ public class FileObjectService
         String expectedSha256,String changeDescription) { }
     public record UploadIntentView(String uploadIntentId,Long fileObjectId,Long relationId,int versionNo,String status,Instant expiresAt) { }
     public record AccessTokenView(Long fileObjectId,Long relationId,String accessType,String token,Instant expiresAt) { }
+    public record RetireFileObjectCommand(String actionId,Long relationId,boolean retireObjectIfUnreferenced) { }
+    public record RetireFileObjectView(Long fileObjectId,Long relationId,boolean relationActive,
+        boolean objectRetired,String status,List<Long> cleanupTaskIds,boolean retryRequired) { }
     @FunctionalInterface public interface TokenGenerator { String generate(int bytes); }
 
     private final FileObjectRepository repository;
@@ -83,6 +87,7 @@ public class FileObjectService
 
         FileObject object=repository.insertFileObject(new FileObject(null,command.originalFileName(),0,2,"PENDING",actor.userId(),0));
         if(object==null||object.fileObjectId()==null)conflict("Unable to create file object");
+        object=lockRelatableObject(object.fileObjectId());
         Scope scope=scope(command.visibility(),actor);
         FileBusinessRelation relation=repository.insertRelation(new FileBusinessRelation(null,object.fileObjectId(),
             command.businessType(),command.businessId(),command.materialType(),scope.visibility(),scope.deptId(),scope.userId(),
@@ -181,8 +186,10 @@ public class FileObjectService
             ||invalidText(materialType,96))throw new FileException("FILE_RELATION_INVALID","Complete file relation metadata is required");
         Scope scope=scope(visibility,actor);
         String fingerprint=relationFingerprint(fileObjectId,businessType,businessId,materialType,scope);
+        FileObject object=lockObject(fileObjectId);
         RelationAction prior=repository.findRelationAction(actor.userId(),actionId);
         if(prior!=null)return replayRelation(prior,"RELATE",fingerprint,fileObjectId);
+        requireRelatableObject(object);
         access.requireCanWrite(fileObjectId,actor);access.requireCanWrite(businessType,businessId,actor);
         FileBusinessRelation relation=repository.findRelation(fileObjectId,businessType,businessId,materialType,
             scope.visibility(),scope.deptId(),scope.userId());
@@ -201,13 +208,82 @@ public class FileObjectService
     {
         if(invalidText(actionId,128))throw new FileException("FILE_ACTION_ID_REQUIRED","actionId is required");
         String fingerprint=relationActionFingerprint("REVOKE",fileObjectId,relationId);
+        FileObject object=lockObject(fileObjectId);
         RelationAction prior=repository.findRelationAction(actor.userId(),actionId);
         if(prior!=null)return replayRelation(prior,"REVOKE",fingerprint,fileObjectId);
+        requireRelatableObject(object);
         FileBusinessRelation relation=access.requireCanWriteRelation(fileObjectId,relationId,actor);
+        List<FileBusinessRelation> active=repository.lockActiveRelations(fileObjectId);
+        if(active==null||active.stream().noneMatch(value->value.relationId().equals(relationId)))
+            conflict("File relation changed concurrently");
+        if(active.stream().filter(FileBusinessRelation::active).count()<=1)
+            throw new FileException("FILE_LAST_RELATION_REQUIRES_RETIREMENT",
+                "The final relation must retire the unreferenced file object");
         if(repository.revokeRelation(relationId)!=1)conflict("File relation changed concurrently");
         insertRelationAction(new RelationAction(actor.userId(),actionId,"REVOKE",relationId,fingerprint,clock.instant()));
         lifecycle(fileObjectId,null,relationId,actionId,"RELATION_REVOKED",null,actor);
         return inactive(relation);
+    }
+
+    /**
+     * Revokes one explicitly authorized relation. The object is retired only
+     * when that was its last active relation and the actor owns the object.
+     * All durable metadata is committed before physical storage is touched.
+     */
+    @Transactional public RetireFileObjectView retire(Long fileObjectId,RetireFileObjectCommand command,
+        FileActor actor)
+    {
+        if(fileObjectId==null||fileObjectId<=0||command==null||command.relationId()==null
+            ||command.relationId()<=0||invalidText(command.actionId(),128))
+            throw new FileException("FILE_RETIRE_INVALID","fileObjectId, relationId and actionId are required");
+        String fingerprint=retireActionFingerprint(fileObjectId,command.relationId(),
+            command.retireObjectIfUnreferenced());
+        FileObject object=lockObject(fileObjectId);
+        RelationAction prior=repository.findRelationAction(actor.userId(),command.actionId());
+        if(prior!=null)return replayRetire(prior,fingerprint,fileObjectId,actor);
+        requireRelatableObject(object);
+        FileBusinessRelation relation=access.requireCanWriteRelation(fileObjectId,command.relationId(),actor);
+        List<FileBusinessRelation> active=repository.lockActiveRelations(fileObjectId);
+        if(active==null||active.stream().noneMatch(value->value.relationId().equals(command.relationId())))
+            conflict("File relation changed concurrently");
+        boolean last=active.stream().filter(FileBusinessRelation::active).count()==1;
+        if(last&&!command.retireObjectIfUnreferenced())
+            throw new FileException("FILE_LAST_RELATION_REQUIRES_RETIREMENT",
+                "The final relation must retire the unreferenced file object");
+        boolean retireObject=last&&command.retireObjectIfUnreferenced();
+        List<StoredVersion> versions=List.of();
+        if(retireObject)
+        {
+            if(!actor.userId().equals(object.createdBy()))
+                throw new FileAccessDeniedException("Only the file object owner may retire an unreferenced object");
+            versions=repository.findStoredVersions(fileObjectId);
+            if(versions==null)versions=List.of();
+        }
+        String actionType=retireObject?"RETIRE_OBJECT":"RETIRE_RELATION";
+        if(!claimRelationAction(new RelationAction(actor.userId(),command.actionId(),actionType,
+            command.relationId(),fingerprint,clock.instant())))
+            return replayRetire(repository.lockRelationAction(actor.userId(),command.actionId()),
+                fingerprint,fileObjectId,actor);
+        if(repository.revokeRelation(relation.relationId())!=1)conflict("File relation changed concurrently");
+        lifecycle(fileObjectId,null,relation.relationId(),command.actionId(),"RELATION_RETIRED",null,actor);
+        if(!retireObject)
+            return new RetireFileObjectView(fileObjectId,relation.relationId(),false,false,
+                object.status(),List.of(),false);
+
+        if(repository.disableObject(fileObjectId)!=1)conflict("File object changed concurrently");
+        List<CleanupTask> tasks=new java.util.ArrayList<>();
+        for(StoredVersion version:versions)
+        {
+            CleanupTask created=repository.insertCleanupTask(new CleanupTask(null,fileObjectId,command.actionId(),
+                "OBJECT",version.objectKey(),"PENDING",0,null,null,clock.instant(),actor.userId(),
+                actor.deptId(),clock.instant()));
+            if(created==null||created.cleanupTaskId()==null)conflict("Unable to persist file storage cleanup");
+            tasks.add(created);
+        }
+        lifecycle(fileObjectId,null,relation.relationId(),command.actionId(),"OBJECT_RETIRED",null,actor);
+        schedulePhysicalCleanup(tasks,actor);
+        return new RetireFileObjectView(fileObjectId,relation.relationId(),false,true,"DISABLED",
+            tasks.stream().map(CleanupTask::cleanupTaskId).toList(),false);
     }
 
     @Transactional public AccessTokenView issueAccessToken(Long fileObjectId,Long relationId,String accessType,FileActor actor)
@@ -313,10 +389,66 @@ public class FileObjectService
         return relation;
     }
 
+    private RetireFileObjectView replayRetire(RelationAction prior,String fingerprint,Long expectedFileObjectId,
+        FileActor actor)
+    {
+        if(prior==null||(!"RETIRE_RELATION".equals(prior.actionType())
+            &&!"RETIRE_OBJECT".equals(prior.actionType()))
+            ||!fingerprint.equals(prior.requestFingerprint()))actionConflict();
+        FileBusinessRelation relation=repository.findRelationById(prior.relationId());
+        if(relation==null||!expectedFileObjectId.equals(relation.fileObjectId()))actionConflict();
+        FileObject object=repository.findById(expectedFileObjectId);
+        boolean objectRetired="RETIRE_OBJECT".equals(prior.actionType());
+        List<CleanupTask> tasks=objectRetired
+            ?repository.findCleanupTasks(expectedFileObjectId,actor.userId(),prior.actionId()):List.of();
+        if(tasks==null)tasks=List.of();
+        boolean retry=tasks.stream().anyMatch(task->!"COMPLETED".equals(task.status()));
+        return new RetireFileObjectView(expectedFileObjectId,relation.relationId(),relation.active(),
+            objectRetired,object==null?(objectRetired?"DISABLED":"ACTIVE"):object.status(),
+            tasks.stream().map(CleanupTask::cleanupTaskId).toList(),retry);
+    }
+
+    private boolean claimRelationAction(RelationAction action)
+    {
+        if(repository.insertRelationAction(action)==1)return true;
+        RelationAction prior=repository.lockRelationAction(action.actorId(),action.actionId());
+        if(prior==null||!prior.actionType().equals(action.actionType())
+            ||!prior.relationId().equals(action.relationId())
+            ||!prior.requestFingerprint().equals(action.requestFingerprint()))actionConflict();
+        return false;
+    }
+
+    private void schedulePhysicalCleanup(List<CleanupTask> tasks,FileActor actor)
+    {
+        Runnable cleanup=()->tasks.forEach(task->cleanupPhysical(task,actor));
+        if(!TransactionSynchronizationManager.isSynchronizationActive())
+        {
+            cleanup.run();return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization()
+        {
+            @Override public void afterCommit(){cleanup.run();}
+        });
+    }
+
+    private void cleanupPhysical(CleanupTask task,FileActor actor)
+    {
+        try
+        {
+            storage.delete(task.targetKey());
+            cleanupAudit.recordCleanupSuccess(task.cleanupTaskId(),"OBJECT_RETIRED",actor);
+        }
+        catch(RuntimeException error)
+        {
+            String code=error instanceof FileException file?file.getBusinessCode():error.getClass().getSimpleName();
+            cleanupAudit.recordCleanupFailure(task.cleanupTaskId(),code,safeCleanupMessage(error.getMessage()),actor);
+        }
+    }
+
     private void insertRelationAction(RelationAction action)
     {
         if(repository.insertRelationAction(action)==1)return;
-        RelationAction prior=repository.findRelationAction(action.actorId(),action.actionId());
+        RelationAction prior=repository.lockRelationAction(action.actorId(),action.actionId());
         if(prior==null||!prior.actionType().equals(action.actionType())
             ||!prior.relationId().equals(action.relationId())
             ||!prior.requestFingerprint().equals(action.requestFingerprint()))actionConflict();
@@ -376,6 +508,8 @@ public class FileObjectService
 
     static String relationActionFingerprint(String type,Long fileObjectId,Long relationId)
     {return sha256(type+"\u001f"+fileObjectId+"\u001f"+relationId);}
+    static String retireActionFingerprint(Long fileObjectId,Long relationId,boolean retireObjectIfUnreferenced)
+    {return sha256("RETIRE\u001f"+fileObjectId+"\u001f"+relationId+"\u001f"+retireObjectIfUnreferenced);}
     private static String relationFingerprint(Long fileId,String type,Long businessId,String material,Scope scope)
     {return sha256(String.join("\u001f","RELATE",String.valueOf(fileId),type,String.valueOf(businessId),material,
         scope.visibility(),String.valueOf(scope.deptId()),String.valueOf(scope.userId())));}
@@ -383,6 +517,20 @@ public class FileObjectService
     {String v=value==null?"BUSINESS":value.toUpperCase(Locale.ROOT);if(!List.of("BUSINESS","DEPARTMENT","PRIVATE").contains(v))throw new FileException("FILE_VISIBILITY_INVALID","Invalid visibility");return v;}
     private static String normalizeAccessType(String value)
     {String v=value==null?"DOWNLOAD":value.toUpperCase(Locale.ROOT);if(!List.of("PREVIEW","DOWNLOAD").contains(v))throw new FileException("FILE_ACCESS_TYPE_INVALID","Invalid access type");return v;}
+    private FileObject lockRelatableObject(Long fileObjectId)
+    {
+        return requireRelatableObject(lockObject(fileObjectId));
+    }
+    private FileObject lockObject(Long fileObjectId)
+    {
+        FileObject object=repository.lockById(fileObjectId);if(object==null)notFound();return object;
+    }
+    private FileObject requireRelatableObject(FileObject object)
+    {
+        if(!List.of("PENDING","ACTIVE").contains(object.status()))
+            throw new FileException("FILE_OBJECT_DISABLED","Disabled file objects cannot gain or change relations");
+        return object;
+    }
     private static void validate(RegisterUploadCommand c)
     {if(c==null||invalidText(c.actionId(),128)||invalidName(c.originalFileName())||invalidText(c.contentType(),160)
         ||c.expectedSize()<0||!sha(c.expectedSha256())||invalidText(c.businessType(),64)||c.businessId()==null

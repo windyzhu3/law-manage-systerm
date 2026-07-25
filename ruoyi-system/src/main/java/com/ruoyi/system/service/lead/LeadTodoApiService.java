@@ -13,6 +13,7 @@ import com.law.business.lead.dto.LeadManualCallRecordCommand;
 import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
 import com.law.todo.application.TodoCommandService;
+import com.law.todo.application.TodoQueryService;
 import com.law.todo.application.command.TodoActionCommands.ActionCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.domain.model.TodoInstance;
@@ -35,15 +36,16 @@ public class LeadTodoApiService
     private final LeadDeadPoolService deadPool;
     private final LeadAssignmentPolicyService policies;
     private final TodoCommandService todoCommands;
+    private final TodoQueryService todoQueries;
     private final BusinessActorProvider actors;
 
     public LeadTodoApiService(LeadQueryService queries,LeadTagConfirmationService tags,
             LeadCallRecordService calls,LeadDeadPoolService deadPool,
             LeadAssignmentPolicyService policies,TodoCommandService todoCommands,
-            BusinessActorProvider actors)
+            TodoQueryService todoQueries,BusinessActorProvider actors)
     {
         this.queries=queries;this.tags=tags;this.calls=calls;this.deadPool=deadPool;
-        this.policies=policies;this.todoCommands=todoCommands;this.actors=actors;
+        this.policies=policies;this.todoCommands=todoCommands;this.todoQueries=todoQueries;this.actors=actors;
     }
 
     @Transactional
@@ -83,11 +85,27 @@ public class LeadTodoApiService
     {
         Map<String,Object> fields=new LinkedHashMap<>();
         fields.put("reviewResult",request.getReviewResult());
-        fields.put("reviewComment",request.getReviewComment());
+        fields.put("reviewOpinion",request.getReviewOpinion());
         BusinessActor actor=actors.current();
-        return todoCommands.complete(todoId,new ActionCommand(request.getActionId(),
-                request.getReviewComment(),fields,request.getFileObjectIds()),
-                new Actor(actor.userId(),actor.userName(),actor.deptId()));
+        Actor todoActor=new Actor(actor.userId(),actor.userName(),actor.deptId());
+        TodoInstance todo=todoQueries.detail(todoId,actor.userId(),actor.deptId());
+        if(!"TD-002".equals(todo.getTemplateCode()))
+            throw new com.law.todo.domain.TodoException("TODO_TEMPLATE_MISMATCH",
+                    "Only TD-002 can be completed by the invalid-review command");
+        String root=request.getActionId();
+        if("CREATED".equals(todo.getStatus()))
+            todo=todoCommands.claim(todoId,step(root,"claim","领取复核任务"),todoActor);
+        if("CLAIMED".equals(todo.getStatus())||"RETURNED".equals(todo.getStatus()))
+            todo=todoCommands.start(todoId,step(root,"start","开始复核"),todoActor);
+        if("IN_PROGRESS".equals(todo.getStatus()))
+            todo=todoCommands.submit(todoId,step(root,"submit","提交复核结论"),todoActor);
+        return todoCommands.complete(todoId,new ActionCommand(root,request.getReviewOpinion(),
+                fields,request.getFileObjectIds()),todoActor);
+    }
+
+    private ActionCommand step(String root,String suffix,String opinion)
+    {
+        return new ActionCommand(root+":"+suffix,opinion,Map.of(),List.of());
     }
 
     public List<LeadTodoWorkItemView> retryQueue(String status,String keyword)

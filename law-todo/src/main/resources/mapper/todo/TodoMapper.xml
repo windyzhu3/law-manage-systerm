@@ -65,6 +65,45 @@
   <select id="countCandidateAccess" resultType="int">select count(*) from todo_candidate c where c.todo_id=#{todoId} and ((c.candidate_type='USER' and c.candidate_value=#{userId}) or (c.candidate_type='DEPT' and c.candidate_value=#{deptId}) or (c.candidate_type='ROLE' and exists(select 1 from sys_user_role ur where ur.user_id=#{userId} and ur.role_id=c.candidate_value)) or (c.candidate_type='POST' and exists(select 1 from sys_user_post up where up.user_id=#{userId} and up.post_id=c.candidate_value)))</select>
   <select id="countCcAccess" resultType="int">select count(*) from todo_cc where todo_id=#{todoId} and user_id=#{userId}</select>
   <select id="countSupervisorAccess" resultType="int">select count(*) from todo_instance t join sys_dept owner_dept on owner_dept.dept_id=t.owner_dept_id join sys_user viewer on viewer.user_id=#{userId} and viewer.status='0' and viewer.del_flag='0' join sys_dept led_dept on led_dept.leader=viewer.user_name and (led_dept.dept_id=owner_dept.dept_id or find_in_set(led_dept.dept_id,owner_dept.ancestors)) where t.todo_id=#{todoId}</select>
+  <select id="selectAllowedActionFacts" resultType="map">
+    select t.todo_id,
+      case when exists(
+        select 1 from todo_candidate c
+        where c.todo_id=t.todo_id
+          and (
+            (c.candidate_type='USER' and c.candidate_value=#{userId})
+            or (c.candidate_type='DEPT' and c.candidate_value=#{deptId})
+            or (c.candidate_type='ROLE' and exists(
+              select 1 from sys_user_role ur
+              where ur.user_id=#{userId} and ur.role_id=c.candidate_value
+            ))
+            or (c.candidate_type='POST' and exists(
+              select 1 from sys_user_post up
+              where up.user_id=#{userId} and up.post_id=c.candidate_value
+            ))
+          )
+      ) then 1 else 0 end can_claim,
+      case when exists(
+        select 1
+        from sys_dept owner_dept
+        join sys_user viewer
+          on viewer.user_id=#{userId}
+         and viewer.status='0'
+         and viewer.del_flag='0'
+        join sys_dept led_dept
+          on led_dept.leader=viewer.user_name
+         and (
+           led_dept.dept_id=owner_dept.dept_id
+           or find_in_set(led_dept.dept_id,owner_dept.ancestors)
+         )
+        where owner_dept.dept_id=t.owner_dept_id
+      ) then 1 else 0 end can_review
+    from todo_instance t
+    where t.todo_id in
+    <foreach collection="todoIds" item="todoId" open="(" separator="," close=")">
+      #{todoId}
+    </foreach>
+  </select>
   <select id="selectGovernedSupervisors" resultType="java.lang.Long">select distinct supervisor.user_id from sys_dept source_dept join sys_dept governed_dept on governed_dept.dept_id=source_dept.dept_id or find_in_set(governed_dept.dept_id,source_dept.ancestors) join sys_user supervisor on supervisor.user_name=governed_dept.leader and supervisor.status='0' and supervisor.del_flag='0' where source_dept.dept_id=coalesce((select owner.dept_id from sys_user owner where owner.user_id=#{ownerId} and owner.status='0' and owner.del_flag='0'),#{ownerDeptId}) and supervisor.user_id&lt;&gt;coalesce(#{ownerId},0) order by supervisor.user_id</select>
   <select id="selectUserDeptId" resultType="java.lang.Long">select dept_id from sys_user where user_id=#{userId} and status='0' and del_flag='0'</select>
   <select id="selectActiveUserIdsForRole" resultType="java.lang.Long">

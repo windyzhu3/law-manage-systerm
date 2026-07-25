@@ -34,6 +34,8 @@ class LeadTodoControllerContractTest
         assertClassPath(BizLeadController.class, "/lead");
         assertEndpoint(BizLeadController.class, "confirmTag", POST, "/tag/confirm",
                 "lead:tag:confirm", LeadTagConfirmationRequest.class);
+        assertEndpointExpression(BizLeadController.class, "ownerOptions", GET, "/owner/options",
+                "@ss.hasAnyPermi('lead:add,lead:edit,lead:assign,lead:assignment-policy:list')");
         assertEndpointExpression(BizLeadController.class, "getInfo", GET, "/{leadId}",
                 "@ss.hasAnyPermi('lead:query,lead:mine:query,lead:pool:query,lead:recycle:query,lead:dead-pool:list')");
         assertEndpointExpression(BizLeadController.class, "callRecords", GET, "/{leadId}/call-records",
@@ -74,7 +76,9 @@ class LeadTodoControllerContractTest
         assertNoFields(LeadManualCallRecordCommand.class, "leadId", "todoId", "actorId",
                 "operatorId", "callChannel", "providerSummaryHash", "targetStatus");
         assertNoFields(LeadInvalidReviewCompleteCommand.class, "leadId", "reviewId", "todoId",
-                "actorId", "operatorId", "targetStatus", "status");
+                "actorId", "operatorId", "targetStatus", "status", "reviewComment");
+        assertTrue(Arrays.stream(LeadInvalidReviewCompleteCommand.class.getDeclaredFields())
+                .anyMatch(field -> "reviewOpinion".equals(field.getName())));
         assertNoFields(LeadDeadPoolRestoreCommand.class, "leadId", "actorId", "operatorId",
                 "targetStatus", "disposition", "rowVersion");
         assertNoFields(LeadAssignmentPolicyCommand.class, "businessType", "actorId", "operatorId",

@@ -28,6 +28,7 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     private final FileObjectMapper mapper;
     public MyBatisFileObjectRepository(FileObjectMapper mapper){this.mapper=mapper;}
     @Override public FileObject findById(Long id){return object(mapper.selectObject(id));}
+    @Override public FileObject lockById(Long id){return object(mapper.selectObjectForUpdate(id));}
     @Override public FileObject insertFileObject(FileObject value)
     {
         Map<String,Object> row=new HashMap<>();row.put("logicalName",value.logicalName());row.put("status",value.status());row.put("createdBy",value.createdBy());
@@ -38,6 +39,8 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     @Override public int activateVersion(Long id,int versionNo,int minimum){return mapper.activateVersion(id,versionNo,minimum);}
     @Override public StoredVersion findCurrentVersion(Long id){return storedVersion(mapper.selectCurrentVersion(id));}
     @Override public StoredVersion findVersionById(Long id){return storedVersion(mapper.selectVersionById(id));}
+    @Override public List<StoredVersion> findStoredVersions(Long id)
+    {List<Map<String,Object>> rows=mapper.selectStoredVersions(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::storedVersion).toList();}
     @Override public List<FileVersion> findVersions(Long id)
     {List<Map<String,Object>> rows=mapper.selectVersions(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::version).toList();}
     @Override public StoredVersion insertVersion(StoredVersion value)
@@ -54,6 +57,8 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
     @Override public int markUploadCompleted(String id,Long versionId){return mapper.markUploadCompleted(id,versionId);}
     @Override public List<FileBusinessRelation> findActiveRelations(Long id)
     {List<Map<String,Object>> rows=mapper.selectActiveRelations(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::relation).toList();}
+    @Override public List<FileBusinessRelation> lockActiveRelations(Long id)
+    {List<Map<String,Object>> rows=mapper.selectActiveRelationsForUpdate(id);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::relation).toList();}
     @Override public List<FileBusinessRelation> findActiveRelations(String type,Long businessId)
     {List<Map<String,Object>> rows=mapper.selectActiveBusinessRelations(type,businessId);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::relation).toList();}
     @Override public FileBusinessRelation findRelation(Long id,String type,Long businessId,String material,String visibility,Long dept,Long user)
@@ -71,7 +76,10 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
             value.materialType(),value.visibility(),value.scopeDeptId(),value.scopeUserId(),value.createdBy(),value.createdDeptId(),true);
     }
     @Override public int revokeRelation(Long id){return mapper.revokeRelation(id);}
+    @Override public int revokeAllRelations(Long id){return mapper.revokeAllRelations(id);}
+    @Override public int disableObject(Long id){return mapper.disableObject(id);}
     @Override public RelationAction findRelationAction(Long actor,String action){return relationAction(mapper.selectRelationAction(actor,action));}
+    @Override public RelationAction lockRelationAction(Long actor,String action){return relationAction(mapper.selectRelationActionForUpdate(actor,action));}
     @Override public int insertRelationAction(RelationAction value){return mapper.insertRelationAction(relationActionRow(value));}
     @Override public AccessToken insertAccessToken(AccessToken value)
     {
@@ -95,6 +103,8 @@ public class MyBatisFileObjectRepository implements FileObjectRepository
             value.nextRetryAt(),value.actorId(),value.actorDeptId(),value.createdAt());
     }
     @Override public CleanupTask findCleanupTaskById(Long id){return cleanup(mapper.selectCleanupTaskById(id));}
+    @Override public List<CleanupTask> findCleanupTasks(Long fileObjectId,Long actorId,String actionId)
+    {List<Map<String,Object>> rows=mapper.selectCleanupTasks(fileObjectId,actorId,actionId);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::cleanup).toList();}
     @Override public List<CleanupTask> findRetryableCleanupTasks(Instant at,int limit)
     {List<Map<String,Object>> rows=mapper.selectRetryableCleanupTasks(at,limit);return rows==null?List.of():rows.stream().map(MyBatisFileObjectRepository::cleanup).toList();}
     @Override public int completeCleanupTask(Long id,Instant at){return mapper.completeCleanupTask(id,at);}

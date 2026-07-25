@@ -1,5 +1,10 @@
 <template>
-  <div class="todo-material-checklist">
+  <div
+    :id="id || null"
+    class="todo-material-checklist"
+    role="group"
+    :aria-labelledby="labelledBy || null"
+  >
     <el-alert v-if="missingCount" :title="`仍缺少 ${missingCount} 份必需材料`" type="warning" :closable="false" show-icon />
     <div v-for="item in rows" :key="item.materialType" class="material-item">
       <div class="material-heading">
@@ -16,6 +21,7 @@
         :material-type="item.materialType"
         :limit="Math.max(item.minCount, item.limit || item.minCount)"
         :disabled="readonly"
+        :aria-label="`选择${item.label}`"
         @input="setFiles(item.materialType, $event)"
       />
       <span v-else class="missing">未提供</span>
@@ -34,7 +40,9 @@ export default {
     requirements: { type: Array, default: () => [] },
     businessType: { type: String, required: true },
     businessId: { type: [Number, String], required: true },
-    readonly: Boolean
+    readonly: Boolean,
+    id: { type: String, default: '' },
+    labelledBy: { type: String, default: '' }
   },
   computed: {
     rows() {

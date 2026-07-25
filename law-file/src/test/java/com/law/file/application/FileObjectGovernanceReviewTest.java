@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.law.file.domain.FileException;
 import com.law.file.domain.FileObject.AccessToken;
@@ -16,6 +17,7 @@ import com.law.file.domain.FileObject.FileActor;
 import com.law.file.domain.FileObject.FileBusinessRelation;
 import com.law.file.domain.FileObject.FileVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.RelationAction;
+import com.law.file.infrastructure.internal.FilePersistenceModel.CleanupTask;
 import com.law.file.infrastructure.internal.FilePersistenceModel.StoredVersion;
 import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 import com.law.file.repository.FileObjectRepository;
@@ -44,8 +46,12 @@ class FileObjectGovernanceReviewTest
     private FileObjectService service;
 
     @BeforeEach void setUp()
-    {service=new FileObjectService(repository,storage,access,cleanupAudit,new FileContentPolicy(),
-        Clock.fixed(now,ZoneOffset.UTC),bytes->"token-fixed");}
+    {
+        lenient().when(repository.lockById(anyLong())).thenAnswer(invocation->
+            new com.law.file.domain.FileObject(invocation.getArgument(0),"proof",2,3,"ACTIVE",7L,1));
+        service=new FileObjectService(repository,storage,access,cleanupAudit,new FileContentPolicy(),
+            Clock.fixed(now,ZoneOffset.UTC),bytes->"token-fixed");
+    }
 
     @Test void public_version_metadata_never_contains_an_object_key()
     {
@@ -127,10 +133,82 @@ class FileObjectGovernanceReviewTest
             &&value.relationId().equals(4L)&&value.requestFingerprint()!=null));
     }
 
-    @Test void revoke_is_action_idempotent_and_writes_lifecycle_audit()
+    @Test void disabled_object_is_rejected_under_lock_before_attach_authorization_or_mutation()
+    {
+        when(repository.lockById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",2,3,"DISABLED",7L,2));
+
+        FileException error=assertThrows(FileException.class,()->service.relate(
+            10L,"late-attach","CASE",9L,"PROOF","BUSINESS",actor));
+
+        assertEquals("FILE_OBJECT_DISABLED",error.getBusinessCode());
+        verifyNoInteractions(access);
+        verify(repository,never()).insertRelation(any());
+        verify(repository,never()).insertRelationAction(any());
+    }
+
+    @Test void action_committed_while_waiting_for_the_object_lock_is_replayed_before_disabled_rejection()
+    {
+        AtomicBoolean objectLockAcquired=new AtomicBoolean();
+        String fingerprint=FileObjectService.retireActionFingerprint(10L,4L,true);
+        RelationAction winner=new RelationAction(
+            7L,"retire-after-wait","RETIRE_OBJECT",4L,fingerprint,now);
+        when(repository.findRelationAction(7L,"retire-after-wait"))
+            .thenAnswer(invocation->objectLockAcquired.get()?winner:null);
+        when(repository.lockById(10L)).thenAnswer(invocation->{
+            objectLockAcquired.set(true);
+            return new com.law.file.domain.FileObject(10L,"proof",2,3,"DISABLED",7L,2);
+        });
+        when(repository.findRelationById(4L)).thenReturn(relation(4L,"DEPARTMENT",3L,0L,false));
+        when(repository.findById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",2,3,"DISABLED",7L,2));
+        when(repository.findCleanupTasks(10L,7L,"retire-after-wait")).thenReturn(java.util.List.of(
+            new CleanupTask(31L,10L,"retire-after-wait","OBJECT","objects/first","COMPLETED",0,
+                null,null,now,7L,3L,now)));
+
+        var result=service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-after-wait",4L,true),actor);
+
+        assertTrue(result.objectRetired());
+        verifyNoInteractions(access);
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).disableObject(anyLong());
+    }
+
+    @Test void final_relation_cannot_be_revoked_without_the_governed_object_retirement_path()
     {
         FileBusinessRelation relation=relation(4L,"DEPARTMENT",3L,0L,true);
         when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(relation);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(relation));
+
+        FileException error=assertThrows(FileException.class,
+            ()->service.revokeRelation(10L,4L,"revoke-final",actor));
+
+        assertEquals("FILE_LAST_RELATION_REQUIRES_RETIREMENT",error.getBusinessCode());
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).insertRelationAction(any());
+    }
+
+    @Test void final_retire_false_is_rejected_without_stranding_an_active_object()
+    {
+        FileBusinessRelation relation=relation(4L,"DEPARTMENT",3L,0L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(relation);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(relation));
+
+        FileException error=assertThrows(FileException.class,()->service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-final-false",4L,false),actor));
+
+        assertEquals("FILE_LAST_RELATION_REQUIRES_RETIREMENT",error.getBusinessCode());
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).disableObject(anyLong());
+    }
+
+    @Test void revoke_is_action_idempotent_and_writes_lifecycle_audit()
+    {
+        FileBusinessRelation relation=relation(4L,"DEPARTMENT",3L,0L,true);
+        FileBusinessRelation retained=relation(5L,"DEPARTMENT",3L,0L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(relation);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(relation,retained));
         when(repository.revokeRelation(4L)).thenReturn(1);
         when(repository.insertRelationAction(any())).thenReturn(1);
         when(repository.insertLifecycleAudit(any())).thenReturn(1);
@@ -162,6 +240,164 @@ class FileObjectGovernanceReviewTest
         assertEquals("FILE_ACTION_ID_CONFLICT",error.getBusinessCode());
         assertFalse(error.getMessage().contains("10"));
         verify(repository,never()).revokeRelation(anyLong());
+    }
+
+    @Test void retire_is_relation_scoped_and_preserves_a_shared_object_and_other_authority()
+    {
+        FileBusinessRelation own=relation(4L,"DEPARTMENT",3L,0L,true);
+        FileBusinessRelation shared=new FileBusinessRelation(
+            5L,10L,"CASE",12L,"PROOF","USER",0L,99L,99L,8L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(own);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(own,shared));
+        when(repository.revokeRelation(4L)).thenReturn(1);
+        when(repository.insertRelationAction(any())).thenReturn(1);
+        when(repository.insertLifecycleAudit(any())).thenReturn(1);
+
+        var result=service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-shared",4L,true),actor);
+
+        assertFalse(result.relationActive());
+        assertFalse(result.objectRetired());
+        assertEquals("ACTIVE",result.status());
+        verify(repository).revokeRelation(4L);
+        verify(repository,never()).revokeRelation(5L);
+        verify(repository,never()).disableObject(anyLong());
+        verify(repository,never()).insertCleanupTask(any());
+        verifyNoInteractions(storage);
+    }
+
+    @Test void owner_can_retire_the_last_relation_and_all_versions_only_after_commit()
+    {
+        FileBusinessRelation own=relation(4L,"DEPARTMENT",3L,0L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(own);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(own));
+        when(repository.lockById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",2,3,"ACTIVE",7L,1));
+        when(repository.findStoredVersions(10L)).thenReturn(java.util.List.of(
+            new StoredVersion(version(21L,"first"),"objects/first"),
+            new StoredVersion(version(22L,"second"),"objects/second")));
+        when(repository.revokeRelation(4L)).thenReturn(1);
+        when(repository.insertRelationAction(any())).thenReturn(1);
+        when(repository.disableObject(10L)).thenReturn(1);
+        when(repository.insertLifecycleAudit(any())).thenReturn(1);
+        when(repository.insertCleanupTask(any())).thenAnswer(invocation->{
+            CleanupTask task=invocation.getArgument(0);
+            long id=task.targetKey().endsWith("first")?31L:32L;
+            return new CleanupTask(id,task.fileObjectId(),task.actionId(),task.targetType(),task.targetKey(),
+                task.status(),task.retryCount(),null,null,task.nextRetryAt(),task.actorId(),task.actorDeptId(),
+                task.createdAt());
+        });
+
+        TransactionSynchronizationManager.initSynchronization();
+        try
+        {
+            var result=service.retire(10L,
+                new FileObjectService.RetireFileObjectCommand("retire-last",4L,true),actor);
+
+            assertTrue(result.objectRetired());
+            assertEquals(java.util.List.of(31L,32L),result.cleanupTaskIds());
+            verifyNoInteractions(storage);
+            for(TransactionSynchronization synchronization:TransactionSynchronizationManager.getSynchronizations())
+                synchronization.afterCommit();
+            verify(storage).delete("objects/first");
+            verify(storage).delete("objects/second");
+            verify(cleanupAudit).recordCleanupSuccess(31L,"OBJECT_RETIRED",actor);
+            verify(cleanupAudit).recordCleanupSuccess(32L,"OBJECT_RETIRED",actor);
+        }
+        finally
+        {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test void non_owner_cannot_retire_the_last_object_and_no_relation_is_mutated()
+    {
+        FileBusinessRelation own=relation(4L,"DEPARTMENT",3L,0L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(own);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(own));
+        when(repository.lockById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",1,2,"ACTIVE",99L,1));
+
+        assertThrows(com.law.file.security.FileAccessDeniedException.class,()->service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-foreign",4L,true),actor));
+
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).disableObject(anyLong());
+        verifyNoInteractions(storage);
+    }
+
+    @Test void cleanup_metadata_failure_never_touches_physical_storage()
+    {
+        FileBusinessRelation own=relation(4L,"DEPARTMENT",3L,0L,true);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(own);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(own));
+        when(repository.lockById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",1,2,"ACTIVE",7L,1));
+        when(repository.findStoredVersions(10L)).thenReturn(java.util.List.of(
+            new StoredVersion(version(21L,"first"),"objects/first")));
+        when(repository.insertRelationAction(any())).thenReturn(1);
+        when(repository.revokeRelation(4L)).thenReturn(1);
+        when(repository.disableObject(10L)).thenReturn(1);
+        when(repository.insertLifecycleAudit(any())).thenReturn(1);
+        when(repository.insertCleanupTask(any())).thenReturn(null);
+
+        assertThrows(FileException.class,()->service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-fails",4L,true),actor));
+
+        verifyNoInteractions(storage);
+        verify(cleanupAudit,never()).recordCleanupSuccess(anyLong(),anyString(),any());
+    }
+
+    @Test void retire_replay_returns_the_durable_result_without_duplicate_metadata_or_cleanup()
+    {
+        String fingerprint=FileObjectService.retireActionFingerprint(10L,4L,true);
+        when(repository.findRelationAction(7L,"retire-replay")).thenReturn(new RelationAction(
+            7L,"retire-replay","RETIRE_OBJECT",4L,fingerprint,now));
+        when(repository.findRelationById(4L)).thenReturn(relation(4L,"DEPARTMENT",3L,0L,false));
+        when(repository.findById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",2,3,"DISABLED",7L,2));
+        when(repository.findCleanupTasks(10L,7L,"retire-replay")).thenReturn(java.util.List.of(
+            new CleanupTask(31L,10L,"retire-replay","OBJECT","objects/first","COMPLETED",0,null,null,
+                now,7L,3L,now),
+            new CleanupTask(32L,10L,"retire-replay","OBJECT","objects/second","COMPLETED",0,null,null,
+                now,7L,3L,now)));
+
+        var result=service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-replay",4L,true),actor);
+
+        assertTrue(result.objectRetired());
+        assertEquals(java.util.List.of(31L,32L),result.cleanupTaskIds());
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).disableObject(anyLong());
+        verify(repository,never()).insertCleanupTask(any());
+        verifyNoInteractions(storage);
+    }
+
+    @Test void concurrent_action_claim_replays_the_winner_without_revoking_twice()
+    {
+        FileBusinessRelation active=relation(4L,"DEPARTMENT",3L,0L,true);
+        FileBusinessRelation retained=relation(5L,"DEPARTMENT",3L,0L,true);
+        FileBusinessRelation retired=relation(4L,"DEPARTMENT",3L,0L,false);
+        String fingerprint=FileObjectService.retireActionFingerprint(10L,4L,false);
+        RelationAction winner=new RelationAction(
+            7L,"retire-race","RETIRE_RELATION",4L,fingerprint,now);
+        when(repository.findRelationAction(7L,"retire-race")).thenReturn(null);
+        when(repository.lockRelationAction(7L,"retire-race")).thenReturn(winner);
+        when(access.requireCanWriteRelation(10L,4L,actor)).thenReturn(active);
+        when(repository.lockActiveRelations(10L)).thenReturn(java.util.List.of(active,retained));
+        when(repository.insertRelationAction(any())).thenReturn(0);
+        when(repository.findRelationById(4L)).thenReturn(retired);
+        when(repository.findById(10L)).thenReturn(new com.law.file.domain.FileObject(
+            10L,"proof",1,2,"ACTIVE",7L,1));
+
+        var result=service.retire(10L,
+            new FileObjectService.RetireFileObjectCommand("retire-race",4L,false),actor);
+
+        assertFalse(result.relationActive());
+        assertFalse(result.objectRetired());
+        verify(repository,never()).revokeRelation(anyLong());
+        verify(repository,never()).insertCleanupTask(any());
+        verifyNoInteractions(storage);
     }
 
     @Test void token_is_bound_to_one_relation_and_redemption_rechecks_that_relation()

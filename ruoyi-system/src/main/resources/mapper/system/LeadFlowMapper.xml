@@ -221,4 +221,8 @@
         <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         order by user_id
     </select>
+    <select id="countActiveLeadSource" resultType="int">
+        select count(*) from biz_lead_setting
+        where setting_type='source' and setting_code=#{sourceCode} and status='0'
+    </select>
 </mapper>

@@ -65,6 +65,9 @@ public class LeadCommandService
         }
         int rows = mapper.insertLead(lead);
         changed(rows, "线索创建失败");
+        mapper.insertSourceBusinessTagIfAbsent(lead.getSourceCode(), actor.userName());
+        changed(mapper.insertLeadSourceTagRelationIfAbsent(lead.getLeadId(), lead.getSourceCode(),
+                actor.userName()), "线索来源标签关系创建失败");
         Map<String, Object> payload = new HashMap<>();
         payload.put("schemaVersion", 1);
         payload.put("operatorId", actor.userId());
@@ -80,7 +83,13 @@ public class LeadCommandService
         {
             throw error(BusinessErrorCode.VALIDATION_FAILED, "线索ID不能为空");
         }
-        access.requireOperable(lead.getLeadId());
+        BizLead persisted = access.requireOperable(lead.getLeadId());
+        if (lead.getSourceCode() != null
+                && !java.util.Objects.equals(persisted.getSourceCode(), lead.getSourceCode()))
+        {
+            throw error(BusinessErrorCode.STATE_CONFLICT, "线索来源创建后不可修改");
+        }
+        lead.setSourceCode(persisted.getSourceCode());
         validateLead(lead);
         clearServerManagedFields(lead);
         lead.setUpdateBy(actors.current().userName());

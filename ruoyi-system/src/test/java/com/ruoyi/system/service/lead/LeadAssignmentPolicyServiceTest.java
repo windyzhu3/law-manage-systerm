@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 
 import java.util.List;
@@ -116,6 +117,7 @@ class LeadAssignmentPolicyServiceTest
         when(actors.current()).thenReturn(com.ruoyi.system.support.BusinessFixtures.actor());
         when(todos.selectTemplateVersionById(99L)).thenReturn(java.util.Map.of(
                 "template_code","TD-003","status","PUBLISHED","business_type","LEAD"));
+        when(mapper.countActiveLeadSource("WEB")).thenReturn(1);
         when(mapper.selectActiveCandidateUsersInDepartment(3L,List.of(9L,8L)))
                 .thenReturn(List.of(8L,9L));
         when(mapper.selectAssignmentPolicyByIdForUpdate(11L)).thenReturn(stored);
@@ -134,6 +136,20 @@ class LeadAssignmentPolicyServiceTest
         verify(mapper).deleteAssignmentPolicyCandidates(11L);
         verify(mapper).insertAssignmentPolicyCandidate(11L,9L,0,"alice");
         verify(mapper).insertAssignmentPolicyCandidate(11L,8L,1,"alice");
+    }
+
+    @Test
+    void rejectsUnknownOrDisabledSource()
+    {
+        LeadAssignmentPolicyCommand command=command();
+        when(todos.selectTemplateVersionById(99L)).thenReturn(java.util.Map.of(
+                "template_code","TD-003","status","PUBLISHED","business_type","LEAD"));
+        when(mapper.countActiveLeadSource("WEB")).thenReturn(0);
+
+        ServiceException error=assertThrows(ServiceException.class,()->apiService().save(command));
+
+        assertEquals("PRECONDITION_FAILED",error.getBusinessCode());
+        verify(mapper,never()).insertAssignmentPolicy(any());
     }
 
     private LeadAssignmentPolicyService apiService()

@@ -56,6 +56,7 @@ class LeadCustomerConversionFlowTest
 
         BizLead lead = lead();
         when(leads.insertLead(lead)).thenAnswer(invocation -> { lead.setLeadId(7L); return 1; });
+        when(leads.insertLeadSourceTagRelationIfAbsent(anyLong(), any(), any())).thenReturn(1);
         new LeadCommandService(leads, dictionaries, events, actors, leadAccess).create(lead);
 
         when(leadAccess.requireReadable(7L, false, true)).thenReturn(lead);

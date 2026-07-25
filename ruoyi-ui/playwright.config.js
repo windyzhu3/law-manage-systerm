@@ -9,13 +9,19 @@ module.exports = defineConfig({
   timeout: realBackend ? 90000 : 30000,
   workers: realBackend ? 1 : undefined,
   retries: 0,
+  projects: [
+    {
+      name: 'chromium',
+      use: { browserName: 'chromium' }
+    }
+  ],
   use: {
     baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
     ...(browserChannel ? { channel: browserChannel } : {})
   },
   webServer: realBackend
-    ? { command: 'node scripts/serve-e2e-production.js', port: 4173, reuseExistingServer: true, timeout: 120000, env: { TODO_E2E_BACKEND_URL: process.env.TODO_E2E_BACKEND_URL || 'http://127.0.0.1:8080' } }
+    ? { command: 'node scripts/serve-e2e-production.js', port: 4173, reuseExistingServer: false, timeout: 120000, env: { TODO_E2E_BACKEND_URL: process.env.TODO_E2E_BACKEND_URL || 'http://127.0.0.1:8080' } }
     : { command: 'node node_modules/serve/build/main.js -s dist -l 4173', port: 4173, reuseExistingServer: true },
   reporter: [['list'], ['html', { outputFolder: 'output/playwright/report', open: 'never' }]]
 })

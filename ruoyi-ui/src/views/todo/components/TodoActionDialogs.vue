@@ -22,7 +22,7 @@
     </div>
     <div slot="footer">
       <el-button @click="innerVisible = false">取消</el-button>
-      <el-button type="primary" :loading="submitting" :disabled="loading || !formView" @click="submit">确认</el-button>
+      <el-button data-testid="todo-action-submit" type="primary" :loading="submitting" :disabled="loading || !formView" @click="submit">确认</el-button>
     </div>
   </el-dialog>
 </template>

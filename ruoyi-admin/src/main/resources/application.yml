@@ -151,6 +151,9 @@ law:
 
 # 防止XSS攻击
 foundation:
+  e2e-identity:
+    enabled: ${FOUNDATION_E2E_IDENTITY_ENABLED:false}
+    secret: ${FOUNDATION_E2E_IDENTITY_SECRET:}
   test-identities:
     enabled: ${FOUNDATION_TEST_IDENTITIES_ENABLED:false}
     password: ${FOUNDATION_TEST_USER_PASSWORD:}

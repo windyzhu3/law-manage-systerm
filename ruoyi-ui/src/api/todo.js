@@ -32,4 +32,5 @@ export function completeBusinessFileUpload(uploadIntentId, file) {
 export function getBusinessFilePreviewToken(fileObjectId, relationId) { return request({ url: `/files/${fileObjectId}/preview-token`, method: 'get', params: { relationId } }) }
 export function getBusinessFileDownloadToken(fileObjectId, relationId) { return request({ url: `/files/${fileObjectId}/download-token`, method: 'get', params: { relationId } }) }
 export function listBusinessFileVersions(fileObjectId) { return request({ url: `/files/${fileObjectId}/versions`, method: 'get' }) }
+export function listBusinessFileMaterials(businessType, businessId) { return request({ url: '/files/materials', method: 'get', params: { businessType, businessId } }) }
 export function openBusinessFileContent(token) { return request({ url: `/files/access/${encodeURIComponent(token)}`, method: 'get', responseType: 'blob' }) }

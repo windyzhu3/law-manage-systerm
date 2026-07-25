@@ -138,6 +138,7 @@ public class LeadAssignmentPolicyService
         validateCommand(command);
         access.requireDepartmentAdministerable(command.getSalesDeptId());
         validatePublishedTd003(command.getTemplateVersionId());
+        validateSource(command.getSourceCode());
         validateCandidates(command.getSalesDeptId(),command.getCandidateUserIds());
         String source=command.getSourceCode().trim();
         String ruleJson=ruleJson(command);
@@ -164,11 +165,10 @@ public class LeadAssignmentPolicyService
             require(policy!=null&&"LEAD".equals(policy.getBusinessType())
                     &&"ACTIVE".equals(policy.getStatus()),"Assignment policy does not exist");
             access.requireDepartmentAdministerable(policy.getSalesDeptId());
-            require(policy.getRowVersion().equals(command.getExpectedVersion()),
-                    "Assignment policy version changed");
-            changed(mapper.updateAssignmentPolicyConditionally(command.getPolicyId(),
+            if(!policy.getRowVersion().equals(command.getExpectedVersion()))throw conflict();
+            if(mapper.updateAssignmentPolicyConditionally(command.getPolicyId(),
                     command.getPolicyName().trim(),command.getSalesDeptId(),source,ruleJson,
-                    command.getExpectedVersion(),actor.userName()),"Assignment policy version changed");
+                    command.getExpectedVersion(),actor.userName())!=1)throw conflict();
             policy.setPolicyName(command.getPolicyName().trim());
             policy.setSalesDeptId(command.getSalesDeptId());
             policy.setSourceCode(source);
@@ -235,6 +235,14 @@ public class LeadAssignmentPolicyService
                 "Every policy candidate must be an active user in the sales department");
     }
 
+    private void validateSource(String sourceCode)
+    {
+        String source=sourceCode==null?null:sourceCode.trim();
+        require("*".equals(source)||(source!=null&&!source.isBlank()
+                &&mapper.countActiveLeadSource(source)==1),
+                "Policy source must be * or an active Lead source");
+    }
+
     private String ruleJson(LeadAssignmentPolicyCommand command)
     {
         JSONObject root=new JSONObject();
@@ -295,6 +303,12 @@ public class LeadAssignmentPolicyService
     private ServiceException error(String message)
     {
         return new ServiceException(message,BusinessErrorCode.PRECONDITION_FAILED.name());
+    }
+
+    private ServiceException conflict()
+    {
+        return new ServiceException("Assignment policy version changed",
+                BusinessErrorCode.CONCURRENT_MODIFICATION.name());
     }
 
     public record ResolvedPolicy(Long policyId, String retryRuleJson, List<Long> candidateUserIds) { }

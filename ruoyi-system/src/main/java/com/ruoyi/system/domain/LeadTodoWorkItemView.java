@@ -1,6 +1,7 @@
 package com.ruoyi.system.domain;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Flat operational read model used by the lead Todo workbenches. Each mapper
@@ -55,6 +56,7 @@ public class LeadTodoWorkItemView
     private Boolean overdue;
     private Boolean escalated;
     private LocalDateTime escalatedAt;
+    private List<String> allowedActions = List.of();
 
     public Long getLeadId() { return leadId; }
     public void setLeadId(Long value) { leadId = value; }
@@ -144,4 +146,6 @@ public class LeadTodoWorkItemView
     public void setEscalated(Boolean value) { escalated = value; }
     public LocalDateTime getEscalatedAt() { return escalatedAt; }
     public void setEscalatedAt(LocalDateTime value) { escalatedAt = value; }
+    public List<String> getAllowedActions() { return allowedActions; }
+    public void setAllowedActions(List<String> value) { allowedActions = value == null ? List.of() : List.copyOf(value); }
 }

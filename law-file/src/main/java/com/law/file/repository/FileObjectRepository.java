@@ -17,11 +17,13 @@ import com.law.file.infrastructure.internal.FilePersistenceModel.UploadIntent;
 public interface FileObjectRepository
 {
     FileObject findById(Long fileObjectId);
+    FileObject lockById(Long fileObjectId);
     FileObject insertFileObject(FileObject value);
     int reserveNextVersion(Long fileObjectId,int expectedNextVersion,int expectedVersion);
     int activateVersion(Long fileObjectId,int versionNo,int minimumCurrentVersion);
     StoredVersion findCurrentVersion(Long fileObjectId);
     StoredVersion findVersionById(Long versionId);
+    List<StoredVersion> findStoredVersions(Long fileObjectId);
     List<FileVersion> findVersions(Long fileObjectId);
     StoredVersion insertVersion(StoredVersion value);
     UploadIntent findUploadIntentByIdempotency(Long actorId,String idempotencyKey);
@@ -30,12 +32,16 @@ public interface FileObjectRepository
     int expireUploadIntent(String uploadIntentId,Instant expiredAt);
     int markUploadCompleted(String uploadIntentId,Long versionId);
     List<FileBusinessRelation> findActiveRelations(Long fileObjectId);
+    List<FileBusinessRelation> lockActiveRelations(Long fileObjectId);
     List<FileBusinessRelation> findActiveRelations(String businessType,Long businessId);
     FileBusinessRelation findRelation(Long fileObjectId,String businessType,Long businessId,String materialType,String visibility,Long scopeDeptId,Long scopeUserId);
     FileBusinessRelation findRelationById(Long relationId);
     FileBusinessRelation insertRelation(FileBusinessRelation relation);
     int revokeRelation(Long relationId);
+    int revokeAllRelations(Long fileObjectId);
+    int disableObject(Long fileObjectId);
     RelationAction findRelationAction(Long actorId,String actionId);
+    RelationAction lockRelationAction(Long actorId,String actionId);
     int insertRelationAction(RelationAction action);
     AccessToken insertAccessToken(AccessToken token);
     AccessToken findAccessTokenForUpdate(String tokenHash);
@@ -46,6 +52,7 @@ public interface FileObjectRepository
     List<LifecycleAudit> findLifecycleAudits(Long fileObjectId);
     CleanupTask insertCleanupTask(CleanupTask task);
     CleanupTask findCleanupTaskById(Long cleanupTaskId);
+    List<CleanupTask> findCleanupTasks(Long fileObjectId,Long actorId,String actionId);
     List<CleanupTask> findRetryableCleanupTasks(Instant readyAt,int limit);
     int completeCleanupTask(Long cleanupTaskId,Instant completedAt);
     int failCleanupTask(Long cleanupTaskId,String errorCode,String errorMessage,Instant nextRetryAt);

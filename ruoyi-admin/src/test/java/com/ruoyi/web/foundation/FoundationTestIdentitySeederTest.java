@@ -96,7 +96,7 @@ class FoundationTestIdentitySeederTest
 
     private static Stream<String> allowedProfiles()
     {
-        return Stream.of("local", "test", "local,test");
+        return Stream.of("local", "test", "e2e", "local,test");
     }
 
     private static Stream<String> forbiddenProfiles()

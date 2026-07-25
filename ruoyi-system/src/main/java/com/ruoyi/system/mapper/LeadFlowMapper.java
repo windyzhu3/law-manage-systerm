@@ -60,4 +60,5 @@ public interface LeadFlowMapper
             @Param("sortOrder") Integer sortOrder, @Param("createBy") String createBy);
     List<Long> selectActiveCandidateUsersInDepartment(@Param("salesDeptId") Long salesDeptId,
             @Param("userIds") List<Long> userIds);
+    int countActiveLeadSource(String sourceCode);
 }

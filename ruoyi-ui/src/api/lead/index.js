@@ -97,3 +97,47 @@ export function updateSetting(data) {
 export function delSetting(settingId) {
   return request({ url: '/lead/setting/' + settingId, method: 'delete' })
 }
+
+export function confirmLeadTag(data) {
+  return request({ url: '/lead/tag/confirm', method: 'post', data })
+}
+
+export function listLeadCallRecords(leadId) {
+  return request({ url: `/lead/${leadId}/call-records`, method: 'get' })
+}
+
+export function addLeadCallRecord(leadId, data) {
+  return request({ url: `/lead/${leadId}/call-records`, method: 'post', data })
+}
+
+export function listInvalidReview(query) {
+  return request({ url: '/lead/invalid-review/list', method: 'get', params: query })
+}
+
+export function completeInvalidReview(todoId, data) {
+  return request({ url: `/lead/invalid-review/${todoId}/complete`, method: 'post', data })
+}
+
+export function listLeadRetry(query) {
+  return request({ url: '/lead/retry/list', method: 'get', params: query })
+}
+
+export function getLeadRetryTimeline(leadId) {
+  return request({ url: `/lead/${leadId}/retry-timeline`, method: 'get' })
+}
+
+export function listDeadPool(query) {
+  return request({ url: '/lead/dead-pool/list', method: 'get', params: query })
+}
+
+export function restoreDeadPoolLead(leadId, data) {
+  return request({ url: `/lead/dead-pool/${leadId}/restore`, method: 'post', data })
+}
+
+export function listAssignmentPolicy() {
+  return request({ url: '/lead/assignment-policy', method: 'get' })
+}
+
+export function saveAssignmentPolicy(data) {
+  return request({ url: '/lead/assignment-policy', method: 'put', data })
+}

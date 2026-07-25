@@ -56,6 +56,25 @@ class FlywayMigrationTest
             .load();
         prePublishFlyway.migrate();
         verifyLeadPublicationRollbackAfterInjectedFailure(url);
+        Flyway publishFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.51")
+            .load();
+        publishFlyway.migrate();
+        insertLeadSourceGovernanceFixtures(url);
+        Flyway governanceSchemaFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.52")
+            .load();
+        governanceSchemaFlyway.migrate();
+        verifyLeadGovernanceAuditSchemaBoundary(url);
+        verifyLeadNavigationFailureRepairAndRetry(url);
         Flyway flyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
             .baselineOnMigrate(true)
@@ -67,7 +86,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.51", current.getVersion().getVersion());
+        assertEquals("0.20.54", current.getVersion().getVersion());
         verifyTodoSchedulePolicySnapshotSchema(url);
         verifyPublishedLeadTodoFlow(url);
         verifyDatabaseInvariants(url);
@@ -89,6 +108,254 @@ class FlywayMigrationTest
         verifyTodoPhaseOneAssetClosure(url);
         verifyReadableNavigationMenuNames(url);
         verifyTodoTemplateVersionEditMetadata(url);
+        verifyLeadSourceGovernance(url);
+    }
+
+    private void insertLeadSourceGovernanceFixtures(String url)
+    {
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD"));
+            Statement statement=connection.createStatement())
+        {
+            statement.executeUpdate("insert into biz_lead_setting(setting_type,setting_code,"
+                    +"setting_name,color,order_num,status,create_by,create_time) values"
+                    +"('source','retired_campaign','Retired campaign','#64748B',998,'1',"
+                    +"'migration-test',sysdate())");
+            statement.executeUpdate("insert into biz_business_tag(tag_code,tag_name,"
+                    +"applicable_business_type,tag_level,color,status,create_by,create_time) values"
+                    +"('LEAD_SOURCE_STALE','Stale source','LEAD','SOURCE','#64748B','0',"
+                    +"'migration-test',sysdate())");
+            statement.executeUpdate(leadFixtureSql(9_920_521L,
+                    "MIGRATION-SOURCE-KNOWN","online","0"));
+            statement.executeUpdate(leadFixtureSql(9_920_522L,
+                    "MIGRATION-SOURCE-UNKNOWN","historical_partner","0"));
+            statement.executeUpdate(leadFixtureSql(9_920_523L,
+                    "MIGRATION-SOURCE-BLANK","","0"));
+            statement.executeUpdate(leadFixtureSql(9_920_524L,
+                    "MIGRATION-SOURCE-DISABLED","retired_campaign","0"));
+            statement.executeUpdate(leadFixtureSql(9_920_525L,
+                    "MIGRATION-SOURCE-DELETED","deleted_historical","2"));
+            statement.executeUpdate("insert into biz_business_tag_rel("
+                    +"business_type,business_id,tag_id,tag_source,confirm_status,"
+                    +"create_by,create_time) select 'LEAD',9920521,tag_id,'SYSTEM','PENDING',"
+                    +"'migration-test',sysdate() from biz_business_tag "
+                    +"where tag_code='LEAD_SOURCE_STALE'");
+        }
+        catch(SQLException exception)
+        {
+            throw new AssertionError("Could not insert lead source governance fixtures",exception);
+        }
+    }
+
+    private String leadFixtureSql(long leadId,String leadNo,String sourceCode,String delFlag)
+    {
+        return "insert into biz_lead(lead_id,lead_no,lead_name,source_code,status,"
+                +"pool_status,priority,disposition,del_flag,create_by,create_time) values("
+                +leadId+",'"+leadNo+"','Migration source fixture','"+sourceCode
+                +"','0','0','2','ACTIVE','"+delFlag+"','migration-test',sysdate())";
+    }
+
+    private void verifyLeadGovernanceAuditSchemaBoundary(String url)
+    {
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            LeadNavigationState state=leadNavigationState(connection);
+            assertTrue(state.auditTableExists(),
+                    "V0.20.52 must establish the audit schema");
+            assertEquals(0L,state.auditRows(),
+                    "V0.20.52 is schema-only and must not govern source data");
+            assertEquals(0L,state.navigationRows(),
+                    "V0.20.52 must not create operational navigation");
+        }
+        catch(SQLException exception)
+        {
+            throw new AssertionError("Lead governance audit schema boundary failed",exception);
+        }
+    }
+
+    private void verifyLeadNavigationFailureRepairAndRetry(String url)
+    {
+        Path directory=null;
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD"));
+            InputStream dataInput=getClass().getResourceAsStream(
+                    "/db/migration/V0_20_53__lead_source_governance_and_navigation.sql"))
+        {
+            assertTrue(dataInput!=null,"0.20.53 migration resource is required");
+            LeadNavigationState before=leadNavigationState(connection);
+            assertTrue(before.auditTableExists(),
+                    "Failure probe must start from the legal V0.20.52 schema");
+            assertEquals(0L,before.auditRows(),
+                    "Failure probe must start before source governance DML");
+            String sql=new String(dataInput.readAllBytes(),StandardCharsets.UTF_8);
+            String marker="-- FAILURE_INJECTION_POINT_BEFORE_COMMIT";
+            assertTrue(sql.contains(marker),"Navigation failure-injection marker is required");
+            String injected=sql.replace(marker,
+                    "signal sqlstate '45000' set message_text='INJECTED_BEFORE_COMMIT';");
+            directory=Files.createTempDirectory("lead-navigation-atomicity-");
+            Files.writeString(directory.resolve(
+                    "V0_20_53__lead_source_governance_and_navigation.sql"),
+                    injected,StandardCharsets.UTF_8);
+
+            String filesystem="filesystem:"+directory.toAbsolutePath().toString()
+                    .replace('\\','/');
+            Flyway probe=Flyway.configure()
+                    .dataSource(url,System.getenv("TODO_MIGRATION_DB_USER"),
+                            System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+                    .locations(filesystem)
+                    .table("flyway_lead_navigation_probe_history")
+                    .baselineOnMigrate(true)
+                    .baselineVersion("0.20.52")
+                    .target("0.20.53")
+                    .load();
+            RuntimeException injectedFailure=assertThrows(RuntimeException.class,probe::migrate);
+            assertTrue(messageChain(injectedFailure).contains("INJECTED_BEFORE_COMMIT"),
+                    "Probe must reach the explicit pre-commit failure injection");
+
+            assertEquals(before,leadNavigationState(connection),
+                    "V0.20.53 permanent DML must roll back to the legal V0.20.52 state");
+            assertEquals(1L,count(connection,
+                    "select count(*) from flyway_lead_navigation_probe_history "
+                    +"where version='0.20.53' and success=0"),
+                    "Failed V0.20.53 must be explicit in Flyway history");
+
+            probe.repair();
+            assertEquals(0L,count(connection,
+                    "select count(*) from flyway_lead_navigation_probe_history "
+                    +"where version='0.20.53' and success=0"),
+                    "Flyway repair must remove the failed V0.20.53 entry");
+            assertEquals("0.20.52",probe.info().current().getVersion().getVersion(),
+                    "After repair the database must remain legally applied through V0.20.52");
+            assertEquals(before,leadNavigationState(connection),
+                    "Repair must not mutate lead source/navigation business state");
+            try(Statement cleanup=connection.createStatement())
+            {
+                cleanup.executeUpdate("drop table flyway_lead_navigation_probe_history");
+            }
+
+            Flyway retry=Flyway.configure()
+                    .dataSource(url,System.getenv("TODO_MIGRATION_DB_USER"),
+                            System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+                    .baselineOnMigrate(true)
+                    .baselineVersion("0.15.0")
+                    .locations("classpath:db/migration")
+                    .target("0.20.53")
+                    .load();
+            MigrateResult retried=retry.migrate();
+            assertTrue(retried.success,"Repaired V0.20.53 must rerun successfully");
+            assertEquals("0.20.53",retry.info().current().getVersion().getVersion());
+            LeadNavigationState after=leadNavigationState(connection);
+            assertTrue(after.auditTableExists());
+            assertTrue(after.auditRows()>0,
+                    "Successful V0.20.53 must persist governance audit rows");
+            assertTrue(after.navigationRows()>0,
+                    "Successful V0.20.53 must create lead workbench navigation");
+        }
+        catch(Exception exception)
+        {
+            throw new AssertionError("Lead navigation failure/repair/retry contract failed",exception);
+        }
+        finally
+        {
+            if(directory!=null)
+            {
+                try
+                {
+                    Files.deleteIfExists(directory.resolve(
+                            "V0_20_53__lead_source_governance_and_navigation.sql"));
+                    Files.deleteIfExists(directory);
+                }
+                catch(IOException ignored){ }
+            }
+        }
+    }
+
+    private LeadNavigationState leadNavigationState(Connection connection) throws SQLException
+    {
+        return new LeadNavigationState(
+                text(connection,"select group_concat(concat(lead_id,':',source_code) "
+                        +"order by lead_id separator '|') from biz_lead "
+                        +"where lead_id between 9920521 and 9920525"),
+                count(connection,"select count(*) from biz_business_tag_rel relation "
+                        +"join biz_business_tag tag on tag.tag_id=relation.tag_id "
+                        +"where relation.business_type='LEAD' "
+                        +"and relation.business_id between 9920521 and 9920525 "
+                        +"and tag.tag_level='SOURCE'"),
+                count(connection,"select count(*) from information_schema.tables "
+                        +"where table_schema=database() "
+                        +"and table_name='biz_lead_source_governance_audit'") == 1,
+                tableExists(connection,"biz_lead_source_governance_audit")
+                        ? count(connection,"select count(*) "
+                                +"from biz_lead_source_governance_audit") : 0L,
+                count(connection,"select count(*) from sys_menu where component in "
+                        +"('lead/review/index','lead/retry/index','lead/dead-pool/index',"
+                        +"'lead/policy/index')"));
+    }
+
+    private record LeadNavigationState(String leadSources,long sourceRelations,
+            boolean auditTableExists,long auditRows,long navigationRows) { }
+
+    private void verifyLeadSourceGovernance(String url)
+    {
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals("online",text(connection,
+                    "select source_code from biz_lead where lead_id=9920521"));
+            assertEquals("deleted_historical",text(connection,
+                    "select source_code from biz_lead where lead_id=9920525"));
+            assertEquals(4L,count(connection,
+                    "select count(*) from biz_lead_source_governance_audit "
+                    +"where lead_id between 9920521 and 9920525"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from biz_lead_source_governance_audit "
+                    +"where lead_id=9920521 and original_source_code='online' "
+                    +"and governed_source_code='online' "
+                    +"and governance_result='RETAINED'"));
+            assertEquals(3L,count(connection,
+                    "select count(*) from biz_lead_source_governance_audit audit "
+                    +"join biz_lead_setting source "
+                    +"on source.setting_type='source' "
+                    +"and source.setting_code=audit.governed_source_code "
+                    +"and source.status='0' "
+                    +"where audit.lead_id between 9920522 and 9920524 "
+                    +"and audit.governance_result='REMAPPED' "
+                    +"and audit.governed_source_code like 'LEGACY_%'"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from biz_lead l "
+                    +"where l.lead_id between 9920521 and 9920524 "
+                    +"and (select count(*) from biz_business_tag_rel relation "
+                    +"join biz_business_tag tag on tag.tag_id=relation.tag_id "
+                    +"where relation.business_type='LEAD' "
+                    +"and relation.business_id=l.lead_id "
+                    +"and tag.tag_level='SOURCE')<>1"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from biz_lead l "
+                    +"where l.lead_id between 9920521 and 9920524 "
+                    +"and not exists(select 1 from biz_business_tag_rel relation "
+                    +"join biz_business_tag tag on tag.tag_id=relation.tag_id "
+                    +"where relation.business_type='LEAD' "
+                    +"and relation.business_id=l.lead_id "
+                    +"and tag.tag_level='SOURCE' "
+                    +"and tag.tag_code=concat('LEAD_SOURCE_',upper(l.source_code)))"));
+        }
+        catch(SQLException exception)
+        {
+            throw new AssertionError("Lead source governance invariants failed",exception);
+        }
+    }
+
+    private String messageChain(Throwable error)
+    {
+        StringBuilder messages=new StringBuilder();
+        for(Throwable current=error;current!=null;current=current.getCause())
+            messages.append(' ').append(current.getMessage());
+        return messages.toString();
     }
 
     private void verifyTodoSchedulePolicySnapshotSchema(String url)
@@ -1193,6 +1460,21 @@ class FlywayMigrationTest
         {
             assertTrue(rows.next());
             return rows.getLong(1);
+        }
+    }
+
+    private boolean tableExists(Connection connection,String tableName) throws SQLException
+    {
+        try(PreparedStatement statement=connection.prepareStatement(
+                "select count(*) from information_schema.tables "
+                +"where table_schema=database() and table_name=?"))
+        {
+            statement.setString(1,tableName);
+            try(ResultSet rows=statement.executeQuery())
+            {
+                assertTrue(rows.next());
+                return rows.getLong(1)==1L;
+            }
         }
     }
 

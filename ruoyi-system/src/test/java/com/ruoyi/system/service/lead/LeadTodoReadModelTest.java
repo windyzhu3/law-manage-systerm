@@ -9,11 +9,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.security.BusinessActorProvider;
+import com.law.todo.application.TodoBusinessViewService;
+import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.domain.model.TodoInstance;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.LeadTodoWorkItemView;
@@ -25,6 +29,7 @@ class LeadTodoReadModelTest
     @Mock private BizLeadMapper mapper;
     @Mock private BusinessActorProvider actors;
     @Mock private LeadAccessPolicy access;
+    @Mock private TodoBusinessViewService todoViews;
 
     @Test
     void callTimelineRequiresLeadScopeAndUsesOneSetQuery()
@@ -51,6 +56,35 @@ class LeadTodoReadModelTest
         List<LeadTodoWorkItemView> rows = service().invalidReviewQueue("PENDING", "张");
 
         assertEquals(List.of(expected), rows);
+    }
+
+    @Test
+    void reviewQueueProjectsServerAuthoritativeActionsWithOneBulkCall()
+    {
+        when(actors.current()).thenReturn(actor());
+        LeadTodoWorkItemView first=item(7L,92L);
+        first.setTodoStatus("CREATED");
+        LeadTodoWorkItemView second=item(8L,93L);
+        second.setTodoStatus("SUBMITTED");
+        LeadTodoWorkItemView third=item(9L,94L);
+        third.setTodoStatus("COMPLETED");
+        when(mapper.selectLeadInvalidReviewQueue("PENDING",null,8L,3L,true))
+                .thenReturn(List.of(first,second,third));
+        when(todoViews.allowedActions(
+                org.mockito.ArgumentMatchers.<TodoInstance>anyList(),
+                org.mockito.ArgumentMatchers.any(Actor.class)))
+                .thenReturn(Map.of(92L,List.of("claim"),
+                        93L,List.of("complete"),94L,List.of()));
+
+        List<LeadTodoWorkItemView> rows=new LeadQueryService(
+                mapper,actors,access,todoViews).invalidReviewQueue("PENDING",null);
+
+        assertEquals(List.of("claim"),rows.get(0).getAllowedActions());
+        assertEquals(List.of("complete"),rows.get(1).getAllowedActions());
+        assertEquals(List.of(),rows.get(2).getAllowedActions());
+        verify(todoViews).allowedActions(
+                org.mockito.ArgumentMatchers.<TodoInstance>anyList(),
+                org.mockito.ArgumentMatchers.any(Actor.class));
     }
 
     @Test
@@ -89,6 +123,7 @@ class LeadTodoReadModelTest
         assertField("overdue");
         assertField("escalated");
         assertField("escalatedAt");
+        assertField("allowedActions");
     }
 
     private LeadQueryService service() { return new LeadQueryService(mapper, actors, access); }

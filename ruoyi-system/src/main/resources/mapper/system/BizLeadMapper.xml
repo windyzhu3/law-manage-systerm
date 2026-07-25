@@ -14,6 +14,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="companyName" column="company_name" />
         <result property="sourceCode" column="source_code" />
         <result property="tagConfirmStatus" column="tag_confirm_status" />
+        <result property="tagRelationId" column="tag_relation_id" />
         <result property="tagConfirmTime" column="tag_confirm_time" />
         <result property="tagConfirmBy" column="tag_confirm_by" />
         <result property="firstContactStatus" column="first_contact_status" />
@@ -103,7 +104,11 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectLeadVo">
-        select l.*, u.nick_name as owner_name, d.dept_name
+        select l.*, u.nick_name as owner_name, d.dept_name,
+          (select rel.tag_rel_id from biz_business_tag_rel rel
+           where rel.business_type='LEAD' and rel.business_id=l.lead_id
+             and rel.confirm_status in ('PENDING','CORRECTED')
+           order by rel.tag_rel_id limit 1) as tag_relation_id
         from biz_lead l
         left join sys_user u on u.user_id = l.owner_id
         left join sys_dept d on d.dept_id = l.dept_id
@@ -196,6 +201,26 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             #{priority}, #{legalDemand}, #{estimatedAmount}, #{ownerId}, #{deptId},
             #{nextFollowTime}, #{remark}, #{createBy}, sysdate(), sysdate()
         )
+    </insert>
+
+    <insert id="insertSourceBusinessTagIfAbsent">
+        insert ignore into biz_business_tag(
+          tag_code,tag_name,applicable_business_type,tag_level,color,status,create_by,create_time)
+        select concat('LEAD_SOURCE_',upper(setting_code)),setting_name,'LEAD','SOURCE',
+          color,status,#{createBy},sysdate()
+        from biz_lead_setting
+        where setting_type='source' and setting_code=#{sourceCode}
+        limit 1
+    </insert>
+
+    <insert id="insertLeadSourceTagRelationIfAbsent">
+        insert ignore into biz_business_tag_rel(
+          business_type,business_id,tag_id,tag_source,confirm_status,create_by,create_time)
+        select 'LEAD',#{leadId},tag.tag_id,'SYSTEM','PENDING',#{createBy},sysdate()
+        from biz_business_tag tag
+        where tag.tag_code=concat('LEAD_SOURCE_',upper(#{sourceCode}))
+          and tag.applicable_business_type='LEAD'
+        limit 1
     </insert>
 
     <update id="updateLead" parameterType="BizLead">

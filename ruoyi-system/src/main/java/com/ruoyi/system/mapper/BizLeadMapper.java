@@ -14,6 +14,10 @@ public interface BizLeadMapper
     public List<BizLead> selectLeadList(BizLead lead);
     public BizLead selectLeadById(Long leadId);
     public int insertLead(BizLead lead);
+    public int insertSourceBusinessTagIfAbsent(@Param("sourceCode") String sourceCode,
+            @Param("createBy") String createBy);
+    public int insertLeadSourceTagRelationIfAbsent(@Param("leadId") Long leadId,
+            @Param("sourceCode") String sourceCode, @Param("createBy") String createBy);
     public int updateLead(BizLead lead);
     public int softDeleteLead(@Param("leadIds") Long[] leadIds, @Param("updateBy") String updateBy);
     public int restoreLead(@Param("leadIds") Long[] leadIds, @Param("updateBy") String updateBy);

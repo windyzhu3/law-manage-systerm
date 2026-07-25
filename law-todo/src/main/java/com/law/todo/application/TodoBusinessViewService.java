@@ -3,6 +3,7 @@ package com.law.todo.application;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,9 @@ public class TodoBusinessViewService
     {
         List<Map<String,Object>> rows=mapper.selectBusinessTodos(authorizedQuery(businessType,businessId,actor));
         if(rows==null||rows.isEmpty())return List.of();
-        return rows.stream().map(row->withAllowedActions(row,actor)).toList();
+        List<TodoInstance> todos=rows.stream().map(this::todo).toList();
+        Map<Long,List<String>> actions=allowedActions(todos,actor);
+        return rows.stream().map(row->withAllowedActions(row,actions)).toList();
     }
 
     public TodoChainView chain(Long rootTodoId,Actor actor)
@@ -68,15 +71,61 @@ public class TodoBusinessViewService
         query.put("currentUserId",actor.userId());query.put("currentDeptId",actor.deptId());return query;
     }
 
-    private Map<String,Object> withAllowedActions(Map<String,Object> row,Actor actor)
+    private Map<String,Object> withAllowedActions(Map<String,Object> row,
+            Map<Long,List<String>> actions)
     {
-        Map<String,Object> view=new HashMap<>(row);TodoInstance todo=new TodoInstance();todo.setTodoId(longValue(value(row,"todo_id","todoId")));
-        todo.setStatus(String.valueOf(value(row,"status","status")));todo.setOwnerId(longValue(value(row,"owner_id","ownerId")));todo.setOwnerDeptId(longValue(value(row,"owner_dept_id","ownerDeptId")));
-        view.put("allowedActions",todo.getTodoId()==null?List.of():allowedActions(todo,actor));return view;
+        Map<String,Object> view=new HashMap<>(row);
+        Long todoId=longValue(value(row,"todo_id","todoId"));
+        view.put("allowedActions",todoId==null?List.of():
+                actions.getOrDefault(todoId,List.of()));
+        return view;
     }
 
-    private List<String> allowedActions(TodoInstance todo,Actor actor)
+    private TodoInstance todo(Map<String,Object> row)
     {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(longValue(value(row,"todo_id","todoId")));
+        todo.setStatus(String.valueOf(value(row,"status","status")));
+        todo.setOwnerId(longValue(value(row,"owner_id","ownerId")));
+        todo.setOwnerDeptId(longValue(value(row,"owner_dept_id","ownerDeptId")));
+        return todo;
+    }
+
+    public Map<Long,List<String>> allowedActions(List<TodoInstance> todos,Actor actor)
+    {
+        if(todos==null||todos.isEmpty()||actor==null)return Map.of();
+        List<TodoInstance> actionable=todos.stream()
+                .filter(todo->todo!=null&&todo.getTodoId()!=null)
+                .toList();
+        if(actionable.isEmpty())return Map.of();
+        List<Long> todoIds=actionable.stream().map(TodoInstance::getTodoId)
+                .distinct().toList();
+        List<Map<String,Object>> rows=mapper.selectAllowedActionFacts(
+                todoIds,actor.userId(),actor.deptId());
+        Map<Long,AccessFacts> facts=new HashMap<>();
+        if(rows!=null)
+        {
+            for(Map<String,Object> row:rows)
+            {
+                Long todoId=longValue(value(row,"todo_id","todoId"));
+                if(todoId!=null)facts.put(todoId,new AccessFacts(
+                        truth(value(row,"can_claim","canClaim")),
+                        truth(value(row,"can_review","canReview"))));
+            }
+        }
+        Map<Long,List<String>> result=new LinkedHashMap<>();
+        for(TodoInstance todo:actionable)
+        {
+            AccessFacts access=facts.getOrDefault(todo.getTodoId(),
+                    AccessFacts.NONE);
+            result.put(todo.getTodoId(),allowedActions(todo,actor,access));
+        }
+        return result;
+    }
+
+    public List<String> allowedActions(TodoInstance todo,Actor actor)
+    {
+        if(todo==null||todo.getTodoId()==null||actor==null)return List.of();
         String status=todo.getStatus();List<String> actions=new java.util.ArrayList<>();
         boolean owner=todoAccess.canOperate(todo,actor.userId());
         if("CREATED".equals(status)&&todoAccess.canClaim(todo,actor.userId(),actor.deptId()))actions.add("claim");
@@ -88,8 +137,42 @@ public class TodoBusinessViewService
         return actions;
     }
 
+    private List<String> allowedActions(TodoInstance todo,Actor actor,
+            AccessFacts access)
+    {
+        String status=todo.getStatus();
+        List<String> actions=new java.util.ArrayList<>();
+        boolean owner=todo.getOwnerId()!=null
+                && todo.getOwnerId().equals(actor.userId());
+        boolean canClaim=todo.getOwnerId()!=null?owner:access.canClaim();
+        if("CREATED".equals(status)&&canClaim)actions.add("claim");
+        if(("CLAIMED".equals(status)||"RETURNED".equals(status))&&owner)
+            actions.add("start");
+        if("IN_PROGRESS".equals(status)&&owner)actions.add("submit");
+        if("SUBMITTED".equals(status)&&owner)actions.add("complete");
+        if("SUBMITTED".equals(status)&&access.canReview())actions.add("return");
+        if(!"COMPLETED".equals(status)&&!"CANCELLED".equals(status)&&owner)
+        {
+            actions.add("transfer");
+            actions.add("cancel");
+        }
+        return actions;
+    }
+
     private static Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private static Long longValue(Object value){return value==null?null:Long.valueOf(String.valueOf(value));}
+    private static boolean truth(Object value)
+    {
+        if(value instanceof Boolean bool)return bool;
+        if(value instanceof Number number)return number.intValue()>0;
+        return value!=null&&("1".equals(String.valueOf(value))
+                ||"true".equalsIgnoreCase(String.valueOf(value)));
+    }
     private static long number(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value==null?0:Long.parseLong(String.valueOf(value));}
     private static LocalDateTime date(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value instanceof LocalDateTime time?time:null;}
+
+    private record AccessFacts(boolean canClaim,boolean canReview)
+    {
+        private static final AccessFacts NONE=new AccessFacts(false,false);
+    }
 }

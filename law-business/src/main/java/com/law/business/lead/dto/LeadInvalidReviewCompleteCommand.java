@@ -1,6 +1,7 @@
 package com.law.business.lead.dto;
 
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -13,16 +14,18 @@ public class LeadInvalidReviewCompleteCommand
     @NotBlank
     @Size(max = 32)
     private String reviewResult;
+    @NotBlank
     @Size(max = 1000)
-    private String reviewComment;
+    @JsonAlias("reviewComment")
+    private String reviewOpinion;
     private List<Long> fileObjectIds;
 
     public String getActionId() { return actionId; }
     public void setActionId(String value) { actionId = value; }
     public String getReviewResult() { return reviewResult; }
     public void setReviewResult(String value) { reviewResult = value; }
-    public String getReviewComment() { return reviewComment; }
-    public void setReviewComment(String value) { reviewComment = value; }
+    public String getReviewOpinion() { return reviewOpinion; }
+    public void setReviewOpinion(String value) { reviewOpinion = value; }
     public List<Long> getFileObjectIds() { return fileObjectIds; }
     public void setFileObjectIds(List<Long> value) { fileObjectIds = value; }
 }

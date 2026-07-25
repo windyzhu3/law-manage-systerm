@@ -21,6 +21,7 @@ public class BizLead extends BaseEntity
     private String companyName;
     private String sourceCode;
     private String tagConfirmStatus;
+    private Long tagRelationId;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private Date tagConfirmTime;
     private Long tagConfirmBy;
@@ -86,6 +87,8 @@ public class BizLead extends BaseEntity
     public void setSourceCode(String sourceCode) { this.sourceCode = sourceCode; }
     public String getTagConfirmStatus() { return tagConfirmStatus; }
     public void setTagConfirmStatus(String tagConfirmStatus) { this.tagConfirmStatus = tagConfirmStatus; }
+    public Long getTagRelationId() { return tagRelationId; }
+    public void setTagRelationId(Long tagRelationId) { this.tagRelationId = tagRelationId; }
     public Date getTagConfirmTime() { return tagConfirmTime; }
     public void setTagConfirmTime(Date tagConfirmTime) { this.tagConfirmTime = tagConfirmTime; }
     public Long getTagConfirmBy() { return tagConfirmBy; }

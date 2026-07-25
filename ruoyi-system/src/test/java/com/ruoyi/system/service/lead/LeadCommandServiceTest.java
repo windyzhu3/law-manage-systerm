@@ -52,9 +52,15 @@ class LeadCommandServiceTest
                 .thenReturn(List.of(setting("web")));
         when(dictionaries.selectDictDataByType("law_lead_priority")).thenReturn(List.of(dict("1")));
         when(mapper.insertLead(input)).thenAnswer(invocation -> { input.setLeadId(11L); return 1; });
+        when(mapper.insertLeadSourceTagRelationIfAbsent(11L, "web", "alice")).thenReturn(1);
 
         assertEquals(1, service.create(input));
 
+        InOrder persisted = inOrder(mapper, events);
+        persisted.verify(mapper).insertLead(input);
+        persisted.verify(mapper).insertSourceBusinessTagIfAbsent("web", "alice");
+        persisted.verify(mapper).insertLeadSourceTagRelationIfAbsent(11L, "web", "alice");
+        persisted.verify(events).publish(argThat(event -> "LEAD_CREATED:11".equals(event.getIdempotencyKey())));
         verify(events).publish(argThat(event -> "LEAD_CREATED:11".equals(event.getIdempotencyKey())
                 && Integer.valueOf(1).equals(event.getPayload().get("schemaVersion"))
                 && Long.valueOf(8L).equals(event.getPayload().get("operatorId"))));
@@ -71,6 +77,40 @@ class LeadCommandServiceTest
 
         assertEquals("STATE_CONFLICT", exception.getBusinessCode());
         verify(mapper, never()).softDeleteLead(new Long[] { 11L }, "alice");
+    }
+
+    @Test
+    void craftedUpdateCannotChangeImmutableSource()
+    {
+        BizLead persisted=validLead();persisted.setLeadId(11L);persisted.setSourceCode("web");
+        BizLead crafted=validLead();crafted.setLeadId(11L);crafted.setSourceCode("phone");
+        when(access.requireOperable(11L)).thenReturn(persisted);
+
+        ServiceException error=assertThrows(ServiceException.class,()->service.update(crafted));
+
+        assertEquals("STATE_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).updateLead(crafted);
+    }
+
+    @Test
+    void updateWithoutSourcePreservesPersistedImmutableSource()
+    {
+        BizLead persisted = validLead();
+        persisted.setLeadId(11L);
+        BizLead update = validLead();
+        update.setLeadId(11L);
+        update.setSourceCode(null);
+        when(access.requireOperable(11L)).thenReturn(persisted);
+        when(mapper.selectSettingList(argThat(s -> "source".equals(s.getSettingType())
+                && "web".equals(s.getSettingCode())))).thenReturn(List.of(setting("web")));
+        when(dictionaries.selectDictDataByType("law_lead_priority")).thenReturn(List.of(dict("1")));
+        when(actors.current()).thenReturn(actor());
+        when(mapper.updateLead(update)).thenReturn(1);
+
+        assertEquals(1, service.update(update));
+
+        assertEquals("web", update.getSourceCode());
+        verify(mapper).updateLead(update);
     }
 
     @Test

@@ -13,8 +13,10 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import com.law.file.application.FileObjectService;
+import com.law.file.application.FileMaterialQueryService;
 import com.law.file.application.FileObjectService.RegisterUploadCommand;
 import com.law.file.application.FileObjectService.RegisterVersionCommand;
+import com.law.file.application.FileObjectService.RetireFileObjectCommand;
 import com.law.file.domain.FileObject.AccessContent;
 import com.law.file.domain.FileObject.AccessLog;
 import com.law.file.domain.FileObject.LifecycleAudit;
@@ -29,6 +31,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -47,7 +50,11 @@ public class FileObjectController extends BaseController
     private static final Set<String> INLINE_PREVIEW_TYPES=Set.of(
         "application/pdf","image/png","image/jpeg","image/gif","image/webp","text/plain");
     private final FileObjectService service;
-    public FileObjectController(FileObjectService service){this.service=service;}
+    private final FileMaterialQueryService materials;
+    public FileObjectController(FileObjectService service){this(service,null);}
+    @Autowired
+    public FileObjectController(FileObjectService service,FileMaterialQueryService materials)
+    {this.service=service;this.materials=materials;}
 
     @PreAuthorize("@ss.hasPermi('file:object:upload')")
     @PostMapping("/register")
@@ -75,10 +82,23 @@ public class FileObjectController extends BaseController
     public AjaxResult revoke(@PathVariable Long fileObjectId,@PathVariable Long relationId,@Valid @RequestBody RevokeRelationRequest request)
     {return success(relation(service.revokeRelation(fileObjectId,relationId,request.actionId(),actor())));}
 
+    @PreAuthorize("@ss.hasPermi('file:object:retire')")
+    @PostMapping("/{fileObjectId}/retire")
+    public AjaxResult retire(@PathVariable Long fileObjectId,@Valid @RequestBody RetireFileObjectRequest request)
+    {return success(service.retire(fileObjectId,request.command(),actor()));}
+
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @PostMapping("/{fileObjectId}/access-token")
     public AjaxResult token(@PathVariable Long fileObjectId,@Valid @RequestBody AccessTokenRequest request)
     {return success(service.issueAccessToken(fileObjectId,request.relationId(),request.accessType(),actor()));}
+
+    @PreAuthorize("@ss.hasPermi('file:object:read')")
+    @GetMapping("/materials")
+    public AjaxResult materials(@RequestParam String businessType,@RequestParam Long businessId)
+    {
+        if(materials==null)throw new IllegalStateException("File material query service is unavailable");
+        return success(materials.list(businessType,businessId,actor()));
+    }
 
     @PreAuthorize("@ss.hasPermi('file:object:read')")
     @GetMapping("/{fileObjectId}/preview-token")
@@ -158,6 +178,9 @@ public class FileObjectController extends BaseController
     {RegisterVersionCommand command(){return new RegisterVersionCommand(actionId,originalFileName,contentType,expectedSize,expectedSha256,changeDescription);}}
     public record RelationRequest(@NotBlank String actionId,@NotBlank String businessType,@NotNull @Positive Long businessId,@NotBlank String materialType,String visibility) { }
     public record RevokeRelationRequest(@NotBlank String actionId) { }
+    public record RetireFileObjectRequest(@NotBlank String actionId,@NotNull @Positive Long relationId,
+        boolean retireObjectIfUnreferenced)
+    {RetireFileObjectCommand command(){return new RetireFileObjectCommand(actionId,relationId,retireObjectIfUnreferenced);}}
     public record AccessTokenRequest(@NotNull @Positive Long relationId,@Pattern(regexp="(?i)PREVIEW|DOWNLOAD") String accessType) { }
     public record VersionView(Long fileObjectId,Long fileVersionId,int versionNo,String originalFileName,String contentType,long sizeBytes,String sha256,String changeDescription,java.time.Instant createdAt) { }
     public record RelationView(Long relationId,Long fileObjectId,String businessType,Long businessId,String materialType,String visibility) { }

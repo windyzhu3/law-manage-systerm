@@ -56,7 +56,7 @@ public class BizLeadController extends BaseController
     @GetMapping("/{leadId}")
     public AjaxResult getInfo(@PathVariable Long leadId) { return success(leadService.selectLeadById(leadId)); }
 
-    @PreAuthorize("@ss.hasAnyPermi('lead:add,lead:edit,lead:assign')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:add,lead:edit,lead:assign,lead:assignment-policy:list')")
     @GetMapping("/owner/options")
     public AjaxResult ownerOptions() { return success(userService.selectUserList(new SysUser())); }
 

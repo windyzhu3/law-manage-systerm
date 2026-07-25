@@ -3,6 +3,8 @@ package com.law.todo.application;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -65,11 +67,44 @@ class TodoBusinessViewServiceTest
         when(access.supports("LEAD")).thenReturn(true);when(access.canView("LEAD",8L,7L,3L)).thenReturn(true);
         TodoInstance todo=new TodoInstance();todo.setTodoId(21L);todo.setStatus("SUBMITTED");todo.setOwnerId(9L);
         when(mapper.selectBusinessTodos(anyMap())).thenReturn(List.of(Map.of("todo_id",21L,"status","SUBMITTED","owner_id",9L)));
-        when(todoAccess.canOperate(org.mockito.ArgumentMatchers.any(TodoInstance.class),org.mockito.ArgumentMatchers.eq(7L))).thenReturn(false);when(todoAccess.canReview(org.mockito.ArgumentMatchers.any(TodoInstance.class),org.mockito.ArgumentMatchers.eq(7L))).thenReturn(true);
+        when(mapper.selectAllowedActionFacts(List.of(21L),7L,3L))
+                .thenReturn(List.of(Map.of("todo_id",21L,"can_claim",0,"can_review",1)));
 
         List<Map<String,Object>> rows=service().businessTodos("LEAD",8L,actor);
 
         assertEquals(List.of("return"),rows.get(0).get("allowedActions"));
+    }
+
+    @Test void bulkActionsUseOneFactQueryForManyTodos()
+    {
+        TodoInstance claim=todo(21L,"CREATED",null);
+        TodoInstance owned=todo(22L,"SUBMITTED",7L);
+        TodoInstance review=todo(23L,"SUBMITTED",9L);
+        when(mapper.selectAllowedActionFacts(List.of(21L,22L,23L),7L,3L))
+                .thenReturn(List.of(
+                        Map.of("todo_id",21L,"can_claim",1,"can_review",0),
+                        Map.of("todo_id",22L,"can_claim",0,"can_review",0),
+                        Map.of("todo_id",23L,"can_claim",0,"can_review",1)));
+
+        Map<Long,List<String>> actions=service().allowedActions(
+                List.of(claim,owned,review),actor);
+
+        assertEquals(List.of("claim"),actions.get(21L));
+        assertEquals(List.of("complete","transfer","cancel"),actions.get(22L));
+        assertEquals(List.of("return"),actions.get(23L));
+        verify(mapper).selectAllowedActionFacts(List.of(21L,22L,23L),7L,3L);
+        verify(todoAccess,never()).canClaim(
+                org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        verify(todoAccess,never()).canReview(
+                org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any());
+    }
+
+    private TodoInstance todo(Long id,String status,Long ownerId)
+    {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(id);todo.setStatus(status);todo.setOwnerId(ownerId);
+        return todo;
     }
 
     private TodoBusinessViewService service(){return new TodoBusinessViewService(mapper,List.of(access),todoAccess);}

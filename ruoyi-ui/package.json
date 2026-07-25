@@ -20,7 +20,8 @@
     "test:e2e": "node node_modules/@playwright/test/cli.js test",
     "test:e2e:server": "node scripts/check-production-e2e-server.js",
     "test:e2e:db-safety": "node scripts/check-todo-config-db-safety.js",
-    "test:e2e:contract": "node scripts/check-todo-config-real-e2e.js && node scripts/check-external-db-reports-contract.js"
+    "test:e2e:contract": "node scripts/check-todo-config-real-e2e.js && node scripts/check-external-db-reports-contract.js",
+    "test:lead-e2e-helpers": "node --test tests/e2e/support/*.test.js"
   },
   "keywords": [
     "vue",

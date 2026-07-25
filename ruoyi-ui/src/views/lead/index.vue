@@ -23,13 +23,15 @@
             <div class="status-tabs">
               <button v-for="item in quickTabs" :key="item.value" :class="{ active: query.status === item.value }" @click="quickStatus(item.value)">{{ item.label }} <em>{{ item.count }}</em></button>
               <el-button v-if="mode === 'recycle'" v-hasPermi="['lead:recycle:restore']" size="mini" :disabled="!ids.length" icon="el-icon-refresh-left" @click="restoreSelected">恢复选中</el-button>
+              <el-button v-else-if="mode === 'mine'" v-hasPermi="['lead:tag:confirm']" size="mini" :loading="tagSubmitting" :disabled="!confirmableSelection.length" icon="el-icon-price-tag" @click="confirmSelectedTags">批量确认标签</el-button>
             </div>
             <div class="lead-table-wrap">
-              <el-table v-loading="loading" :data="leadList" size="mini" @selection-change="selection => ids = selection.map(item => item.leadId)">
+              <el-table v-loading="loading" :data="leadList" size="mini" @selection-change="selectionChanged">
                 <el-table-column type="selection" width="42" align="center" />
-                <el-table-column label="线索编号" prop="leadNo" min-width="142" align="center" />
+                <el-table-column label="线索编号" min-width="142" align="center"><template slot-scope="{row}"><span :data-testid="`lead-row-${row.leadNo}`">{{ row.leadNo }}</span></template></el-table-column>
                 <el-table-column label="客户信息" min-width="150" align="center"><template slot-scope="{row}"><a v-if="canQueryLead" class="lead-link" @click="openDetail(row)">{{ row.contactName || row.leadName }}</a><span v-else>{{ row.contactName || row.leadName }}</span><span class="sub-text">{{ maskMobile(row.mobile) }}</span></template></el-table-column>
                 <el-table-column label="来源" width="94" align="center"><template slot-scope="{row}">{{ settingName('source',row.sourceCode) }}</template></el-table-column>
+                <el-table-column label="标签确认" width="104" align="center"><template slot-scope="{row}"><el-tag size="mini" :type="row.tagConfirmStatus==='CONFIRMED'?'success':'warning'">{{ dictLabel('law_lead_tag_confirm_status',row.tagConfirmStatus) }}</el-tag></template></el-table-column>
                 <el-table-column label="法律需求" prop="legalDemand" min-width="140" align="center" show-overflow-tooltip />
                 <el-table-column label="当前状态" width="96" align="center"><template slot-scope="{row}"><dict-tag :options="dict.type.law_lead_status" :value="row.status" /></template></el-table-column>
                 <el-table-column label="负责人" width="92" align="center"><template slot-scope="{row}"><span class="owner-cell"><i>{{ avatar(row.ownerName) }}</i>{{ row.ownerName || '待领取' }}</span></template></el-table-column>
@@ -38,7 +40,7 @@
                 <el-table-column label="操作" :width="operationColumnWidth" align="center" class-name="small-padding fixed-width lead-operation-column" fixed="right"><template slot-scope="{row}">
                   <template v-if="mode === 'recycle'"><el-button v-hasPermi="['lead:recycle:restore']" size="mini" type="text" icon="el-icon-refresh-left" @click="restoreOne(row)">恢复</el-button><el-button v-hasPermi="['lead:recycle:purge']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="purgeOne(row)">彻底删除</el-button></template>
                   <template v-else-if="mode === 'pool'"><el-button v-if="canClaim(row)" v-hasPermi="['lead:pool:claim']" size="mini" type="text" icon="el-icon-user" @click="claim(row)">领取</el-button><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">详情</el-button></template>
-                  <template v-else><span class="action-buttons"><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">查看</el-button><el-button v-if="canEdit(row)" v-hasPermi="['lead:edit']" size="mini" type="text" icon="el-icon-edit" @click="openLeadDialog(row)">编辑</el-button><el-button v-if="canFollow(row)" v-hasPermi="leadFollowPerms" size="mini" type="text" icon="el-icon-chat-line-round" @click="openFollowDialog(row)">跟进</el-button><el-button v-if="canAssign(row)" v-hasPermi="['lead:assign']" size="mini" type="text" icon="el-icon-user" @click="openAssignDialog(row)">分配</el-button><el-button v-if="canMovePool(row)" v-hasPermi="leadMovePoolPerms" size="mini" type="text" icon="el-icon-office-building" @click="toPool(row)">公海</el-button><el-button v-if="canConvert(row)" v-hasPermi="leadConvertPerms" size="mini" type="text" icon="el-icon-circle-check" @click="convert(row)">转化</el-button><el-button v-hasPermi="['lead:remove']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="remove(row)">删除</el-button></span></template>
+                  <template v-else><span class="action-buttons"><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">查看</el-button><el-button v-if="canConfirmTag(row)" v-hasPermi="['lead:tag:confirm']" size="mini" type="text" icon="el-icon-price-tag" @click="confirmTag(row)">确认标签</el-button><el-button v-if="canFirstContact(row)" v-hasPermi="['lead:first-contact:handle']" size="mini" type="text" icon="el-icon-phone-outline" @click="openFirstContact(row)">首联</el-button><el-button v-if="canEdit(row)" v-hasPermi="['lead:edit']" size="mini" type="text" icon="el-icon-edit" @click="openLeadDialog(row)">编辑</el-button><el-button v-if="canFollow(row)" v-hasPermi="leadFollowPerms" size="mini" type="text" icon="el-icon-chat-line-round" @click="openFollowDialog(row)">跟进</el-button><el-button v-if="canAssign(row)" v-hasPermi="['lead:assign']" size="mini" type="text" icon="el-icon-user" @click="openAssignDialog(row)">分配</el-button><el-button v-if="canMovePool(row)" v-hasPermi="leadMovePoolPerms" size="mini" type="text" icon="el-icon-office-building" @click="toPool(row)">公海</el-button><el-button v-if="canConvert(row)" v-hasPermi="leadConvertPerms" size="mini" type="text" icon="el-icon-circle-check" @click="convert(row)">转化</el-button><el-button v-hasPermi="['lead:remove']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="remove(row)">删除</el-button></span></template>
                 </template></el-table-column>
               </el-table>
             </div>
@@ -69,7 +71,7 @@
       <el-form ref="leadForm" :model="leadForm" :rules="leadRules" label-width="92px"><el-row :gutter="14">
         <el-col :span="12"><el-form-item label="线索名称" prop="leadName"><el-input v-model="leadForm.leadName" /></el-form-item></el-col><el-col :span="12"><el-form-item label="单位名称"><el-input v-model="leadForm.companyName" /></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="联系人" prop="contactName"><el-input v-model="leadForm.contactName" /></el-form-item></el-col><el-col :span="12"><el-form-item label="手机号" prop="mobile"><el-input v-model="leadForm.mobile" /></el-form-item></el-col>
-        <el-col :span="12"><el-form-item label="微信"><el-input v-model="leadForm.wechat" /></el-form-item></el-col><el-col :span="12"><el-form-item label="来源" prop="sourceCode"><el-select v-model="leadForm.sourceCode"><el-option v-for="item in settingOptions('source')" :key="item.settingCode" :label="item.settingName" :value="item.settingCode" /></el-select></el-form-item></el-col>
+        <el-col :span="12"><el-form-item label="微信"><el-input v-model="leadForm.wechat" /></el-form-item></el-col><el-col :span="12"><el-form-item label="来源" prop="sourceCode"><el-select v-model="leadForm.sourceCode" :disabled="!!leadForm.leadId" title="来源标签创建后保持只读"><el-option v-for="item in settingOptions('source')" :key="item.settingCode" :label="item.settingName" :value="item.settingCode" /></el-select></el-form-item></el-col>
         <el-col :span="12"><el-form-item label="优先级" prop="priority"><el-select v-model="leadForm.priority"><el-option v-for="item in dict.type.law_lead_priority" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item label="预计金额"><el-input-number v-model="leadForm.estimatedAmount" :min="0" :precision="2" /></el-form-item></el-col>
         <el-col :span="24"><el-form-item label="法律需求" prop="legalDemand"><el-input v-model="leadForm.legalDemand" type="textarea" :rows="3" /></el-form-item></el-col><el-col :span="24"><el-form-item label="备注"><el-input v-model="leadForm.remark" type="textarea" :rows="2" /></el-form-item></el-col>
       </el-row></el-form><div slot="footer"><el-button @click="leadDialog=false">取消</el-button><el-button type="primary" @click="saveLead">保存</el-button></div>
@@ -77,7 +79,8 @@
     <el-dialog title="记录跟进" :visible.sync="followDialog" width="560px" append-to-body><el-form ref="followFormRef" :model="followForm" :rules="followRules" label-width="90px"><el-form-item label="跟进方式" prop="followType"><el-select v-model="followForm.followType"><el-option v-for="item in dict.type.law_lead_follow_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="跟进结果" prop="followResult"><el-input v-model="followForm.followResult" /></el-form-item><el-form-item label="跟进内容" prop="content"><el-input v-model="followForm.content" type="textarea" :rows="4" maxlength="1000" show-word-limit /></el-form-item><el-form-item label="下次跟进"><el-date-picker v-model="followForm.nextFollowTime" type="datetime" value-format="yyyy-MM-dd HH:mm:ss" /></el-form-item></el-form><div slot="footer"><el-button @click="followDialog=false">取消</el-button><el-button type="primary" @click="saveFollowup">保存记录</el-button></div></el-dialog>
     <el-dialog :title="settingForm.settingId?'编辑配置':'新增配置'" :visible.sync="settingDialog" width="480px" append-to-body><el-form ref="settingFormRef" :model="settingForm" :rules="settingRules" label-width="86px"><el-form-item label="类型" prop="settingType"><el-select v-model="settingForm.settingType"><el-option v-for="item in dict.type.law_lead_setting_type" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item><el-form-item label="名称" prop="settingName"><el-input v-model="settingForm.settingName" /></el-form-item><el-form-item label="编码" prop="settingCode"><el-input v-model="settingForm.settingCode" /></el-form-item><el-form-item label="颜色"><el-color-picker v-model="settingForm.color" /></el-form-item><el-form-item label="排序"><el-input-number v-model="settingForm.orderNum" :min="0" /></el-form-item></el-form><div slot="footer"><el-button @click="settingDialog=false">取消</el-button><el-button type="primary" @click="saveSetting">保存</el-button></div></el-dialog>
     <lead-assign-dialog v-model="assignDialog" :lead="assignLeadRow" :owners="owners" :source-name="settingName('source',assignLeadRow.sourceCode)" :status-name="statusMeta(assignLeadRow.status).label" :priority-name="dictLabel('law_lead_priority', assignLeadRow.priority)" :size-class="'lead-size-' + appSize" @submit="saveAssign" />
-    <lead-detail-drawer v-model="detailDrawer" :lead="detail" :followups="detailFollowups" :source-name="settingName('source',detail && detail.sourceCode)" :status="statusMeta(detail && detail.status)" :priority-name="dictLabel('law_lead_priority', detail && detail.priority)" :pool-status-name="dictLabel('law_lead_pool_status', detail && detail.poolStatus)" :follow-type-options="dict.type.law_lead_follow_type" :follow-perms="leadFollowPerms" :size-class="'lead-size-' + appSize" @refresh="loadDetailFollowups" @edit="openLeadDialog" @assign="openAssignDialog" @follow="openFollowDialog" />
+    <lead-detail-drawer v-model="detailDrawer" :lead="detail" :followups="detailFollowups" :source-name="settingName('source',detail && detail.sourceCode)" :status="statusMeta(detail && detail.status)" :priority-name="dictLabel('law_lead_priority', detail && detail.priority)" :pool-status-name="dictLabel('law_lead_pool_status', detail && detail.poolStatus)" :follow-type-options="dict.type.law_lead_follow_type" :follow-perms="leadFollowPerms" :size-class="'lead-size-' + appSize" @refresh="loadDetailFollowups" @edit="openLeadDialog" @assign="openAssignDialog" @follow="openFollowDialog" @first-contact="openFirstContact" />
+    <lead-first-contact-drawer v-model="firstContactDrawer" :lead="firstContactLead" @completed="flowChanged" @changed="flowChanged" />
   </div>
 </template>
 
@@ -87,11 +90,12 @@ import LeadHero from './components/LeadHero'
 import LeadMetrics from './components/LeadMetrics'
 import LeadAssignDialog from './components/LeadAssignDialog'
 import LeadDetailDrawer from './components/LeadDetailDrawer'
-import { getDashboard,listLeadOwner,listLead,getLead,addLead,updateLead,delLead,restoreLead,purgeLead,assignLead,moveLeadToPool,claimLead,convertLead,listFollowup,addFollowup,delFollowup,listSetting,addSetting,updateSetting,delSetting } from '@/api/lead'
+import LeadFirstContactDrawer from './components/LeadFirstContactDrawer'
+import { getDashboard,listLeadOwner,listLead,getLead,addLead,updateLead,delLead,restoreLead,purgeLead,assignLead,moveLeadToPool,claimLead,convertLead,listFollowup,addFollowup,delFollowup,listSetting,addSetting,updateSetting,delSetting,confirmLeadTag } from '@/api/lead'
 export default {
   name: 'Lead',
-  dicts: ['law_lead_status', 'law_lead_priority', 'law_lead_follow_type', 'law_lead_pool_status', 'law_lead_setting_type'],
-  components: { DashboardView, LeadHero, LeadMetrics, LeadAssignDialog, LeadDetailDrawer },
+  dicts: ['law_lead_status', 'law_lead_priority', 'law_lead_follow_type', 'law_lead_pool_status', 'law_lead_setting_type', 'law_lead_tag_confirm_status'],
+  components: { DashboardView, LeadHero, LeadMetrics, LeadAssignDialog, LeadDetailDrawer, LeadFirstContactDrawer },
   data() {
     return {
       mode: 'dashboard',
@@ -101,6 +105,7 @@ export default {
       followupList: [],
       detailFollowups: [],
       ids: [],
+      selectedRows: [],
       owners: [],
       settings: [],
       allSettings: [],
@@ -113,6 +118,9 @@ export default {
       assignDialog: false,
       settingDialog: false,
       detailDrawer: false,
+      firstContactDrawer: false,
+      firstContactLead: null,
+      tagSubmitting: false,
       detail: null,
       assignLeadRow: {},
       leadForm: {},
@@ -148,13 +156,14 @@ export default {
       return ['lead:query']
     },
     canQueryLead() { return this.$auth.hasPermiOr(this.leadQueryPerms) },
+    confirmableSelection() { return this.selectedRows.filter(row => this.canConfirmTag(row)) },
     leadFollowPerms() { return this.mode === 'mine' ? ['lead:mine:followup'] : ['lead:followup:add'] },
     leadMovePoolPerms() { return this.mode === 'mine' ? ['lead:mine:pool:move'] : ['lead:pool:move'] },
     leadConvertPerms() { return this.mode === 'mine' ? ['lead:mine:convert'] : ['lead:convert'] },
     operationColumnWidth() {
       if (this.mode === 'recycle') return 150
       if (this.mode === 'pool') return 118
-      return 310
+      return 420
     },
     pageTitle() { return ({ dashboard: '线索中心', all: '全部线索', mine: '我的线索', pool: '线索公海', followup: '跟进记录', recycle: '线索回收站', settings: '线索设置' })[this.mode] || '线索管理' },
     pageDescription() { return ({ dashboard: '统一管理线索获取、分配与转化，提升线索利用效率', all: '统一管理律所全部潜在客户线索', mine: '专注处理由我负责的客户咨询', pool: '领取和分配尚未归属的线索资源', followup: '沉淀每一次客户沟通和后续计划', recycle: '恢复误删线索或执行彻底删除', settings: '维护来源、标签和无效原因' })[this.mode] || '' },
@@ -242,14 +251,17 @@ export default {
     avatar(value) { return value ? value.slice(0, 1) : '?' },
     isOverdue(time) { return time && new Date(time).getTime() < Date.now() },
     isTerminal(row) { return row && ['3', '4', '5'].includes(row.status) },
-    isPool(row) { return row && row.poolStatus === '1' },
+    isPool(row) { return row && (row.poolStatus === '1' || row.disposition === 'PUBLIC_POOL') },
+    isDeadPool(row) { return row && row.disposition === 'DEAD_POOL' },
     hasOwner(row) { return !!(row && row.ownerId) },
-    canEdit(row) { return !this.isTerminal(row) },
-    canAssign(row) { return !this.isTerminal(row) },
-    canMovePool(row) { return !this.isTerminal(row) && !this.isPool(row) },
-    canClaim(row) { return !this.isTerminal(row) && this.isPool(row) },
-    canFollow(row) { return !this.isTerminal(row) && !this.isPool(row) && this.hasOwner(row) },
+    canEdit(row) { return !this.isTerminal(row) && !this.isDeadPool(row) },
+    canAssign(row) { return !this.isTerminal(row) && !this.isDeadPool(row) },
+    canMovePool(row) { return !this.isTerminal(row) && !this.isPool(row) && !this.isDeadPool(row) },
+    canClaim(row) { return !this.isTerminal(row) && this.isPool(row) && !this.isDeadPool(row) },
+    canFollow(row) { return !this.isTerminal(row) && !this.isPool(row) && !this.isDeadPool(row) && this.hasOwner(row) },
     canConvert(row) { return !this.isTerminal(row) && !this.isPool(row) && this.hasOwner(row) && ['1', '2'].includes(row.status) },
+    canConfirmTag(row) { return !!(row && row.tagRelationId && ['PENDING', 'CORRECTED'].includes(row.tagConfirmStatus)) },
+    canFirstContact(row) { return this.canFollow(row) && row.tagConfirmStatus === 'CONFIRMED' && row.firstContactStatus !== 'COMPLETED' },
     followTypeName(value) { return this.dictLabel('law_lead_follow_type', value) },
     followIcon(value) { return ({ phone: 'phone', wechat: 'wechat', meeting: 'peoples', email: 'email' })[value] || 'message' },
     goPool() { this.$router.push({ path: '/lead/pool', query: { module: 'pool' } }) },
@@ -265,6 +277,36 @@ export default {
       })
     },
     openDetail(row) { getLead(row.leadId).then(res => { this.detail = res.data; this.detailDrawer = true; this.loadDetailFollowups() }) },
+    selectionChanged(selection) { this.selectedRows = selection; this.ids = selection.map(item => item.leadId) },
+    confirmTag(row) {
+      this.tagSubmitting = true
+      confirmLeadTag({ tagRelationId: row.tagRelationId }).then(() => {
+        this.$modal.msgSuccess('标签已确认')
+        this.flowChanged()
+      }).finally(() => { this.tagSubmitting = false })
+    },
+    confirmSelectedTags() {
+      const rows = this.confirmableSelection.slice()
+      this.$modal.confirm(`确认所选 ${rows.length} 条线索的来源标签吗？`).then(() => {
+        this.tagSubmitting = true
+        return Promise.all(rows.map(row => confirmLeadTag({ tagRelationId: row.tagRelationId })))
+      }).then(() => {
+        this.$modal.msgSuccess('标签批量确认完成')
+        this.flowChanged()
+      }).catch(() => {}).finally(() => { this.tagSubmitting = false })
+    },
+    openFirstContact(row) {
+      getLead(row.leadId).then(response => {
+        this.firstContactLead = response.data || row
+        this.firstContactDrawer = true
+      })
+    },
+    flowChanged() {
+      this.loadPage()
+      if (this.detail && this.detail.leadId) {
+        getLead(this.detail.leadId).then(response => { this.detail = response.data || this.detail })
+      }
+    },
     openFollowDialog(row) {
       this.followForm = { leadId: row.leadId, followType: 'phone', followResult: '', content: '', nextFollowTime: '' }
       this.followDialog = true

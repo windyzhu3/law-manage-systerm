@@ -9,12 +9,20 @@
       :on-exceed="onExceed"
       :show-file-list="false"
     >
-      <el-button size="mini" type="primary" :loading="uploading">选择文件</el-button>
+      <el-button
+        :id="controlId || null"
+        size="mini"
+        type="primary"
+        :loading="uploading"
+        :aria-labelledby="labelledBy || null"
+        :aria-label="labelledBy ? null : (ariaLabel || '选择文件')"
+      >选择文件</el-button>
       <span slot="tip" class="el-upload__tip">文件将保存到统一文件中心</span>
     </el-upload>
     <div class="file-list">
       <div v-for="file in selections" :key="file.fileObjectId" class="file-row">
-        <span class="file-name">{{ file.fileName || `文件 #${file.fileObjectId}` }}</span>
+        <button v-if="canAccess(file)" type="button" class="file-name file-name-link" :aria-label="`预览文件 ${file.fileName || '业务证据'}`" @click="previewFile(file)">{{ file.fileName || '业务证据' }}</button>
+        <span v-else class="file-name">{{ file.fileName || '文件元数据不可用' }}</span>
         <el-tag v-if="!canAccess(file)" size="mini" type="info">未授权</el-tag>
         <span v-else class="file-actions">
           <el-button type="text" size="mini" :loading="previewing === file.fileObjectId" @click="previewFile(file)">预览</el-button>
@@ -57,7 +65,10 @@ export default {
     materialType: { type: String, default: 'TODO_MATERIAL' },
     visibility: { type: String, default: 'BUSINESS' },
     limit: { type: Number, default: 1 },
-    disabled: Boolean
+    disabled: Boolean,
+    controlId: { type: String, default: '' },
+    labelledBy: { type: String, default: '' },
+    ariaLabel: { type: String, default: '' }
   },
   data() { return { uploading: false, previewing: null, downloading: null, versionLoading: null, versionOpen: false, versions: [] } },
   computed: {
@@ -181,5 +192,5 @@ export default {
 </script>
 
 <style scoped>
-.business-file-picker{width:100%}.el-upload__tip{margin-left:10px;color:#909399}.file-list{display:grid;gap:6px;margin-top:6px}.file-row{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 8px;border:1px solid #ebeef5;border-radius:4px}.file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-actions{white-space:nowrap}.remove{color:#f56c6c}
+.business-file-picker{width:100%}.el-upload__tip{margin-left:10px;color:#606266}.file-list{display:grid;gap:6px;margin-top:6px}.file-row{display:flex;align-items:center;gap:8px;min-height:44px;padding:4px 8px;border:1px solid #dcdfe6;border-radius:4px}.file-name{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-name-link{border:0;color:#0369a1;background:transparent;text-align:left;cursor:pointer}.file-name-link:focus-visible{outline:3px solid rgba(3,105,161,.28);outline-offset:2px}.file-actions{white-space:nowrap}.file-actions .el-button,.remove{min-width:44px;min-height:44px}.remove{color:#f56c6c}
 </style>

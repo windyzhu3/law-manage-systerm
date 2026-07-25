@@ -81,6 +81,7 @@ class FileObjectServiceTest
     {
         FileObject object=new FileObject(10L,"proof.pdf",0,1,"PENDING",7L,0);
         when(repository.insertFileObject(any())).thenReturn(object);
+        when(repository.lockById(10L)).thenReturn(object);
         when(repository.insertRelation(any())).thenReturn(relation());
         when(repository.insertRelationAction(any())).thenReturn(1);
         when(repository.insertLifecycleAudit(any())).thenReturn(1);

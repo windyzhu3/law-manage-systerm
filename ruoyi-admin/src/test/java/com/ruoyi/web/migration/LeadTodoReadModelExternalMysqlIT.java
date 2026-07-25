@@ -10,6 +10,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -19,6 +20,14 @@ import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.executor.Executor;
+import org.apache.ibatis.plugin.Interceptor;
+import org.apache.ibatis.plugin.Intercepts;
+import org.apache.ibatis.plugin.Invocation;
+import org.apache.ibatis.plugin.Signature;
+import org.apache.ibatis.session.ResultHandler;
+import org.apache.ibatis.session.RowBounds;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -27,6 +36,11 @@ import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.Test;
 import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
+import com.law.todo.application.TodoBusinessViewService;
+import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.domain.DefaultTodoAccessPolicy;
+import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
@@ -223,6 +237,52 @@ class LeadTodoReadModelExternalMysqlIT
         }
     }
 
+    @Test
+    void manyAllowedActionsUseExactlyOneRealMysqlBulkQuery() throws Exception
+    {
+        String url=required("TODO_MIGRATION_DB_URL");
+        String user=required("TODO_MIGRATION_DB_USER");
+        String password=required("TODO_MIGRATION_DB_PASSWORD");
+        DataSource dataSource=new UnpooledDataSource(
+                "com.mysql.cj.jdbc.Driver",url,user,password);
+        cleanup(dataSource);
+        try
+        {
+            insertFixtures(dataSource);
+            Configuration configuration=myBatis(dataSource);
+            TodoQueryCounter counter=new TodoQueryCounter();
+            configuration.addInterceptor(counter);
+            try(SqlSession session=new SqlSessionFactoryBuilder()
+                    .build(configuration).openSession(true))
+            {
+                TodoMapper mapper=session.getMapper(TodoMapper.class);
+                TodoBusinessViewService views=new TodoBusinessViewService(
+                        mapper,List.of(),new DefaultTodoAccessPolicy(mapper));
+                TodoInstance claim=actionTodo(SOURCE_TODO,"CREATED",null);
+                TodoInstance owned=actionTodo(RETRY_TODO,"SUBMITTED",SELLER);
+                TodoInstance terminal=actionTodo(
+                        DEAD_REVIEW_TODO,"COMPLETED",SUPERVISOR);
+
+                var actions=views.allowedActions(
+                        List.of(claim,owned,terminal),
+                        new Actor(SELLER,"task9_seller",104L));
+
+                assertEquals(List.of("claim"),actions.get(SOURCE_TODO));
+                assertEquals(List.of("complete","transfer","cancel"),
+                        actions.get(RETRY_TODO));
+                assertEquals(List.of(),actions.get(DEAD_REVIEW_TODO));
+                assertEquals(1,counter.todoQueryCount());
+                assertEquals(Set.of(
+                        "com.law.todo.mapper.TodoMapper.selectAllowedActionFacts"),
+                        counter.statementIds());
+            }
+        }
+        finally
+        {
+            cleanup(dataSource);
+        }
+    }
+
     private static Configuration myBatis(DataSource dataSource) throws Exception
     {
         Configuration configuration=new Configuration(new Environment(
@@ -231,8 +291,10 @@ class LeadTodoReadModelExternalMysqlIT
         configuration.addMapper(BizLeadMapper.class);
         configuration.addMapper(LeadFlowMapper.class);
         configuration.addMapper(BusinessEventMapper.class);
+        configuration.addMapper(TodoMapper.class);
         for(String resource:List.of("mapper/system/BizLeadMapper.xml",
-                "mapper/system/LeadFlowMapper.xml","mapper/system/BusinessEventMapper.xml"))
+                "mapper/system/LeadFlowMapper.xml","mapper/system/BusinessEventMapper.xml",
+                "mapper/todo/TodoMapper.xml"))
         {
             try(InputStream input=Resources.getResourceAsStream(resource))
             {
@@ -259,6 +321,15 @@ class LeadTodoReadModelExternalMysqlIT
     {
         BusinessActor actor=new BusinessActor(userId,userName,userName,deptId,false);
         return ()->actor;
+    }
+
+    private static TodoInstance actionTodo(long todoId,String status,Long ownerId)
+    {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(todoId);
+        todo.setStatus(status);
+        todo.setOwnerId(ownerId);
+        return todo;
     }
 
     private static int count(DataSource dataSource,String query) throws Exception
@@ -309,6 +380,8 @@ class LeadTodoReadModelExternalMysqlIT
                     "COMPLETED","OVERDUE","date_sub(sysdate(),interval 1 day)",DEAD_SOURCE_TODO));
             sql.executeUpdate(todo(RETRY_TODO,"TASK9-T5","TD-003","T0重试",ACTIVE_LEAD,SELLER,104,
                     "IN_PROGRESS","NORMAL","date_add(sysdate(),interval 2 hour)",SOURCE_TODO));
+            sql.executeUpdate("insert into todo_candidate(todo_id,candidate_type,"
+                    +"candidate_value) values ("+SOURCE_TODO+",'USER',"+SELLER+")");
             sql.executeUpdate("insert into todo_sla_record(sla_record_id,todo_id,start_at,due_at,"
                     +"overdue100_at,escalate150_at,status,version) values "
                     +"(9910601,"+REVIEW_TODO+",date_sub(sysdate(),interval 2 hour),"
@@ -386,6 +459,8 @@ class LeadTodoReadModelExternalMysqlIT
             sql.executeUpdate("delete from biz_lead_call_record where lead_id in ("+ACTIVE_LEAD+","+DEAD_LEAD+")");
             sql.executeUpdate("delete from todo_sla_record where todo_id in ("+SOURCE_TODO+","+REVIEW_TODO+","
                     +DEAD_SOURCE_TODO+","+DEAD_REVIEW_TODO+","+RETRY_TODO+")");
+            sql.executeUpdate("delete from todo_candidate where todo_id in ("+SOURCE_TODO+","+REVIEW_TODO+","
+                    +DEAD_SOURCE_TODO+","+DEAD_REVIEW_TODO+","+RETRY_TODO+")");
             sql.executeUpdate("delete from todo_instance where todo_id in ("+SOURCE_TODO+","+REVIEW_TODO+","
                     +DEAD_SOURCE_TODO+","+DEAD_REVIEW_TODO+","+RETRY_TODO+")");
             sql.executeUpdate("delete from biz_lead where lead_id in ("+ACTIVE_LEAD+","+DEAD_LEAD+")");
@@ -401,5 +476,30 @@ class LeadTodoReadModelExternalMysqlIT
         String value=System.getenv(name);
         if(value==null||value.isBlank())throw new IllegalStateException(name+" is required");
         return value;
+    }
+
+    @Intercepts(@Signature(type=Executor.class,method="query",
+            args={MappedStatement.class,Object.class,RowBounds.class,
+                    ResultHandler.class}))
+    private static final class TodoQueryCounter implements Interceptor
+    {
+        private final java.util.LinkedHashSet<String> statementIds=
+                new java.util.LinkedHashSet<>();
+        private int todoQueryCount;
+
+        @Override
+        public Object intercept(Invocation invocation) throws Throwable
+        {
+            MappedStatement statement=(MappedStatement)invocation.getArgs()[0];
+            if(statement.getId().startsWith("com.law.todo.mapper.TodoMapper."))
+            {
+                todoQueryCount++;
+                statementIds.add(statement.getId());
+            }
+            return invocation.proceed();
+        }
+
+        int todoQueryCount() { return todoQueryCount; }
+        Set<String> statementIds() { return Set.copyOf(statementIds); }
     }
 }

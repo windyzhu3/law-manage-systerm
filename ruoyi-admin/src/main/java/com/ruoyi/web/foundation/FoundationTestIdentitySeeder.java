@@ -32,7 +32,8 @@ public class FoundationTestIdentitySeeder implements ApplicationRunner
     {
         String[] activeProfiles = environment.getActiveProfiles();
         if (hasProfile(activeProfiles, "prod")
-            || (!hasProfile(activeProfiles, "local") && !hasProfile(activeProfiles, "test")))
+            || (!hasProfile(activeProfiles, "local") && !hasProfile(activeProfiles, "test")
+                && !hasProfile(activeProfiles, "e2e")))
         {
             throw new FoundationTestIdentityException(
                 FoundationTestIdentityErrorCode.FOUNDATION_TEST_IDENTITIES_PROFILE_FORBIDDEN, null);

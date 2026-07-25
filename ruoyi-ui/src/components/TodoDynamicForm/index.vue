@@ -1,8 +1,16 @@
 <template>
   <el-form ref="form" :model="state.fields" label-width="120px" class="todo-dynamic-form">
-    <el-form-item v-for="field in visibleFields" :key="field.key" :label="field.label" :required="field.required">
+    <el-form-item
+      v-for="field in visibleFields"
+      :key="field.key"
+      :prop="field.key"
+      :for="field.type === 'materialChecklist' ? null : controlId(field)"
+      :required="field.required"
+    >
+      <span slot="label" :id="labelId(field)">{{ field.label }}</span>
       <component
         :is="componentFor(field)"
+        v-bind="controlAttrs(field)"
         :value="valueFor(field)"
         v-bind="propsFor(field)"
         @input="setValue(field, $event)"
@@ -78,6 +86,26 @@ export default {
     requirements() { return getMaterialRequirements(this.formView) }
   },
   methods: {
+    controlId(field) { return `todo-field-${this.formView.todoId || this.businessId}-${field.key}` },
+    labelId(field) { return `${this.controlId(field)}-label` },
+    controlAttrs(field) {
+      if (field.type === 'file') {
+        return {
+          controlId: this.controlId(field),
+          labelledBy: this.labelId(field)
+        }
+      }
+      if (field.type === 'materialChecklist') {
+        return {
+          id: this.controlId(field),
+          labelledBy: this.labelId(field)
+        }
+      }
+      return {
+        id: this.controlId(field),
+        'aria-label': field.label
+      }
+    },
     componentFor(field) { return resolveFieldComponent(field.type) },
     valueFor(field) { return field.type === 'materialChecklist' ? this.state.materials : this.state.fields[field.key] },
     propsFor(field) {

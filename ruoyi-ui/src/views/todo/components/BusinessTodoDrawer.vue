@@ -1,9 +1,9 @@
 <template>
-  <el-drawer title="业务待办" :visible.sync="open" size="760px" append-to-body>
+  <el-drawer title="业务待办" :visible.sync="open" size="760px" append-to-body data-testid="business-todo-drawer">
     <div class="body">
       <el-alert v-if="error" :title="error" type="error" show-icon />
       <el-table v-loading="loading" :data="rows" @row-click="openDetail">
-        <el-table-column prop="todo_no" label="待办编号" width="150" />
+        <el-table-column label="待办编号" width="150"><template slot-scope="{ row }"><span :data-testid="`todo-row-${todoId(row)}`">{{ row.todo_no || row.todoNo }}</span></template></el-table-column>
         <el-table-column prop="title" label="标题" />
         <el-table-column prop="status" label="状态" width="110" />
         <el-table-column prop="due_at" label="截止时间" width="170" />
