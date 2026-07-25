@@ -128,7 +128,8 @@ public class TodoEventService
                     event.payload(),event.aggregateType(),event.aggregateId(),LocalDateTime.now()));
             if(resolved.ownerId()!=null)return new Assignment(resolved.ownerId(),null,null);
             if(!resolved.candidateUserIds().isEmpty())return new Assignment(null,"USER",resolved.candidateUserIds().get(0));
-            return new Assignment(null,null,null);
+            throw new TodoException("TODO_OWNER_UNRESOLVED",
+                    "No eligible owner or candidate is available");
         }
         catch(TodoException explicit)
         {

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.law.todo.mapper.TodoMapper;
 
@@ -36,27 +37,35 @@ public class MapperTodoOrganizationAdapter implements TodoOrganizationPort
 
     @Override public Optional<Long> businessOwner(String businessType,Long businessId)
     {
-        return Optional.empty();
+        if(businessType==null||businessType.isBlank()||businessId==null||businessId<=0)return Optional.empty();
+        return positive(mapper.selectBusinessOwner(businessType.trim().toUpperCase(),businessId));
     }
 
     @Override public Optional<Long> supervisor(long userId,int levels)
     {
-        return Optional.empty();
+        if(userId<=0||levels<=0)return Optional.empty();
+        return positive(mapper.selectDepartmentSupervisor(userId,levels));
     }
 
-    @Override public Optional<Long> roundRobin(String strategyKey,List<Long> sortedAvailableCandidates)
+    @Override @Transactional
+    public Optional<Long> roundRobin(String strategyKey,List<Long> sortedAvailableCandidates)
     {
-        return Optional.empty();
+        if(strategyKey==null||strategyKey.isBlank())return Optional.empty();
+        List<Long> candidates=normalized(sortedAvailableCandidates);
+        if(candidates.isEmpty())return Optional.empty();
+        Long selected=mapper.selectAndAdvanceRoundRobin(strategyKey.trim(),candidates);
+        return candidates.contains(selected)?Optional.of(selected):Optional.empty();
     }
 
     @Override public boolean isAvailable(long userId,LocalDateTime effectiveAt)
     {
-        return mapper.countActiveUser(userId)>0;
+        return userId>0&&effectiveAt!=null&&mapper.countAvailableUser(userId,effectiveAt)>0;
     }
 
     @Override public Optional<Long> delegateFor(long userId,LocalDateTime effectiveAt)
     {
-        return Optional.empty();
+        if(userId<=0||effectiveAt==null)return Optional.empty();
+        return positive(mapper.selectActiveDelegate(userId,effectiveAt));
     }
 
     @Override public List<Long> assignmentLevel(int level,String businessType,Long businessId)
@@ -68,5 +77,10 @@ public class MapperTodoOrganizationAdapter implements TodoOrganizationPort
     {
         if(values==null)return List.of();
         return values.stream().filter(value->value!=null&&value>0).distinct().sorted().toList();
+    }
+
+    private Optional<Long> positive(Long value)
+    {
+        return value==null||value<=0?Optional.empty():Optional.of(value);
     }
 }

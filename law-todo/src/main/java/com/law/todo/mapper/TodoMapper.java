@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Param;
+import org.springframework.transaction.annotation.Transactional;
 import com.law.todo.domain.model.TodoInstance;
 
 public interface TodoMapper
@@ -62,6 +63,46 @@ public interface TodoMapper
     List<Long> selectActiveUserIdsForDepartment(Long departmentId);
     List<Long> selectActiveUserIdsForPost(Long postId);
     int countActiveUser(Long userId);
+    Long selectBusinessOwner(@Param("businessType") String businessType,@Param("businessId") Long businessId);
+    Long selectDepartmentSupervisor(@Param("userId") Long userId,@Param("levels") int levels);
+    int countAvailableUser(@Param("userId") Long userId,@Param("effectiveAt") LocalDateTime effectiveAt);
+    Long selectActiveDelegate(@Param("userId") Long userId,@Param("effectiveAt") LocalDateTime effectiveAt);
+    int insertRoundRobinCursorIfAbsent(@Param("strategyKey") String strategyKey);
+    Map<String,Object> selectRoundRobinCursorForUpdate(@Param("strategyKey") String strategyKey);
+    int advanceRoundRobinCursorConditionally(@Param("strategyKey") String strategyKey,
+            @Param("selectedUserId") Long selectedUserId,@Param("expectedLastUserId") Long expectedLastUserId,
+            @Param("expectedVersion") int expectedVersion);
+
+    @Transactional
+    default Long selectAndAdvanceRoundRobin(String strategyKey,List<Long> candidates)
+    {
+        if(strategyKey==null||strategyKey.isBlank()||candidates==null||candidates.isEmpty())return null;
+        List<Long> stable=candidates.stream().filter(value->value!=null&&value>0).distinct().sorted().toList();
+        if(stable.isEmpty())return null;
+        insertRoundRobinCursorIfAbsent(strategyKey);
+        Map<String,Object> cursor=selectRoundRobinCursorForUpdate(strategyKey);
+        if(cursor==null)throw new IllegalStateException("Round-robin cursor could not be locked");
+        Long previous=cursorLong(cursor,"lastUserId","last_user_id");
+        int version=cursorLong(cursor,"version","version").intValue();
+        Long selected=stable.get(0);
+        if(previous!=null)
+        {
+            int current=stable.indexOf(previous);
+            if(current>=0)selected=stable.get((current+1)%stable.size());
+            else for(Long candidate:stable)if(candidate>previous){selected=candidate;break;}
+        }
+        if(!stable.contains(selected))throw new IllegalStateException("Round-robin selected outside candidate pool");
+        if(advanceRoundRobinCursorConditionally(strategyKey,selected,previous,version)!=1)
+            throw new IllegalStateException("Round-robin cursor changed concurrently");
+        return selected;
+    }
+
+    private static Long cursorLong(Map<String,Object> cursor,String camel,String snake)
+    {
+        Object value=cursor.containsKey(camel)?cursor.get(camel):cursor.get(snake);
+        if(value==null)return camel.equals("version")?0L:null;
+        return value instanceof Number number?number.longValue():Long.valueOf(String.valueOf(value));
+    }
     Long selectRoleIdByKey(String roleKey);
     Long selectDepartmentIdByCode(String departmentCode);
     List<Map<String,Object>> selectTemplates();

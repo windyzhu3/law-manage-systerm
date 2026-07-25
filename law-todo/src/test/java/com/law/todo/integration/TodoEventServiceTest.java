@@ -165,6 +165,25 @@ class TodoEventServiceTest
         assertEquals(41L,candidate.getValue().get("candidateValue"));
     }
 
+    @Test void canonicalOwnerWithoutEligibleOwnerOrCandidateFailsBeforePersistence()
+    {
+        Map<String,Object> typed=new java.util.HashMap<>(rule());
+        typed.put("definition_json","""
+                {"schemaVersion":1,"templateCode":"T","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"ROLE","operand":5}},"dod":{"config":{}},"sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},
+                 "ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """);
+        when(mapper.selectTriggerRules("LEAD_ASSIGNED","LEAD")).thenReturn(List.of(typed));
+
+        TodoException error=assertThrows(TodoException.class,
+                ()->new TodoEventService(mapper,new TodoAssignmentResolver(TodoOrganizationPort.legacyCompatible())).handle(event()));
+
+        assertEquals("TODO_OWNER_UNRESOLVED",error.getBusinessCode());
+        verify(mapper,never()).insertInstance(any());
+        verify(mapper,never()).insertRelation(anyMap());
+        verify(mapper,never()).insertSlaRecord(anyMap());
+    }
+
     @Test void malformedCanonicalOwnerDefinitionNeverFallsBackToStaleLegacyProjection()
     {
         Map<String,Object> corrupted=new java.util.HashMap<>(rule());

@@ -89,6 +89,85 @@
   <select id="countActiveUser" resultType="int">
     select count(*) from sys_user where user_id=#{userId} and status='0' and del_flag='0'
   </select>
+  <select id="selectBusinessOwner" resultType="java.lang.Long">
+    <choose>
+      <when test='businessType == "LEAD"'>
+        select owner.user_id from biz_lead business
+        join sys_user owner on owner.user_id=business.owner_id and owner.status='0' and owner.del_flag='0'
+        where business.lead_id=#{businessId} and business.del_flag='0'
+      </when>
+      <when test='businessType == "CUSTOMER"'>
+        select owner.user_id from biz_customer business
+        join sys_user owner on owner.user_id=business.owner_id and owner.status='0' and owner.del_flag='0'
+        where business.customer_id=#{businessId} and business.del_flag='0'
+      </when>
+      <when test='businessType == "CONTRACT"'>
+        select owner.user_id from biz_contract business
+        join sys_user owner on owner.user_id=business.owner_id and owner.status='0' and owner.del_flag='0'
+        where business.contract_id=#{businessId} and business.del_flag='0'
+      </when>
+      <when test='businessType == "CASE" or businessType == "MATTER"'>
+        select owner.user_id from biz_case business
+        join sys_user owner on owner.user_id=business.owner_id and owner.status='0' and owner.del_flag='0'
+        where business.case_id=#{businessId} and business.del_flag='0'
+      </when>
+      <otherwise>select cast(null as signed)</otherwise>
+    </choose>
+  </select>
+  <select id="selectDepartmentSupervisor" resultType="java.lang.Long">
+    select supervisor.user_id
+    from sys_user source_user
+    join sys_dept source_dept on source_dept.dept_id=source_user.dept_id
+      and source_dept.status='0' and source_dept.del_flag='0'
+    join sys_dept leader_dept on leader_dept.dept_id=cast(
+      substring_index(substring_index(
+        concat_ws(',',nullif(source_dept.ancestors,''),source_dept.dept_id),
+        ',',-#{levels}),',',1) as unsigned)
+      and leader_dept.status='0' and leader_dept.del_flag='0'
+    join sys_user supervisor on supervisor.user_name=leader_dept.leader
+      and supervisor.status='0' and supervisor.del_flag='0'
+    where source_user.user_id=#{userId} and source_user.status='0' and source_user.del_flag='0'
+      and #{levels}>0
+    limit 1
+  </select>
+  <select id="countAvailableUser" resultType="int">
+    select count(*) from sys_user user_account
+    where user_account.user_id=#{userId}
+      and user_account.status='0' and user_account.del_flag='0'
+      and not exists(
+        select 1 from sys_user_availability availability
+        where availability.user_id=user_account.user_id
+          and availability.status='UNAVAILABLE'
+          and availability.effective_from&lt;=#{effectiveAt}
+          and (availability.effective_to is null or availability.effective_to>#{effectiveAt})
+      )
+  </select>
+  <select id="selectActiveDelegate" resultType="java.lang.Long">
+    select delegate_user.user_id
+    from sys_user_delegation delegation
+    join sys_user delegate_user on delegate_user.user_id=delegation.to_user_id
+      and delegate_user.status='0' and delegate_user.del_flag='0'
+    where delegation.from_user_id=#{userId} and delegation.status='ACTIVE'
+      and delegation.effective_from&lt;=#{effectiveAt}
+      and (delegation.effective_to is null or delegation.effective_to>#{effectiveAt})
+    order by delegation.effective_from desc,delegation.delegation_id desc
+    limit 1
+  </select>
+  <insert id="insertRoundRobinCursorIfAbsent">
+    insert ignore into todo_round_robin_cursor(strategy_key,last_user_id,version,update_time)
+    values(#{strategyKey},null,0,sysdate())
+  </insert>
+  <select id="selectRoundRobinCursorForUpdate" resultType="java.util.Map">
+    select last_user_id lastUserId,version
+    from todo_round_robin_cursor where strategy_key=#{strategyKey}
+    for update
+  </select>
+  <update id="advanceRoundRobinCursorConditionally">
+    update todo_round_robin_cursor
+    set last_user_id=#{selectedUserId},version=version+1,update_time=sysdate()
+    where strategy_key=#{strategyKey} and version=#{expectedVersion}
+      and last_user_id&lt;=>#{expectedLastUserId}
+  </update>
   <select id="selectTemplates" resultType="java.util.Map">select * from todo_template order by template_id</select>
   <select id="selectPublishedTemplateVersionCatalog" resultType="java.util.Map">select v.version_id,v.version_no,v.status from todo_template_version v where v.template_id=#{templateId} and v.status='PUBLISHED' order by v.version_no desc,v.version_id desc</select>
   <select id="selectRoutingTargetCatalog" resultType="java.util.Map">
