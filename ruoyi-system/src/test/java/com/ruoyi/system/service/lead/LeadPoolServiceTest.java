@@ -53,7 +53,7 @@ class LeadPoolServiceTest
 
         assertEquals("CONCURRENT_MODIFICATION", exception.getBusinessCode());
         verify(mapper, never()).insertAssignmentLog(any());
-        verify(events, never()).publish(any());
+        verify(events, never()).publish(any(),any());
     }
 
     @Test
@@ -90,6 +90,6 @@ class LeadPoolServiceTest
             assertEquals("CONCURRENT_MODIFICATION", exception.getBusinessCode());
         }
         verify(mapper, never()).insertAssignmentLog(any());
-        verify(events, never()).publish(any());
+        verify(events, never()).publish(any(),any());
     }
 }

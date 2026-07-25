@@ -162,4 +162,58 @@ User-owned `.superpowers/sdd/task-7-report.md`, `ruoyi-ui/vue.config.js`, `.play
 - `insert ignore` replay paths always reload and validate the persisted fact.
 - The real MySQL test proves the shared mapper transaction boundary; Task 7 still owns end-to-end Todo handler/action-log rollback tests.
 - Task 7 must wire only thin typed completion handlers. Task 8 must publish the executable TD-001 through TD-004 routes; until then these services do not by themselves create the downstream Todos.
-- The existing shared Outbox publisher derives `create_by` from the security context. System-default review facts and payloads are explicitly audited as `0/system`; Task 7 should preserve a service security actor when invoking automatic completion so the shared Outbox audit column is also available and consistent.
+- The original shared Outbox publisher derived `create_by` from the security context; this concern is resolved in independent review fix round 1 by explicit trusted-actor publication.
+
+## Independent review fix round 1
+
+Status: complete. All findings in `task-6-review.md` (C1, C2, I1, I2, I3, I4, and M1) are addressed.
+
+### RED evidence
+
+The first review-fix test command was:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=TodoScheduleServiceTest,LeadRetryServiceTest,LeadInvalidReviewServiceTest,OutboxBusinessEventPublisherTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+It failed at `law-todo` test compilation with seven expected missing-contract errors, including the locked schedule-context mapper API, `ScheduleOccurrenceContext`, and configured `ScheduleWindowRule`.
+
+The outbound-boundary test was also introduced before its port implementation. Its first run stopped at compilation while the new call-record API and actor boundary were still absent.
+
+### Fixes
+
+- C1: added a joined `FOR UPDATE` occurrence/window/plan query and authoritative schedule context containing lead business identity, linked Todo, plan/window/occurrence identity, timezone, template/rule, maximum attempts, and statuses. Retry validates that context before call facts or graph mutations, derives all persisted schedule fields from it, and uses its timezone. Context-based schedule completion re-locks and rejects a changed/forged context.
+- C2: removed `systemDefault` from the public review DTO. Human review always uses the current actor, data scope, permission, stored source Todo, and assigned-reviewer/admin checks. Automatic review is a separate fixed-TRUE_INVALID entry point and accepts only the exact Todo service capability object.
+- I1: added explicit actor publication. Task 6 services pass their already-authorized actor; the automatic path passes `0/system`, so Outbox no longer depends on an ambient web principal.
+- I2: persisted the resolved reviewer, enforced assigned reviewer/admin plus `lead:invalid-review:handle`, enforced owner/admin plus `lead:call-record:add` for direct call records, and required embedded call records to match their trusted parent Todo.
+- I3: added a vendor-neutral outbound-call port and verified callback command/result. Ordinary commands are MANUAL-only. APP/OUTBOUND_SYSTEM records require adapter verification, provider-qualified idempotency, a canonical SHA-256 hash, and exact immutable replay comparison. Database timestamp precision is canonicalized before comparison.
+- I4: first-contact commands no longer carry retry template, rule, or timezone authority. The service resolves the active department/source policy with wildcard fallback, parses server-side template/rule/timezone/windows, snapshots immutable absolute windows, validates the published TD-003 version, and stores the selected rule version.
+- M1: completed review replay now requires its immutable quality or Dead-Pool companion fact and raises stable `LEAD_FLOW_EVIDENCE_MISSING` consistency failure if evidence is absent.
+
+### Final verification
+
+Focused review-fix gate:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=TodoScheduleServiceTest,TodoMapperXmlContractTest,LeadTagConfirmationServiceTest,LeadCallRecordServiceTest,LeadFirstContactServiceTest,LeadInvalidReviewServiceTest,LeadRetryServiceTest,LeadDeadPoolServiceTest,LeadAssignmentPolicyServiceTest,LeadPoolServiceTest,OutboxBusinessEventPublisherTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 69 tests passed (33 `law-todo`, 36 `ruoyi-system`), 0 failures/errors/skips.
+
+Broad lead regression:
+
+```powershell
+mvn -pl ruoyi-system -am "-Dtest=TodoScheduleServiceTest,TodoMapperXmlContractTest,Lead*Test,BusinessEventCommandTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 103 tests passed (4 `law-business`, 40 `law-todo`, 59 `ruoyi-system`), 0 failures/errors/skips.
+
+Real MySQL 8 gate:
+
+```powershell
+mvn -pl ruoyi-admin -am "-Dtest=LeadFlowMapperExternalMysqlIT" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 3 tests passed. In addition to the original rollback/commit proof, the real mapper/service test proves cross-lead and cross-Todo retry commands leave both lead rows, the plan, the occurrence, and retry facts unchanged. The real Outbox publisher also persists `create_by='system'` with no authenticated principal.
+
+`git diff --check` passes. User-owned Task 7 report, UI proxy edit, Playwright/runtime output, and test-results remain unstaged.

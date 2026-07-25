@@ -64,7 +64,7 @@ public class LeadTagConfirmationService
         payload.put("operatorId", actor.userId());
         events.publish(new BusinessEventCommand(BusinessEventType.LEAD_TAG_CONFIRMED, "LEAD",
                 lead.getLeadId(), lead.getLeadNo(), "LEAD_TAG_CONFIRMED:" + lead.getLeadId() + ":"
-                        + command.getTagRelationId(), payload));
+                        + command.getTagRelationId(), payload),actor);
     }
 
     private void changed(int rows)

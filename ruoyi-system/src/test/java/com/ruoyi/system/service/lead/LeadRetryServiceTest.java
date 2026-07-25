@@ -3,6 +3,7 @@ package com.ruoyi.system.service.lead;
 import static com.ruoyi.system.support.BusinessFixtures.actor;
 import static com.ruoyi.system.support.BusinessFixtures.lead;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,6 +24,7 @@ import com.law.business.lead.dto.LeadRetryCompleteCommand;
 import com.law.business.security.BusinessActorProvider;
 import com.law.todo.schedule.TodoScheduleService;
 import com.ruoyi.common.core.domain.entity.SysDictData;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadRetryRecord;
 import com.ruoyi.system.mapper.BizLeadMapper;
@@ -63,13 +65,15 @@ class LeadRetryServiceTest
         LeadRetryCompleteCommand command = command("NEXT_WINDOW");
         command.setNextWindowCode("CALLER_FORGED_STAGE");
         command.setNextRetryTime(Date.from(LocalDateTime.of(2026, 7, 26, 12, 0)
-                .atZone(ZoneId.systemDefault()).toInstant()));
+                .atZone(ZoneId.of("UTC")).toInstant()));
         common(command);
+        when(schedules.lockOccurrenceContext(41L)).thenReturn(new TodoScheduleService.ScheduleOccurrenceContext(
+                41L,31L,51L,"T1_AM",1,21L,"LEAD",7L,"UTC",99L,11L,3,
+                "MATERIALIZED",null));
         generatedRetry(91L);
-        when(schedules.completeOccurrence(org.mockito.ArgumentMatchers.eq(41L),
+        when(schedules.completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
                 org.mockito.ArgumentMatchers.eq("NEXT_WINDOW"), any())).thenReturn(
-                new TodoScheduleService.ScheduleCompletion(31L, "T1_AM", 1, "T1_NOON",
-                        LocalDateTime.of(2026, 7, 26, 12, 0), false));
+                completion("T1_NOON",LocalDateTime.of(2026,7,26,12,0)));
         when(leads.advanceRetryStage(7L, "T1_AM", "T1_NOON", 1, command.getNextRetryTime(), 5, "alice"))
                 .thenReturn(1);
 
@@ -79,7 +83,7 @@ class LeadRetryServiceTest
         ArgumentCaptor<BizLeadRetryRecord> retry = ArgumentCaptor.forClass(BizLeadRetryRecord.class);
         verify(facts).insertRetryRecordIfAbsent(retry.capture());
         assertEquals("T1_NOON", retry.getValue().getNextWindowCode());
-        verify(schedules).completeOccurrence(org.mockito.ArgumentMatchers.eq(41L),
+        verify(schedules).completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
                 org.mockito.ArgumentMatchers.eq("NEXT_WINDOW"), any());
         verify(pool, never()).moveToPoolBySystem(any(), org.mockito.ArgumentMatchers.anyInt(), any());
     }
@@ -94,18 +98,18 @@ class LeadRetryServiceTest
         command.setVisited("0");
         common(command);
         generatedRetry(92L);
-        when(schedules.completeOccurrence(org.mockito.ArgumentMatchers.eq(41L),
+        when(schedules.completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
                 org.mockito.ArgumentMatchers.eq("CONNECTED"), any())).thenReturn(
-                new TodoScheduleService.ScheduleCompletion(31L, "T1_AM", 1, null, null, false));
+                completion(null,null));
         when(leads.completeRetryConnected(7L, "T1_AM", "Client", "Shanghai", "Demand", "0", 5, "alice"))
                 .thenReturn(1);
 
         LeadRetryService.RetryOutcome outcome = service.completeWindow(command);
 
         assertEquals("CONNECTED", outcome.result());
-        verify(schedules).completeOccurrence(org.mockito.ArgumentMatchers.eq(41L),
+        verify(schedules).completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
                 org.mockito.ArgumentMatchers.eq("CONNECTED"), any());
-        verify(events).publish(any());
+        verify(events).publish(any(),org.mockito.ArgumentMatchers.eq(actor()));
     }
 
     @Test
@@ -114,9 +118,9 @@ class LeadRetryServiceTest
         LeadRetryCompleteCommand command = command("EXHAUSTED");
         common(command);
         generatedRetry(93L);
-        when(schedules.completeOccurrence(org.mockito.ArgumentMatchers.eq(41L),
+        when(schedules.completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
                 org.mockito.ArgumentMatchers.eq("EXHAUSTED"), any())).thenReturn(
-                new TodoScheduleService.ScheduleCompletion(31L, "T1_AM", 1, null, null, false));
+                completion(null,null));
         when(leads.advanceRetryStage(7L, "T1_AM", "EXHAUSTED", 1, null, 5, "alice")).thenReturn(1);
         when(pool.moveToPoolBySystem(stored, 6, "RETRY_EXHAUSTED")).thenReturn(1);
 
@@ -124,7 +128,7 @@ class LeadRetryServiceTest
 
         assertEquals("EXHAUSTED", outcome.result());
         verify(pool).moveToPoolBySystem(stored, 6, "RETRY_EXHAUSTED");
-        verify(events).publish(any());
+        verify(events).publish(any(),org.mockito.ArgumentMatchers.eq(actor()));
     }
 
     @Test
@@ -139,27 +143,76 @@ class LeadRetryServiceTest
         existing.setAttemptNo(1);
         existing.setContactResult("NEXT_WINDOW");
         existing.setNextWindowCode("T1_NOON");
+        existing.setTodoId(21L);
         when(access.requireReadable(7L, false, true)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
+        when(schedules.lockOccurrenceContext(41L)).thenReturn(context(7L,21L));
         when(facts.selectRetryRecordByIdempotencyKey("LEAD_RETRY_OCCURRENCE:41")).thenReturn(existing);
 
         LeadRetryService.RetryOutcome outcome = service.completeWindow(command);
 
         assertEquals(true, outcome.replayed());
         assertEquals(94L, outcome.retryRecordId());
-        verify(schedules, never()).completeOccurrence(any(), any(), any());
+        verify(schedules, never()).completeOccurrence(
+                any(TodoScheduleService.ScheduleOccurrenceContext.class),any(),any());
         verify(leads, never()).advanceRetryStage(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cross_lead_occurrence_is_rejected_before_call_fact_or_schedule_mutation()
+    {
+        LeadRetryCompleteCommand command = command("CONNECTED");
+        when(access.requireReadable(7L, false, true)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(schedules.lockOccurrenceContext(41L)).thenReturn(context(99L, 21L));
+
+        ServiceException error = assertThrows(ServiceException.class, () -> service.completeWindow(command));
+
+        assertEquals("LEAD_RETRY_STATE_INVALID", error.getMessage());
+        verify(calls, never()).recordForLead(any(), any(), any(), any());
+        verify(schedules, never()).completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
+                any(), any());
+        verify(leads, never()).completeRetryConnected(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cross_todo_occurrence_is_rejected_before_call_fact_or_schedule_mutation()
+    {
+        LeadRetryCompleteCommand command = command("NEXT_WINDOW");
+        when(access.requireReadable(7L, false, true)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(schedules.lockOccurrenceContext(41L)).thenReturn(context(7L, 999L));
+
+        assertThrows(ServiceException.class, () -> service.completeWindow(command));
+
+        verify(calls, never()).recordForLead(any(), any(), any(), any());
+        verify(schedules, never()).completeOccurrence(any(TodoScheduleService.ScheduleOccurrenceContext.class),
+                any(), any());
+    }
+
+    private TodoScheduleService.ScheduleOccurrenceContext context(Long businessId, Long todoId)
+    {
+        return new TodoScheduleService.ScheduleOccurrenceContext(41L, 31L, 51L, "T1_AM", 1,
+                todoId, "LEAD", businessId, "Asia/Shanghai", 99L, 11L, 3,
+                "MATERIALIZED", null);
     }
 
     private void common(LeadRetryCompleteCommand command)
     {
         when(access.requireReadable(7L, false, true)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
+        when(schedules.lockOccurrenceContext(41L)).thenReturn(context(7L,21L));
         SysDictData value = new SysDictData();
         value.setDictValue(command.getResult());
         when(dictionaries.selectDictDataByType("law_retry_result")).thenReturn(List.of(value));
-        when(calls.recordForLead(command.getCallRecord(), stored, actor())).thenReturn(
+        when(calls.recordForLead(command.getCallRecord(), stored, actor(),21L)).thenReturn(
                 new LeadCallRecordService.CallRecordOutcome(51L, false));
+    }
+
+    private TodoScheduleService.ScheduleCompletion completion(String next,LocalDateTime nextAt)
+    {
+        return new TodoScheduleService.ScheduleCompletion(31L,"T1_AM",1,next,nextAt,false,
+                "LEAD",7L,21L,"Asia/Shanghai",99L,11L,3);
     }
 
     private void generatedRetry(Long id)

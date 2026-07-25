@@ -194,6 +194,7 @@ public interface TodoMapper
     int insertScheduleOccurrenceIfAbsent(Map<String,Object> occurrence);
     Map<String,Object> selectScheduleOccurrenceByKey(String occurrenceKey);
     Map<String,Object> selectScheduleOccurrenceById(Long occurrenceId);
+    Map<String,Object> selectScheduleOccurrenceContextForUpdate(Long occurrenceId);
     Map<String,Object> selectNextScheduleWindow(@Param("planId") Long planId,
             @Param("currentWindowId") Long currentWindowId);
     Map<String,Object> selectScheduleOccurrenceIdentityByKey(String occurrenceKey);

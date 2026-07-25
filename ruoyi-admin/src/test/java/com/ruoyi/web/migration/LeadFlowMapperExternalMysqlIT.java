@@ -1,12 +1,15 @@
 package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.sql.PreparedStatement;
 import java.time.LocalDateTime;
 import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -19,12 +22,29 @@ import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.law.business.event.BusinessEventCommand;
+import com.law.business.event.BusinessEventPublisher;
+import com.law.business.event.BusinessEventType;
+import com.law.business.lead.dto.LeadRetryCompleteCommand;
+import com.law.business.security.BusinessActor;
+import com.law.business.security.BusinessActorProvider;
+import com.law.todo.application.TodoRoutingService;
+import com.law.todo.mapper.TodoMapper;
+import com.law.todo.schedule.TodoScheduleService;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLeadCallRecord;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BusinessEventRecord;
 import com.ruoyi.system.mapper.BizLeadMapper;
 import com.ruoyi.system.mapper.BusinessEventMapper;
 import com.ruoyi.system.mapper.LeadFlowMapper;
+import com.ruoyi.system.service.ISysDictTypeService;
+import com.ruoyi.system.service.event.OutboxBusinessEventPublisher;
+import com.ruoyi.system.service.lead.LeadAccessPolicy;
+import com.ruoyi.system.service.lead.LeadCallRecordService;
+import com.ruoyi.system.service.lead.LeadPoolService;
+import com.ruoyi.system.service.lead.LeadRetryService;
 
 class LeadFlowMapperExternalMysqlIT
 {
@@ -63,6 +83,82 @@ class LeadFlowMapperExternalMysqlIT
         }
     }
 
+    @Test
+    void crossLeadAndCrossTodoRetryCommandsCannotMutateEitherGraph() throws Exception
+    {
+        String url=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        long seed=910_000_000L+Math.abs(System.nanoTime()%10_000_000L);
+        long leadA=seed,leadB=seed+1,todoId=seed+100;
+        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
+        ScheduleIds ids=insertRetryBoundary(dataSource,leadA,leadB,todoId);
+        try
+        {
+            try(SqlSession session=new SqlSessionFactoryBuilder().build(myBatis(dataSource)).openSession(false))
+            {
+                LeadRetryService service=retryService(session);
+                ServiceException crossLead=assertThrows(ServiceException.class,
+                        ()->service.completeWindow(retryCommand(leadB,todoId,ids.occurrenceId())));
+                assertEquals("LEAD_RETRY_STATE_INVALID",crossLead.getMessage());
+                session.rollback();
+            }
+            assertRetryBoundaryState(dataSource,leadA,leadB,ids,0);
+            try(SqlSession session=new SqlSessionFactoryBuilder().build(myBatis(dataSource)).openSession(false))
+            {
+                LeadRetryService service=retryService(session);
+                ServiceException crossTodo=assertThrows(ServiceException.class,
+                        ()->service.completeWindow(retryCommand(leadA,todoId+999,ids.occurrenceId())));
+                assertEquals("LEAD_RETRY_STATE_INVALID",crossTodo.getMessage());
+                session.rollback();
+            }
+            assertRetryBoundaryState(dataSource,leadA,leadB,ids,0);
+        }
+        finally
+        {
+            cleanupRetryBoundary(dataSource,leadA,leadB,ids);
+        }
+    }
+
+    @Test
+    void explicitSystemActorPersistsRealOutboxWithoutPrincipal() throws Exception
+    {
+        String url=requiredEnvironment("TODO_MIGRATION_DB_URL");
+        String user=requiredEnvironment("TODO_MIGRATION_DB_USER");
+        String password=requiredEnvironment("TODO_MIGRATION_DB_PASSWORD");
+        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
+        String key="TASK6:SYSTEM:"+Math.abs(System.nanoTime());
+        SecurityContextHolder.clearContext();
+        try
+        {
+            try(SqlSession session=new SqlSessionFactoryBuilder().build(myBatis(dataSource)).openSession(false))
+            {
+                new OutboxBusinessEventPublisher(session.getMapper(BusinessEventMapper.class)).publish(
+                        new BusinessEventCommand(BusinessEventType.LEAD_INVALID_REVIEW_CONFIRMED,
+                                "LEAD",1L,"L-1",key,java.util.Map.of("schemaVersion",1)),
+                        new BusinessActor(0L,"system","system",null,false));
+                session.commit();
+            }
+            try(Connection connection=dataSource.getConnection();PreparedStatement statement=connection.prepareStatement(
+                    "select create_by from business_event where idempotency_key=?"))
+            {
+                statement.setString(1,key);
+                try(ResultSet row=statement.executeQuery())
+                {
+                    row.next();assertEquals("system",row.getString(1));
+                }
+            }
+        }
+        finally
+        {
+            try(Connection connection=dataSource.getConnection();PreparedStatement statement=connection.prepareStatement(
+                    "delete from business_event where idempotency_key=?"))
+            {
+                statement.setString(1,key);statement.executeUpdate();
+            }
+        }
+    }
+
     private static void writeFlow(SqlSession session,long leadId,String leadNo,String callKey,String eventKey)
     {
         LeadFlowMapper facts=session.getMapper(LeadFlowMapper.class);
@@ -95,7 +191,8 @@ class LeadFlowMapperExternalMysqlIT
                 new JdbcTransactionFactory(),dataSource));
         configuration.getTypeAliasRegistry().registerAliases("com.ruoyi.system.domain");
         for(String resource:new String[]{"mapper/system/BizLeadMapper.xml",
-                "mapper/system/LeadFlowMapper.xml","mapper/system/BusinessEventMapper.xml"})
+                "mapper/system/LeadFlowMapper.xml","mapper/system/BusinessEventMapper.xml",
+                "mapper/todo/TodoMapper.xml"})
         {
             try(InputStream input=Resources.getResourceAsStream(resource))
             {
@@ -104,6 +201,97 @@ class LeadFlowMapperExternalMysqlIT
         }
         return configuration;
     }
+
+    private static LeadRetryService retryService(SqlSession session)
+    {
+        BizLeadMapper leads=session.getMapper(BizLeadMapper.class);
+        BusinessActorProvider actors=()->new BusinessActor(1L,"admin","admin",1L,true);
+        LeadAccessPolicy access=new LeadAccessPolicy(leads,actors);
+        TodoScheduleService schedules=new TodoScheduleService(session.getMapper(TodoMapper.class),
+                mock(TodoRoutingService.class));
+        return new LeadRetryService(leads,session.getMapper(LeadFlowMapper.class),access,
+                mock(LeadCallRecordService.class),actors,mock(ISysDictTypeService.class),schedules,
+                mock(LeadPoolService.class),mock(BusinessEventPublisher.class));
+    }
+
+    private static LeadRetryCompleteCommand retryCommand(long leadId,long todoId,long occurrenceId)
+    {
+        LeadRetryCompleteCommand command=new LeadRetryCompleteCommand();
+        command.setLeadId(leadId);command.setTodoId(todoId);command.setOccurrenceId(occurrenceId);
+        command.setResult("EXHAUSTED");
+        return command;
+    }
+
+    private static ScheduleIds insertRetryBoundary(DataSource dataSource,long leadA,long leadB,long todoId)
+            throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();Statement statement=connection.createStatement())
+        {
+            statement.executeUpdate("insert into biz_lead(lead_id,lead_no,lead_name,status,pool_status,"
+                    +"disposition,del_flag,owner_id,row_version,first_contact_status,first_contact_result,retry_stage)"
+                    +" values("+leadA+",'RB-"+leadA+"','Retry A','2','0','ACTIVE','0',1,0,"
+                    +"'COMPLETED','UNREACHABLE','T1_AM'),("+leadB+",'RB-"+leadB
+                    +"','Retry B','2','0','ACTIVE','0',1,0,'COMPLETED','UNREACHABLE','T1_AM')");
+            statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,template_version_id,"
+                    +"business_type,business_id,timezone,rule_version_id,first_contact_at,status,create_time,"
+                    +"update_time,version) values("+todoId+",1,'LEAD',"+leadA
+                    +",'Asia/Shanghai',11,'2026-07-25 09:00:00','ACTIVE',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long planId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_window(plan_id,window_code,window_order,"
+                    +"day_offset,start_time,end_time,materialize_at,due_at,max_attempts,occurrence_no,status,"
+                    +"create_time,update_time,version) values("+planId+",'T1_AM',1,1,'09:00:00','11:00:00',"
+                    +"'2026-07-26 09:00:00','2026-07-26 11:00:00',3,1,'MATERIALIZED',sysdate(),sysdate(),0)",
+                    Statement.RETURN_GENERATED_KEYS);
+            long windowId=generated(statement);
+            statement.executeUpdate("insert into todo_schedule_occurrence(plan_id,window_id,window_code,"
+                    +"occurrence_no,occurrence_key,due_at,todo_id,status,create_time,update_time,version) values("
+                    +planId+","+windowId+",'T1_AM',1,'"+planId+":T1_AM:1','2026-07-26 11:00:00',"
+                    +todoId+",'MATERIALIZED',sysdate(),sysdate(),0)",Statement.RETURN_GENERATED_KEYS);
+            return new ScheduleIds(planId,windowId,generated(statement));
+        }
+    }
+
+    private static long generated(Statement statement) throws Exception
+    {
+        try(ResultSet keys=statement.getGeneratedKeys()){keys.next();return keys.getLong(1);}
+    }
+
+    private static void assertRetryBoundaryState(DataSource dataSource,long leadA,long leadB,
+            ScheduleIds ids,int retries) throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();Statement statement=connection.createStatement())
+        {
+            assertEquals(0,count(statement,"select sum(row_version) from biz_lead where lead_id in ("
+                    +leadA+","+leadB+")"));
+            assertEquals("ACTIVE",scalar(statement,"select status from todo_schedule_plan where plan_id="
+                    +ids.planId()));
+            assertEquals("MATERIALIZED",scalar(statement,
+                    "select status from todo_schedule_occurrence where occurrence_id="+ids.occurrenceId()));
+            assertEquals(retries,count(statement,"select count(*) from biz_lead_retry_record where plan_id="
+                    +ids.planId()));
+        }
+    }
+
+    private static String scalar(Statement statement,String sql) throws Exception
+    {
+        try(ResultSet rows=statement.executeQuery(sql)){rows.next();return rows.getString(1);}
+    }
+
+    private static void cleanupRetryBoundary(DataSource dataSource,long leadA,long leadB,ScheduleIds ids)
+            throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();Statement statement=connection.createStatement())
+        {
+            statement.executeUpdate("delete from biz_lead_retry_record where plan_id="+ids.planId());
+            statement.executeUpdate("delete from todo_schedule_occurrence where plan_id="+ids.planId());
+            statement.executeUpdate("delete from todo_schedule_window where plan_id="+ids.planId());
+            statement.executeUpdate("delete from todo_schedule_plan where plan_id="+ids.planId());
+            statement.executeUpdate("delete from biz_lead where lead_id in ("+leadA+","+leadB+")");
+        }
+    }
+
+    private record ScheduleIds(long planId,long windowId,long occurrenceId) { }
 
     private static void insertLead(DataSource dataSource,long leadId,String leadNo) throws Exception
     {

@@ -18,8 +18,8 @@
 
     <insert id="insertInvalidReviewIfAbsent" parameterType="BizLeadInvalidReview" useGeneratedKeys="true" keyProperty="reviewId">
         insert ignore into biz_lead_invalid_review(
-          lead_id,reason_code,sales_explanation,submitted_by,submitted_at,todo_id,status,idempotency_key,create_by,create_time,row_version)
-        values(#{leadId},#{reasonCode},#{salesExplanation},#{submittedBy},sysdate(),#{todoId},'PENDING',
+          lead_id,reason_code,sales_explanation,submitted_by,submitted_at,reviewer_id,todo_id,status,idempotency_key,create_by,create_time,row_version)
+        values(#{leadId},#{reasonCode},#{salesExplanation},#{submittedBy},sysdate(),#{reviewerId},#{todoId},'PENDING',
           #{idempotencyKey},#{createBy},sysdate(),0)
     </insert>
     <select id="selectInvalidReviewById" resultType="BizLeadInvalidReview">
@@ -100,7 +100,7 @@
     </select>
     <select id="selectActiveAssignmentPolicy" resultType="BizLeadAssignmentPolicy">
         select policy_id policyId,sales_dept_id salesDeptId,source_code sourceCode,business_type businessType,
-          retry_rule_json retryRuleJson,status
+          retry_rule_json retryRuleJson,status,row_version rowVersion
         from biz_lead_assignment_policy
         where sales_dept_id=#{salesDeptId} and business_type='LEAD' and status='ACTIVE'
           and source_code in (#{sourceCode},'*')

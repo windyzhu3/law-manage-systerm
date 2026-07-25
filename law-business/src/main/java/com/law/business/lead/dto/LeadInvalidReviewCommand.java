@@ -7,7 +7,6 @@ public class LeadInvalidReviewCommand
     private Long todoId;
     private String reviewResult;
     private String reviewComment;
-    private boolean systemDefault;
 
     public Long getLeadId() { return leadId; }
     public void setLeadId(Long value) { leadId = value; }
@@ -19,6 +18,4 @@ public class LeadInvalidReviewCommand
     public void setReviewResult(String value) { reviewResult = value; }
     public String getReviewComment() { return reviewComment; }
     public void setReviewComment(String value) { reviewComment = value; }
-    public boolean isSystemDefault() { return systemDefault; }
-    public void setSystemDefault(boolean value) { systemDefault = value; }
 }

@@ -12,9 +12,6 @@ public class LeadFirstContactCommand
     private String invalidReasonCode;
     private String salesExplanation;
     private LeadCallRecordCommand callRecord;
-    private Long retryTemplateVersionId;
-    private Long retryRuleVersionId;
-    private String timezone;
 
     public Long getLeadId() { return leadId; }
     public void setLeadId(Long value) { leadId = value; }
@@ -36,10 +33,4 @@ public class LeadFirstContactCommand
     public void setSalesExplanation(String value) { salesExplanation = value; }
     public LeadCallRecordCommand getCallRecord() { return callRecord; }
     public void setCallRecord(LeadCallRecordCommand value) { callRecord = value; }
-    public Long getRetryTemplateVersionId() { return retryTemplateVersionId; }
-    public void setRetryTemplateVersionId(Long value) { retryTemplateVersionId = value; }
-    public Long getRetryRuleVersionId() { return retryRuleVersionId; }
-    public void setRetryRuleVersionId(Long value) { retryRuleVersionId = value; }
-    public String getTimezone() { return timezone; }
-    public void setTimezone(String value) { timezone = value; }
 }

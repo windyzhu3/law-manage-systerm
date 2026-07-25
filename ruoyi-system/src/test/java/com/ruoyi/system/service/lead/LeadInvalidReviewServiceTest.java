@@ -18,7 +18,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
 import com.law.business.lead.dto.LeadInvalidReviewCommand;
+import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
+import com.law.todo.application.TodoAutoActionService;
+import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadDeadPoolLog;
@@ -36,6 +39,7 @@ class LeadInvalidReviewServiceTest
     @Mock private LeadAccessPolicy access;
     @Mock private BusinessActorProvider actors;
     @Mock private ISysDictTypeService dictionaries;
+    @Mock private LeadPermissionPolicy permissions;
     @Mock private LeadDeadPoolService deadPool;
     @Mock private BusinessEventPublisher events;
     private LeadInvalidReviewService service;
@@ -45,7 +49,8 @@ class LeadInvalidReviewServiceTest
     @BeforeEach
     void setUp()
     {
-        service = new LeadInvalidReviewService(leads, facts, access, actors, dictionaries, deadPool, events);
+        service = new LeadInvalidReviewService(leads, facts, access, actors, dictionaries, permissions,
+                deadPool, events);
         stored = lead(7L, "2", "0");
         stored.setLeadNo("L-7");
         stored.setOwnerId(8L);
@@ -56,6 +61,8 @@ class LeadInvalidReviewServiceTest
         review.setReviewId(61L);
         review.setLeadId(7L);
         review.setReasonCode("NO_DEMAND");
+        review.setReviewerId(8L);
+        review.setTodoId(21L);
         review.setStatus("PENDING");
         review.setRowVersion(0);
     }
@@ -98,7 +105,7 @@ class LeadInvalidReviewServiceTest
         assertEquals(72L, outcome.qualityRecordId());
         verify(leads).reopenFirstContact(7L, 6, "alice");
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_INVALID_REVIEW_MISJUDGED:7:61:72", event.getValue().getIdempotencyKey());
     }
 
@@ -111,14 +118,30 @@ class LeadInvalidReviewServiceTest
         when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
         when(leads.markInvalidReviewed(7L, "PENDING", "TRUE_INVALID", 5, "system")).thenReturn(1);
-        when(facts.completeInvalidReview(61L, "TRUE_INVALID", "confirmed", 0L, "Y", 0, "system"))
+        when(facts.completeInvalidReview(61L, "TRUE_INVALID",
+                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system"))
                 .thenReturn(1);
         when(deadPool.enterConfirmedInvalid(any(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new LeadDeadPoolService.DeadPoolOutcome(73L, false));
 
-        service.review(command);
+        service.reviewAutomatically(7L,61L,21L,TodoAutoActionService.SERVICE_ACTOR);
 
-        verify(facts).completeInvalidReview(61L, "TRUE_INVALID", "confirmed", 0L, "Y", 0, "system");
+        verify(facts).completeInvalidReview(61L, "TRUE_INVALID",
+                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system");
+        ArgumentCaptor<BusinessActor> publisherActor=ArgumentCaptor.forClass(BusinessActor.class);
+        verify(events).publish(any(),publisherActor.capture());
+        assertEquals(0L,publisherActor.getValue().userId());
+        assertEquals("system",publisherActor.getValue().userName());
+    }
+
+    @Test
+    void public_review_dto_has_no_system_default_switch()
+    {
+        long exposed=java.util.Arrays.stream(LeadInvalidReviewCommand.class.getMethods())
+                .filter(method->method.getName().contains("SystemDefault"))
+                .count();
+
+        assertEquals(0L,exposed);
     }
 
     @Test
@@ -137,11 +160,115 @@ class LeadInvalidReviewServiceTest
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
         when(facts.selectDeadPoolLogByIdempotencyKey("LEAD_DEAD_POOL:7:61")).thenReturn(log);
 
-        LeadInvalidReviewService.InvalidReviewOutcome outcome = service.review(command);
+        LeadInvalidReviewService.InvalidReviewOutcome outcome =
+                service.reviewAutomatically(7L,61L,21L,TodoAutoActionService.SERVICE_ACTOR);
 
         assertEquals(true, outcome.replayed());
         assertEquals(73L, outcome.deadPoolLogId());
         verify(leads, org.mockito.Mockito.never()).markInvalidReviewed(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void human_review_rejects_wrong_source_todo()
+    {
+        LeadInvalidReviewCommand command = command("TRUE_INVALID", false);
+        review.setReviewerId(9L);
+        review.setTodoId(20L);
+        when(access.requireOperable(7L)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                () -> service.review(command));
+
+        verify(leads, org.mockito.Mockito.never()).markInvalidReviewed(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void human_review_rejects_actor_who_is_not_assigned_reviewer()
+    {
+        LeadInvalidReviewCommand command=command("TRUE_INVALID",false);
+        review.setReviewerId(9L);
+        when(access.requireOperable(7L)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                ()->service.review(command));
+
+        verify(leads,org.mockito.Mockito.never()).markInvalidReviewed(any(),any(),any(),any(),any());
+    }
+
+    @Test
+    void human_review_cannot_bypass_lead_data_scope()
+    {
+        LeadInvalidReviewCommand command=command("TRUE_INVALID",false);
+        when(actors.current()).thenReturn(actor());
+        when(access.requireOperable(7L)).thenThrow(new com.ruoyi.common.exception.ServiceException(
+                "out of scope",com.law.business.shared.error.BusinessErrorCode.ACCESS_DENIED.name()));
+
+        com.ruoyi.common.exception.ServiceException error=
+                org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                        ()->service.review(command));
+
+        assertEquals("ACCESS_DENIED",error.getBusinessCode());
+        verify(facts,org.mockito.Mockito.never()).selectInvalidReviewById(any());
+    }
+
+    @Test
+    void automatic_review_requires_exact_todo_service_capability_and_fixed_result()
+    {
+        review.setReviewerId(9L);
+        review.setTodoId(21L);
+        when(leads.selectLeadById(7L)).thenReturn(stored);
+        when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+        when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
+                .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
+        when(leads.markInvalidReviewed(7L, "PENDING", "TRUE_INVALID", 5, "system")).thenReturn(1);
+        when(facts.completeInvalidReview(61L, "TRUE_INVALID",
+                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system")).thenReturn(1);
+        when(deadPool.enterConfirmedInvalid(any(), anyInt(), any(), any(), any(), any(), any()))
+                .thenReturn(new LeadDeadPoolService.DeadPoolOutcome(73L, false));
+
+        LeadInvalidReviewService.InvalidReviewOutcome outcome =
+                service.reviewAutomatically(7L, 61L, 21L, TodoAutoActionService.SERVICE_ACTOR);
+
+        assertEquals("TRUE_INVALID", outcome.result());
+        verify(facts).completeInvalidReview(61L, "TRUE_INVALID",
+                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system");
+    }
+
+    @Test
+    void automatic_review_rejects_lookalike_actor_without_capability_identity()
+    {
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                ()->service.reviewAutomatically(7L,61L,21L,
+                        new Actor(-1L,"TODO_AUTO_ACTION",null)));
+
+        verify(leads,org.mockito.Mockito.never()).selectLeadById(any());
+    }
+
+    @Test
+    void completed_review_without_companion_evidence_is_consistency_error()
+    {
+        LeadInvalidReviewCommand command = command("TRUE_INVALID", false);
+        stored.setDisposition("DEAD_POOL");
+        stored.setInvalidReviewStatus("CONFIRMED");
+        review.setStatus("COMPLETED");
+        review.setReviewResult("TRUE_INVALID");
+        review.setReviewerId(8L);
+        review.setTodoId(21L);
+        when(access.requireOperable(7L)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+        when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
+                .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
+
+        com.ruoyi.common.exception.ServiceException error =
+                org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                        () -> service.review(command));
+
+        assertEquals("LEAD_FLOW_EVIDENCE_MISSING", error.getMessage());
     }
 
     private void common(LeadInvalidReviewCommand command)
@@ -161,7 +288,6 @@ class LeadInvalidReviewServiceTest
         value.setTodoId(21L);
         value.setReviewResult(result);
         value.setReviewComment("TRUE_INVALID".equals(result) ? "confirmed" : "wrong");
-        value.setSystemDefault(system);
         return value;
     }
 

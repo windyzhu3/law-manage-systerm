@@ -57,7 +57,7 @@ class LeadTagConfirmationServiceTest
         service.confirm(command);
 
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_TAG_CONFIRMED:7:81", event.getValue().getIdempotencyKey());
         verify(leads).confirmLeadTags(7L, "1", 8L, 3, "alice");
         verify(facts).confirmTagRelation(any(), any(), any(), any(), any());

@@ -398,9 +398,23 @@
            status,result_code resultCode,version
     from todo_schedule_occurrence where occurrence_id=#{occurrenceId}
   </select>
+  <select id="selectScheduleOccurrenceContextForUpdate" resultType="java.util.Map">
+    select o.occurrence_id occurrenceId,o.plan_id planId,o.window_id windowId,
+           o.window_code windowCode,o.occurrence_no occurrenceNo,o.todo_id todoId,
+           o.status,o.result_code resultCode,
+           w.max_attempts maxAttempts,w.materialize_at windowStartAt,w.due_at windowDueAt,
+           p.previous_todo_id previousTodoId,p.template_version_id templateVersionId,
+           p.business_type businessType,p.business_id businessId,p.timezone,
+           p.rule_version_id ruleVersionId,p.status planStatus
+    from todo_schedule_occurrence o
+    join todo_schedule_window w on w.window_id=o.window_id and w.plan_id=o.plan_id
+    join todo_schedule_plan p on p.plan_id=o.plan_id
+    where o.occurrence_id=#{occurrenceId}
+    for update
+  </select>
   <select id="selectNextScheduleWindow" resultType="java.util.Map">
     select next_window.window_id windowId,next_window.window_code windowCode,
-           next_window.start_at startAt,next_window.due_at dueAt,next_window.window_order windowOrder
+           next_window.materialize_at startAt,next_window.due_at dueAt,next_window.window_order windowOrder
     from todo_schedule_window current_window
     join todo_schedule_window next_window on next_window.plan_id=current_window.plan_id
       and next_window.window_order&gt;current_window.window_order

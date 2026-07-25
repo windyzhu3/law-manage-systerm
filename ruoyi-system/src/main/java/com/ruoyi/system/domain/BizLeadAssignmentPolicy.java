@@ -8,6 +8,7 @@ public class BizLeadAssignmentPolicy
     private String businessType;
     private String retryRuleJson;
     private String status;
+    private Integer rowVersion;
 
     public Long getPolicyId() { return policyId; }
     public void setPolicyId(Long value) { policyId = value; }
@@ -21,4 +22,6 @@ public class BizLeadAssignmentPolicy
     public void setRetryRuleJson(String value) { retryRuleJson = value; }
     public String getStatus() { return status; }
     public void setStatus(String value) { status = value; }
+    public Integer getRowVersion() { return rowVersion; }
+    public void setRowVersion(Integer value) { rowVersion = value; }
 }

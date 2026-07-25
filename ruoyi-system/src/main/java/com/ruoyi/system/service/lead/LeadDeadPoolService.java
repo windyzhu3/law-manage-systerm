@@ -77,7 +77,7 @@ public class LeadDeadPoolService
         payload.put("operatorId", actor.userId());
         events.publish(new BusinessEventCommand(BusinessEventType.LEAD_MOVED_TO_DEAD_POOL, "LEAD",
                 lead.getLeadId(), lead.getLeadNo(), "LEAD_MOVED_TO_DEAD_POOL:" + lead.getLeadId() + ":"
-                        + log.getDeadPoolLogId(), payload));
+                        + log.getDeadPoolLogId(), payload),actor);
         return new DeadPoolOutcome(log.getDeadPoolLogId(), inserted == 0);
     }
 

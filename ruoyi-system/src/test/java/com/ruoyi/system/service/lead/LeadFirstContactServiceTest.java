@@ -42,6 +42,7 @@ class LeadFirstContactServiceTest
     @Mock private ISysDictTypeService dictionaries;
     @Mock private TodoOrganizationPort organization;
     @Mock private TodoScheduleService schedules;
+    @Mock private LeadAssignmentPolicyService policies;
     @Mock private BusinessEventPublisher events;
     private LeadFirstContactService service;
     private BizLead stored;
@@ -50,7 +51,7 @@ class LeadFirstContactServiceTest
     void setUp()
     {
         service = new LeadFirstContactService(leads, facts, access, calls, actors, dictionaries,
-                organization, schedules, events);
+                organization, schedules, policies, events);
         stored = lead(7L, "1", "0");
         stored.setLeadNo("L-7");
         stored.setOwnerId(8L);
@@ -70,7 +71,7 @@ class LeadFirstContactServiceTest
         when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(dictionaries.selectDictDataByType("law_first_contact_result")).thenReturn(dict("VALID"));
-        when(calls.recordForLead(command.getCallRecord(), stored, actor())).thenReturn(
+        when(calls.recordForLead(command.getCallRecord(), stored, actor(),21L)).thenReturn(
                 new LeadCallRecordService.CallRecordOutcome(31L, false));
         generatedFollowup(51L);
         when(leads.completeFirstContact(7L, "1", "VALID", "Client", "Shanghai",
@@ -82,7 +83,7 @@ class LeadFirstContactServiceTest
         assertEquals(51L, outcome.businessFactId());
         assertEquals(31L, outcome.callRecordId());
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_FIRST_CONTACT_VALID:7:51", event.getValue().getIdempotencyKey());
         assertEquals(51L, event.getValue().getPayload().get("followupId"));
     }
@@ -103,7 +104,7 @@ class LeadFirstContactServiceTest
         assertEquals("VALIDATION_FAILED", error.getBusinessCode());
         verify(leads, never()).completeFirstContact(any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any());
-        verify(events, never()).publish(any());
+        verify(events, never()).publish(any(),any());
     }
 
     @Test
@@ -115,11 +116,12 @@ class LeadFirstContactServiceTest
         when(actors.current()).thenReturn(actor());
         when(dictionaries.selectDictDataByType("law_first_contact_result")).thenReturn(dict("SUSPECT_INVALID"));
         when(dictionaries.selectDictDataByType("law_lead_invalid_reason")).thenReturn(dict("NO_DEMAND"));
-        when(calls.recordForLead(command.getCallRecord(), stored, actor())).thenReturn(
+        when(calls.recordForLead(command.getCallRecord(), stored, actor(),21L)).thenReturn(
                 new LeadCallRecordService.CallRecordOutcome(33L, false));
         generatedFollowup(53L);
         when(facts.insertInvalidReviewIfAbsent(any())).thenAnswer(invocation -> {
             BizLeadInvalidReview value = invocation.getArgument(0);
+            assertEquals(9L,value.getReviewerId());
             value.setReviewId(63L);
             return 1;
         });
@@ -133,7 +135,7 @@ class LeadFirstContactServiceTest
         assertEquals(53L, outcome.followupId());
         assertEquals(33L, outcome.callRecordId());
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_SUSPECT_INVALID_MARKED:7:63", event.getValue().getIdempotencyKey());
         assertEquals(63L, event.getValue().getPayload().get("reviewId"));
         assertEquals(9L, event.getValue().getPayload().get("reviewerId"));
@@ -143,16 +145,21 @@ class LeadFirstContactServiceTest
     void unreachable_creates_default_retry_plan()
     {
         LeadFirstContactCommand command = command("UNREACHABLE");
-        command.setRetryTemplateVersionId(99L);
-        command.setRetryRuleVersionId(5L);
+        stored.setDeptId(3L);
+        stored.setSourceCode("WEB");
         when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(dictionaries.selectDictDataByType("law_first_contact_result")).thenReturn(dict("UNREACHABLE"));
-        when(calls.recordForLead(command.getCallRecord(), stored, actor())).thenReturn(
+        when(calls.recordForLead(command.getCallRecord(), stored, actor(),21L)).thenReturn(
                 new LeadCallRecordService.CallRecordOutcome(32L, false));
         generatedFollowup(52L);
         when(leads.completeFirstContact(7L, "1", "UNREACHABLE", null, null, null, null,
                 null, null, 4, "alice")).thenReturn(1);
+        var windows=List.of(new TodoScheduleService.ScheduleWindowRule(
+                "T0",0,0,null,null,0,120,3,1));
+        when(policies.resolveRetrySchedule(stored)).thenReturn(
+                new LeadAssignmentPolicyService.RetrySchedulePolicy(11L,2,99L,501L,
+                        "Asia/Shanghai",windows));
         when(schedules.createPlan(any())).thenReturn(81L);
 
         LeadFirstContactService.FirstContactOutcome outcome = service.complete(command);
@@ -160,9 +167,15 @@ class LeadFirstContactServiceTest
         assertEquals(81L, outcome.schedulePlanId());
         assertEquals(52L, outcome.followupId());
         assertEquals(32L, outcome.callRecordId());
-        verify(schedules).createPlan(any());
+        ArgumentCaptor<TodoScheduleService.CreateSchedulePlanCommand> plan=
+                ArgumentCaptor.forClass(TodoScheduleService.CreateSchedulePlanCommand.class);
+        verify(schedules).createPlan(plan.capture());
+        assertEquals(99L,plan.getValue().templateVersionId());
+        assertEquals(501L,plan.getValue().ruleVersionId());
+        assertEquals("Asia/Shanghai",plan.getValue().timezone());
+        assertEquals(windows,plan.getValue().windows());
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_FIRST_CONTACT_UNREACHABLE:7:81", event.getValue().getIdempotencyKey());
         assertEquals(81L, event.getValue().getPayload().get("planId"));
     }

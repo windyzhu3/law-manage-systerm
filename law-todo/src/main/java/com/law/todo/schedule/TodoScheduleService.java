@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +50,10 @@ public class TodoScheduleService
         {
             throw new TodoException("TODO_SCHEDULE_TIMEZONE_INVALID","Unknown schedule timezone");
         }
+        validateTemplate(command.templateVersionId(),command.businessType());
+        List<TodoScheduleWindow> windows=command.windows()==null||command.windows().isEmpty()
+                ?defaultWindows(command.firstContactCompletedAt())
+                :configuredWindows(command.firstContactCompletedAt(),command.windows());
         Map<String,Object> plan=new HashMap<>();
         plan.put("previousTodoId",command.previousTodoId());
         plan.put("templateVersionId",command.templateVersionId());
@@ -62,7 +67,7 @@ public class TodoScheduleService
         Long planId=longValue(plan,"planId","plan_id");
         if(planId==null)
             throw new TodoException("TODO_SCHEDULE_PLAN_PERSIST_FAILED","Schedule plan identity was not generated");
-        for(TodoScheduleWindow window:defaultWindows(command.firstContactCompletedAt()))
+        for(TodoScheduleWindow window:windows)
         {
             Map<String,Object> row=new HashMap<>();
             row.put("planId",planId);row.put("windowCode",window.windowCode());
@@ -92,6 +97,52 @@ public class TodoScheduleService
             windows.add(TodoScheduleWindow.fixed("T"+day+"_PM",order++,day,
                     LocalTime.of(15,0),LocalTime.of(18,0),firstContactCompletedAt.toLocalDate()));
         }
+        return List.copyOf(windows);
+    }
+
+    public List<TodoScheduleWindow> configuredWindows(LocalDateTime firstContactCompletedAt,
+            List<ScheduleWindowRule> rules)
+    {
+        if(firstContactCompletedAt==null||rules==null||rules.isEmpty())
+            throw new TodoException("TODO_SCHEDULE_RULE_INVALID","Configured schedule windows are required");
+        List<TodoScheduleWindow> windows=new ArrayList<>();
+        HashSet<String> codes=new HashSet<>();
+        HashSet<Integer> orders=new HashSet<>();
+        for(ScheduleWindowRule rule:rules)
+        {
+            if(rule==null||rule.windowCode()==null||rule.windowCode().isBlank()
+                    ||rule.windowOrder()<0||rule.dayOffset()<0||rule.maxAttempts()<=0
+                    ||rule.occurrenceNo()<=0||!codes.add(rule.windowCode().trim())
+                    ||!orders.add(rule.windowOrder()))
+                throw new TodoException("TODO_SCHEDULE_RULE_INVALID","Configured schedule window is invalid");
+            LocalDateTime startAt;
+            LocalDateTime dueAt;
+            LocalTime startTime;
+            LocalTime endTime;
+            if(rule.dayOffset()==0)
+            {
+                if(rule.startOffsetMinutes()==null||rule.startOffsetMinutes()<0
+                        ||rule.durationMinutes()==null||rule.durationMinutes()<=0)
+                    throw new TodoException("TODO_SCHEDULE_RULE_INVALID",
+                            "Same-day schedule window requires positive relative timing");
+                startAt=firstContactCompletedAt.plusMinutes(rule.startOffsetMinutes());
+                dueAt=startAt.plusMinutes(rule.durationMinutes());
+                startTime=startAt.toLocalTime();
+                endTime=dueAt.toLocalTime();
+            }
+            else
+            {
+                if(rule.startTime()==null||rule.endTime()==null||!rule.endTime().isAfter(rule.startTime()))
+                    throw new TodoException("TODO_SCHEDULE_RULE_INVALID",
+                            "Future schedule window requires a valid local-time period");
+                startTime=rule.startTime();endTime=rule.endTime();
+                var date=firstContactCompletedAt.toLocalDate().plusDays(rule.dayOffset());
+                startAt=LocalDateTime.of(date,startTime);dueAt=LocalDateTime.of(date,endTime);
+            }
+            windows.add(new TodoScheduleWindow(rule.windowCode().trim(),rule.windowOrder(),rule.dayOffset(),
+                    startTime,endTime,startAt,dueAt,rule.maxAttempts(),rule.occurrenceNo()));
+        }
+        windows.sort(java.util.Comparator.comparingInt(TodoScheduleWindow::windowOrder));
         return List.copyOf(windows);
     }
 
@@ -170,44 +221,66 @@ public class TodoScheduleService
     }
 
     @Transactional
-    public ScheduleCompletion completeOccurrence(Long occurrenceId,String result,LocalDateTime completedAt)
+    public ScheduleOccurrenceContext lockOccurrenceContext(Long occurrenceId)
     {
-        if(occurrenceId==null||occurrenceId<=0||result==null||result.isBlank()||completedAt==null)
-            throw new TodoException("TODO_SCHEDULE_RESULT_INVALID","Schedule occurrence result is incomplete");
-        Map<String,Object> occurrence=mapper.selectScheduleOccurrenceById(occurrenceId);
+        if(occurrenceId==null||occurrenceId<=0)
+            throw new TodoException("TODO_SCHEDULE_RESULT_INVALID","Schedule occurrence identity is incomplete");
+        Map<String,Object> occurrence=mapper.selectScheduleOccurrenceContextForUpdate(occurrenceId);
         if(occurrence==null)
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_FOUND","Schedule occurrence does not exist");
-        Long planId=requiredLong(occurrence,"planId","plan_id");
-        if("CONNECTED".equals(result))
-        {
-            if(mapper.selectSchedulePlanForUpdate(planId)==null)
-                throw new TodoException("TODO_SCHEDULE_PLAN_NOT_FOUND","Schedule plan does not exist");
-        }
-        int accepted=mapper.recordScheduleOccurrenceResult(occurrenceId,result,completedAt);
+        return context(occurrence);
+    }
+
+    @Transactional
+    public ScheduleCompletion completeOccurrence(Long occurrenceId,String result,LocalDateTime completedAt)
+    {
+        return completeLockedOccurrence(lockOccurrenceContext(occurrenceId),result,completedAt);
+    }
+
+    @Transactional
+    public ScheduleCompletion completeOccurrence(ScheduleOccurrenceContext context,String result,
+            LocalDateTime completedAt)
+    {
+        if(context==null||result==null||result.isBlank()||completedAt==null)
+            throw new TodoException("TODO_SCHEDULE_RESULT_INVALID","Schedule occurrence result is incomplete");
+        ScheduleOccurrenceContext authoritative=lockOccurrenceContext(context.occurrenceId());
+        if(!authoritative.equals(context))
+            throw new TodoException("TODO_SCHEDULE_RESULT_NOT_ACCEPTED",
+                    "Schedule occurrence context changed before completion");
+        return completeLockedOccurrence(authoritative,result,completedAt);
+    }
+
+    private ScheduleCompletion completeLockedOccurrence(ScheduleOccurrenceContext context,String result,
+            LocalDateTime completedAt)
+    {
+        if(!"ACTIVE".equals(context.planStatus())
+                && !("COMPLETED".equals(context.status())&&result.equals(context.resultCode())))
+            throw new TodoException("TODO_SCHEDULE_RESULT_NOT_ACCEPTED","Schedule plan is not active");
+        int accepted=mapper.recordScheduleOccurrenceResult(context.occurrenceId(),result,completedAt);
         boolean replayed=accepted!=1;
         if(accepted!=1)
         {
-            Map<String,Object> current=mapper.selectScheduleOccurrenceById(occurrenceId);
-            if(current==null||!"COMPLETED".equals(text(current,"status","status"))
-                    ||!result.equals(text(current,"resultCode","result_code")))
+            ScheduleOccurrenceContext current=lockOccurrenceContext(context.occurrenceId());
+            if(!"COMPLETED".equals(current.status())||!result.equals(current.resultCode()))
                 throw new TodoException("TODO_SCHEDULE_RESULT_NOT_ACCEPTED",
                         "Schedule occurrence is not materialized or already has another result");
-            occurrence=current;
+            context=current;
         }
         if("CONNECTED".equals(result))
-            terminateLockedPlan(planId,occurrenceId,"CONTACTED",completedAt);
+            terminateLockedPlan(context.planId(),context.occurrenceId(),"CONTACTED",completedAt);
         Map<String,Object> next=null;
         if("NEXT_WINDOW".equals(result))
         {
-            next=mapper.selectNextScheduleWindow(planId,requiredLong(occurrence,"windowId","window_id"));
+            next=mapper.selectNextScheduleWindow(context.planId(),context.windowId());
             if(next==null)
                 throw new TodoException("TODO_SCHEDULE_NEXT_WINDOW_NOT_FOUND",
                         "Retry result requires a later configured window");
         }
-        return new ScheduleCompletion(planId,text(occurrence,"windowCode","window_code"),
-                intValue(occurrence,"occurrenceNo","occurrence_no"),
+        return new ScheduleCompletion(context.planId(),context.windowCode(),context.occurrenceNo(),
                 next==null?null:text(next,"windowCode","window_code"),
-                next==null?null:dateTime(next,"startAt","start_at"),replayed);
+                next==null?null:dateTime(next,"startAt","start_at"),replayed,
+                context.businessType(),context.businessId(),context.todoId(),context.timezone(),
+                context.templateVersionId(),context.ruleVersionId(),context.maxAttempts());
     }
 
     @Transactional
@@ -259,8 +332,32 @@ public class TodoScheduleService
                 ||command.templateVersionId()==null||command.templateVersionId()<=0
                 ||command.businessType()==null||command.businessType().isBlank()
                 ||command.businessId()==null||command.businessId()<=0
+                ||command.ruleVersionId()==null||command.ruleVersionId()<=0
                 ||command.firstContactCompletedAt()==null)
             throw new TodoException("TODO_SCHEDULE_PLAN_INVALID","Schedule plan identity is incomplete");
+    }
+
+    private void validateTemplate(Long templateVersionId,String businessType)
+    {
+        Map<String,Object> template=mapper.selectTemplateVersionById(templateVersionId);
+        if(template==null||!"PUBLISHED".equals(text(template,"status","status"))
+                ||!"TD-003".equals(text(template,"templateCode","template_code"))
+                ||!businessType.trim().equals(text(template,"businessType","business_type")))
+            throw new TodoException("TODO_SCHEDULE_TEMPLATE_INVALID",
+                    "Retry schedule requires a published TD-003 version for the same business type");
+    }
+
+    private ScheduleOccurrenceContext context(Map<String,Object> value)
+    {
+        return new ScheduleOccurrenceContext(requiredLong(value,"occurrenceId","occurrence_id"),
+                requiredLong(value,"planId","plan_id"),requiredLong(value,"windowId","window_id"),
+                text(value,"windowCode","window_code"),intValue(value,"occurrenceNo","occurrence_no"),
+                longValue(value,"todoId","todo_id"),text(value,"businessType","business_type"),
+                requiredLong(value,"businessId","business_id"),text(value,"timezone","timezone"),
+                requiredLong(value,"templateVersionId","template_version_id"),
+                longValue(value,"ruleVersionId","rule_version_id"),intValue(value,"maxAttempts","max_attempts"),
+                text(value,"status","status"),text(value,"resultCode","result_code"),
+                text(value,"planStatus","plan_status"));
     }
 
     private String errorCode(RuntimeException failure)
@@ -307,8 +404,36 @@ public class TodoScheduleService
         throw new TodoException("TODO_SCHEDULE_ROW_INVALID","Schedule row is missing "+camel);
     }
 
+    public record ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
+            int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
+            Long templateVersionId,Long ruleVersionId,int maxAttempts,String status,String resultCode,
+            String planStatus)
+    {
+        public ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
+                int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
+                Long templateVersionId,Long ruleVersionId,int maxAttempts,String status,String resultCode)
+        {
+            this(occurrenceId,planId,windowId,windowCode,occurrenceNo,todoId,businessType,businessId,
+                    timezone,templateVersionId,ruleVersionId,maxAttempts,status,resultCode,"ACTIVE");
+        }
+    }
+
     public record ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
-            String nextWindowCode,LocalDateTime nextStartAt,boolean replayed) { }
+            String nextWindowCode,LocalDateTime nextStartAt,boolean replayed,String businessType,
+            Long businessId,Long todoId,String timezone,Long templateVersionId,Long ruleVersionId,
+            int maxAttempts)
+    {
+        public ScheduleCompletion(Long planId,String windowCode,int occurrenceNo,
+                String nextWindowCode,LocalDateTime nextStartAt,boolean replayed)
+        {
+            this(planId,windowCode,occurrenceNo,nextWindowCode,nextStartAt,replayed,
+                    null,null,null,null,null,null,0);
+        }
+    }
+
+    public record ScheduleWindowRule(String windowCode,int windowOrder,int dayOffset,
+            LocalTime startTime,LocalTime endTime,Integer startOffsetMinutes,Integer durationMinutes,
+            int maxAttempts,int occurrenceNo) { }
 
     public record CreateSchedulePlanCommand(
             Long previousTodoId,
@@ -317,5 +442,14 @@ public class TodoScheduleService
             Long businessId,
             LocalDateTime firstContactCompletedAt,
             String timezone,
-            Long ruleVersionId) { }
+            Long ruleVersionId,
+            List<ScheduleWindowRule> windows)
+    {
+        public CreateSchedulePlanCommand(Long previousTodoId,Long templateVersionId,String businessType,
+                Long businessId,LocalDateTime firstContactCompletedAt,String timezone,Long ruleVersionId)
+        {
+            this(previousTodoId,templateVersionId,businessType,businessId,firstContactCompletedAt,
+                    timezone,ruleVersionId,List.of());
+        }
+    }
 }

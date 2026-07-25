@@ -49,7 +49,8 @@ public class LeadPoolService
         changed(rows);
         Long logId = insertLog(leadId, lead.getOwnerId(), null, "pool", reason, actor.userName());
         Map<String, Object> payload = payload(actor); payload.put("reason", reason == null ? "" : reason);
-        publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead, "LEAD_MOVED_TO_POOL:" + leadId + ":" + logId, payload);
+        publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead, "LEAD_MOVED_TO_POOL:" + leadId + ":" + logId,
+                payload,actor);
         return rows;
     }
 
@@ -67,7 +68,7 @@ public class LeadPoolService
         changed(rows);
         Long logId = insertLog(leadId, null, actor.userId(), "claim", "claim from public pool", actor.userName());
         Map<String, Object> payload = payload(actor); payload.put("ownerId", actor.userId());
-        publish(BusinessEventType.LEAD_CLAIMED, lead, "LEAD_CLAIMED:" + leadId + ":" + logId, payload);
+        publish(BusinessEventType.LEAD_CLAIMED, lead, "LEAD_CLAIMED:" + leadId + ":" + logId,payload,actor);
         return rows;
     }
 
@@ -83,7 +84,7 @@ public class LeadPoolService
         Map<String, Object> payload = payload(SYSTEM);
         payload.put("reason", reason == null ? "" : reason);
         publish(BusinessEventType.LEAD_MOVED_TO_POOL, lead,
-                "LEAD_MOVED_TO_POOL:" + lead.getLeadId() + ":" + logId, payload);
+                "LEAD_MOVED_TO_POOL:" + lead.getLeadId() + ":" + logId,payload,SYSTEM);
         return rows;
     }
 
@@ -104,9 +105,11 @@ public class LeadPoolService
         Map<String, Object> value = new HashMap<>();value.put("schemaVersion", 1);value.put("operatorId", actor.userId());return value;
     }
 
-    private void publish(BusinessEventType type, BizLead lead, String key, Map<String, Object> payload)
+    private void publish(BusinessEventType type, BizLead lead, String key, Map<String, Object> payload,
+            BusinessActor actor)
     {
-        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload));
+        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload),
+                actor);
     }
 
     private void requireActive(BizLead lead)

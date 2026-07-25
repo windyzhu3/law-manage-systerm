@@ -35,11 +35,13 @@ public class LeadFirstContactService
     private final ISysDictTypeService dictionaries;
     private final TodoOrganizationPort organization;
     private final TodoScheduleService schedules;
+    private final LeadAssignmentPolicyService policies;
     private final BusinessEventPublisher events;
 
     public LeadFirstContactService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
             LeadCallRecordService calls, BusinessActorProvider actors, ISysDictTypeService dictionaries,
-            TodoOrganizationPort organization, TodoScheduleService schedules, BusinessEventPublisher events)
+            TodoOrganizationPort organization, TodoScheduleService schedules,
+            LeadAssignmentPolicyService policies, BusinessEventPublisher events)
     {
         this.leads = leads;
         this.facts = facts;
@@ -49,6 +51,7 @@ public class LeadFirstContactService
         this.dictionaries = dictionaries;
         this.organization = organization;
         this.schedules = schedules;
+        this.policies = policies;
         this.events = events;
     }
 
@@ -66,13 +69,19 @@ public class LeadFirstContactService
         String result = trim(command.getContactResult());
         requireDict("law_first_contact_result", result);
         validateBranch(command, result);
-        LeadCallRecordService.CallRecordOutcome call = calls.recordForLead(command.getCallRecord(), lead, actor);
+        LeadCallRecordService.CallRecordOutcome call =
+                calls.recordForLead(command.getCallRecord(), lead, actor, command.getTodoId());
         Long followupId = insertFollowup(command, actor, result);
 
         Long reviewId = null;
         Long planId = null;
-        if ("SUSPECT_INVALID".equals(result)) reviewId = insertReview(command, lead, actor);
-        if ("UNREACHABLE".equals(result)) planId = createRetryPlan(command);
+        ReviewSubmission review=null;
+        if ("SUSPECT_INVALID".equals(result))
+        {
+            review=insertReview(command, lead, actor);
+            reviewId=review.reviewId();
+        }
+        if ("UNREACHABLE".equals(result)) planId = createRetryPlan(command,lead);
 
         int rows = leads.completeFirstContact(lead.getLeadId(), lead.getStatus(), result,
                 trim(command.getContactName()), trim(command.getCity()), trim(command.getLegalDemand()),
@@ -100,9 +109,7 @@ public class LeadFirstContactService
             businessFactId = reviewId;
             payload.put("reviewId", reviewId);
             payload.put("ownerId", lead.getOwnerId());
-            payload.put("reviewerId", organization.supervisor(lead.getOwnerId(), 1)
-                    .orElseThrow(() -> new ServiceException("TODO_OWNER_UNRESOLVED",
-                            BusinessErrorCode.PRECONDITION_FAILED.name())));
+            payload.put("reviewerId", review.reviewerId());
             payload.put("reasonCode", trim(command.getInvalidReasonCode()));
         }
         else
@@ -115,7 +122,8 @@ public class LeadFirstContactService
             payload.put("attempts", 0);
             payload.put("nextContactAt", LocalDateTime.now().toString());
         }
-        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload));
+        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload),
+                actor);
         return new FirstContactOutcome(result, businessFactId, followupId, call.callRecordId(), reviewId, planId);
     }
 
@@ -136,30 +144,34 @@ public class LeadFirstContactService
         return followup.getFollowupId();
     }
 
-    private Long insertReview(LeadFirstContactCommand command, BizLead lead, BusinessActor actor)
+    private ReviewSubmission insertReview(LeadFirstContactCommand command, BizLead lead, BusinessActor actor)
     {
+        Long reviewerId=organization.supervisor(lead.getOwnerId(),1)
+                .orElseThrow(()->new ServiceException("TODO_OWNER_UNRESOLVED",
+                        BusinessErrorCode.PRECONDITION_FAILED.name()));
         String key = "LEAD_INVALID_REVIEW:" + lead.getLeadId() + ":" + command.getTodoId();
         BizLeadInvalidReview review = new BizLeadInvalidReview();
         review.setLeadId(lead.getLeadId());
         review.setReasonCode(trim(command.getInvalidReasonCode()));
         review.setSalesExplanation(trim(command.getSalesExplanation()));
         review.setSubmittedBy(actor.userId());
+        review.setReviewerId(reviewerId);
         review.setTodoId(command.getTodoId());
         review.setIdempotencyKey(key);
         review.setCreateBy(actor.userName());
         int inserted = facts.insertInvalidReviewIfAbsent(review);
         if (inserted == 0) review = facts.selectInvalidReviewByIdempotencyKey(key);
         require(review != null && review.getReviewId() != null, "Invalid-review identity was not generated");
-        return review.getReviewId();
+        require(reviewerId.equals(review.getReviewerId()),"Persisted invalid-review reviewer changed");
+        return new ReviewSubmission(review.getReviewId(),reviewerId);
     }
 
-    private Long createRetryPlan(LeadFirstContactCommand command)
+    private Long createRetryPlan(LeadFirstContactCommand command,BizLead lead)
     {
-        require(command.getRetryTemplateVersionId() != null && command.getRetryTemplateVersionId() > 0,
-                "Retry template version is required");
+        LeadAssignmentPolicyService.RetrySchedulePolicy policy=policies.resolveRetrySchedule(lead);
         return schedules.createPlan(new TodoScheduleService.CreateSchedulePlanCommand(
-                command.getTodoId(), command.getRetryTemplateVersionId(), "LEAD", command.getLeadId(),
-                LocalDateTime.now(), command.getTimezone(), command.getRetryRuleVersionId()));
+                command.getTodoId(), policy.templateVersionId(), "LEAD", command.getLeadId(),
+                LocalDateTime.now(), policy.timezone(), policy.ruleVersionId(), policy.windows()));
     }
 
     private void validateBranch(LeadFirstContactCommand command, String result)
@@ -215,4 +227,5 @@ public class LeadFirstContactService
 
     public record FirstContactOutcome(String result, Long businessFactId, Long followupId, Long callRecordId,
             Long reviewId, Long schedulePlanId) { }
+    private record ReviewSubmission(Long reviewId,Long reviewerId) { }
 }

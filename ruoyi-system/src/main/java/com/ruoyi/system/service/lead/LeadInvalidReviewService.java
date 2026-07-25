@@ -11,7 +11,10 @@ import com.law.business.event.BusinessEventType;
 import com.law.business.lead.dto.LeadInvalidReviewCommand;
 import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
+import com.law.business.security.LeadPermissions;
 import com.law.business.shared.error.BusinessErrorCode;
+import com.law.todo.application.TodoAutoActionService;
+import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
@@ -30,18 +33,20 @@ public class LeadInvalidReviewService
     private final LeadAccessPolicy access;
     private final BusinessActorProvider actors;
     private final ISysDictTypeService dictionaries;
+    private final LeadPermissionPolicy permissions;
     private final LeadDeadPoolService deadPool;
     private final BusinessEventPublisher events;
 
     public LeadInvalidReviewService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
-            BusinessActorProvider actors, ISysDictTypeService dictionaries, LeadDeadPoolService deadPool,
-            BusinessEventPublisher events)
+            BusinessActorProvider actors, ISysDictTypeService dictionaries, LeadPermissionPolicy permissions,
+            LeadDeadPoolService deadPool, BusinessEventPublisher events)
     {
         this.leads = leads;
         this.facts = facts;
         this.access = access;
         this.actors = actors;
         this.dictionaries = dictionaries;
+        this.permissions = permissions;
         this.deadPool = deadPool;
         this.events = events;
     }
@@ -51,14 +56,45 @@ public class LeadInvalidReviewService
     {
         require(command != null && command.getLeadId() != null && command.getReviewId() != null,
                 "Review identity is incomplete");
-        BusinessActor actor = command.isSystemDefault() ? SYSTEM : actors.current();
-        BizLead lead = command.isSystemDefault() ? leads.selectLeadById(command.getLeadId())
-                : access.requireOperable(command.getLeadId());
+        permissions.require(LeadPermissions.INVALID_REVIEW_HANDLE);
+        BusinessActor actor = actors.current();
+        BizLead lead = access.requireOperable(command.getLeadId());
         BizLeadInvalidReview review = facts.selectInvalidReviewById(command.getReviewId());
         require(lead != null && review != null && lead.getLeadId().equals(review.getLeadId()),
                 "Invalid-review fact not found");
+        require(command.getTodoId() != null && command.getTodoId().equals(review.getTodoId()),
+                "LEAD_INVALID_REVIEW_SOURCE_TODO_INVALID");
+        require(review.getReviewerId() != null
+                && (actor.administrator() || actor.userId().equals(review.getReviewerId())),
+                "LEAD_INVALID_REVIEW_REVIEWER_INVALID");
         String result = trim(command.getReviewResult());
         requireDict("law_lead_invalid_review_result", result);
+        return apply(command,lead,review,result,actor,false);
+    }
+
+    @Transactional
+    public InvalidReviewOutcome reviewAutomatically(Long leadId,Long reviewId,Long sourceTodoId,
+            Actor capability)
+    {
+        require(capability==TodoAutoActionService.SERVICE_ACTOR,
+                "LEAD_INVALID_REVIEW_AUTOMATIC_CAPABILITY_INVALID");
+        require(leadId!=null&&reviewId!=null&&sourceTodoId!=null,"Review identity is incomplete");
+        BizLead lead=leads.selectLeadById(leadId);
+        BizLeadInvalidReview review=facts.selectInvalidReviewById(reviewId);
+        require(lead!=null&&review!=null&&leadId.equals(review.getLeadId()),
+                "Invalid-review fact not found");
+        require(sourceTodoId.equals(review.getTodoId()),"LEAD_INVALID_REVIEW_SOURCE_TODO_INVALID");
+        requireDict("law_lead_invalid_review_result","TRUE_INVALID");
+        LeadInvalidReviewCommand command=new LeadInvalidReviewCommand();
+        command.setLeadId(leadId);command.setReviewId(reviewId);command.setTodoId(sourceTodoId);
+        command.setReviewResult("TRUE_INVALID");
+        command.setReviewComment("TD-002 overdue automatic confirmation");
+        return apply(command,lead,review,"TRUE_INVALID",SYSTEM,true);
+    }
+
+    private InvalidReviewOutcome apply(LeadInvalidReviewCommand command,BizLead lead,
+            BizLeadInvalidReview review,String result,BusinessActor actor,boolean systemDefault)
+    {
         if ("COMPLETED".equals(review.getStatus()))
         {
             require(result.equals(review.getReviewResult()), "Review occurrence already has another result");
@@ -71,7 +107,7 @@ public class LeadInvalidReviewService
         changed(leads.markInvalidReviewed(lead.getLeadId(), "PENDING", result, lead.getRowVersion(),
                 actor.userName()));
         changed(facts.completeInvalidReview(review.getReviewId(), result, trim(command.getReviewComment()),
-                actor.userId(), command.isSystemDefault() ? "Y" : "N", review.getRowVersion(), actor.userName()));
+                actor.userId(), systemDefault ? "Y" : "N", review.getRowVersion(), actor.userName()));
 
         Long qualityId = null;
         Long deadPoolLogId = null;
@@ -139,7 +175,8 @@ public class LeadInvalidReviewService
                     + qualityId;
             payload.put("ownerId", lead.getOwnerId());
         }
-        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload));
+        events.publish(new BusinessEventCommand(type, "LEAD", lead.getLeadId(), lead.getLeadNo(), key, payload),
+                actor);
     }
 
     private InvalidReviewOutcome replayOutcome(BizLead lead, BizLeadInvalidReview review)
@@ -156,8 +193,10 @@ public class LeadInvalidReviewService
         {
             var log = facts.selectDeadPoolLogByIdempotencyKey(
                     "LEAD_DEAD_POOL:" + lead.getLeadId() + ":" + review.getReviewId());
-            deadPoolLogId = log == null ? null : log.getDeadPoolLogId();
+            requireEvidence(log != null && log.getDeadPoolLogId() != null);
+            deadPoolLogId = log.getDeadPoolLogId();
         }
+        if ("MISJUDGED_VALID".equals(review.getReviewResult())) requireEvidence(qualityId != null);
         return new InvalidReviewOutcome(review.getReviewResult(), review.getReviewId(), qualityId,
                 deadPoolLogId, true);
     }
@@ -176,6 +215,11 @@ public class LeadInvalidReviewService
     private void require(boolean condition, String message)
     {
         if (!condition) throw new ServiceException(message, BusinessErrorCode.STATE_CONFLICT.name());
+    }
+    private void requireEvidence(boolean condition)
+    {
+        if(!condition)throw new ServiceException("LEAD_FLOW_EVIDENCE_MISSING",
+                BusinessErrorCode.STATE_CONFLICT.name());
     }
     private String trim(String value) { return value == null ? null : value.trim(); }
 

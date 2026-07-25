@@ -55,7 +55,7 @@ class LeadDeadPoolServiceTest
         verify(schedules).cancelPlan(org.mockito.ArgumentMatchers.eq(81L),
                 org.mockito.ArgumentMatchers.eq("TRUE_INVALID"), any());
         ArgumentCaptor<BusinessEventCommand> event = ArgumentCaptor.forClass(BusinessEventCommand.class);
-        verify(events).publish(event.capture());
+        verify(events).publish(event.capture(),org.mockito.ArgumentMatchers.eq(actor()));
         assertEquals("LEAD_MOVED_TO_DEAD_POOL:7:71", event.getValue().getIdempotencyKey());
     }
 }
