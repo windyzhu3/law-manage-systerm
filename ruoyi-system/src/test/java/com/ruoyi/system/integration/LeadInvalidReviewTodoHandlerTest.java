@@ -3,6 +3,8 @@ package com.ruoyi.system.integration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -14,9 +16,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.lead.dto.LeadInvalidReviewCommand;
+import com.law.todo.application.TodoCommandService;
+import com.law.todo.application.TodoDodService;
 import com.law.todo.application.TodoAutoActionService;
+import com.law.todo.application.command.TodoActionCommands.ActionCommand;
+import com.law.todo.domain.TodoAccessPolicy;
 import com.law.todo.domain.model.TodoInstance;
-import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
+import com.law.todo.mapper.TodoMapper;
 import com.ruoyi.system.service.event.LeadInvalidReviewTodoHandler;
 import com.ruoyi.system.service.event.LeadTodoSourceContextService;
 import com.ruoyi.system.service.lead.LeadInvalidReviewService;
@@ -60,17 +66,29 @@ class LeadInvalidReviewTodoHandlerTest
     {
         LeadInvalidReviewTodoHandler handler = new LeadInvalidReviewTodoHandler(reviews,contexts);
         TodoInstance todo=todo();
+        todo.setStatus("SUBMITTED");todo.setTemplateVersionId(12L);
         when(contexts.requireInvalidReview(todo,61L)).thenReturn(
                 new LeadTodoSourceContextService.InvalidReviewContext(61L,11L));
+        TodoMapper mapper=mock(TodoMapper.class);
+        TodoAccessPolicy access=mock(TodoAccessPolicy.class);
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:21:TD002")).thenReturn(Map.of(
+                "execution_key","AUTO:21:TD002","todo_id",21L,
+                "action_type","COMPLETE_DEFAULT","status","CLAIMED"));
+        when(mapper.selectById(21L)).thenReturn(todo);
+        when(mapper.selectTemplateVersionById(12L)).thenReturn(Map.of());
+        when(mapper.updateStatusConditionally(21L,"SUBMITTED","COMPLETED",null,
+                TodoAutoActionService.SERVICE_ACTOR.userName())).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        TodoCommandService commands=new TodoCommandService(mapper,access,
+                new TodoDodService(java.util.List.of()),java.util.List.of(handler),null);
 
-        handler.complete(new CompletionContext(todo,Map.of(
-                "reviewId", 61L,
-                "reviewResult", "MISJUDGED_VALID",
-                "automatic", false), TodoAutoActionService.SERVICE_ACTOR.userId(),
-                TodoAutoActionService.SERVICE_ACTOR.userName(),true));
+        commands.autoComplete(21L,new ActionCommand("AUTO:21:TD002",null,Map.of(
+                "reviewId",61L,"reviewResult","MISJUDGED_VALID","automatic",false)),
+                TodoAutoActionService.SERVICE_ACTOR);
 
         verify(reviews).reviewAutomatically(7L, 61L, 11L,
                 TodoAutoActionService.SERVICE_ACTOR);
+        assertEquals("COMPLETED",todo.getStatus());
         verifyNoMoreInteractions(reviews);
     }
 

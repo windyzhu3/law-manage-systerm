@@ -35,6 +35,7 @@ import com.law.business.security.BusinessActorProvider;
 import com.law.file.security.FileAccessPolicy;
 import com.law.todo.application.TodoCommandService;
 import com.law.todo.application.TodoDodService;
+import com.law.todo.application.TodoRoutingService;
 import com.law.todo.application.command.TodoActionCommands.ActionCommand;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.domain.TodoAccessPolicy;
@@ -83,9 +84,13 @@ class LeadTodoTransactionRollbackTest
         jdbc.execute("create table lead_followup(followup_id bigint primary key,lead_id bigint)");
         jdbc.execute("create table lead_transition(id bigint auto_increment primary key,lead_id bigint,result varchar(32))");
         jdbc.execute("create table business_event(id bigint auto_increment primary key,event_key varchar(255))");
+        jdbc.execute("create table route_join(root_todo_id bigint,node_key varchar(64),occurrence int,status varchar(32),primary key(root_todo_id,node_key,occurrence))");
+        jdbc.execute("create table route_token(root_todo_id bigint,node_key varchar(64),branch_key varchar(64),occurrence int,status varchar(32))");
+        jdbc.execute("create table todo_relation(todo_id bigint,business_type varchar(32),business_id bigint)");
         jdbc.update("insert into todo_instance(todo_id,status) values(21,'SUBMITTED')");
         outbox.failAfterInsert=false;
         outbox.businessFactFailure=false;
+        outbox.routingFailure=false;
 
         when(todoAccess.canOperate(any(),anyLong())).thenReturn(true);
         when(todos.selectById(21L)).thenAnswer(invocation->todo());
@@ -95,7 +100,17 @@ class LeadTodoTransactionRollbackTest
                     new Object[]{invocation.getArgument(0)});
             return rows.isEmpty()?null:rows.get(0);
         });
-        when(todos.selectTemplateVersionById(any())).thenReturn(Map.of());
+        when(todos.selectTemplateVersionById(any())).thenAnswer(invocation->{
+            Long versionId=invocation.getArgument(0);
+            if(Long.valueOf(11L).equals(versionId))return Map.of(
+                    "compiled_json",routeDefinition(),
+                    "definition_hash","route-hash");
+            if(Long.valueOf(12L).equals(versionId))return Map.of(
+                    "status","PUBLISHED","template_id",12L,"template_code","TD-004",
+                    "template_name","Progress handoff","business_type","LEAD",
+                    "owner_rule_json","OWNER");
+            return Map.of();
+        });
         when(todos.updateStatusConditionally(anyLong(),anyString(),anyString(),any(),anyString()))
                 .thenAnswer(invocation->jdbc.update(
                         "update todo_instance set status=? where todo_id=? and status=?",
@@ -104,6 +119,52 @@ class LeadTodoTransactionRollbackTest
             Map<String,Object> value=invocation.getArgument(0);
             return jdbc.update("insert into todo_action(action_id,todo_id) values(?,?)",
                     value.get("actionId"),value.get("todoId"));
+        });
+        when(todos.insertRouteJoinIfAbsent(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> value=invocation.getArgument(0);
+            return jdbc.update("insert into route_join(root_todo_id,node_key,occurrence,status) values(?,?,?,'WAITING')",
+                    value.get("rootTodoId"),value.get("nodeKey"),value.get("occurrence"));
+        });
+        when(todos.selectRouteJoinForUpdate(anyLong(),anyString(),anyInt())).thenAnswer(invocation->{
+            Long root=invocation.getArgument(0);String node=invocation.getArgument(1);
+            Integer occurrence=invocation.getArgument(2);
+            List<Map<String,Object>> rows=jdbc.queryForList(
+                    "select root_todo_id rootTodoId,node_key nodeKey,occurrence,status from route_join where root_todo_id=? and node_key=? and occurrence=?",
+                    root,node,occurrence);
+            return rows.isEmpty()?null:rows.get(0);
+        });
+        when(todos.insertRouteTokenIfAbsent(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> value=invocation.getArgument(0);
+            return jdbc.update("insert into route_token(root_todo_id,node_key,branch_key,occurrence,status) values(?,?,?,?,?)",
+                    value.get("rootTodoId"),value.get("nodeKey"),value.get("branchKey"),
+                    value.get("occurrence"),value.get("status"));
+        });
+        when(todos.selectRouteTokenArrivalsForUpdate(anyLong(),anyString(),anyInt()))
+                .thenAnswer(invocation->{
+                    Long root=invocation.getArgument(0);String node=invocation.getArgument(1);
+                    Integer occurrence=invocation.getArgument(2);
+                    return jdbc.queryForList(
+                            "select branch_key from route_token where root_todo_id=? and node_key=? and occurrence=?",
+                            String.class,root,node,occurrence);
+                });
+        when(todos.advanceRouteJoinConditionally(anyLong(),anyString(),anyInt()))
+                .thenAnswer(invocation->jdbc.update(
+                        "update route_join set status='ADVANCED' where root_todo_id=? and node_key=? and occurrence=? and status='WAITING'",
+                        invocation.getArgument(0),invocation.getArgument(1),invocation.getArgument(2)));
+        when(todos.selectByNextKey(anyString())).thenReturn(null);
+        when(todos.insertInstance(any(TodoInstance.class))).thenAnswer(invocation->{
+            TodoInstance next=invocation.getArgument(0);
+            next.setTodoId(22L);
+            return jdbc.update("insert into todo_instance(todo_id,status) values(?,?)",
+                    next.getTodoId(),next.getStatus());
+        });
+        when(todos.insertRelation(anyMap())).thenAnswer(invocation->{
+            Map<String,Object> value=invocation.getArgument(0);
+            int inserted=jdbc.update(
+                    "insert into todo_relation(todo_id,business_type,business_id) values(?,?,?)",
+                    value.get("todoId"),value.get("businessType"),value.get("businessId"));
+            if(outbox.routingFailure)throw new IllegalStateException("routing relation failure");
+            return inserted;
         });
 
         when(leads.selectLeadById(7L)).thenAnswer(invocation->lead());
@@ -151,6 +212,17 @@ class LeadTodoTransactionRollbackTest
         assertRolledBack();
     }
 
+    @Test
+    void routing_failure_after_token_next_todo_and_relation_rolls_back_the_full_completion()
+    {
+        outbox.routingFailure=true;
+
+        assertThrows(IllegalStateException.class,()->commands.complete(21L,action("tx-route"),
+                new Actor(8L,"alice",3L)));
+
+        assertRolledBack();
+    }
+
     private void assertRolledBack()
     {
         assertEquals("SUBMITTED",jdbc.queryForObject(
@@ -160,6 +232,10 @@ class LeadTodoTransactionRollbackTest
         assertEquals(0,count("lead_followup"));
         assertEquals(0,count("lead_transition"));
         assertEquals(0,count("business_event"));
+        assertEquals(0,count("route_join"));
+        assertEquals(0,count("route_token"));
+        assertEquals(0,count("todo_relation"));
+        assertEquals(1,count("todo_instance"));
     }
 
     private int count(String table)
@@ -187,7 +263,29 @@ class LeadTodoTransactionRollbackTest
         TodoInstance todo=new TodoInstance();todo.setTodoId(21L);todo.setTemplateVersionId(11L);
         todo.setTemplateCode("TD-001");todo.setBusinessType("LEAD");todo.setBusinessId(7L);
         todo.setBusinessNo("LEAD-7");todo.setOwnerId(8L);todo.setOwnerDeptId(3L);
+        todo.setDefinitionHash("route-hash");todo.setRouteDefinitionVersionId(11L);
+        todo.setRouteNodeKey("source");todo.setRootTodoId(21L);
         todo.setStatus(status);return todo;
+    }
+
+    private String routeDefinition()
+    {
+        return """
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "dod":{"config":{}},"ui":{"config":{}},
+                 "routing":{"config":{"start":"source","nodes":[
+                   {"key":"source","type":"TASK","templateVersionId":11},
+                   {"key":"fork","type":"FORK"},
+                   {"key":"join","type":"JOIN","joinMode":"ALL","branches":["branchA"]},
+                   {"key":"next","type":"TASK","templateVersionId":12},
+                   {"key":"end","type":"END"}],
+                 "edges":[
+                   {"key":"source-fork","from":"source","to":"fork","priority":0},
+                   {"key":"fork-join","from":"fork","to":"join","branchKey":"branchA","priority":0},
+                   {"key":"join-next","from":"join","to":"next","priority":0},
+                   {"key":"next-end","from":"next","to":"end","priority":0}]}} ,
+                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
     }
 
     private BizLead lead()
@@ -247,9 +345,10 @@ class LeadTodoTransactionRollbackTest
                 organization,schedules,policies,events);}
         @Bean LeadFirstContactHandler handler(LeadFirstContactService firstContacts)
         {return new LeadFirstContactHandler(firstContacts);}
+        @Bean TodoRoutingService routing(TodoMapper mapper){return new TodoRoutingService(mapper);}
         @Bean TodoCommandService commands(TodoMapper mapper,TodoAccessPolicy access,
-                LeadFirstContactHandler handler)
-        {return new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(handler),null);}
+                LeadFirstContactHandler handler,TodoRoutingService routing)
+        {return new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(handler),routing);}
     }
 
     static final class MutableOutboxPublisher implements BusinessEventPublisher
@@ -257,6 +356,7 @@ class LeadTodoTransactionRollbackTest
         private final JdbcTemplate jdbc;
         volatile boolean failAfterInsert;
         volatile boolean businessFactFailure;
+        volatile boolean routingFailure;
         MutableOutboxPublisher(JdbcTemplate jdbc){this.jdbc=jdbc;}
         @Override public void publish(BusinessEventCommand command)
         {publish(command,null);}

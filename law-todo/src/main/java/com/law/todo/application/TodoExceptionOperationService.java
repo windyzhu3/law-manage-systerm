@@ -16,7 +16,6 @@ import com.law.todo.domain.TodoExceptionPolicy;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
-import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
 
 @Service
 public class TodoExceptionOperationService
@@ -30,9 +29,9 @@ public class TodoExceptionOperationService
         TodoInstance todo=prepare(id,command.actionId());dod.validateBusiness(todo,command.payload());
         writeException(todo,command.actionId(),"FORCE_COMPLETE",command.reason(),command.payload(),actor);
         terminal(todo,"COMPLETED",actor);
-        CompletionContext context=new CompletionContext(todo,command.payload(),
-                actor.userId(),actor.userName(),false);
-        for(TodoCompletionHandler handler:handlers)if(handler.supports(todo))handler.complete(context);
+        CompletionContext context=CompletionContext.human(todo,command.payload(),
+                actor.userId(),actor.userName());
+        for(TodoCompletionHandler handler:handlers)if(handler.supports(todo))handler.handle(context);
         return todo;
     }
     @Transactional public TodoInstance forceCancel(Long id,ForceCommand command,Actor actor)

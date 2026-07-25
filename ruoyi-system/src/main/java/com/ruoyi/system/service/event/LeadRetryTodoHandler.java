@@ -1,12 +1,16 @@
 package com.ruoyi.system.service.event;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import com.law.business.lead.dto.LeadRetryCompleteCommand;
+import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.lead.LeadRetryService;
+import com.ruoyi.system.service.lead.LeadRetryService.RetryOutcome;
 
 /** Typed TD-003 adapter. Schedule identity is derived from the persisted Todo, never the payload. */
 @Component
@@ -25,6 +29,24 @@ public class LeadRetryTodoHandler implements TodoCompletionHandler
 
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
+    {execute(todo,payload);}
+
+    @Override
+    public CompletionResult handle(CompletionContext context)
+    {
+        RetryOutcome outcome=execute(context.todo(),context.payload());
+        Map<String,Object> routing=new LinkedHashMap<>();
+        routing.put("result",outcome.result());
+        if(outcome.retryRecordId()!=null)routing.put("retryRecordId",outcome.retryRecordId());
+        if(outcome.nextStage()!=null)routing.put("nextStage",outcome.nextStage());
+        routing.put("attemptNo",outcome.attemptNo());
+        routing.put("replayed",outcome.replayed());
+        return "CONTINUE_CURRENT_WINDOW".equals(outcome.result())
+                ?CompletionResult.retainCurrentTodo(routing)
+                :CompletionResult.completeTodo(routing);
+    }
+
+    private RetryOutcome execute(TodoInstance todo,Map<String,Object> payload)
     {
         Map<String,Object> values=LeadTodoPayloadMapper.values(payload);
         LeadRetryCompleteCommand command=new LeadRetryCompleteCommand();
@@ -37,6 +59,6 @@ public class LeadRetryTodoHandler implements TodoCompletionHandler
         command.setLegalDemand(LeadTodoPayloadMapper.text(values,"legalDemand","demand"));
         command.setVisited(LeadTodoPayloadMapper.text(values,"visited"));
         command.setCallRecord(LeadTodoPayloadMapper.manualCall(todo,values));
-        retries.completeWindow(command);
+        return retries.completeWindow(command);
     }
 }

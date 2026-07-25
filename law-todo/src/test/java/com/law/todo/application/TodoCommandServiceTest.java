@@ -24,7 +24,7 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
-import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 
 @ExtendWith(MockitoExtension.class)
 class TodoCommandServiceTest
@@ -177,6 +177,8 @@ class TodoCommandServiceTest
                 TodoAutoActionService.SERVICE_ACTOR.userName())).thenReturn(1);
         when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
         when(completionHandler.supports(todo)).thenReturn(true);
+        when(completionHandler.handle(any())).thenReturn(
+                CompletionResult.completeTodo(Map.of("reviewResult","TRUE_INVALID")));
         TodoCommandService guarded=new TodoCommandService(mapper,access,
                 new TodoDodService(List.of()),List.of(completionHandler),null);
 
@@ -184,7 +186,7 @@ class TodoCommandServiceTest
                 Map.of("reviewResult","MISJUDGED_VALID")),
                 TodoAutoActionService.SERVICE_ACTOR);
 
-        verify(completionHandler).complete(org.mockito.ArgumentMatchers.argThat(
+        verify(completionHandler).handle(org.mockito.ArgumentMatchers.argThat(
                 context->context.todo()==todo
                         &&context.controlledAutomatic()
                         &&context.operatorId().equals(-1L)
@@ -220,18 +222,52 @@ class TodoCommandServiceTest
         when(mapper.selectTemplateVersionById(12L)).thenReturn(Map.of());
         when(mapper.updateStatusConditionally(8L,"SUBMITTED","COMPLETED",null,"alice")).thenReturn(1);
         when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);when(completionHandler.supports(todo)).thenReturn(true);
+        when(completionHandler.handle(any())).thenReturn(CompletionResult.completeTodo(
+                Map.of("approved",true,"decisionSource","SERVER")));
         TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),List.of(completionHandler),routing);
 
-        guarded.complete(8L,new ActionCommand("done-8",null,Map.of("approved",true)),new Actor(7L,"alice",3L));
+        guarded.complete(8L,new ActionCommand("done-8",null,
+                Map.of("approved",false,"decisionSource","CLIENT")),new Actor(7L,"alice",3L));
 
-        InOrder order=org.mockito.Mockito.inOrder(completionHandler,routing);
-        order.verify(completionHandler).complete(org.mockito.ArgumentMatchers.argThat(
+        InOrder order=org.mockito.Mockito.inOrder(completionHandler,mapper,routing);
+        order.verify(completionHandler).handle(org.mockito.ArgumentMatchers.argThat(
                 context->context.todo()==todo
-                        &&context.payload().equals(Map.of("approved",true))
+                        &&context.payload().equals(Map.of("approved",false,
+                                "decisionSource","CLIENT"))
                         &&context.operatorId().equals(7L)
                         &&context.operatorName().equals("alice")
                         &&!context.controlledAutomatic()));
-        order.verify(routing).advance(todo,Map.of("approved",true));
+        order.verify(mapper).updateStatusConditionally(8L,"SUBMITTED","COMPLETED",null,"alice");
+        order.verify(mapper).insertActionIfAbsent(org.mockito.ArgumentMatchers.argThat(log->
+                "COMPLETE".equals(log.get("actionType"))
+                        &&"SUBMITTED".equals(log.get("fromStatus"))
+                        &&"COMPLETED".equals(log.get("toStatus"))));
+        order.verify(routing).advance(todo,Map.of("approved",true,
+                "decisionSource","SERVER"));
+    }
+
+    @Test void handler_can_retain_the_current_todo_without_complete_or_route()
+    {
+        TodoInstance todo=todo(19L,"SUBMITTED",7L);todo.setTemplateVersionId(19L);
+        when(mapper.selectById(19L)).thenReturn(todo);when(access.canOperate(todo,7L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(19L)).thenReturn(Map.of());
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        when(completionHandler.supports(todo)).thenReturn(true);
+        when(completionHandler.handle(any())).thenReturn(CompletionResult.retainCurrentTodo(
+                Map.of("result","CONTINUE_CURRENT_WINDOW","attemptNo",1)));
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),
+                List.of(completionHandler),routing);
+
+        TodoInstance retained=guarded.complete(19L,new ActionCommand("attempt-19",null,
+                Map.of("result","NEXT_WINDOW")),new Actor(7L,"alice",3L));
+
+        assertEquals("SUBMITTED",retained.getStatus());
+        verify(mapper,never()).updateStatusConditionally(eq(19L),any(),any(),any(),any());
+        verify(routing,never()).advance(any(),anyMap());
+        verify(mapper).insertActionIfAbsent(org.mockito.ArgumentMatchers.argThat(log->
+                "COMPLETE_RETAINED".equals(log.get("actionType"))
+                        &&"SUBMITTED".equals(log.get("fromStatus"))
+                        &&"SUBMITTED".equals(log.get("toStatus"))));
     }
 
     @Test void completion_passes_the_authenticated_actor_to_dod_material_validation()

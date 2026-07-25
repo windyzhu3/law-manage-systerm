@@ -3,10 +3,11 @@ package com.ruoyi.system.service.event;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import com.law.business.lead.dto.LeadInvalidReviewCommand;
+import com.law.todo.application.CompletionContext;
 import com.law.todo.application.TodoAutoActionService;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
-import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.lead.LeadInvalidReviewService;
 
 /** Typed TD-002 adapter. Automatic defaulting is selected only by the fenced service actor. */
@@ -32,18 +33,22 @@ public class LeadInvalidReviewTodoHandler implements TodoCompletionHandler
     }
 
     @Override
-    public void complete(CompletionContext completion)
+    public CompletionResult handle(CompletionContext completion)
     {
         if(!completion.controlledAutomatic())
         {
             reviewHuman(completion.todo(),completion.payload());
-            return;
+            return CompletionResult.completeTodo(completion.payload());
         }
         TodoInstance todo=completion.todo();
         Map<String,Object> values=LeadTodoPayloadMapper.values(completion.payload());
         LeadTodoSourceContextService.InvalidReviewContext context=source(todo,values);
         reviews.reviewAutomatically(todo.getBusinessId(),context.reviewId(),context.sourceTodoId(),
                 TodoAutoActionService.SERVICE_ACTOR);
+        return CompletionResult.completeTodo(Map.of(
+                "reviewResult","TRUE_INVALID",
+                "reviewId",context.reviewId(),
+                "sourceTodoId",context.sourceTodoId()));
     }
 
     private void reviewHuman(TodoInstance todo,Map<String,Object> payload)

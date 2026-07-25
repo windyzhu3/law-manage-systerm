@@ -22,7 +22,7 @@ import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
-import com.law.todo.spi.TodoCompletionHandler.CompletionContext;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 
 @Service
 public class TodoCommandService
@@ -120,13 +120,32 @@ public class TodoCommandService
 
     private TodoInstance complete(TodoInstance todo,ActionCommand command,Actor actor,String actionType)
     {
-        validateAction(todo,command,"COMPLETE",actor);TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
+        validateAction(todo,command,"COMPLETE",actor);
         boolean controlledAutomatic="COMPLETE_DEFAULT".equals(actionType)
                 &&actor==TodoAutoActionService.SERVICE_ACTOR;
-        CompletionContext context=new CompletionContext(completed,command.payload(),
-                actor.userId(),actor.userName(),controlledAutomatic);
-        for(TodoCompletionHandler handler:completionHandlers)if(handler.supports(completed))handler.complete(context);
-        if(routing!=null)routing.advance(completed,command.payload());return completed;
+        CompletionContext context=controlledAutomatic
+                ?CompletionContext.controlledAutomatic(todo,command.payload(),actor.userId(),actor.userName())
+                :CompletionContext.human(todo,command.payload(),actor.userId(),actor.userName());
+        List<TodoCompletionHandler> supported=completionHandlers.stream()
+                .filter(handler->handler.supports(todo)).toList();
+        if(supported.size()>1)
+            throw new TodoException("TODO_COMPLETION_HANDLER_AMBIGUOUS",
+                    "More than one completion handler supports this Todo");
+        CompletionResult result=supported.isEmpty()
+                ?CompletionResult.completeTodo(command.payload())
+                :supported.get(0).handle(context);
+        if(result==null)
+            throw new TodoException("TODO_COMPLETION_RESULT_REQUIRED",
+                    "Completion handler did not return an authoritative result");
+        if(!result.completeTodo())
+        {
+            String status=TodoStatus.fromCode(todo.getStatus()).code();
+            writeAction(todo,command,actor,"COMPLETE_RETAINED",status,status);
+            return todo;
+        }
+        TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
+        if(routing!=null)routing.advance(completed,result.routingPayload());
+        return completed;
     }
 
     private TodoInstance transition(TodoInstance todo,TodoStatus target,Long owner,String action,ActionCommand command,Actor actor)

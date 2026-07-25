@@ -183,3 +183,59 @@ five-day progress recurrence. Those are the next-task boundary, not an incomplet
 
 User-owned `.superpowers/sdd/task-7-report.md`, `ruoyi-ui/vue.config.js`, `.playwright-cli/`,
 `.runtime-logs/`, `output/`, and `test-results/` are deliberately excluded from this task's staging.
+
+## Independent review fix round 1
+
+The three findings in `task-7-review.md` are now addressed:
+
+- **C1 — authoritative TD-003 completion:** completion handlers return a server-owned
+  `CompletionResult`. `CONTINUE_CURRENT_WINDOW` records `COMPLETE_RETAINED`, leaves the source Todo
+  in its current state, and does not advance the graph. `CONNECTED`, `NEXT_WINDOW`, and
+  `EXHAUSTED` complete and route only from the Task 6 `RetryOutcome`; client `planId`, window,
+  stage, time, and terminal branch choices are not routing authority.
+- **I1 — unforgeable controlled automatic context:** `CompletionContext` has a private
+  constructor, a public human factory, and a package-private controlled-automatic factory. Only
+  the fenced Todo application package can manufacture the controlled capability. Human exception
+  completion continues to use the human factory.
+- **I2 — full routing rollback proof:** the Spring/H2 transaction test now uses a real
+  `TodoRoutingService` with JDBC-backed route join, token, next-Todo, and relation ports. A
+  deliberate failure after relation insertion proves rollback of the source Todo, action, lead
+  facts, Outbox, join/token/relation, and generated Todo.
+
+Additional executable evidence:
+
+- `LeadRetryTodoCommandFlowTest` runs the actual proxied `TodoCommandService`,
+  `LeadRetryTodoHandler`, Task 6 `LeadRetryService`, call-record service, and real routing engine
+  through attempts 1, 2, and the configured limit. It proves the first two attempts retain TD-003
+  and the limit routes using the locked schedule outcome and exact server payload.
+- Handler tests cover all four Task 6 results and prove terminality/routing payloads are derived
+  from the server result even when the client submits conflicting branch values.
+- Command-service order assertions prove handler business work precedes Todo transition/action,
+  which precedes graph routing.
+
+### Review-fix RED evidence
+
+1. The first focused compile failed with 21 expected errors for the missing application
+   `CompletionContext`, `CompletionResult`, and `handle` contract.
+2. The new route-failure rollback case then failed because the transaction test still supplied
+   `routing=null`; no routing exception was observed.
+3. After wiring the real routing service and JDBC ports, all three rollback cases passed.
+
+### Review-fix verification
+
+Focused gate:
+
+```powershell
+mvn -pl ruoyi-system -am "-DskipTests=false" "-Dtest=CompletionContextCapabilityTest,TodoCommandServiceTest,LeadInvalidReviewTodoHandlerTest,LeadRetryTodoHandlerTest,LeadRetryTodoCommandFlowTest,LeadTodoTransactionRollbackTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
+```
+
+Result: `BUILD SUCCESS`; 34 tests passed, 0 failures/errors/skips.
+
+Broad module regression:
+
+```powershell
+mvn -pl law-todo,ruoyi-system -am test
+```
+
+Result: `BUILD SUCCESS`; `law-todo` 733 tests (2 pre-existing skips) and `ruoyi-system` 235 tests,
+with 0 failures/errors. `git diff --check` passes apart from existing line-ending notices.

@@ -14,16 +14,77 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.business.lead.dto.LeadRetryCompleteCommand;
+import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.schedule.TodoScheduleService;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.ruoyi.system.service.event.LeadRetryTodoHandler;
 import com.ruoyi.system.service.lead.LeadRetryService;
+import com.ruoyi.system.service.lead.LeadRetryService.RetryOutcome;
 
 @ExtendWith(MockitoExtension.class)
 class LeadRetryTodoHandlerTest
 {
     @Mock LeadRetryService retries;
     @Mock TodoScheduleService schedules;
+
+    @Test
+    void server_outcome_retains_current_todo_and_replaces_client_branch_authority()
+    {
+        LeadRetryTodoHandler handler=new LeadRetryTodoHandler(retries,schedules);
+        TodoInstance todo=todo();
+        when(schedules.requireOccurrenceIdForTodo("81:T1_AM:1",31L)).thenReturn(91L);
+        when(retries.completeWindow(org.mockito.ArgumentMatchers.any())).thenReturn(
+                new RetryOutcome("CONTINUE_CURRENT_WINDOW",71L,"T1_AM",1,false));
+
+        CompletionResult result=handler.handle(CompletionContext.human(todo,Map.of(
+                "result","EXHAUSTED",
+                "planId",998L,
+                "nextWindowCode","CLIENT_CHOICE",
+                "contactedAt","2026-07-26T10:00:00",
+                "attemptCount",1),8L,"alice"));
+
+        assertEquals(false,result.completeTodo());
+        assertEquals(Map.of("result","CONTINUE_CURRENT_WINDOW","retryRecordId",71L,
+                "nextStage","T1_AM","attemptNo",1,"replayed",false),
+                result.routingPayload());
+    }
+
+    @Test
+    void all_terminal_server_outcomes_complete_and_expose_only_authoritative_routing_fields()
+    {
+        LeadRetryTodoHandler handler=new LeadRetryTodoHandler(retries,schedules);
+        TodoInstance todo=todo();
+        when(schedules.requireOccurrenceIdForTodo("81:T1_AM:1",31L)).thenReturn(91L);
+        when(retries.completeWindow(org.mockito.ArgumentMatchers.any())).thenReturn(
+                new RetryOutcome("CONNECTED",72L,null,1,false),
+                new RetryOutcome("NEXT_WINDOW",73L,"T2_PM",2,false),
+                new RetryOutcome("EXHAUSTED",74L,"EXHAUSTED",3,true));
+        Map<String,Object> client=Map.of(
+                "result","CONTINUE_CURRENT_WINDOW",
+                "planId",998L,
+                "nextWindowCode","CLIENT_CHOICE",
+                "contactedAt","2026-07-26T10:00:00",
+                "attemptCount",1);
+
+        CompletionResult connected=handler.handle(
+                CompletionContext.human(todo,client,8L,"alice"));
+        CompletionResult next=handler.handle(
+                CompletionContext.human(todo,client,8L,"alice"));
+        CompletionResult exhausted=handler.handle(
+                CompletionContext.human(todo,client,8L,"alice"));
+
+        assertTrue(connected.completeTodo());
+        assertEquals(Map.of("result","CONNECTED","retryRecordId",72L,
+                "attemptNo",1,"replayed",false),connected.routingPayload());
+        assertTrue(next.completeTodo());
+        assertEquals(Map.of("result","NEXT_WINDOW","retryRecordId",73L,
+                "nextStage","T2_PM","attemptNo",2,"replayed",false),next.routingPayload());
+        assertTrue(exhausted.completeTodo());
+        assertEquals(Map.of("result","EXHAUSTED","retryRecordId",74L,
+                "nextStage","EXHAUSTED","attemptNo",3,"replayed",true),
+                exhausted.routingPayload());
+    }
 
     @Test
     void derives_schedule_occurrence_from_persisted_todo_context()
