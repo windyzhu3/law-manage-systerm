@@ -96,8 +96,17 @@
     <select id="selectDeadPoolLogByIdempotencyKey" resultType="BizLeadDeadPoolLog">
         select dead_pool_log_id deadPoolLogId,lead_id leadId,action_type actionType,reason_code reasonCode,
           reason_detail reasonDetail,from_disposition fromDisposition,to_disposition toDisposition,
-          operator_id operatorId,source_todo_id sourceTodoId,action_time actionTime,idempotency_key idempotencyKey
+          operator_id operatorId,source_todo_id sourceTodoId,action_time actionTime,idempotency_key idempotencyKey,
+          create_by createBy
         from biz_lead_dead_pool_log where idempotency_key=#{idempotencyKey}
+    </select>
+    <select id="selectDeadPoolLogByIdempotencyKeyForUpdate" resultType="BizLeadDeadPoolLog">
+        select dead_pool_log_id deadPoolLogId,lead_id leadId,action_type actionType,reason_code reasonCode,
+          reason_detail reasonDetail,from_disposition fromDisposition,to_disposition toDisposition,
+          operator_id operatorId,source_todo_id sourceTodoId,action_time actionTime,idempotency_key idempotencyKey,
+          create_by createBy
+        from biz_lead_dead_pool_log where idempotency_key=#{idempotencyKey}
+        for update
     </select>
 
     <update id="confirmTagRelation">

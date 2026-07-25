@@ -95,6 +95,7 @@ public interface BizLeadMapper
     public List<LeadTodoWorkItemView> selectLeadDeadPoolQueue(@Param("reasonCode") String reasonCode,
             @Param("keyword") String keyword, @Param("currentUserId") Long currentUserId,
             @Param("currentDeptId") Long currentDeptId, @Param("dataScope") Boolean dataScope);
+    public BizLead selectDeadPoolOriginLeadForUpdate(Long leadId);
     public int countDeadPoolInDataScope(@Param("leadId") Long leadId,
             @Param("currentUserId") Long currentUserId, @Param("currentDeptId") Long currentDeptId);
     public int countDepartmentInDataScope(@Param("deptId") Long deptId,

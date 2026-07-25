@@ -106,44 +106,69 @@ public class LeadDeadPoolService
         permissions.require(LeadPermissions.DEAD_POOL_RESTORE);
         require(leadId != null && leadId > 0 && actionId != null && !actionId.isBlank()
                 && reason != null && !reason.isBlank(), "Dead-Pool restore command is incomplete");
-        String key = "LEAD_DEAD_POOL_RESTORE:" + leadId + ":" + actionId.trim();
-        BizLeadDeadPoolLog existing = facts.selectDeadPoolLogByIdempotencyKey(key);
+        String canonicalActionId = actionId.trim();
+        String canonicalReason = canonicalReason(reason);
+        String key = "LEAD_DEAD_POOL_RESTORE:" + leadId + ":" + canonicalActionId;
+        BusinessActor actor = actors.current();
+
+        // Global lock order: immutable lead/provenance first, action ledger second.
+        // This serializes identical and conflicting restore attempts alike.
+        BizLead lead = access.requireDeadPoolOriginForRestore(leadId, actor);
+        BizLeadDeadPoolLog existing = facts.selectDeadPoolLogByIdempotencyKeyForUpdate(key);
         if (existing != null)
         {
-            require(leadId.equals(existing.getLeadId()) && "RESTORE".equals(existing.getActionType())
-                    && reason.trim().equals(existing.getReasonDetail()),
-                    "Dead-Pool restore action belongs to another request");
+            requireExactRestore(existing, leadId, canonicalReason, actor);
             return new DeadPoolOutcome(existing.getDeadPoolLogId(), true);
         }
-        BizLead lead = access.requireDeadPoolRestorable(leadId);
-        BusinessActor actor = actors.current();
-        changedRestore(leads.restoreFromDeadPool(leadId, reason.trim(), lead.getRowVersion(),
+        require("DEAD_POOL".equals(lead.getDisposition()), "LEAD_DEAD_POOL_STATE_INVALID");
+        changedRestore(leads.restoreFromDeadPool(leadId, canonicalReason, lead.getRowVersion(),
                 actor.userName()));
 
         BizLeadDeadPoolLog log = new BizLeadDeadPoolLog();
         log.setLeadId(leadId);
         log.setActionType("RESTORE");
         log.setReasonCode("MANUAL_RESTORE");
-        log.setReasonDetail(reason.trim());
+        log.setReasonDetail(canonicalReason);
         log.setFromDisposition("DEAD_POOL");
         log.setToDisposition("PUBLIC_POOL");
         log.setOperatorId(actor.userId());
         log.setIdempotencyKey(key);
         log.setCreateBy(actor.userName());
         int inserted = facts.insertDeadPoolLogIfAbsent(log);
-        require(inserted == 1 && log.getDeadPoolLogId() != null,
-                "Dead-Pool restore audit identity was not generated");
+        if (inserted == 0)
+        {
+            BizLeadDeadPoolLog canonical = facts.selectDeadPoolLogByIdempotencyKeyForUpdate(key);
+            require(canonical != null, "Dead-Pool restore audit identity was not generated");
+            requireExactRestore(canonical, leadId, canonicalReason, actor);
+            return new DeadPoolOutcome(canonical.getDeadPoolLogId(), true);
+        }
+        require(log.getDeadPoolLogId() != null, "Dead-Pool restore audit identity was not generated");
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("schemaVersion", 1);
         payload.put("leadId", leadId);
-        payload.put("reason", reason.trim());
+        payload.put("reason", canonicalReason);
         payload.put("operatorId", actor.userId());
         payload.put("sourceDisposition", "DEAD_POOL");
         events.publish(new BusinessEventCommand(BusinessEventType.LEAD_MOVED_TO_POOL, "LEAD",
                 leadId, lead.getLeadNo(), "LEAD_DEAD_POOL_RESTORED:" + leadId + ":"
                         + log.getDeadPoolLogId(), payload), actor);
         return new DeadPoolOutcome(log.getDeadPoolLogId(), false);
+    }
+
+    private void requireExactRestore(BizLeadDeadPoolLog existing, Long leadId,
+            String canonicalReason, BusinessActor actor)
+    {
+        require(leadId.equals(existing.getLeadId())
+                && "RESTORE".equals(existing.getActionType())
+                && canonicalReason.equals(canonicalReason(existing.getReasonDetail()))
+                && actor.userId().equals(existing.getOperatorId()),
+                "LEAD_DEAD_POOL_RESTORE_ACTION_CONFLICT");
+    }
+
+    private String canonicalReason(String reason)
+    {
+        return reason == null ? "" : reason.trim().replaceAll("\\s+", " ");
     }
 
     private void changed(int rows)

@@ -77,4 +77,30 @@ class LeadAccessPolicyTest
                 ()->new LeadAccessPolicy(mapper,actors).requireDeadPoolRestorable(7L));
         assertEquals("ACCESS_DENIED",exception.getBusinessCode());
     }
+
+    @Test
+    void deadPoolDetailAndEvidenceReuseImmutableOriginScope()
+    {
+        BizLead dead=lead(7L,"4","0");
+        dead.setDisposition("DEAD_POOL");
+        when(mapper.selectLeadById(7L)).thenReturn(dead);
+        when(actors.current()).thenReturn(actor());
+        when(mapper.countDeadPoolInDataScope(7L,8L,3L)).thenReturn(1);
+
+        assertSame(dead,new LeadAccessPolicy(mapper,actors)
+                .requireReadable(7L,false,false));
+        verify(mapper,never()).countLeadInDataScope(7L,8L,3L,false);
+    }
+
+    @Test
+    void restoredLeadReplayStillRequiresImmutableOriginScopeUnderLock()
+    {
+        BizLead restored=lead(7L,"0","0");
+        restored.setDisposition("PUBLIC_POOL");
+        when(mapper.selectDeadPoolOriginLeadForUpdate(7L)).thenReturn(restored);
+        when(mapper.countDeadPoolInDataScope(7L,8L,3L)).thenReturn(1);
+
+        assertSame(restored,new LeadAccessPolicy(mapper,actors)
+                .requireDeadPoolOriginForRestore(7L,actor()));
+    }
 }

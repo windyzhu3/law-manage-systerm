@@ -13,6 +13,8 @@ public class LeadAccessPolicy
 {
     private static final String DELETED = "2";
     private static final String IN_POOL = "1";
+    private static final String DEAD_POOL = "DEAD_POOL";
+    private static final String PUBLIC_POOL = "PUBLIC_POOL";
 
     private final BizLeadMapper mapper;
     private final BusinessActorProvider actors;
@@ -41,8 +43,16 @@ public class LeadAccessPolicy
             return lead;
         }
         if (allowPool && !DELETED.equals(lead.getDelFlag()) && IN_POOL.equals(lead.getPoolStatus())
-                && "PUBLIC_POOL".equals(lead.getDisposition()))
+                && PUBLIC_POOL.equals(lead.getDisposition()))
         {
+            return lead;
+        }
+        if (DEAD_POOL.equals(lead.getDisposition()))
+        {
+            if (mapper.countDeadPoolInDataScope(leadId, actor.userId(), actor.deptId()) == 0)
+            {
+                throw error(BusinessErrorCode.ACCESS_DENIED, "LEAD_DEAD_POOL_ACCESS_DENIED");
+            }
             return lead;
         }
         if (mapper.countLeadInDataScope(leadId, actor.userId(), actor.deptId(), includeDeleted) == 0)
@@ -59,11 +69,35 @@ public class LeadAccessPolicy
         {
             throw error(BusinessErrorCode.DATA_NOT_FOUND, "线索不存在或已删除");
         }
-        if (!"DEAD_POOL".equals(lead.getDisposition()))
+        if (!DEAD_POOL.equals(lead.getDisposition()))
         {
             throw error(BusinessErrorCode.STATE_CONFLICT, "LEAD_DEAD_POOL_STATE_INVALID");
         }
         BusinessActor actor = actors.current();
+        if (!actor.administrator()
+                && mapper.countDeadPoolInDataScope(leadId, actor.userId(), actor.deptId()) == 0)
+        {
+            throw error(BusinessErrorCode.ACCESS_DENIED, "LEAD_DEAD_POOL_ACCESS_DENIED");
+        }
+        return lead;
+    }
+
+    /**
+     * Locks the lead and its immutable TRUE_INVALID/ENTER provenance before a
+     * restore attempt is inspected. PUBLIC_POOL is accepted only so an exact
+     * retry can be verified after the first transaction has committed.
+     */
+    public BizLead requireDeadPoolOriginForRestore(Long leadId, BusinessActor actor)
+    {
+        BizLead lead = mapper.selectDeadPoolOriginLeadForUpdate(leadId);
+        if (lead == null || DELETED.equals(lead.getDelFlag()))
+        {
+            throw error(BusinessErrorCode.DATA_NOT_FOUND, "LEAD_DEAD_POOL_ORIGIN_NOT_FOUND");
+        }
+        if (!DEAD_POOL.equals(lead.getDisposition()) && !PUBLIC_POOL.equals(lead.getDisposition()))
+        {
+            throw error(BusinessErrorCode.STATE_CONFLICT, "LEAD_DEAD_POOL_STATE_INVALID");
+        }
         if (!actor.administrator()
                 && mapper.countDeadPoolInDataScope(leadId, actor.userId(), actor.deptId()) == 0)
         {

@@ -1,6 +1,7 @@
 package com.ruoyi.system.service.lead;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
@@ -18,6 +19,7 @@ import com.law.business.lead.dto.LeadAssignmentPolicyCommand;
 import com.law.business.security.BusinessActorProvider;
 import com.law.business.security.LeadPermissions;
 import com.law.todo.mapper.TodoMapper;
+import com.ruoyi.common.exception.ServiceException;
 
 @ExtendWith(MockitoExtension.class)
 class LeadAssignmentPolicyServiceTest
@@ -52,14 +54,7 @@ class LeadAssignmentPolicyServiceTest
         BizLead lead=new BizLead();lead.setDeptId(3L);lead.setSourceCode("WEB");
         BizLeadAssignmentPolicy policy=new BizLeadAssignmentPolicy();
         policy.setPolicyId(11L);policy.setRowVersion(2);policy.setSourceCode("WEB");
-        policy.setRetryRuleJson("""
-                {"templateVersionId":99,"ruleVersionId":501,"timezone":"Asia/Shanghai","windows":[
-                  {"windowCode":"T0","windowOrder":0,"dayOffset":0,
-                   "startOffsetMinutes":0,"durationMinutes":120,"maxAttempts":3},
-                  {"windowCode":"VIP","windowOrder":1,"dayOffset":1,
-                   "startTime":"10:15","endTime":"11:45","maxAttempts":2}
-                ]}
-                """);
+        policy.setRetryRuleJson(canonicalRuleJson(99,501));
         when(mapper.selectActiveAssignmentPolicy(3L,"WEB")).thenReturn(policy);
 
         LeadAssignmentPolicyService.RetrySchedulePolicy resolved=
@@ -68,7 +63,7 @@ class LeadAssignmentPolicyServiceTest
         assertEquals(99L,resolved.templateVersionId());
         assertEquals(501L,resolved.ruleVersionId());
         assertEquals(11L,resolved.policyId());
-        assertEquals(List.of("T0","VIP"),
+        assertEquals(List.of("T0","T1_AM","T1_NOON","T1_PM","T2_AM","T2_NOON","T2_PM"),
                 resolved.windows().stream().map(value->value.windowCode()).toList());
     }
 
@@ -78,12 +73,7 @@ class LeadAssignmentPolicyServiceTest
         BizLead lead=new BizLead();lead.setDeptId(3L);lead.setSourceCode(null);
         BizLeadAssignmentPolicy policy=new BizLeadAssignmentPolicy();
         policy.setPolicyId(12L);policy.setSourceCode("*");
-        policy.setRetryRuleJson("""
-                {"templateVersionId":100,"ruleVersionId":502,"windows":[
-                  {"windowCode":"T0","windowOrder":0,"dayOffset":0,
-                   "startOffsetMinutes":0,"durationMinutes":60,"maxAttempts":1}
-                ]}
-                """);
+        policy.setRetryRuleJson(canonicalRuleJson(100,502));
         when(mapper.selectActiveAssignmentPolicy(3L,"*")).thenReturn(policy);
 
         LeadAssignmentPolicyService.RetrySchedulePolicy resolved=
@@ -91,6 +81,28 @@ class LeadAssignmentPolicyServiceTest
 
         assertEquals(100L,resolved.templateVersionId());
         assertEquals("Asia/Shanghai",resolved.timezone());
+    }
+
+    @Test
+    void persistedUnsupportedOrIncompletePolicyFailsClosed()
+    {
+        BizLead lead=new BizLead();lead.setDeptId(3L);lead.setSourceCode("WEB");
+        BizLeadAssignmentPolicy policy=new BizLeadAssignmentPolicy();
+        policy.setPolicyId(13L);policy.setSourceCode("WEB");
+        policy.setRetryRuleJson("""
+                {"templateVersionId":99,"ruleVersionId":503,"windows":[
+                  {"windowCode":"T0","windowOrder":0,"dayOffset":0,
+                   "startOffsetMinutes":0,"durationMinutes":60,"maxAttempts":1},
+                  {"windowCode":"VIP","windowOrder":1,"dayOffset":1,
+                   "startTime":"09:00","endTime":"11:00","maxAttempts":1}
+                ]}
+                """);
+        when(mapper.selectActiveAssignmentPolicy(3L,"WEB")).thenReturn(policy);
+
+        ServiceException error=assertThrows(ServiceException.class,
+                ()->new LeadAssignmentPolicyService(mapper).resolveRetrySchedule(lead));
+
+        assertEquals("PRECONDITION_FAILED",error.getBusinessCode());
     }
 
     @Test
@@ -136,10 +148,48 @@ class LeadAssignmentPolicyServiceTest
         command.setSourceCode("WEB");command.setExpectedVersion(2);
         command.setTemplateVersionId(99L);command.setRuleVersionId(501L);
         command.setTimezone("Asia/Shanghai");command.setCandidateUserIds(List.of(9L,8L));
-        LeadAssignmentPolicyCommand.RetryWindow t0=new LeadAssignmentPolicyCommand.RetryWindow();
-        t0.setWindowCode("T0");t0.setWindowOrder(0);t0.setDayOffset(0);
-        t0.setStartOffsetMinutes(0);t0.setDurationMinutes(120);t0.setMaxAttempts(3);
-        command.setWindows(List.of(t0));
+        command.setWindows(List.of(relative("T0",0,0,0,120),
+                clock("T1_AM",1,1,"09:00","11:00"),
+                clock("T1_NOON",2,1,"11:00","14:00"),
+                clock("T1_PM",3,1,"14:00","18:00"),
+                clock("T2_AM",4,2,"09:00","11:00"),
+                clock("T2_NOON",5,2,"11:00","14:00"),
+                clock("T2_PM",6,2,"14:00","18:00")));
         return command;
+    }
+
+    private LeadAssignmentPolicyCommand.RetryWindow relative(String code,int order,int day,
+            int offset,int duration)
+    {
+        LeadAssignmentPolicyCommand.RetryWindow value=new LeadAssignmentPolicyCommand.RetryWindow();
+        value.setWindowCode(code);value.setWindowOrder(order);value.setDayOffset(day);
+        value.setStartOffsetMinutes(offset);value.setDurationMinutes(duration);
+        value.setMaxAttempts(1);value.setOccurrenceNo(1);
+        return value;
+    }
+
+    private LeadAssignmentPolicyCommand.RetryWindow clock(String code,int order,int day,
+            String start,String end)
+    {
+        LeadAssignmentPolicyCommand.RetryWindow value=new LeadAssignmentPolicyCommand.RetryWindow();
+        value.setWindowCode(code);value.setWindowOrder(order);value.setDayOffset(day);
+        value.setStartTime(start);value.setEndTime(end);
+        value.setMaxAttempts(1);value.setOccurrenceNo(1);
+        return value;
+    }
+
+    private String canonicalRuleJson(long templateVersionId,long ruleVersionId)
+    {
+        return """
+                {"templateVersionId":%d,"ruleVersionId":%d,"timezone":"Asia/Shanghai","windows":[
+                  {"windowCode":"T0","windowOrder":0,"dayOffset":0,"startOffsetMinutes":0,"durationMinutes":120,"maxAttempts":1},
+                  {"windowCode":"T1_AM","windowOrder":1,"dayOffset":1,"startTime":"09:00","endTime":"11:00","maxAttempts":1},
+                  {"windowCode":"T1_NOON","windowOrder":2,"dayOffset":1,"startTime":"11:00","endTime":"14:00","maxAttempts":1},
+                  {"windowCode":"T1_PM","windowOrder":3,"dayOffset":1,"startTime":"14:00","endTime":"18:00","maxAttempts":1},
+                  {"windowCode":"T2_AM","windowOrder":4,"dayOffset":2,"startTime":"09:00","endTime":"11:00","maxAttempts":1},
+                  {"windowCode":"T2_NOON","windowOrder":5,"dayOffset":2,"startTime":"11:00","endTime":"14:00","maxAttempts":1},
+                  {"windowCode":"T2_PM","windowOrder":6,"dayOffset":2,"startTime":"14:00","endTime":"18:00","maxAttempts":1}
+                ]}
+                """.formatted(templateVersionId,ruleVersionId);
     }
 }

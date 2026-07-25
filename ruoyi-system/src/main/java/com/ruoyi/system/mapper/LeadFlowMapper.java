@@ -34,6 +34,7 @@ public interface LeadFlowMapper
 
     int insertDeadPoolLogIfAbsent(BizLeadDeadPoolLog log);
     BizLeadDeadPoolLog selectDeadPoolLogByIdempotencyKey(String idempotencyKey);
+    BizLeadDeadPoolLog selectDeadPoolLogByIdempotencyKeyForUpdate(String idempotencyKey);
 
     int confirmTagRelation(@Param("tagRelationId") Long tagRelationId, @Param("leadId") Long leadId,
             @Param("confirmStatus") String confirmStatus, @Param("confirmedBy") Long confirmedBy,

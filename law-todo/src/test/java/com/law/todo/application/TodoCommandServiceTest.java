@@ -56,6 +56,60 @@ class TodoCommandServiceTest
         verify(mapper,never()).updateStatusConditionally(org.mockito.ArgumentMatchers.anyLong(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyString());
     }
 
+    @Test void humanCompleteAuthorizesOwnerBeforeExactReplay()
+    {
+        TodoInstance done=todo(1L,"COMPLETED",7L);
+        when(mapper.selectById(1L)).thenReturn(done);
+        when(access.canOperate(done,7L)).thenReturn(true);
+        when(mapper.selectActionById("same")).thenReturn(Map.of(
+                "todo_id",1L,"action_type","COMPLETE","action_source","HUMAN",
+                "operator_id",7L,"operator_name","alice","opinion","approved",
+                "payload_json","{\"fields\":{\"reviewResult\":\"TRUE_INVALID\"},"
+                        +"\"fileObjectIds\":[11],\"opinion\":\"approved\"}"));
+
+        assertEquals(done,service.complete(1L,new ActionCommand("same"," approved ",
+                Map.of("reviewResult","TRUE_INVALID"),List.of(11L)),
+                new Actor(7L,"alice",3L)));
+
+        InOrder order=org.mockito.Mockito.inOrder(mapper,access);
+        order.verify(mapper).selectById(1L);
+        order.verify(access).canOperate(done,7L);
+        order.verify(mapper).selectActionById("same");
+        verify(mapper,never()).updateStatusConditionally(any(),any(),any(),any(),any());
+    }
+
+    @Test void peerCannotReplayKnownHumanCompleteAction()
+    {
+        TodoInstance done=todo(1L,"COMPLETED",7L);
+        when(mapper.selectById(1L)).thenReturn(done);
+        when(access.canOperate(done,8L)).thenReturn(false);
+
+        TodoException error=assertThrows(TodoException.class,()->service.complete(1L,
+                new ActionCommand("same","approved",Map.of("reviewResult","TRUE_INVALID"),
+                        List.of(11L)),new Actor(8L,"peer",4L)));
+
+        assertEquals("TODO_ACCESS_DENIED",error.getBusinessCode());
+        verify(mapper,never()).selectActionById("same");
+    }
+
+    @Test void ownerReplayRejectsDifferentCompletionPayload()
+    {
+        TodoInstance done=todo(1L,"COMPLETED",7L);
+        when(mapper.selectById(1L)).thenReturn(done);
+        when(access.canOperate(done,7L)).thenReturn(true);
+        when(mapper.selectActionById("same")).thenReturn(Map.of(
+                "todo_id",1L,"action_type","COMPLETE","action_source","HUMAN",
+                "operator_id",7L,"operator_name","alice","opinion","approved",
+                "payload_json","{\"fields\":{\"reviewResult\":\"TRUE_INVALID\"},"
+                        +"\"fileObjectIds\":[11],\"opinion\":\"approved\"}"));
+
+        TodoException error=assertThrows(TodoException.class,()->service.complete(1L,
+                new ActionCommand("same","approved",Map.of("reviewResult","MISJUDGED_VALID"),
+                        List.of(11L)),new Actor(7L,"alice",3L)));
+
+        assertEquals("TODO_ACTION_ID_CONFLICT",error.getBusinessCode());
+    }
+
     @Test void rejectsActionIdReusedForAnotherTodo()
     {
         when(mapper.selectActionById("same")).thenReturn(Map.of("todo_id",99L));

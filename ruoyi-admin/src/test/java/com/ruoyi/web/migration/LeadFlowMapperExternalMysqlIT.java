@@ -641,7 +641,20 @@ class LeadFlowMapperExternalMysqlIT
         return "{\"templateVersionId\":"+templateVersionId+",\"ruleVersionId\":"+ruleVersionId
                 +",\"timezone\":\"Asia/Shanghai\",\"windows\":[{\"windowCode\":\"T0\","
                 +"\"windowOrder\":0,\"dayOffset\":0,\"startOffsetMinutes\":0,"
-                +"\"durationMinutes\":120,\"maxAttempts\":"+attempts+",\"occurrenceNo\":1}]}";
+                +"\"durationMinutes\":120,\"maxAttempts\":"+attempts+",\"occurrenceNo\":1},"
+                +clockWindow("T1_AM",1,1,"09:00:00","11:00:00")+","
+                +clockWindow("T1_NOON",2,1,"11:00:00","14:00:00")+","
+                +clockWindow("T1_PM",3,1,"14:00:00","18:00:00")+","
+                +clockWindow("T2_AM",4,2,"09:00:00","11:00:00")+","
+                +clockWindow("T2_NOON",5,2,"11:00:00","14:00:00")+","
+                +clockWindow("T2_PM",6,2,"14:00:00","18:00:00")+"]}";
+    }
+
+    private static String clockWindow(String code,int order,int day,String start,String end)
+    {
+        return "{\"windowCode\":\""+code+"\",\"windowOrder\":"+order+",\"dayOffset\":"+day
+                +",\"startTime\":\""+start+"\",\"endTime\":\""+end
+                +"\",\"maxAttempts\":1,\"occurrenceNo\":1}";
     }
 
     private static BizLead policyLead(long deptId,String sourceCode)

@@ -69,8 +69,8 @@ class LeadDeadPoolServiceTest
                 events,permissions);
         BizLead stored=lead(7L,"4","0");
         stored.setLeadNo("L-7");stored.setDisposition("DEAD_POOL");stored.setRowVersion(9);
-        when(access.requireDeadPoolRestorable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
+        when(access.requireDeadPoolOriginForRestore(7L,actor())).thenReturn(stored);
         when(leads.restoreFromDeadPool(7L,"误判恢复",9,"alice")).thenReturn(1);
         when(facts.insertDeadPoolLogIfAbsent(any())).thenAnswer(invocation->{
             BizLeadDeadPoolLog value=invocation.getArgument(0);
@@ -94,15 +94,41 @@ class LeadDeadPoolServiceTest
                 events,permissions);
         BizLeadDeadPoolLog existing=new BizLeadDeadPoolLog();
         existing.setDeadPoolLogId(72L);existing.setLeadId(7L);existing.setActionType("RESTORE");
+        existing.setOperatorId(8L);
         existing.setReasonDetail("误判恢复");
-        when(facts.selectDeadPoolLogByIdempotencyKey("LEAD_DEAD_POOL_RESTORE:7:restore-1"))
+        BizLead restored=lead(7L,"0","0");restored.setDisposition("PUBLIC_POOL");
+        when(actors.current()).thenReturn(actor());
+        when(access.requireDeadPoolOriginForRestore(7L,actor())).thenReturn(restored);
+        when(facts.selectDeadPoolLogByIdempotencyKeyForUpdate(
+                "LEAD_DEAD_POOL_RESTORE:7:restore-1"))
                 .thenReturn(existing);
 
         LeadDeadPoolService.DeadPoolOutcome outcome=
                 service.restoreToPublicPool(7L,"restore-1","误判恢复");
 
         assertEquals(true,outcome.replayed());
-        verify(access,never()).requireDeadPoolRestorable(7L);
+        verify(permissions).require(LeadPermissions.DEAD_POOL_RESTORE);
+        verify(access).requireDeadPoolOriginForRestore(7L,actor());
+        verify(leads,never()).restoreFromDeadPool(any(),any(),any(),any());
+    }
+
+    @Test
+    void restoreReplayRejectsAnotherActorEvenWhenActionIdAndReasonAreKnown()
+    {
+        LeadDeadPoolService service=new LeadDeadPoolService(leads,facts,access,actors,schedules,
+                events,permissions);
+        BizLead restored=lead(7L,"0","0");restored.setDisposition("PUBLIC_POOL");
+        BizLeadDeadPoolLog existing=new BizLeadDeadPoolLog();
+        existing.setDeadPoolLogId(72L);existing.setLeadId(7L);existing.setActionType("RESTORE");
+        existing.setReasonDetail("canonical reason");existing.setOperatorId(99L);
+        when(actors.current()).thenReturn(actor());
+        when(access.requireDeadPoolOriginForRestore(7L,actor())).thenReturn(restored);
+        when(facts.selectDeadPoolLogByIdempotencyKeyForUpdate(
+                "LEAD_DEAD_POOL_RESTORE:7:restore-1")).thenReturn(existing);
+
+        org.junit.jupiter.api.Assertions.assertThrows(com.ruoyi.common.exception.ServiceException.class,
+                ()->service.restoreToPublicPool(7L,"restore-1","canonical reason"));
+
         verify(leads,never()).restoreFromDeadPool(any(),any(),any(),any());
     }
 }

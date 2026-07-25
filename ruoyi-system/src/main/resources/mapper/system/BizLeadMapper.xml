@@ -524,8 +524,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           <include refid="todoProjection"/>
         from biz_lead_invalid_review review
         join biz_lead l on l.lead_id=review.lead_id and l.del_flag='0'
-        left join sys_user business_owner on business_owner.user_id=l.owner_id
-        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        left join sys_user origin_user on origin_user.user_id=review.submitted_by
+        left join sys_user business_owner on business_owner.user_id=coalesce(l.owner_id,review.submitted_by)
+        left join sys_dept business_dept on business_dept.dept_id=coalesce(l.dept_id,origin_user.dept_id)
         left join sys_user reviewer on reviewer.user_id=review.reviewer_id
         left join todo_instance t on t.todo_id=(
           select max(candidate.todo_id) from todo_instance candidate
@@ -547,13 +548,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and role_scope.status='0'
               where ur.user_id=#{currentUserId} and (
                 role_scope.data_scope='1'
-                or (role_scope.data_scope='2' and l.dept_id in (
+                or (role_scope.data_scope='2' and origin_user.dept_id in (
                   select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
-                or (role_scope.data_scope='3' and l.dept_id=#{currentDeptId})
-                or (role_scope.data_scope='4' and l.dept_id in (
+                or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
+                or (role_scope.data_scope='4' and origin_user.dept_id in (
                   select sd.dept_id from sys_dept sd
                   where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
-                or (role_scope.data_scope='5' and l.owner_id=#{currentUserId})
+                or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
               )
             ))
           </if>
@@ -631,7 +632,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         join biz_lead_dead_pool_log dead_log on dead_log.dead_pool_log_id=(
           select max(latest.dead_pool_log_id) from biz_lead_dead_pool_log latest
           where latest.lead_id=l.lead_id and latest.action_type='ENTER')
-        left join biz_lead_invalid_review review on review.review_id=(
+        join biz_lead_invalid_review review on review.review_id=(
           select max(latest_review.review_id) from biz_lead_invalid_review latest_review
           where latest_review.lead_id=l.lead_id and latest_review.review_result='TRUE_INVALID')
         left join sys_user origin_user on origin_user.user_id=review.submitted_by
@@ -669,13 +670,31 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by dead_log.action_time desc,dead_log.dead_pool_log_id desc
     </select>
 
+    <select id="selectDeadPoolOriginLeadForUpdate" parameterType="Long" resultMap="BizLeadResult">
+        select l.*,business_owner.nick_name owner_name,business_dept.dept_name
+        from biz_lead l
+        join biz_lead_invalid_review review on review.review_id=(
+          select max(latest_review.review_id) from biz_lead_invalid_review latest_review
+          where latest_review.lead_id=l.lead_id and latest_review.review_result='TRUE_INVALID')
+        join biz_lead_dead_pool_log dead_log on dead_log.dead_pool_log_id=(
+          select max(latest_log.dead_pool_log_id) from biz_lead_dead_pool_log latest_log
+          where latest_log.lead_id=l.lead_id and latest_log.action_type='ENTER')
+        left join sys_user business_owner on business_owner.user_id=l.owner_id
+        left join sys_dept business_dept on business_dept.dept_id=l.dept_id
+        where l.lead_id=#{leadId} and l.del_flag='0'
+        for update
+    </select>
+
     <select id="countDeadPoolInDataScope" resultType="int">
         select count(*) from biz_lead l
         join biz_lead_invalid_review review on review.review_id=(
           select max(latest_review.review_id) from biz_lead_invalid_review latest_review
           where latest_review.lead_id=l.lead_id and latest_review.review_result='TRUE_INVALID')
         join sys_user origin_user on origin_user.user_id=review.submitted_by
-        where l.lead_id=#{leadId} and l.del_flag='0' and l.disposition='DEAD_POOL'
+        join biz_lead_dead_pool_log dead_log on dead_log.dead_pool_log_id=(
+          select max(latest_log.dead_pool_log_id) from biz_lead_dead_pool_log latest_log
+          where latest_log.lead_id=l.lead_id and latest_log.action_type='ENTER')
+        where l.lead_id=#{leadId} and l.del_flag='0'
           and exists (
             select 1 from sys_user_role ur
             join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'

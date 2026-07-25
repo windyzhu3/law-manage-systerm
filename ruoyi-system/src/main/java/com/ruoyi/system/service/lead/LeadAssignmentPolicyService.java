@@ -36,17 +36,26 @@ public class LeadAssignmentPolicyService
     private final LeadPermissionPolicy permissions;
     private final LeadAccessPolicy access;
     private final TodoMapper todos;
+    private final CanonicalRetryWindowValidator windows;
 
     public LeadAssignmentPolicyService(LeadFlowMapper mapper)
     {
-        this(mapper,null,null,null,null);
+        this(mapper,null,null,null,null,new CanonicalRetryWindowValidator());
     }
 
     @Autowired
     public LeadAssignmentPolicyService(LeadFlowMapper mapper,BusinessActorProvider actors,
             LeadPermissionPolicy permissions,LeadAccessPolicy access,TodoMapper todos)
     {
-        this.mapper=mapper;this.actors=actors;this.permissions=permissions;this.access=access;this.todos=todos;
+        this(mapper,actors,permissions,access,todos,new CanonicalRetryWindowValidator());
+    }
+
+    LeadAssignmentPolicyService(LeadFlowMapper mapper,BusinessActorProvider actors,
+            LeadPermissionPolicy permissions,LeadAccessPolicy access,TodoMapper todos,
+            CanonicalRetryWindowValidator windows)
+    {
+        this.mapper=mapper;this.actors=actors;this.permissions=permissions;this.access=access;
+        this.todos=todos;this.windows=windows;
     }
 
     public ResolvedPolicy resolve(Long salesDeptId, String sourceCode)
@@ -95,7 +104,7 @@ public class LeadAssignmentPolicyService
                                 ?1:row.getIntValue("occurrenceNo")));
             }
             return new RetrySchedulePolicy(policy.getPolicyId(),policy.getRowVersion(),templateVersionId,
-                    ruleVersionId,timezone,List.copyOf(windows));
+                    ruleVersionId,timezone,this.windows.validate(windows));
         }
         catch(ServiceException known){throw known;}
         catch(RuntimeException invalid){throw error("Retry policy JSON is invalid");}
@@ -193,32 +202,20 @@ public class LeadAssignmentPolicyService
                 &&command.getCandidateUserIds().stream().distinct().count()
                     ==command.getCandidateUserIds().size(),"Assignment policy candidates are invalid");
         require(!command.getWindows().isEmpty(),"Retry windows are required");
-        Set<String> codes=new HashSet<>();Set<Integer> orders=new HashSet<>();
+        List<ScheduleWindowRule> rules=new ArrayList<>();
         for(LeadAssignmentPolicyCommand.RetryWindow window:command.getWindows())
         {
             require(window!=null&&window.getWindowCode()!=null&&window.getWindowOrder()!=null
                     &&window.getDayOffset()!=null&&window.getMaxAttempts()!=null
                     &&window.getMaxAttempts()>0,"Retry window is incomplete");
-            String code=window.getWindowCode().trim();
-            require(Set.of("T0","T1_AM","T1_NOON","T1_PM","T2_AM","T2_NOON","T2_PM")
-                    .contains(code)&&codes.add(code)&&orders.add(window.getWindowOrder()),
-                    "Retry window identity is invalid");
-            boolean relative=window.getStartOffsetMinutes()!=null||window.getDurationMinutes()!=null;
-            boolean clock=window.getStartTime()!=null||window.getEndTime()!=null;
-            require(relative!=clock,"Retry window must use exactly one time mode");
-            if(relative)require(window.getStartOffsetMinutes()!=null&&window.getStartOffsetMinutes()>=0
-                    &&window.getDurationMinutes()!=null&&window.getDurationMinutes()>0,
-                    "Relative retry window is invalid");
-            else
-            {
-                LocalTime start=time(window.getStartTime()),end=time(window.getEndTime());
-                require(start!=null&&end!=null&&end.isAfter(start),"Clock retry window is invalid");
-            }
+            rules.add(new ScheduleWindowRule(window.getWindowCode().trim(),
+                    window.getWindowOrder(),window.getDayOffset(),
+                    time(window.getStartTime()),time(window.getEndTime()),
+                    window.getStartOffsetMinutes(),window.getDurationMinutes(),
+                    window.getMaxAttempts(),window.getOccurrenceNo()==null
+                            ?1:window.getOccurrenceNo()));
         }
-        List<Integer> sorted=command.getWindows().stream()
-                .map(LeadAssignmentPolicyCommand.RetryWindow::getWindowOrder).sorted().toList();
-        for(int index=0;index<sorted.size();index++)
-            require(sorted.get(index)==index,"Retry window order must be contiguous from zero");
+        windows.validate(rules);
     }
 
     private void validatePublishedTd003(Long versionId)

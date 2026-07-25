@@ -2,12 +2,18 @@ package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import javax.sql.DataSource;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
@@ -15,15 +21,26 @@ import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.Test;
+import com.law.business.security.BusinessActor;
+import com.law.business.security.BusinessActorProvider;
+import com.law.todo.schedule.TodoScheduleService;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadAssignmentPolicy;
 import com.ruoyi.system.domain.LeadAssignmentPolicyCandidateView;
 import com.ruoyi.system.domain.LeadTodoWorkItemView;
 import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.mapper.BusinessEventMapper;
 import com.ruoyi.system.mapper.LeadFlowMapper;
+import com.ruoyi.system.service.event.OutboxBusinessEventPublisher;
+import com.ruoyi.system.service.lead.LeadAccessPolicy;
+import com.ruoyi.system.service.lead.LeadDeadPoolService;
+import com.ruoyi.system.service.lead.LeadPermissionPolicy;
+import com.ruoyi.system.service.lead.LeadQueryService;
 
 /** Real MySQL proof for the joined workbench projections and role data scope. */
 class LeadTodoReadModelExternalMysqlIT
@@ -61,6 +78,13 @@ class LeadTodoReadModelExternalMysqlIT
             {
                 BizLeadMapper mapper=session.getMapper(BizLeadMapper.class);
                 LeadFlowMapper flow=session.getMapper(LeadFlowMapper.class);
+                BusinessActorProvider supervisorActors=actors(SUPERVISOR,"task9_supervisor",101L);
+                LeadAccessPolicy supervisorAccess=new LeadAccessPolicy(mapper,supervisorActors);
+                LeadQueryService supervisorQueries=new LeadQueryService(
+                        mapper,supervisorActors,supervisorAccess);
+                LeadQueryService peerQueries=new LeadQueryService(mapper,
+                        actors(PEER,"task9_peer",105L),
+                        new LeadAccessPolicy(mapper,actors(PEER,"task9_peer",105L)));
 
                 List<LeadTodoWorkItemView> calls=mapper.selectLeadCallTimeline(ACTIVE_LEAD);
                 assertEquals(1,calls.size());
@@ -78,6 +102,8 @@ class LeadTodoReadModelExternalMysqlIT
 
                 assertEquals(0,mapper.selectLeadInvalidReviewQueue(
                         "PENDING",null,PEER,105L,true).size());
+                assertEquals(1,supervisorQueries.invalidReviewQueue("COMPLETED",null).size());
+                assertEquals(0,peerQueries.invalidReviewQueue("COMPLETED",null).size());
 
                 List<LeadTodoWorkItemView> sellerRetries=mapper.selectLeadRetryQueue(
                         null,null,SELLER,104L,true);
@@ -90,11 +116,15 @@ class LeadTodoReadModelExternalMysqlIT
                 assertEquals(1,timeline.size());
                 assertEquals("T0",timeline.get(0).getWindowCode());
 
-                List<LeadTodoWorkItemView> deadPool=mapper.selectLeadDeadPoolQueue(
-                        "NO_DEMAND",null,SUPERVISOR,101L,true);
+                List<LeadTodoWorkItemView> deadPool=supervisorQueries.deadPoolQueue(
+                        "NO_DEMAND",null);
                 assertEquals(1,deadPool.size());
                 assertEquals(DEAD_LEAD,deadPool.get(0).getLeadId());
                 assertEquals(DEAD_REVIEW_TODO,deadPool.get(0).getTodoId());
+                assertEquals(DEAD_LEAD,supervisorQueries.detail(DEAD_LEAD).getLeadId());
+                assertEquals(1,supervisorQueries.callTimeline(DEAD_LEAD).size());
+                assertThrows(ServiceException.class,()->peerQueries.detail(DEAD_LEAD));
+                assertThrows(ServiceException.class,()->peerQueries.callTimeline(DEAD_LEAD));
                 assertEquals(1,mapper.countDeadPoolInDataScope(DEAD_LEAD,SUPERVISOR,101L));
                 assertEquals(0,mapper.countDeadPoolInDataScope(DEAD_LEAD,PEER,105L));
 
@@ -109,10 +139,14 @@ class LeadTodoReadModelExternalMysqlIT
                 assertEquals(List.of(SELLER),
                         flow.selectActiveCandidateUsersInDepartment(104L,List.of(SELLER,PEER)));
 
-                assertEquals(1,mapper.restoreFromDeadPool(
-                        DEAD_LEAD,"Task9 restore",2,"task9"));
-                assertEquals(0,mapper.restoreFromDeadPool(
-                        DEAD_LEAD,"Task9 replay",2,"task9"));
+                LeadDeadPoolService restores=restoreService(session,supervisorActors);
+                LeadDeadPoolService.DeadPoolOutcome first=restores.restoreToPublicPool(
+                        DEAD_LEAD,"task9-read-model-restore"," Task9   restore ");
+                LeadDeadPoolService.DeadPoolOutcome replay=restores.restoreToPublicPool(
+                        DEAD_LEAD,"task9-read-model-restore","Task9 restore");
+                assertEquals(false,first.replayed());
+                assertEquals(true,replay.replayed());
+                assertEquals(first.deadPoolLogId(),replay.deadPoolLogId());
                 BizLead restored=mapper.selectLeadById(DEAD_LEAD);
                 assertEquals("PUBLIC_POOL",restored.getDisposition());
                 assertEquals(3,restored.getRowVersion());
@@ -124,6 +158,71 @@ class LeadTodoReadModelExternalMysqlIT
         }
     }
 
+    @Test
+    void concurrentRestoreSerializesOnOriginThenReturnsCanonicalReplay() throws Exception
+    {
+        String url=required("TODO_MIGRATION_DB_URL");
+        String user=required("TODO_MIGRATION_DB_USER");
+        String password=required("TODO_MIGRATION_DB_PASSWORD");
+        DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
+        cleanup(dataSource);
+        ExecutorService pool=Executors.newFixedThreadPool(2);
+        try
+        {
+            insertFixtures(dataSource);
+            SqlSessionFactory factory=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
+            CountDownLatch ready=new CountDownLatch(2);
+            CountDownLatch start=new CountDownLatch(1);
+            java.util.concurrent.Callable<LeadDeadPoolService.DeadPoolOutcome> command=()->{
+                try(SqlSession session=factory.openSession(false))
+                {
+                    BusinessActorProvider actor=actors(SUPERVISOR,"task9_supervisor",101L);
+                    LeadDeadPoolService service=restoreService(session,actor);
+                    ready.countDown();
+                    start.await();
+                    LeadDeadPoolService.DeadPoolOutcome outcome=service.restoreToPublicPool(
+                            DEAD_LEAD,"task9-concurrent-restore","canonical reason");
+                    session.commit();
+                    return outcome;
+                }
+            };
+            Future<LeadDeadPoolService.DeadPoolOutcome> left=pool.submit(command);
+            Future<LeadDeadPoolService.DeadPoolOutcome> right=pool.submit(command);
+            ready.await();
+            start.countDown();
+            LeadDeadPoolService.DeadPoolOutcome first=left.get();
+            LeadDeadPoolService.DeadPoolOutcome second=right.get();
+
+            assertEquals(first.deadPoolLogId(),second.deadPoolLogId());
+            assertEquals(1,List.of(first,second).stream().filter(value->!value.replayed()).count());
+            assertEquals(1,List.of(first,second).stream().filter(
+                    LeadDeadPoolService.DeadPoolOutcome::replayed).count());
+            assertEquals(1,count(dataSource,"select count(*) from biz_lead_dead_pool_log where lead_id="
+                    +DEAD_LEAD+" and action_type='RESTORE'"));
+            assertEquals(1,count(dataSource,"select count(*) from business_event where aggregate_type='LEAD'"
+                    +" and aggregate_id="+DEAD_LEAD+" and event_type='LEAD_MOVED_TO_POOL'"));
+            assertEquals(3,count(dataSource,"select row_version from biz_lead where lead_id="+DEAD_LEAD));
+
+            try(SqlSession session=factory.openSession(true))
+            {
+                LeadDeadPoolService sameActor=restoreService(session,
+                        actors(SUPERVISOR,"task9_supervisor",101L));
+                assertThrows(ServiceException.class,()->sameActor.restoreToPublicPool(
+                        DEAD_LEAD,"task9-concurrent-restore","different reason"));
+                LeadDeadPoolService peer=restoreService(session,actors(PEER,"task9_peer",105L));
+                ServiceException denied=assertThrows(ServiceException.class,
+                        ()->peer.restoreToPublicPool(DEAD_LEAD,
+                                "task9-concurrent-restore","canonical reason"));
+                assertEquals("ACCESS_DENIED",denied.getBusinessCode());
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
+            cleanup(dataSource);
+        }
+    }
+
     private static Configuration myBatis(DataSource dataSource) throws Exception
     {
         Configuration configuration=new Configuration(new Environment(
@@ -131,8 +230,9 @@ class LeadTodoReadModelExternalMysqlIT
         configuration.getTypeAliasRegistry().registerAliases("com.ruoyi.system.domain");
         configuration.addMapper(BizLeadMapper.class);
         configuration.addMapper(LeadFlowMapper.class);
+        configuration.addMapper(BusinessEventMapper.class);
         for(String resource:List.of("mapper/system/BizLeadMapper.xml",
-                "mapper/system/LeadFlowMapper.xml"))
+                "mapper/system/LeadFlowMapper.xml","mapper/system/BusinessEventMapper.xml"))
         {
             try(InputStream input=Resources.getResourceAsStream(resource))
             {
@@ -141,6 +241,40 @@ class LeadTodoReadModelExternalMysqlIT
             }
         }
         return configuration;
+    }
+
+    private static LeadDeadPoolService restoreService(SqlSession session,
+            BusinessActorProvider actors)
+    {
+        BizLeadMapper leads=session.getMapper(BizLeadMapper.class);
+        LeadFlowMapper flow=session.getMapper(LeadFlowMapper.class);
+        LeadAccessPolicy access=new LeadAccessPolicy(leads,actors);
+        return new LeadDeadPoolService(leads,flow,access,actors,
+                org.mockito.Mockito.mock(TodoScheduleService.class),
+                new OutboxBusinessEventPublisher(session.getMapper(BusinessEventMapper.class)),
+                new AllowAllLeadPermissionPolicy());
+    }
+
+    private static BusinessActorProvider actors(long userId,String userName,long deptId)
+    {
+        BusinessActor actor=new BusinessActor(userId,userName,userName,deptId,false);
+        return ()->actor;
+    }
+
+    private static int count(DataSource dataSource,String query) throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+                Statement sql=connection.createStatement();
+                ResultSet result=sql.executeQuery(query))
+        {
+            result.next();
+            return result.getInt(1);
+        }
+    }
+
+    private static final class AllowAllLeadPermissionPolicy extends LeadPermissionPolicy
+    {
+        @Override public void require(String permission) { }
     }
 
     private static void insertFixtures(DataSource dataSource) throws Exception
@@ -182,7 +316,8 @@ class LeadTodoReadModelExternalMysqlIT
                     +"sysdate(),'RUNNING',0)");
             sql.executeUpdate("insert into biz_lead_call_record(call_record_id,lead_id,todo_id,call_channel,"
                     +"started_at,duration_seconds,call_result,idempotency_key) values "
-                    +"(9910701,"+ACTIVE_LEAD+","+SOURCE_TODO+",'MANUAL',sysdate(),30,'NO_ANSWER','TASK9-CALL')");
+                    +"(9910701,"+ACTIVE_LEAD+","+SOURCE_TODO+",'MANUAL',sysdate(),30,'NO_ANSWER','TASK9-CALL'),"
+                    +"(9910702,"+DEAD_LEAD+","+DEAD_SOURCE_TODO+",'MANUAL',sysdate(),45,'INVALID','TASK9-DEAD-CALL')");
             sql.executeUpdate("insert into biz_lead_invalid_review(review_id,lead_id,reason_code,"
                     +"submitted_by,submitted_at,reviewer_id,todo_id,status,idempotency_key,row_version) values "
                     +"(9910801,"+ACTIVE_LEAD+",'NO_DEMAND',"+SELLER+",sysdate(),"+SUPERVISOR+","
@@ -238,6 +373,8 @@ class LeadTodoReadModelExternalMysqlIT
     {
         try(Connection connection=dataSource.getConnection();Statement sql=connection.createStatement())
         {
+            sql.executeUpdate("delete from business_event where aggregate_type='LEAD' and aggregate_id in ("
+                    +ACTIVE_LEAD+","+DEAD_LEAD+")");
             sql.executeUpdate("delete from todo_schedule_occurrence where occurrence_id="+OCCURRENCE);
             sql.executeUpdate("delete from todo_schedule_window where window_id="+WINDOW);
             sql.executeUpdate("delete from todo_schedule_plan where plan_id="+PLAN);

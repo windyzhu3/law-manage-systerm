@@ -52,7 +52,7 @@ public class BizLeadController extends BaseController
         return getDataTable(leadService.selectLeadList(lead));
     }
 
-    @PreAuthorize("@ss.hasAnyPermi('lead:query,lead:mine:query,lead:pool:query,lead:recycle:query')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:query,lead:mine:query,lead:pool:query,lead:recycle:query,lead:dead-pool:list')")
     @GetMapping("/{leadId}")
     public AjaxResult getInfo(@PathVariable Long leadId) { return success(leadService.selectLeadById(leadId)); }
 
@@ -162,7 +162,7 @@ public class BizLeadController extends BaseController
         return success();
     }
 
-    @PreAuthorize("@ss.hasPermi('lead:call-record:view')")
+    @PreAuthorize("@ss.hasAnyPermi('lead:call-record:view,lead:dead-pool:list')")
     @GetMapping("/{leadId}/call-records")
     public AjaxResult callRecords(@PathVariable Long leadId)
     {

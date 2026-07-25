@@ -16,7 +16,7 @@ derives Lead and review identities from the persisted Todo provenance.
 | Method | Path | Permission |
 |---|---|---|
 | POST | `/lead/tag/confirm` | `lead:tag:confirm` |
-| GET | `/lead/{leadId}/call-records` | `lead:call-record:view` |
+| GET | `/lead/{leadId}/call-records` | `lead:call-record:view` or `lead:dead-pool:list` |
 | POST | `/lead/{leadId}/call-records` | `lead:call-record:add` |
 | GET | `/lead/invalid-review/list` | `lead:invalid-review:list` |
 | POST | `/lead/invalid-review/{todoId}/complete` | `lead:invalid-review:handle` |
@@ -34,6 +34,12 @@ state. Timeline operations enforce the existing Lead access policy before the
 set query. Queue SQL implements role data-scope rules for all/custom/current
 department, department-and-children, and own-record scopes.
 
+Dead-Pool detail and evidence reads additionally accept the dedicated
+`lead:dead-pool:list` permission. Permission alone is insufficient: the service
+reconstructs data scope from the immutable TRUE_INVALID review submitter and
+the ENTER ledger row. The same provenance rule is used for list, detail, call
+evidence, completed invalid-review history, restore, and restore replay.
+
 ## Command safety
 
 - All new write bodies are typed and use `@Valid`.
@@ -44,10 +50,17 @@ department, department-and-children, and own-record scopes.
 - Tag confirmation first resolves the persisted tag-relation Lead identity.
 - Invalid review completion calls `TodoCommandService.complete`; it does not
   call the business review service using request-supplied Lead/review IDs.
-- Dead-Pool restore requires the dedicated permission, checks the originating
-  review user's role data scope, performs a row-version conditional update,
-  writes a `RESTORE` ledger row, uses an exact action occurrence key, and
-  publishes a stable `LEAD_MOVED_TO_POOL` outbox event.
+- Dead-Pool restore requires the dedicated permission on every attempt,
+  including replay. It locks the Lead/TRUE_INVALID/ENTER provenance first and
+  the action ledger second, verifies the same actor and canonical
+  Lead/action/reason, performs one row-version transition, writes one
+  `RESTORE` ledger row, and publishes one stable `LEAD_MOVED_TO_POOL` Outbox
+  event. An exact concurrent second request returns the canonical audit ID.
+- Human Todo completion authorizes the persisted owner before action replay.
+  A replay must match Todo, human source, action kind, operator, canonical
+  opinion, recursively canonicalized fields, and sorted file identities.
+  Conflict returns stable `TODO_ACTION_ID_CONFLICT`; trusted automatic and
+  exception paths retain their previous contracts.
 
 ## Assignment policy
 
@@ -61,7 +74,12 @@ The PUT operation:
 - accepts only a published LEAD `TD-003` template version;
 - validates a real timezone and exactly one complete supported time mode for
   every window;
-- requires unique, contiguous window order and controlled window codes;
+- uses one fail-closed validator for API commands and persisted JSON;
+- requires the exact seven-window lifecycle: T0 at order/day 0/0,
+  T1_AM/NOON/PM at orders 1/2/3 and day 1, and T2_AM/NOON/PM at orders
+  4/5/6 and day 2;
+- rejects missing, duplicate, reversed, wrong-day, unsupported, invalid-time,
+  non-positive attempt, and non-positive occurrence values;
 - requires unique active users in the configured sales department;
 - fixes business type and active state on the server;
 - conditionally updates by persisted `row_version`;
@@ -108,8 +126,9 @@ FlywayMigrationTest
 
 ### Real MySQL mapper proof
 
-`LeadTodoReadModelExternalMysqlIT` ran real production mapper XML against the
-fully migrated schema. It proves:
+`LeadTodoReadModelExternalMysqlIT` now contains two real-MySQL tests and runs
+production mapper XML and services against the fully migrated schema. It
+proves:
 
 - joined call/review/retry/Dead-Pool Todo and SLA projections;
 - salesperson own visibility;
@@ -117,10 +136,15 @@ fully migrated schema. It proves:
 - unauthorized peer exclusion;
 - assignment-policy and candidate bulk reads;
 - active same-department candidate selection;
-- Dead-Pool row-version restore success and stale replay rejection.
+- completed TRUE_INVALID supervisor visibility and peer denial;
+- Dead-Pool list -> detail -> call evidence -> restore through the shared
+  immutable provenance scope;
+- two-connection simultaneous exact restore with one state transition, one
+  RESTORE audit row, one Outbox event, and one canonical replay;
+- conflicting reason rejection and unauthorized peer replay denial.
 
 ```text
-1 test passed; 0 failures; 0 errors; 0 skips.
+2 tests passed; 0 failures; 0 errors; 0 skips.
 ```
 
 The class is included in the CI external-MySQL list and the no-skip report gate.
@@ -132,8 +156,14 @@ mvn --batch-mode --no-transfer-progress -pl ruoyi-system -am test
 
 law-file:     73 tests; 0 failures; 0 errors; 0 skips
 law-business: 28 tests; 0 failures; 0 errors; 0 skips
-law-todo:    752 tests; 0 failures; 0 errors; 2 environment-conditional skips
-ruoyi-system:247 tests; 0 failures; 0 errors; 0 skips
+law-todo:    755 tests; 0 failures; 0 errors; 2 environment-conditional skips
+ruoyi-system:253 tests; 0 failures; 0 errors; 0 skips
+```
+
+The CI-equivalent external database report gate also passed:
+
+```text
+Verified 13 external-database Surefire reports with no skips or failures
 ```
 
 `git diff --check` passed. Protected dirty files and unrelated runtime/UI

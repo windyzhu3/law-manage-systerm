@@ -34,8 +34,10 @@ class LeadTodoControllerContractTest
         assertClassPath(BizLeadController.class, "/lead");
         assertEndpoint(BizLeadController.class, "confirmTag", POST, "/tag/confirm",
                 "lead:tag:confirm", LeadTagConfirmationRequest.class);
-        assertEndpoint(BizLeadController.class, "callRecords", GET, "/{leadId}/call-records",
-                "lead:call-record:view", null);
+        assertEndpointExpression(BizLeadController.class, "getInfo", GET, "/{leadId}",
+                "@ss.hasAnyPermi('lead:query,lead:mine:query,lead:pool:query,lead:recycle:query,lead:dead-pool:list')");
+        assertEndpointExpression(BizLeadController.class, "callRecords", GET, "/{leadId}/call-records",
+                "@ss.hasAnyPermi('lead:call-record:view,lead:dead-pool:list')");
         assertEndpoint(BizLeadController.class, "addCallRecord", POST, "/{leadId}/call-records",
                 "lead:call-record:add", LeadManualCallRecordCommand.class);
 
@@ -123,6 +125,19 @@ class LeadTodoControllerContractTest
             assertEquals(bodyType, body.getType());
             assertTrue(hasAnnotation(body, Valid.class), "request body must use @Valid");
         }
+    }
+
+    private void assertEndpointExpression(Class<?> type, String name, RequestMethod httpMethod,
+            String path, String expression) throws Exception
+    {
+        Method method = Arrays.stream(type.getDeclaredMethods())
+                .filter(candidate -> candidate.getName().equals(name))
+                .findFirst().orElseThrow();
+        assertEquals(path, mappingPath(method));
+        assertEquals(httpMethod, mappingMethod(method));
+        PreAuthorize authorize = method.getAnnotation(PreAuthorize.class);
+        assertNotNull(authorize);
+        assertEquals(expression, authorize.value());
     }
 
     private RequestMethod mappingMethod(Method method)

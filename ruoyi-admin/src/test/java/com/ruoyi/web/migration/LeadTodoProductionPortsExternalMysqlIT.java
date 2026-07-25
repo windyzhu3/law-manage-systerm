@@ -198,14 +198,18 @@ class LeadTodoProductionPortsExternalMysqlIT
                 assertEquals("T1_AM",textScalar(connection,
                         "select retry_stage from biz_lead where lead_id=?",fixtures.retryLeadId()));
 
-                ports.schedules().materializeDue(LocalDateTime.now().plusDays(2),100);
+                LocalDateTime nextWindowDue=dateTimeScalar(connection,
+                        "select materialize_at from todo_schedule_window where plan_id=("
+                        +"select plan_id from todo_schedule_plan where business_type='LEAD' "
+                        +"and business_id=?) and window_code='T1_AM'",fixtures.retryLeadId());
+                ports.schedules().materializeDue(nextWindowDue.plusSeconds(1),100);
                 assertEquals(2,countTodos(connection,fixtures.retryLeadId(),published.td003()));
                 TodoRow secondRetry=latestTodo(connection,fixtures.retryLeadId(),published.td003());
                 assertNotEquals(firstRetry.todoId(),secondRetry.todoId());
                 assertTodo(connection,secondRetry.todoId(),published.td003(),fixtures.ownerId(),null);
                 assertGraphIdentity(connection,secondRetry.todoId(),secondRetry.todoId(),"td003");
                 assertOccurrenceLink(connection,secondRetry);
-                ports.schedules().materializeDue(LocalDateTime.now().plusDays(2),100);
+                ports.schedules().materializeDue(nextWindowDue.plusSeconds(1),100);
                 assertEquals(2,countTodos(connection,fixtures.retryLeadId(),published.td003()));
 
                 assertNoOrphansOrDuplicates(connection,fixtures,published);
@@ -382,6 +386,21 @@ class LeadTodoProductionPortsExternalMysqlIT
                 +"\"occurrenceNo\":1},"
                 +"{\"windowCode\":\"T1_AM\",\"windowOrder\":1,\"dayOffset\":1,"
                 +"\"startTime\":\"09:00:00\",\"endTime\":\"11:00:00\","
+                +"\"maxAttempts\":1,\"occurrenceNo\":1},"
+                +"{\"windowCode\":\"T1_NOON\",\"windowOrder\":2,\"dayOffset\":1,"
+                +"\"startTime\":\"11:00:00\",\"endTime\":\"14:00:00\","
+                +"\"maxAttempts\":1,\"occurrenceNo\":1},"
+                +"{\"windowCode\":\"T1_PM\",\"windowOrder\":3,\"dayOffset\":1,"
+                +"\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\","
+                +"\"maxAttempts\":1,\"occurrenceNo\":1},"
+                +"{\"windowCode\":\"T2_AM\",\"windowOrder\":4,\"dayOffset\":2,"
+                +"\"startTime\":\"09:00:00\",\"endTime\":\"11:00:00\","
+                +"\"maxAttempts\":1,\"occurrenceNo\":1},"
+                +"{\"windowCode\":\"T2_NOON\",\"windowOrder\":5,\"dayOffset\":2,"
+                +"\"startTime\":\"11:00:00\",\"endTime\":\"14:00:00\","
+                +"\"maxAttempts\":1,\"occurrenceNo\":1},"
+                +"{\"windowCode\":\"T2_PM\",\"windowOrder\":6,\"dayOffset\":2,"
+                +"\"startTime\":\"14:00:00\",\"endTime\":\"18:00:00\","
                 +"\"maxAttempts\":1,\"occurrenceNo\":1}]}";
         update(connection,
                 "insert into biz_lead_assignment_policy(policy_code,policy_name,sales_dept_id,"
@@ -705,6 +724,22 @@ class LeadTodoProductionPortsExternalMysqlIT
             {
                 assertTrue(row.next(),sql);
                 String result=row.getString(1);
+                assertFalse(row.next(),sql);
+                return result;
+            }
+        }
+    }
+
+    private static LocalDateTime dateTimeScalar(Connection connection,String sql,Object... values)
+            throws Exception
+    {
+        try(PreparedStatement query=connection.prepareStatement(sql))
+        {
+            bind(query,values);
+            try(ResultSet row=query.executeQuery())
+            {
+                assertTrue(row.next(),sql);
+                LocalDateTime result=row.getTimestamp(1).toLocalDateTime();
                 assertFalse(row.next(),sql);
                 return result;
             }

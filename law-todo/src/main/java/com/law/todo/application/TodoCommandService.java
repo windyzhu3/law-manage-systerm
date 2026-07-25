@@ -1,8 +1,12 @@
 package com.law.todo.application;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -64,8 +68,9 @@ public class TodoCommandService
     }
     @Transactional public TodoInstance complete(Long id,ActionCommand command,Actor actor)
     {
-        requireHumanActionId(command);if(repeated(id,command))return mapper.selectById(id);
-        return complete(requireOwner(id,actor),command,actor,"COMPLETE");
+        requireHumanActionId(command);TodoInstance todo=requireOwner(id,actor);
+        if(repeatedHumanComplete(todo,command,actor))return todo;
+        return complete(todo,command,actor,"COMPLETE");
     }
     @Transactional public TodoInstance returnTodo(Long id,ActionCommand command,Actor actor)
     {
@@ -160,7 +165,11 @@ public class TodoCommandService
         Map<String,Object> log=new HashMap<>();log.put("todoId",todo.getTodoId());log.put("actionId",command.actionId());
         log.put("actionType",action);log.put("actionSource",actor==TodoAutoActionService.SERVICE_ACTOR?"SYSTEM":"HUMAN");
         log.put("fromStatus",from);log.put("toStatus",to);log.put("operatorId",actor.userId());log.put("operatorName",actor.userName());
-        log.put("opinion",command.opinion());log.put("payloadJson",JSON.toJSONString(command.payload()));
+        boolean humanComplete=actor!=TodoAutoActionService.SERVICE_ACTOR
+                &&("COMPLETE".equals(action)||"COMPLETE_RETAINED".equals(action));
+        log.put("opinion",humanComplete?canonicalOpinion(command.opinion()):command.opinion());
+        log.put("payloadJson",humanComplete?canonicalCompletePayload(command)
+                :JSON.toJSONString(command.payload()));
         if(mapper.insertActionIfAbsent(log)<=0&&mapper.selectActionById(command.actionId())==null)
             throw new TodoException("TODO_ACTION_LOG_FAILED","Todo action audit failed");
     }
@@ -170,6 +179,73 @@ public class TodoCommandService
         Map<String,Object> action=mapper.selectActionById(command.actionId());if(action==null||action.isEmpty())return false;
         Object recorded=value(action,"todo_id","todoId");if(recorded==null||!todoId.equals(Long.valueOf(String.valueOf(recorded))))
             throw new TodoException("TODO_ACTION_ID_CONFLICT","Action id is already used by another todo");return true;
+    }
+
+    private boolean repeatedHumanComplete(TodoInstance todo,ActionCommand command,Actor actor)
+    {
+        Map<String,Object> action=mapper.selectActionById(command.actionId());
+        if(action==null||action.isEmpty())return false;
+        Object recorded=value(action,"todo_id","todoId");
+        String type=text(value(action,"action_type","actionType"));
+        String source=text(value(action,"action_source","actionSource"));
+        String operator=text(value(action,"operator_id","operatorId"));
+        String name=text(value(action,"operator_name","operatorName"));
+        String opinion=canonicalOpinion(text(value(action,"opinion","opinion")));
+        String payload=text(value(action,"payload_json","payloadJson"));
+        boolean exact=recorded!=null&&todo.getTodoId().equals(Long.valueOf(String.valueOf(recorded)))
+                &&("COMPLETE".equals(type)||"COMPLETE_RETAINED".equals(type))
+                &&"HUMAN".equals(source)&&String.valueOf(actor.userId()).equals(operator)
+                &&actor.userName().equals(name)
+                &&java.util.Objects.equals(canonicalOpinion(command.opinion()),opinion)
+                &&canonicalJson(payload).equals(canonicalJson(canonicalCompletePayload(command)));
+        if(!exact)throw new TodoException("TODO_ACTION_ID_CONFLICT",
+                "Action id is already used by another completion request");
+        return true;
+    }
+
+    private String canonicalCompletePayload(ActionCommand command)
+    {
+        Map<String,Object> envelope=new TreeMap<>();
+        envelope.put("fields",canonical(command.fields()));
+        List<Long> files=new ArrayList<>(command.fileObjectIds());
+        files.sort(Comparator.nullsFirst(Long::compareTo));
+        envelope.put("fileObjectIds",files);
+        envelope.put("opinion",canonicalOpinion(command.opinion()));
+        return JSON.toJSONString(envelope);
+    }
+
+    private String canonicalJson(String json)
+    {
+        try{return JSON.toJSONString(canonical(JSON.parse(json)));}
+        catch(RuntimeException invalid)
+        {
+            throw new TodoException("TODO_ACTION_ID_CONFLICT",
+                    "Stored completion action payload is invalid");
+        }
+    }
+
+    private Object canonical(Object value)
+    {
+        if(value instanceof Map<?,?> map)
+        {
+            Map<String,Object> sorted=new TreeMap<>();
+            map.forEach((key,item)->sorted.put(String.valueOf(key),canonical(item)));
+            return sorted;
+        }
+        if(value instanceof Collection<?> collection)
+        {
+            List<Object> values=new ArrayList<>();
+            collection.forEach(item->values.add(canonical(item)));
+            return values;
+        }
+        if(value instanceof Number number)return new java.math.BigDecimal(number.toString())
+                .stripTrailingZeros();
+        return value;
+    }
+
+    private String canonicalOpinion(String value)
+    {
+        return value==null||value.isBlank()?null:value.trim();
     }
 
     private boolean repeatedAuto(Long todoId,ActionCommand command,String expectedType)
