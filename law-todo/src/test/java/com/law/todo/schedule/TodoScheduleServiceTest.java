@@ -127,15 +127,62 @@ class TodoScheduleServiceTest
         TodoMapper mapper=mock(TodoMapper.class);
         when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(Map.of(
                 "planId",3L,"status","MATERIALIZED"));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of("planId",3L,"status","ACTIVE"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(1);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
         service.completeOccurrence(9L,"CONNECTED",NOW);
 
         verify(mapper).recordScheduleOccurrenceResult(9L,"CONNECTED",NOW);
-        verify(mapper).cancelFutureScheduleWindows(3L,"CONTACTED",NOW);
-        verify(mapper).cancelFutureScheduleOccurrences(3L,"CONTACTED",NOW);
+        verify(mapper).cancelFutureScheduleWindows(3L,9L,"CONTACTED",NOW);
+        verify(mapper).cancelFutureScheduleOccurrences(3L,9L,"CONTACTED",NOW);
         verify(mapper).completeSchedulePlan(3L,"CONTACTED",NOW);
+    }
+
+    @Test
+    void workerFirstConnectedResultCancelsLinkedFutureTodoAndRowsIdempotently()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        Map<String,Object> accepted=Map.of(
+                "occurrenceId",9L,"planId",3L,"todoId",44L,"status","MATERIALIZED");
+        Map<String,Object> completed=Map.of(
+                "occurrenceId",9L,"planId",3L,"todoId",44L,
+                "status","COMPLETED","resultCode","CONNECTED");
+        when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(accepted,completed,completed);
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of("planId",3L,"status","ACTIVE"));
+        when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(1,0);
+        when(mapper.selectActiveLinkedScheduleTodosForUpdate(3L,9L)).thenReturn(
+                List.of(Map.of("occurrenceId",10L,"todoId",55L,"status","CREATED")),
+                List.of());
+        when(mapper.updateStatusConditionally(55L,"CREATED","CANCELLED",null,"TODO_AUTO_ACTION"))
+                .thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        service.completeOccurrence(9L,"CONNECTED",NOW);
+
+        InOrder order=inOrder(mapper);
+        order.verify(mapper).selectSchedulePlanForUpdate(3L);
+        order.verify(mapper).recordScheduleOccurrenceResult(9L,"CONNECTED",NOW);
+        order.verify(mapper).completeSchedulePlan(3L,"CONTACTED",NOW);
+        order.verify(mapper).selectActiveLinkedScheduleTodosForUpdate(3L,9L);
+        order.verify(mapper).updateStatusConditionally(55L,"CREATED","CANCELLED",null,"TODO_AUTO_ACTION");
+        order.verify(mapper).insertActionIfAbsent(org.mockito.ArgumentMatchers.argThat(row->
+                Long.valueOf(55L).equals(row.get("todoId"))
+                        && "CANCEL".equals(row.get("actionType"))
+                        && "SYSTEM".equals(row.get("actionSource"))
+                        && "MATERIALIZED_SCHEDULE_CANCELLED".equals(row.get("opinion"))));
+        order.verify(mapper).cancelFutureScheduleWindows(3L,9L,"CONTACTED",NOW);
+        order.verify(mapper).cancelFutureScheduleOccurrences(3L,9L,"CONTACTED",NOW);
+        verify(mapper,never()).updateStatusConditionally(eq(44L),any(),any(),any(),any());
+
+        service.completeOccurrence(9L,"CONNECTED",NOW);
+
+        verify(mapper,times(1))
+                .updateStatusConditionally(55L,"CREATED","CANCELLED",null,"TODO_AUTO_ACTION");
+        verify(mapper,times(1)).insertActionIfAbsent(anyMap());
+        verify(mapper,times(2)).cancelFutureScheduleWindows(3L,9L,"CONTACTED",NOW);
+        verify(mapper,times(2)).cancelFutureScheduleOccurrences(3L,9L,"CONTACTED",NOW);
     }
 
     @Test
@@ -170,6 +217,7 @@ class TodoScheduleServiceTest
         TodoMapper mapper=mock(TodoMapper.class);
         when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(Map.of(
                 "planId",3L,"status","CLAIMED"));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of("planId",3L,"status","ACTIVE"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(0);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -177,7 +225,7 @@ class TodoScheduleServiceTest
                 ()->service.completeOccurrence(9L,"CONNECTED",NOW));
 
         assertEquals("TODO_SCHEDULE_RESULT_NOT_ACCEPTED",error.getBusinessCode());
-        verify(mapper,never()).cancelFutureScheduleWindows(any(),any(),any());
+        verify(mapper,never()).cancelFutureScheduleWindows(any(),any(),any(),any());
         verify(mapper,never()).completeSchedulePlan(any(),any(),any());
     }
 
@@ -187,6 +235,7 @@ class TodoScheduleServiceTest
         TodoMapper mapper=mock(TodoMapper.class);
         when(mapper.selectScheduleOccurrenceById(9L)).thenReturn(Map.of(
                 "planId",3L,"status","COMPLETED","resultCode","CONNECTED"));
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of("planId",3L,"status","CONTACTED"));
         when(mapper.recordScheduleOccurrenceResult(9L,"CONNECTED",NOW)).thenReturn(0);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -199,14 +248,16 @@ class TodoScheduleServiceTest
     void cancellingPlanCancelsWindowsAndUnmaterializedOccurrences()
     {
         TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectSchedulePlanForUpdate(3L)).thenReturn(Map.of("planId",3L,"status","ACTIVE"));
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
         service.cancelPlan(3L,"CONVERTED",NOW);
 
         InOrder fenceOrder=inOrder(mapper);
+        fenceOrder.verify(mapper).selectSchedulePlanForUpdate(3L);
         fenceOrder.verify(mapper).completeSchedulePlan(3L,"CONVERTED",NOW);
-        fenceOrder.verify(mapper).cancelFutureScheduleWindows(3L,"CONVERTED",NOW);
-        fenceOrder.verify(mapper).cancelFutureScheduleOccurrences(3L,"CONVERTED",NOW);
+        fenceOrder.verify(mapper).cancelFutureScheduleWindows(3L,null,"CONVERTED",NOW);
+        fenceOrder.verify(mapper).cancelFutureScheduleOccurrences(3L,null,"CONVERTED",NOW);
     }
 
     private Map<String,Object> dueWindow()

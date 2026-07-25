@@ -444,15 +444,37 @@
     set current_window_code=#{windowCode},version=version+1,update_time=#{now}
     where plan_id=#{planId} and status='ACTIVE'
   </update>
+  <select id="selectSchedulePlanForUpdate" resultType="java.util.Map">
+    select plan_id planId,status,completion_reason completionReason,version
+    from todo_schedule_plan where plan_id=#{planId}
+    for update
+  </select>
+  <select id="selectActiveLinkedScheduleTodosForUpdate" resultType="java.util.Map">
+    select o.occurrence_id occurrenceId,t.todo_id todoId,t.status
+    from todo_schedule_occurrence o
+    join todo_instance t on t.todo_id=o.todo_id
+    where o.plan_id=#{planId}
+      and (#{exceptOccurrenceId} is null or o.occurrence_id&lt;&gt;#{exceptOccurrenceId})
+      and o.status='MATERIALIZED'
+      and t.status not in ('COMPLETED','CANCELLED')
+    order by o.occurrence_id
+    for update
+  </select>
   <update id="cancelFutureScheduleWindows">
     update todo_schedule_window
     set status='CANCELLED',cancel_reason=#{reason},completed_at=#{now},claimed_at=null,version=version+1,update_time=#{now}
-    where plan_id=#{planId} and status in ('PENDING','PROCESSING')
+    where plan_id=#{planId} and status in ('PENDING','PROCESSING','MATERIALIZED')
+      and (#{exceptOccurrenceId} is null or not exists(
+        select 1 from todo_schedule_occurrence keep_occurrence
+        where keep_occurrence.window_id=todo_schedule_window.window_id
+          and keep_occurrence.occurrence_id=#{exceptOccurrenceId}
+      ))
   </update>
   <update id="cancelFutureScheduleOccurrences">
     update todo_schedule_occurrence
     set status='CANCELLED',result_code=#{reason},completed_at=#{now},claimed_at=null,version=version+1,update_time=#{now}
-    where plan_id=#{planId} and status in ('RETRY','CLAIMED')
+    where plan_id=#{planId} and status in ('RETRY','CLAIMED','MATERIALIZED')
+      and (#{exceptOccurrenceId} is null or occurrence_id&lt;&gt;#{exceptOccurrenceId})
   </update>
   <update id="completeSchedulePlan">
     update todo_schedule_plan

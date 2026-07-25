@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.alibaba.fastjson2.JSON;
+import com.law.todo.application.TodoAutoActionService;
 import com.law.todo.application.TodoRoutingService;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
@@ -175,6 +177,12 @@ public class TodoScheduleService
         Map<String,Object> occurrence=mapper.selectScheduleOccurrenceById(occurrenceId);
         if(occurrence==null)
             throw new TodoException("TODO_SCHEDULE_OCCURRENCE_NOT_FOUND","Schedule occurrence does not exist");
+        Long planId=requiredLong(occurrence,"planId","plan_id");
+        if("CONNECTED".equals(result))
+        {
+            if(mapper.selectSchedulePlanForUpdate(planId)==null)
+                throw new TodoException("TODO_SCHEDULE_PLAN_NOT_FOUND","Schedule plan does not exist");
+        }
         int accepted=mapper.recordScheduleOccurrenceResult(occurrenceId,result,completedAt);
         if(accepted!=1)
         {
@@ -186,7 +194,7 @@ public class TodoScheduleService
             occurrence=current;
         }
         if("CONNECTED".equals(result))
-            cancelPlan(requiredLong(occurrence,"planId","plan_id"),"CONTACTED",completedAt);
+            terminateLockedPlan(planId,occurrenceId,"CONTACTED",completedAt);
     }
 
     @Transactional
@@ -194,9 +202,42 @@ public class TodoScheduleService
     {
         if(planId==null||planId<=0||reason==null||reason.isBlank()||cancelledAt==null)
             throw new TodoException("TODO_SCHEDULE_CANCEL_INVALID","Schedule cancellation is incomplete");
+        if(mapper.selectSchedulePlanForUpdate(planId)==null)
+            throw new TodoException("TODO_SCHEDULE_PLAN_NOT_FOUND","Schedule plan does not exist");
+        terminateLockedPlan(planId,null,reason,cancelledAt);
+    }
+
+    private void terminateLockedPlan(Long planId,Long exceptOccurrenceId,String reason,
+            LocalDateTime cancelledAt)
+    {
         mapper.completeSchedulePlan(planId,reason,cancelledAt);
-        mapper.cancelFutureScheduleWindows(planId,reason,cancelledAt);
-        mapper.cancelFutureScheduleOccurrences(planId,reason,cancelledAt);
+        cancelActiveLinkedTodos(planId,exceptOccurrenceId,reason);
+        mapper.cancelFutureScheduleWindows(planId,exceptOccurrenceId,reason,cancelledAt);
+        mapper.cancelFutureScheduleOccurrences(planId,exceptOccurrenceId,reason,cancelledAt);
+    }
+
+    private void cancelActiveLinkedTodos(Long planId,Long exceptOccurrenceId,String reason)
+    {
+        for(Map<String,Object> linked:mapper.selectActiveLinkedScheduleTodosForUpdate(planId,exceptOccurrenceId))
+        {
+            Long todoId=requiredLong(linked,"todoId","todo_id");
+            String fromStatus=text(linked,"status","status");
+            if(fromStatus==null||mapper.updateStatusConditionally(todoId,fromStatus,"CANCELLED",null,
+                    TodoAutoActionService.SERVICE_ACTOR.userName())!=1)
+                throw new TodoException("TODO_SCHEDULE_TODO_CANCEL_CONFLICT",
+                        "Linked scheduled Todo changed during plan cancellation");
+            Map<String,Object> action=new HashMap<>();
+            String actionId="SCHEDULE:CANCEL:"+planId+":"+todoId;
+            action.put("todoId",todoId);action.put("actionId",actionId);
+            action.put("actionType","CANCEL");action.put("actionSource","SYSTEM");
+            action.put("fromStatus",fromStatus);action.put("toStatus","CANCELLED");
+            action.put("operatorId",TodoAutoActionService.SERVICE_ACTOR.userId());
+            action.put("operatorName",TodoAutoActionService.SERVICE_ACTOR.userName());
+            action.put("opinion","MATERIALIZED_SCHEDULE_CANCELLED");
+            action.put("payloadJson",JSON.toJSONString(Map.of("planId",planId,"reason",reason)));
+            if(mapper.insertActionIfAbsent(action)<=0&&mapper.selectActionById(actionId)==null)
+                throw new TodoException("TODO_ACTION_LOG_FAILED","Todo action audit failed");
+        }
     }
 
     private void validate(CreateSchedulePlanCommand command)

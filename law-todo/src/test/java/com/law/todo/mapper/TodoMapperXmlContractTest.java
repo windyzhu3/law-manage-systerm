@@ -259,6 +259,20 @@ class TodoMapperXmlContractTest
             String result=statement(xml,"update","recordScheduleOccurrenceResult");
             assertTrue(result.contains("status='MATERIALIZED'"));
             assertFalse(result.contains("'COMPLETED','MATERIALIZED'"));
+            String planLock=statement(xml,"select","selectSchedulePlanForUpdate");
+            assertTrue(planLock.contains("where plan_id=#{planId}"));
+            assertTrue(planLock.contains("for update"));
+            String linkedTodos=statement(xml,"select","selectActiveLinkedScheduleTodosForUpdate");
+            assertTrue(linkedTodos.contains("o.occurrence_id&lt;&gt;#{exceptOccurrenceId}"));
+            assertTrue(linkedTodos.contains("o.status='MATERIALIZED'"));
+            assertTrue(linkedTodos.contains("t.status not in ('COMPLETED','CANCELLED')"));
+            assertTrue(linkedTodos.contains("for update"));
+            String cancelWindows=statement(xml,"update","cancelFutureScheduleWindows");
+            assertTrue(cancelWindows.contains("'PENDING','PROCESSING','MATERIALIZED'"));
+            assertTrue(cancelWindows.contains("keep_occurrence.occurrence_id=#{exceptOccurrenceId}"));
+            String cancelOccurrences=statement(xml,"update","cancelFutureScheduleOccurrences");
+            assertTrue(cancelOccurrences.contains("'RETRY','CLAIMED','MATERIALIZED'"));
+            assertTrue(cancelOccurrences.contains("occurrence_id&lt;&gt;#{exceptOccurrenceId}"));
             String sla=statement(xml,"insert","insertScheduledSlaRecord");
             assertTrue(sla.contains("remind80_at,overdue100_at"));
         }

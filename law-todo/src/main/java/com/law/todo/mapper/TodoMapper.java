@@ -204,8 +204,13 @@ public interface TodoMapper
             @Param("errorCode") String errorCode,@Param("errorMessage") String errorMessage,@Param("now") LocalDateTime now);
     int recordScheduleOccurrenceResult(@Param("occurrenceId") Long occurrenceId,@Param("result") String result,@Param("now") LocalDateTime now);
     int updateSchedulePlanWindow(@Param("planId") Long planId,@Param("windowCode") String windowCode,@Param("now") LocalDateTime now);
-    int cancelFutureScheduleWindows(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
-    int cancelFutureScheduleOccurrences(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
+    Map<String,Object> selectSchedulePlanForUpdate(Long planId);
+    List<Map<String,Object>> selectActiveLinkedScheduleTodosForUpdate(@Param("planId") Long planId,
+            @Param("exceptOccurrenceId") Long exceptOccurrenceId);
+    int cancelFutureScheduleWindows(@Param("planId") Long planId,@Param("exceptOccurrenceId") Long exceptOccurrenceId,
+            @Param("reason") String reason,@Param("now") LocalDateTime now);
+    int cancelFutureScheduleOccurrences(@Param("planId") Long planId,@Param("exceptOccurrenceId") Long exceptOccurrenceId,
+            @Param("reason") String reason,@Param("now") LocalDateTime now);
     int completeSchedulePlan(@Param("planId") Long planId,@Param("reason") String reason,@Param("now") LocalDateTime now);
     int insertScheduledSlaRecord(Map<String,Object> record);
 }
