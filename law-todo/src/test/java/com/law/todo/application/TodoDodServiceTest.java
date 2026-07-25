@@ -19,6 +19,10 @@ import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoBusinessValidator;
+import com.law.todo.spi.TodoDictionaryValidationPort;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class TodoDodServiceTest
 {
@@ -72,6 +76,49 @@ class TodoDodServiceTest
         assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
     }
 
+    @Test void rejectsDisabledDictionaryValue()
+    {
+        TodoDictionaryValidationPort dictionaries=mock(TodoDictionaryValidationPort.class);
+        when(dictionaries.isEnabled("law_first_contact_result","UNKNOWN")).thenReturn(false);
+        TodoDodService service=new TodoDodService(List.of(),List.of(),dictionaries);
+
+        TodoException error=assertThrows(TodoException.class,()->service.validate(todo(),
+                definition(Map.of(),Map.of("fields",List.of(Map.of(
+                        "key","contactResult","type","dict",
+                        "dictType","law_first_contact_result")))),
+                "COMPLETE",Map.of("contactResult","UNKNOWN"),List.of(),actor));
+
+        assertEquals("TODO_DOD_DICTIONARY_VALUE_INVALID",error.getBusinessCode());
+    }
+
+    @Test void acceptsEnabledDictionaryValue()
+    {
+        TodoDictionaryValidationPort dictionaries=mock(TodoDictionaryValidationPort.class);
+        when(dictionaries.isEnabled("law_first_contact_result","VALID")).thenReturn(true);
+        TodoDodService service=new TodoDodService(List.of(),List.of(),dictionaries);
+
+        service.validate(todo(),definition(Map.of(),Map.of("fields",List.of(Map.of(
+                "key","contactResult","type","dict",
+                "dictType","law_first_contact_result")))),
+                "COMPLETE",Map.of("contactResult","VALID"),List.of(),actor);
+    }
+
+    @Test void requiredValidationRunsBeforeDictionaryLookup()
+    {
+        TodoDictionaryValidationPort dictionaries=mock(TodoDictionaryValidationPort.class);
+        TodoDodService service=new TodoDodService(List.of(),List.of(),dictionaries);
+
+        TodoException error=assertThrows(TodoException.class,()->service.validate(todo(),
+                definition(Map.of("requiredFields",List.of("contactResult")),
+                        Map.of("fields",List.of(Map.of(
+                                "key","contactResult","type","dict",
+                                "dictType","law_first_contact_result")))),
+                "COMPLETE",Map.of(),List.of(),actor));
+
+        assertEquals("TODO_DOD_FIELD_MISSING",error.getBusinessCode());
+        verifyNoInteractions(dictionaries);
+    }
+
     private TodoInstance todo()
     {
         TodoInstance todo=new TodoInstance();
@@ -82,10 +129,15 @@ class TodoDodServiceTest
 
     private TodoDefinitionDocument definition(Map<String,Object> dod)
     {
+        return definition(dod,Map.of());
+    }
+
+    private TodoDefinitionDocument definition(Map<String,Object> dod,Map<String,Object> ui)
+    {
         return new TodoDefinitionDocument(1,"LEAD-FIRST-CONTACT",
                 new EventRule("LEAD_ASSIGNED",1,Map.of()),
                 new OwnerRule(Map.of()),new DodRule(dod),new SlaRule(Map.of()),
-                new UiSchema(Map.of()),new RoutingGraph(Map.of()),
+                new UiSchema(ui),new RoutingGraph(Map.of()),
                 List.of(),List.of(),List.of());
     }
 

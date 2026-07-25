@@ -13,6 +13,8 @@ public record TodoFormView(Long todoId, String action, String businessType, Long
 {
     public TodoFormView
     {
+        ui = ui == null ? new UiSchema(Map.of()) : ui;
+        dod = dod == null ? new DodRule(Map.of()) : dod;
         defaults = defaults == null ? Map.of() : java.util.Collections.unmodifiableMap(
                 new java.util.LinkedHashMap<>(defaults));
         materials = materials == null ? List.of() : List.copyOf(materials);

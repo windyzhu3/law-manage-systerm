@@ -18,6 +18,8 @@ import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.definition.model.TodoDefinitionDocument.UiSchema;
 import com.law.file.application.FileMaterialQueryService;
 import com.law.file.application.FileMaterialQueryService.FileMaterialView;
 import com.law.file.domain.FileObject.FileActor;
@@ -25,7 +27,32 @@ import com.law.file.domain.FileObject.FileActor;
 @ExtendWith(MockitoExtension.class)
 class TodoQueryServiceTest
 {
-    @Mock TodoMapper mapper;@Mock TodoAccessPolicy access;
+    @Mock TodoMapper mapper;@Mock TodoAccessPolicy access;@Mock TodoConfigurationMapper configurationMapper;
+    @Test void formProjectsOnlyGovernedDictionaryOptionsWithoutMutatingDefinition()
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(4L);todo.setStatus("SUBMITTED");todo.setTemplateVersionId(10L);
+        when(mapper.selectById(4L)).thenReturn(todo);when(access.canView(todo,7L,3L)).thenReturn(true);
+        when(mapper.selectTemplateVersionById(10L)).thenReturn(Map.of(
+                "compiled_json","{\"schemaVersion\":1,\"templateCode\":\"TD-001\",\"dod\":{\"config\":{}},\"ui\":{\"config\":{\"fields\":[{\"key\":\"contactResult\",\"type\":\"dict\",\"dictType\":\"law_first_contact_result\"}]}},\"autoActions\":[],\"decisionRefs\":[],\"acceptanceRefs\":[]}"));
+        when(configurationMapper.selectEnabledDictionaryData("law_first_contact_result")).thenReturn(List.of(
+                Map.of("dict_label","Valid","dict_value","VALID"),
+                Map.of("dict_label","Suspect invalid","dict_value","SUSPECT_INVALID")));
+        TodoFormOptionService options=new TodoFormOptionService(configurationMapper);
+
+        var form=new TodoQueryService(mapper,access,null,options).form(4L,new Actor(7L,"alice",3L));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String,Object>> fields=(List<Map<String,Object>>)form.ui().config().get("fields");
+        assertEquals(List.of(Map.of("label","Valid","value","VALID"),
+                Map.of("label","Suspect invalid","value","SUSPECT_INVALID")),fields.get(0).get("options"));
+        UiSchema original=new UiSchema(Map.of("fields",List.of(Map.of(
+                "key","contactResult","type","dict","dictType","law_first_contact_result"))));
+        options.project(original);
+        @SuppressWarnings("unchecked")
+        List<Map<String,Object>> originalFields=(List<Map<String,Object>>)original.config().get("fields");
+        assertEquals(false,originalFields.get(0).containsKey("options"));
+    }
+
     @Test void rejectsInvisibleDetail(){TodoInstance t=new TodoInstance();t.setTodoId(1L);when(mapper.selectById(1L)).thenReturn(t);when(access.canView(t,7L,3L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->new TodoQueryService(mapper,access).detail(1L,7L,3L));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
     @Test void dashboardReturnsMapperMetrics(){when(mapper.selectDashboard(7L,3L)).thenReturn(Map.of("mine",4));assertEquals(4,new TodoQueryService(mapper,access).dashboard(7L,3L).get("mine"));}
     @Test void detailViewContainsAuditAndAttachments(){TodoInstance t=new TodoInstance();t.setTodoId(1L);when(mapper.selectById(1L)).thenReturn(t);when(access.canView(t,7L,3L)).thenReturn(true);when(mapper.selectActionTimeline(1L)).thenReturn(java.util.List.of(Map.of("action_type","CLAIM")));when(mapper.selectAttachments(1L)).thenReturn(java.util.List.of(Map.of("file_name","a.pdf")));Map<String,Object> view=new TodoQueryService(mapper,access).detailView(1L,7L,3L);assertEquals(1,((java.util.List<?>)view.get("actions")).size());assertEquals(1,((java.util.List<?>)view.get("attachments")).size());}

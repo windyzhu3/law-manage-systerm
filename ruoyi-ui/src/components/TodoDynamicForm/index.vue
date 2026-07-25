@@ -1,6 +1,6 @@
 <template>
   <el-form ref="form" :model="state.fields" label-width="120px" class="todo-dynamic-form">
-    <el-form-item v-for="field in fields" :key="field.key" :label="field.label" :required="field.required">
+    <el-form-item v-for="field in visibleFields" :key="field.key" :label="field.label" :required="field.required">
       <component
         :is="componentFor(field)"
         :value="valueFor(field)"
@@ -23,9 +23,13 @@ const TodoDictField = {
   props: { value: null, options: { type: Array, default: () => [] }, disabled: Boolean, placeholder: String },
   render(h) {
     if (!this.options.length) {
-      return h('el-input', {
-        props: { value: this.value, disabled: this.disabled, clearable: true, placeholder: this.placeholder },
-        on: { input: value => this.$emit('input', value) }
+      return h('el-alert', {
+        props: {
+          title: 'Dictionary options are unavailable. Contact an administrator.',
+          type: 'error',
+          closable: false,
+          showIcon: true
+        }
       })
     }
     return h('el-select', {
@@ -69,7 +73,8 @@ export default {
   data() { return { fieldRegistry } },
   computed: {
     state() { return this.value },
-    fields() { return normalizeFields(this.formView) },
+    fields() { return normalizeFields(this.formView, this.state) },
+    visibleFields() { return this.fields.filter(field => field.visible !== false) },
     requirements() { return getMaterialRequirements(this.formView) }
   },
   methods: {

@@ -25,9 +25,13 @@ import com.alibaba.fastjson2.JSON;
 public class TodoQueryService
 {
     private final TodoMapper mapper;private final TodoAccessPolicy access;private final FileMaterialQueryService fileMaterials;
-    public TodoQueryService(TodoMapper mapper,TodoAccessPolicy access){this(mapper,access,null);}
-    @Autowired public TodoQueryService(TodoMapper mapper,TodoAccessPolicy access,FileMaterialQueryService fileMaterials)
-    {this.mapper=mapper;this.access=access;this.fileMaterials=fileMaterials;}
+    private final TodoFormOptionService formOptions;
+    public TodoQueryService(TodoMapper mapper,TodoAccessPolicy access){this(mapper,access,null,null);}
+    public TodoQueryService(TodoMapper mapper,TodoAccessPolicy access,FileMaterialQueryService fileMaterials)
+    {this(mapper,access,fileMaterials,null);}
+    @Autowired public TodoQueryService(TodoMapper mapper,TodoAccessPolicy access,FileMaterialQueryService fileMaterials,
+            TodoFormOptionService formOptions)
+    {this.mapper=mapper;this.access=access;this.fileMaterials=fileMaterials;this.formOptions=formOptions;}
     public Map<String,Object> dashboard(Long userId,Long deptId){return mapper.selectDashboard(userId,deptId);}
     public List<Map<String,Object>> list(Map<String,Object> query,Long userId,Long deptId){query.put("currentUserId",userId);query.put("currentDeptId",deptId);return mapper.selectTodoList(query);}
     public TodoInstance detail(Long id,Long userId,Long deptId){TodoInstance t=mapper.selectById(id);if(t==null)throw new TodoException("TODO_NOT_FOUND","待办不存在");if(!access.canView(t,userId,deptId))throw new TodoException("TODO_ACCESS_DENIED","无权查看该待办");return t;}
@@ -41,8 +45,9 @@ public class TodoQueryService
         TodoDefinitionDocument definition=definition(version);
         DodRule dod=definition.dod()==null?new DodRule(Map.of()):definition.dod();
         if(todo.getDodSnapshotJson()!=null&&!todo.getDodSnapshotJson().isBlank())dod=new DodRule(JSON.parseObject(todo.getDodSnapshotJson()));
-        UiSchema ui=definition.ui()==null?new UiSchema(Map.of()):definition.ui();
-        Map<String,Object> defaults=map(ui.config().get("defaults"));
+        UiSchema definitionUi=definition.ui()==null?new UiSchema(Map.of()):definition.ui();
+        Map<String,Object> defaults=map(definitionUi.config().get("defaults"));
+        UiSchema ui=formOptions==null?definitionUi:formOptions.project(definitionUi);
         List<MaterialState> materials=materials(todo,actor);
         return new TodoFormView(todoId,action(todo.getStatus()),todo.getBusinessType(),todo.getBusinessId(),ui,dod,
             defaults,materials,extensionPolicy(todoId),text(value(version,"definition_hash","definitionHash")));

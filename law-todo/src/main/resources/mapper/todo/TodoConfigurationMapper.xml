@@ -5,6 +5,12 @@
     select count(*) from sys_dict_type type join sys_dict_data data on data.dict_type=type.dict_type
     where type.dict_type=#{dictType} and data.dict_value=#{dictValue} and type.status='0' and data.status='0'
   </select>
+  <select id="selectEnabledDictionaryData" resultType="java.util.Map">
+    select data.dict_label,data.dict_value
+    from sys_dict_type type join sys_dict_data data on data.dict_type=type.dict_type
+    where type.dict_type=#{dictType} and type.status='0' and data.status='0'
+    order by data.dict_sort,data.dict_code
+  </select>
   <select id="selectSlaRules" resultType="java.util.Map">
     select r.*,
       (select count(*) from todo_template_draft_rule_ref ref

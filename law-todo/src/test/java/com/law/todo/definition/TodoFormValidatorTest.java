@@ -18,6 +18,21 @@ class TodoFormValidatorTest
 {
     private final TodoFormValidator validator = new TodoFormValidator();
 
+    @Test void conditionalFieldIsNotRequiredForAnUnselectedBranch()
+    {
+        TodoDefinitionDocument definition=definition(
+                Map.of("conditionalRequired",List.of(Map.of(
+                        "field","name",
+                        "when",Map.of("field","contactResult","equals","VALID")))),
+                Map.of("fields",List.of(
+                        Map.of("key","contactResult"),
+                        Map.of("key","name","showWhen",Map.of(
+                                "field","contactResult","equals","VALID")))));
+
+        validator.validateSubmission(definition,"COMPLETE",
+                Map.of("contactResult","SUSPECT_INVALID"));
+    }
+
     @Test void dodFieldMustExistInUiOrBeSystemDerived()
     {
         TodoDefinitionDocument definition = definition(

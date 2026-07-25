@@ -41,9 +41,14 @@ function materialRules(formView) {
       })
 }
 
-export function normalizeFields(formView) {
+export function normalizeFields(formView, state) {
   const ui = config(formView && formView.ui)
-  const required = new Set(effectiveRules(formView).requiredFields || [])
+  const rulesForAction = effectiveRules(formView)
+  const required = new Set(rulesForAction.requiredFields || [])
+  const values = (state && state.fields) || (formView && formView.defaults) || {}
+  const conditionalRequired = new Set((rulesForAction.conditionalRequired || [])
+    .filter(rule => conditionMatches(rule.when, values))
+    .map(rule => rule.field))
   const raw = Array.isArray(ui.fields) ? ui.fields : []
   const fields = raw.map((value, index) => {
     const field = typeof value === 'string' ? { key: value } : { ...value }
@@ -53,7 +58,10 @@ export function normalizeFields(formView) {
       key,
       type: field.type || field.component || 'text',
       label: field.label || field.title || key,
-      required: field.required === true || required.has(key)
+      required: required.has(key) || conditionalRequired.has(key) ||
+        (field.required === true && (!field.showWhen || conditionMatches(field.showWhen, values))),
+      requiredByDod: required.has(key) || conditionalRequired.has(key),
+      visible: !field.showWhen || conditionMatches(field.showWhen, values)
     }
   })
   const rules = materialRules(formView)
@@ -101,7 +109,7 @@ function normalizeValue(value, ids) {
 export function createActionPayload(formView, state) {
   const fileObjectIds = []
   const fields = normalizeValue(clone((state && state.fields) || {}), fileObjectIds)
-  const materialField = normalizeFields(formView).find(field => field.type === 'materialChecklist')
+  const materialField = normalizeFields(formView, state).find(field => field.type === 'materialChecklist')
   const materials = normalizeValue(clone((state && state.materials) || []), fileObjectIds)
   if (materialField) fields[materialField.key] = materials
   return { fields, fileObjectIds: [...new Set(fileObjectIds)] }
@@ -120,14 +128,18 @@ function conditionMatches(when, fields) {
 
 export function validateFormState(formView, state) {
   const errors = []
-  for (const field of normalizeFields(formView)) {
+  const normalizedFields = normalizeFields(formView, state)
+  for (const field of normalizedFields) {
+    if (field.visible && field.type === 'dict' && (!Array.isArray(field.options) || field.options.length === 0)) {
+      errors.push(`Dictionary options are unavailable: ${field.label}`)
+    }
     const value = field.type === 'materialChecklist' ? state.materials : state.fields[field.key]
     if (field.required && empty(value)) errors.push(`${field.label}不能为空`)
   }
   const rules = effectiveRules(formView)
   for (const conditional of rules.conditionalRequired || []) {
     if (conditionMatches(conditional.when, state.fields) && empty(state.fields[conditional.field])) {
-      const field = normalizeFields(formView).find(value => value.key === conditional.field)
+      const field = normalizedFields.find(value => value.key === conditional.field)
       errors.push(`${field ? field.label : conditional.field}不能为空`)
     }
   }

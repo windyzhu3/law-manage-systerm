@@ -2,6 +2,7 @@ package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -20,6 +21,27 @@ import org.mockito.ArgumentCaptor;
 
 class TodoAutoActionConfigurationTest
 {
+    @Test void completeDefaultPassesConfiguredFieldsToFullDod()
+    {
+        TodoCommandService commands=mock(TodoCommandService.class);
+        TodoAutoActionCapability capability=new TodoAutoActionConfiguration().completeDefaultCapability(commands);
+        TodoInstance todo=new TodoInstance();todo.setTodoId(1L);
+        AutoActionRule rule=new AutoActionRule(Map.of(
+                "ruleKey","default-invalid",
+                "actionType","COMPLETE_DEFAULT",
+                "capability","COMPLETE_DEFAULT",
+                "fields",Map.of(
+                        "reviewResult","TRUE_INVALID",
+                        "reviewOpinion","System default confirmation")));
+
+        capability.execute(todo,rule,TodoAutoActionService.SERVICE_ACTOR);
+
+        verify(commands).autoComplete(eq(1L),argThat(command->
+                "TRUE_INVALID".equals(command.payload().get("reviewResult"))
+                &&"System default confirmation".equals(command.payload().get("reviewOpinion"))),
+                eq(TodoAutoActionService.SERVICE_ACTOR));
+    }
+
     @Test void registeredCapabilitiesDelegateToCommandBoundary()
     {
         TodoCommandService commands=mock(TodoCommandService.class);TodoNotificationPort notifications=mock(TodoNotificationPort.class);TodoSupervisorPort supervisors=mock(TodoSupervisorPort.class);TodoAutoActionConfiguration config=new TodoAutoActionConfiguration();
