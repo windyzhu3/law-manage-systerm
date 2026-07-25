@@ -27,12 +27,6 @@ public class LeadAssignmentService
     private final BusinessEventPublisher events;
     private final SysUserMapper users;
 
-    public LeadAssignmentService(BizLeadMapper mapper, LeadAccessPolicy access,
-            BusinessActorProvider actors, BusinessEventPublisher events)
-    {
-        this(mapper, access, actors, events, null);
-    }
-
     @Autowired
     public LeadAssignmentService(BizLeadMapper mapper, LeadAccessPolicy access,
             BusinessActorProvider actors, BusinessEventPublisher events, SysUserMapper users)

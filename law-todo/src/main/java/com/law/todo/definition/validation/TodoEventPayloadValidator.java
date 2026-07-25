@@ -15,8 +15,8 @@ public class TodoEventPayloadValidator
     public void validate(String schemaJson, Map<String, Object> payload)
     {
         JSONObject schema = JSON.parseObject(schemaJson);
-        Map<String, Object> value = payload == null ? Map.of() : payload;
-        validateObject(schema, value, null);
+        if (payload == null) invalid(null);
+        validateObject(schema, payload, null);
     }
 
     private void validateObject(JSONObject schema, Map<String, Object> payload, String field)

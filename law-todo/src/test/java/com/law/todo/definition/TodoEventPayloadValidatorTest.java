@@ -29,6 +29,15 @@ class TodoEventPayloadValidatorTest
                 Map.of("assignmentId", 1L, "ownerId", 11L, "contactedAt", "2026-07-25T09:30:00")));
     }
 
+    @Test
+    void rejectsNullPayloadForObjectSchema()
+    {
+        TodoException error = assertThrows(TodoException.class,
+                () -> validator.validate("{\"type\":\"object\"}", null));
+
+        assertEquals("TODO_EVENT_PAYLOAD_INVALID", error.getBusinessCode());
+    }
+
     private String schema()
     {
         return """

@@ -25,6 +25,7 @@ import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadSetting;
 import com.ruoyi.system.mapper.BizCustomerMapper;
 import com.ruoyi.system.mapper.BizLeadMapper;
+import com.ruoyi.system.mapper.SysUserMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.customer.CustomerAccessPolicy;
 import com.ruoyi.system.service.customer.CustomerCommandService;
@@ -40,6 +41,7 @@ class LeadCustomerConversionFlowTest
     void createAssignFollowupAndConvertRemainOneIdempotentFlow()
     {
         BizLeadMapper leads = mock(BizLeadMapper.class);
+        SysUserMapper users = mock(SysUserMapper.class);
         BizCustomerMapper customers = mock(BizCustomerMapper.class);
         ISysDictTypeService dictionaries = mock(ISysDictTypeService.class);
         BusinessEventPublisher events = mock(BusinessEventPublisher.class);
@@ -63,7 +65,10 @@ class LeadCustomerConversionFlowTest
             invocation.<Map<String, Object>>getArgument(0).put("logId", 21L);
             return 1;
         });
-        new LeadAssignmentService(leads, leadAccess, actors, events).assign(7L, 8L, "首次分配");
+        com.ruoyi.common.core.domain.entity.SysUser owner = new com.ruoyi.common.core.domain.entity.SysUser();
+        owner.setDeptId(3L);
+        when(users.selectUserById(8L)).thenReturn(owner);
+        new LeadAssignmentService(leads, leadAccess, actors, events, users).assign(7L, 8L, "首次分配");
         lead.setOwnerId(8L); lead.setDeptId(3L); lead.setPoolStatus("0"); lead.setStatus(LeadStatus.WAIT_FOLLOW.code());
 
         when(leads.insertFollowup(any())).thenReturn(1);

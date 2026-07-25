@@ -3,6 +3,7 @@ package com.ruoyi.system.service.lead;
 import static com.ruoyi.system.support.BusinessFixtures.actor;
 import static com.ruoyi.system.support.BusinessFixtures.lead;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,10 +55,20 @@ class LeadAssignmentServiceTest
         assertEquals(1, service.assign(7L, 9L, "首次分配"));
 
         verify(events).publish(argThat(event -> "LEAD_ASSIGNED:7:21".equals(event.getIdempotencyKey())
+                && Integer.valueOf(1).equals(event.getPayload().get("schemaVersion"))
+                && Long.valueOf(8L).equals(event.getPayload().get("operatorId"))
                 && Long.valueOf(21L).equals(event.getPayload().get("assignmentId"))
                 && Long.valueOf(9L).equals(event.getPayload().get("ownerId"))
                 && event.getPayload().containsKey("ownerDeptId")
                 && Long.valueOf(3L).equals(event.getPayload().get("ownerDeptId"))
                 && !event.getPayload().containsKey("toOwnerId")));
+    }
+
+    @Test
+    void doesNotExposeConstructorWithoutUserMapper()
+    {
+        assertThrows(NoSuchMethodException.class, () -> LeadAssignmentService.class.getConstructor(
+                BizLeadMapper.class, LeadAccessPolicy.class, BusinessActorProvider.class,
+                BusinessEventPublisher.class));
     }
 }
