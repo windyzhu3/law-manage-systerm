@@ -123,7 +123,9 @@ jobs:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017_trigger_metadata?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=TodoTriggerRuleMetadataMigrationContractTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: |
+          rm -rf ruoyi-admin/target/surefire-reports
+          mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=TodoTriggerRuleMetadataMigrationContractTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Execute and verify all Flyway migrations
         env:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_v017?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
@@ -131,7 +133,7 @@ jobs:
           TODO_MIGRATION_DB_PASSWORD: root
         run: |
           mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
-          mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FileMaterialEndToEndTest,FileObjectLockOrderExternalMysqlIT,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest,TodoAssignmentDelegationMapperExternalMysqlIT,TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadTodoProductionPortsExternalMysqlIT,LeadTodoReadModelExternalMysqlIT -Dsurefire.failIfNoSpecifiedTests=false test
+          mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FileMaterialEndToEndTest,FileObjectLockOrderExternalMysqlIT,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest,TodoAssignmentDelegationMapperExternalMysqlIT,TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadTodoProductionPortsExternalMysqlIT,LeadTodoFlowEndToEndTest,LeadTodoScheduleEndToEndTest,LeadTodoReadModelExternalMysqlIT -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Assert external-database Todo tests were not skipped
         run: node ruoyi-ui/scripts/assert-external-db-reports.js ruoyi-admin/target/surefire-reports
       - name: Generate ephemeral Foundation test password

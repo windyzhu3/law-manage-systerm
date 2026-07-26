@@ -16,7 +16,11 @@ const classes = [
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
   'TodoTriggerRuleMetadataMigrationContractTest',
-  'LeadFlowMapperExternalMysqlIT'
+  'LeadFlowMapperExternalMysqlIT',
+  'LeadTodoProductionPortsExternalMysqlIT',
+  'LeadTodoFlowEndToEndTest',
+  'LeadTodoScheduleEndToEndTest',
+  'LeadTodoReadModelExternalMysqlIT'
 ]
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-external-reports-'))
 
@@ -31,19 +35,27 @@ function requireFailure(label) { const result = run(); if (result.status === 0) 
 
 try {
   classes.forEach(className => writeReport(className))
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
+  writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
   requirePass('complete reports')
 
-  fs.unlinkSync(reportPath(classes[0]))
-  requireFailure('missing report')
-  writeReport(classes[0])
+  for (const className of ['LeadTodoFlowEndToEndTest', 'LeadTodoScheduleEndToEndTest']) {
+    fs.unlinkSync(reportPath(className))
+    requireFailure(`missing ${className} report`)
+    writeReport(className, { tests: className === 'LeadTodoFlowEndToEndTest' ? 6 : 4 })
+  }
 
-  writeReport(classes[1], { tests: 0 })
-  requireFailure('zero tests')
-  writeReport(classes[1])
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 0 })
+  requireFailure('zero Task 11 flow tests')
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
 
-  writeReport(classes[2], { skipped: 1 })
-  requireFailure('skipped test')
-  writeReport(classes[2])
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 5 })
+  requireFailure('incorrect Task 11 flow test count')
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
+
+  writeReport('LeadTodoScheduleEndToEndTest', { tests: 4, skipped: 1 })
+  requireFailure('skipped Task 11 schedule test')
+  writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
 
   writeReport(classes[3], { failures: 1 })
   requireFailure('failed test')

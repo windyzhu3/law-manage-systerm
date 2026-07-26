@@ -30,6 +30,7 @@ import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.apache.ibatis.transaction.TransactionFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,6 +58,8 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.spi.MapperTodoOrganizationAdapter;
+import com.law.todo.spi.NoOpTodoCompletionLifecyclePort;
+import com.law.todo.spi.TodoCompletionLifecyclePort;
 import com.law.todo.spi.TodoDictionaryValidationMapperAdapter;
 import com.law.todo.spi.TodoOrganizationPort;
 import com.ruoyi.common.core.domain.entity.SysUser;
@@ -222,7 +225,13 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static Ports productionPorts(SqlSession session) throws Exception
+    static Ports productionPorts(SqlSession session) throws Exception
+    {
+        return productionPorts(session,new NoOpTodoCompletionLifecyclePort());
+    }
+
+    static Ports productionPorts(SqlSession session,TodoCompletionLifecyclePort completionLifecycle)
+            throws Exception
     {
         TodoMapper todos=session.getMapper(TodoMapper.class);
         BizLeadMapper leads=session.getMapper(BizLeadMapper.class);
@@ -267,7 +276,7 @@ class LeadTodoProductionPortsExternalMysqlIT
                         new LeadInvalidReviewTodoHandler(reviews,
                                 new LeadTodoSourceContextService(outboxMapper,facts)),
                         new LeadRetryTodoHandler(retries,schedules)),
-                routing);
+                routing,completionLifecycle);
         return new Ports(events,commands,schedules);
     }
 
@@ -283,7 +292,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         };
     }
 
-    private static PublishedIds discoverPublishedIds(Connection connection) throws Exception
+    static PublishedIds discoverPublishedIds(Connection connection) throws Exception
     {
         Map<String,Long> ids=new LinkedHashMap<>();
         try(PreparedStatement query=connection.prepareStatement(
@@ -327,7 +336,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static Fixtures insertFixtures(Connection connection,PublishedIds published) throws Exception
+    static Fixtures insertFixtures(Connection connection,PublishedIds published) throws Exception
     {
         String marker=UUID.randomUUID().toString().replace("-","").substring(0,12);
         String ownerName="i3o_"+marker;
@@ -423,7 +432,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return fileId;
     }
 
-    private static TodoInstance trigger(TodoEventService events,PublishedIds published,long leadId,
+    static TodoInstance trigger(TodoEventService events,PublishedIds published,long leadId,
             String leadNo,long ownerId,long ownerDeptId,String suffix)
     {
         List<TodoInstance> created=events.handle(new TodoEvent(
@@ -436,7 +445,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return created.get(0);
     }
 
-    private static ActionCommand firstContact(String result,String key,long proofId,boolean valid)
+    static ActionCommand firstContact(String result,String key,long proofId,boolean valid)
     {
         Map<String,Object> fields=new LinkedHashMap<>();
         fields.put("contactResult",result);
@@ -457,14 +466,14 @@ class LeadTodoProductionPortsExternalMysqlIT
         return new ActionCommand(action(key),"production-port first contact",fields,List.of(proofId));
     }
 
-    private static void prepare(TodoCommandService commands,long todoId,Actor actor,String key)
+    static void prepare(TodoCommandService commands,long todoId,Actor actor,String key)
     {
         commands.claim(todoId,new ActionCommand(action(key+"-claim"),null,Map.of(),List.of()),actor);
         commands.start(todoId,new ActionCommand(action(key+"-start"),null,Map.of(),List.of()),actor);
         commands.submit(todoId,new ActionCommand(action(key+"-submit"),null,Map.of(),List.of()),actor);
     }
 
-    private static ActionCommand retryAttempt(String key,long proofId,int attempt)
+    static ActionCommand retryAttempt(String key,long proofId,int attempt)
     {
         Map<String,Object> fields=new LinkedHashMap<>();
         fields.put("contactResult","NEXT_WINDOW");
@@ -473,7 +482,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return new ActionCommand(action(key),"production-port retry",fields,List.of(proofId));
     }
 
-    private static Map<String,Object> call(String key,String result,Integer attempt)
+    static Map<String,Object> call(String key,String result,Integer attempt)
     {
         Map<String,Object> call=new LinkedHashMap<>();
         call.put("callChannel","MANUAL");
@@ -487,7 +496,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return call;
     }
 
-    private static void authenticate(long userId,long deptId,String userName,Set<String> permissions)
+    static void authenticate(long userId,long deptId,String userName,Set<String> permissions)
     {
         SysUser user=new SysUser();
         user.setUserId(userId);user.setDeptId(deptId);user.setUserName(userName);
@@ -497,12 +506,12 @@ class LeadTodoProductionPortsExternalMysqlIT
                 new UsernamePasswordAuthenticationToken(login,null,login.getAuthorities()));
     }
 
-    private static Actor actor(long userId,String userName,long deptId)
+    static Actor actor(long userId,String userName,long deptId)
     {
         return new Actor(userId,userName,deptId);
     }
 
-    private static String action(String suffix)
+    static String action(String suffix)
     {
         return "I3-"+suffix+"-"+UUID.randomUUID();
     }
@@ -560,7 +569,7 @@ class LeadTodoProductionPortsExternalMysqlIT
                 todo.occurrenceKey()));
     }
 
-    private static TodoRow onlyChild(Connection connection,long previousId,long versionId)
+    static TodoRow onlyChild(Connection connection,long previousId,long versionId)
             throws Exception
     {
         List<TodoRow> rows=todos(connection,
@@ -571,7 +580,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return rows.get(0);
     }
 
-    private static TodoRow onlyTodo(Connection connection,long leadId,long versionId) throws Exception
+    static TodoRow onlyTodo(Connection connection,long leadId,long versionId) throws Exception
     {
         List<TodoRow> rows=todos(connection,
                 "select todo_id,template_version_id,owner_id,root_todo_id,route_node_key,"
@@ -581,7 +590,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return rows.get(0);
     }
 
-    private static TodoRow latestTodo(Connection connection,long leadId,long versionId) throws Exception
+    static TodoRow latestTodo(Connection connection,long leadId,long versionId) throws Exception
     {
         List<TodoRow> rows=todos(connection,
                 "select todo_id,template_version_id,owner_id,root_todo_id,route_node_key,"
@@ -610,7 +619,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static int countTodos(Connection connection,long leadId,long versionId) throws Exception
+    static int countTodos(Connection connection,long leadId,long versionId) throws Exception
     {
         return count(connection,"select count(*) from todo_instance where business_type='LEAD' "
                 +"and business_id=? and template_version_id=?",leadId,versionId);
@@ -645,10 +654,15 @@ class LeadTodoProductionPortsExternalMysqlIT
                 published.td001(),published.td002(),published.td003(),published.td004()));
     }
 
-    private static Configuration myBatis(DataSource dataSource) throws Exception
+    static Configuration myBatis(DataSource dataSource) throws Exception
+    {
+        return myBatis(dataSource,new JdbcTransactionFactory());
+    }
+
+    static Configuration myBatis(DataSource dataSource,TransactionFactory transactions) throws Exception
     {
         Configuration configuration=new Configuration(new Environment("lead-todo-production-it",
-                new JdbcTransactionFactory(),dataSource));
+                transactions,dataSource));
         configuration.setMapUnderscoreToCamelCase(true);
         configuration.setLocalCacheScope(LocalCacheScope.STATEMENT);
         configuration.getTypeAliasRegistry().registerAliases("com.ruoyi.system.domain");
@@ -660,6 +674,7 @@ class LeadTodoProductionPortsExternalMysqlIT
                 "mapper/system/LeadFlowMapper.xml",
                 "mapper/system/BusinessEventMapper.xml",
                 "mapper/system/SysDictDataMapper.xml",
+                "mapper/system/SysUserMapper.xml",
                 "mapper/file/FileObjectMapper.xml"})
         {
             try(InputStream input=Resources.getResourceAsStream(resource))
@@ -671,7 +686,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         return configuration;
     }
 
-    private static long generated(Connection connection,String sql,Object... values) throws Exception
+    static long generated(Connection connection,String sql,Object... values) throws Exception
     {
         try(PreparedStatement insert=connection.prepareStatement(sql,Statement.RETURN_GENERATED_KEYS))
         {
@@ -685,7 +700,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static int update(Connection connection,String sql,Object... values) throws Exception
+    static int update(Connection connection,String sql,Object... values) throws Exception
     {
         try(PreparedStatement update=connection.prepareStatement(sql))
         {
@@ -694,12 +709,12 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static int count(Connection connection,String sql,Object... values) throws Exception
+    static int count(Connection connection,String sql,Object... values) throws Exception
     {
         return Math.toIntExact(longScalar(connection,sql,values));
     }
 
-    private static long longScalar(Connection connection,String sql,Object... values) throws Exception
+    static long longScalar(Connection connection,String sql,Object... values) throws Exception
     {
         try(PreparedStatement query=connection.prepareStatement(sql))
         {
@@ -715,7 +730,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static String textScalar(Connection connection,String sql,Object... values) throws Exception
+    static String textScalar(Connection connection,String sql,Object... values) throws Exception
     {
         try(PreparedStatement query=connection.prepareStatement(sql))
         {
@@ -730,7 +745,7 @@ class LeadTodoProductionPortsExternalMysqlIT
         }
     }
 
-    private static LocalDateTime dateTimeScalar(Connection connection,String sql,Object... values)
+    static LocalDateTime dateTimeScalar(Connection connection,String sql,Object... values)
             throws Exception
     {
         try(PreparedStatement query=connection.prepareStatement(sql))
@@ -765,13 +780,13 @@ class LeadTodoProductionPortsExternalMysqlIT
         return value;
     }
 
-    private record PublishedIds(long td001,long td002,long td003,long td004) { }
-    private record Fixtures(long deptId,long ownerId,long reviewerId,String ownerName,
+    record PublishedIds(long td001,long td002,long td003,long td004) { }
+    record Fixtures(long deptId,long ownerId,long reviewerId,String ownerName,
             String reviewerName,long validLeadId,String validLeadNo,long validProofId,
             long suspectLeadId,String suspectLeadNo,long suspectProofId,
             long retryLeadId,String retryLeadNo,long retryProofId) { }
-    private record Ports(TodoEventService events,TodoCommandService commands,
+    record Ports(TodoEventService events,TodoCommandService commands,
             TodoScheduleService schedules) { }
-    private record TodoRow(long todoId,long templateVersionId,Long ownerId,Long rootTodoId,
+    record TodoRow(long todoId,long templateVersionId,Long ownerId,Long rootTodoId,
             String routeNodeKey,String occurrenceKey,String status) { }
 }

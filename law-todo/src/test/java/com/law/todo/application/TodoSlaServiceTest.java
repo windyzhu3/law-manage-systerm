@@ -67,10 +67,11 @@ class TodoSlaServiceTest
         LocalDateTime p80=now.minusHours(3),p100=now.minusHours(2),p150=now.minusHours(1);
         LocalDateTime due=now.minusHours(2);
         when(mapper.selectSlaScanItems(now)).thenReturn(List.of(Map.of("todo_id",1L,"version",4,"due_at",due,"remind80_due_at",p80,"overdue100_due_at",p100,"escalate150_due_at",p150)));
-        when(mapper.markSlaThreshold(1L,"REMINDED_80",p80,due,4,now)).thenReturn(1);
-        when(mapper.markSlaThreshold(1L,"OVERDUE_100",p100,due,5,now)).thenReturn(1);
-        when(mapper.markSlaThreshold(1L,"ESCALATED_150",p150,due,6,now)).thenReturn(1);
-        new TodoSlaService(mapper,access).scanAndEscalate(now);
+        // MySQL reports both joined-table rows changed by the multi-table update.
+        when(mapper.markSlaThreshold(1L,"REMINDED_80",p80,due,4,now)).thenReturn(2);
+        when(mapper.markSlaThreshold(1L,"OVERDUE_100",p100,due,5,now)).thenReturn(2);
+        when(mapper.markSlaThreshold(1L,"ESCALATED_150",p150,due,6,now)).thenReturn(2);
+        assertEquals(3,new TodoSlaService(mapper,access).scanAndEscalate(now));
         verify(mapper).markSlaThreshold(1L,"REMINDED_80",p80,due,4,now);
         verify(mapper).markSlaThreshold(1L,"OVERDUE_100",p100,due,5,now);
         verify(mapper).markSlaThreshold(1L,"ESCALATED_150",p150,due,6,now);

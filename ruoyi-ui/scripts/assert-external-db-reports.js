@@ -16,8 +16,14 @@ const requiredClasses = [
   'TodoTriggerRuleMetadataMigrationContractTest',
   'LeadFlowMapperExternalMysqlIT',
   'LeadTodoProductionPortsExternalMysqlIT',
+  'LeadTodoFlowEndToEndTest',
+  'LeadTodoScheduleEndToEndTest',
   'LeadTodoReadModelExternalMysqlIT'
 ]
+const exactTestCounts = new Map([
+  ['LeadTodoFlowEndToEndTest', 6],
+  ['LeadTodoScheduleEndToEndTest', 4]
+])
 
 function suiteAttributes(xml, className) {
   const match = xml.match(/<testsuite\b([^>]*)>/)
@@ -36,6 +42,9 @@ for (const className of requiredClasses) {
   const failures = Number(attributes.failures)
   const errors = Number(attributes.errors)
   if (!(tests > 0)) throw new Error(`${className}: tests must be greater than zero`)
+  const expectedTests = exactTestCounts.get(className)
+  if (expectedTests !== undefined && tests !== expectedTests)
+    throw new Error(`${className}: expected exactly ${expectedTests} tests, found ${tests}`)
   if (!(skipped === 0)) throw new Error(`${className}: skipped tests are forbidden`)
   if (!(failures === 0)) throw new Error(`${className}: failures are forbidden`)
   if (!(errors === 0)) throw new Error(`${className}: errors are forbidden`)

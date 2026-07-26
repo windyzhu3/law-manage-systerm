@@ -247,6 +247,30 @@ class TodoCommandServiceTest
                         &&context.payload().get("reviewResult").equals("MISJUDGED_VALID")));
     }
 
+    @Test void controlled_due_completion_advances_created_todo_through_audited_states()
+    {
+        TodoInstance todo=todo(18L,"CREATED",7L);
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:18:due")).thenReturn(
+                execution("AUTO:18:due",18L,"COMPLETE_DEFAULT","CLAIMED"));
+        when(mapper.selectById(18L)).thenReturn(todo);
+        when(mapper.updateStatusConditionally(any(),any(),any(),any(),any())).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+
+        assertEquals("COMPLETED",service.autoComplete(18L,
+                new ActionCommand("AUTO:18:due","overdue default",Map.of()),
+                TodoAutoActionService.SERVICE_ACTOR).getStatus());
+
+        InOrder order=org.mockito.Mockito.inOrder(mapper);
+        order.verify(mapper).updateStatusConditionally(18L,"CREATED","CLAIMED",7L,
+                TodoAutoActionService.SERVICE_ACTOR.userName());
+        order.verify(mapper).updateStatusConditionally(18L,"CLAIMED","IN_PROGRESS",null,
+                TodoAutoActionService.SERVICE_ACTOR.userName());
+        order.verify(mapper).updateStatusConditionally(18L,"IN_PROGRESS","SUBMITTED",null,
+                TodoAutoActionService.SERVICE_ACTOR.userName());
+        order.verify(mapper).updateStatusConditionally(18L,"SUBMITTED","COMPLETED",null,
+                TodoAutoActionService.SERVICE_ACTOR.userName());
+    }
+
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
     @Test void returnValidatesActionSpecificRule()
     {

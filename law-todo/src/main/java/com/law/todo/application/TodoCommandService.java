@@ -7,6 +7,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,8 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
+import com.law.todo.spi.NoOpTodoCompletionLifecyclePort;
+import com.law.todo.spi.TodoCompletionLifecyclePort;
 
 @Service
 public class TodoCommandService
@@ -36,18 +41,30 @@ public class TodoCommandService
     private final TodoDodService dod;
     private final List<TodoCompletionHandler> completionHandlers;
     private final TodoRoutingService routing;
+    private final TodoCompletionLifecyclePort completionLifecycle;
 
     public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access)
     {
-        this(mapper,access,new TodoDodService(List.of()),List.of(),null);
+        this(mapper,access,new TodoDodService(List.of()),List.of(),null,
+                new NoOpTodoCompletionLifecyclePort());
+    }
+
+    public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access,TodoDodService dod,
+            List<TodoCompletionHandler> completionHandlers,TodoRoutingService routing)
+    {
+        this(mapper,access,dod,completionHandlers,routing,
+                new NoOpTodoCompletionLifecyclePort());
     }
 
     @Autowired
     public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access,TodoDodService dod,
-            List<TodoCompletionHandler> completionHandlers,TodoRoutingService routing)
+            List<TodoCompletionHandler> completionHandlers,TodoRoutingService routing,
+            TodoCompletionLifecyclePort completionLifecycle)
     {
         this.mapper=mapper;this.access=access;this.dod=dod;
         this.completionHandlers=completionHandlers==null?List.of():completionHandlers;this.routing=routing;
+        this.completionLifecycle=completionLifecycle==null
+                ?new NoOpTodoCompletionLifecyclePort():completionLifecycle;
     }
 
     @Transactional public TodoInstance claim(Long id,ActionCommand command,Actor actor)
@@ -94,7 +111,7 @@ public class TodoCommandService
     @Transactional public TodoInstance autoComplete(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"COMPLETE_DEFAULT");if(repeatedAuto(id,command,"COMPLETE_DEFAULT"))return mapper.selectById(id);
-        return complete(require(id),command,actor,"COMPLETE_DEFAULT");
+        return complete(prepareAutomaticCompletion(require(id),command,actor),command,actor,"COMPLETE_DEFAULT");
     }
     @Transactional public TodoInstance autoReturn(Long id,ActionCommand command,Actor actor)
     {
@@ -142,6 +159,7 @@ public class TodoCommandService
         if(result==null)
             throw new TodoException("TODO_COMPLETION_RESULT_REQUIRED",
                     "Completion handler did not return an authoritative result");
+        completionLifecycle.afterBusinessCompletion(todo,result.routingPayload());
         if(!result.completeTodo())
         {
             String status=TodoStatus.fromCode(todo.getStatus()).code();
@@ -150,7 +168,46 @@ public class TodoCommandService
         }
         TodoInstance completed=transition(todo,TodoStatus.COMPLETED,null,actionType,command,actor);
         if(routing!=null)routing.advance(completed,result.routingPayload());
+        completionLifecycle.afterRouting(completed,result.routingPayload());
         return completed;
+    }
+
+    private TodoInstance prepareAutomaticCompletion(TodoInstance todo,ActionCommand parent,Actor actor)
+    {
+        while(true)
+        {
+            TodoStatus status=TodoStatus.fromCode(todo.getStatus());
+            switch(status)
+            {
+                case CREATED -> transition(todo,TodoStatus.CLAIMED,todo.getOwnerId(),"CLAIM",
+                        automaticStage(parent,"CLAIM"),actor);
+                case CLAIMED -> transition(todo,TodoStatus.IN_PROGRESS,null,"START",
+                        automaticStage(parent,"START"),actor);
+                case IN_PROGRESS -> transition(todo,TodoStatus.SUBMITTED,null,"SUBMIT",
+                        automaticStage(parent,"SUBMIT"),actor);
+                case SUBMITTED -> {return todo;}
+                default -> throw new TodoException("TODO_STATE_TRANSITION_INVALID",
+                        "Controlled completion cannot advance Todo from "+status.code());
+            }
+        }
+    }
+
+    private ActionCommand automaticStage(ActionCommand parent,String stage)
+    {
+        String source=parent.actionId()+":"+stage;
+        String actionId;
+        try
+        {
+            actionId="AUTO_STAGE:"+java.util.HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(
+                            source.getBytes(StandardCharsets.UTF_8)));
+        }
+        catch(NoSuchAlgorithmException unavailable)
+        {
+            throw new IllegalStateException("SHA-256 is required",unavailable);
+        }
+        return new ActionCommand(actionId,parent.opinion(),
+                Map.of("parentActionId",parent.actionId(),"stage",stage),List.of());
     }
 
     private TodoInstance transition(TodoInstance todo,TodoStatus target,Long owner,String action,ActionCommand command,Actor actor)

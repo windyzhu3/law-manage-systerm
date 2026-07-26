@@ -142,6 +142,8 @@ class LeadRetryServiceTest
 
         assertEquals("EXHAUSTED",outcome.result());
         assertEquals(2,outcome.attemptNo());
+        verify(schedules).cancelPlan(org.mockito.ArgumentMatchers.eq(31L),
+                org.mockito.ArgumentMatchers.eq("EXHAUSTED"),any());
         verify(pool).moveToPoolBySystem(stored,6,"RETRY_EXHAUSTED");
     }
 
@@ -184,6 +186,8 @@ class LeadRetryServiceTest
         LeadRetryService.RetryOutcome outcome = service.completeWindow(command);
 
         assertEquals("EXHAUSTED", outcome.result());
+        verify(schedules).cancelPlan(org.mockito.ArgumentMatchers.eq(31L),
+                org.mockito.ArgumentMatchers.eq("EXHAUSTED"),any());
         verify(pool).moveToPoolBySystem(stored, 6, "RETRY_EXHAUSTED");
         verify(events).publish(any(),org.mockito.ArgumentMatchers.eq(actor()));
     }

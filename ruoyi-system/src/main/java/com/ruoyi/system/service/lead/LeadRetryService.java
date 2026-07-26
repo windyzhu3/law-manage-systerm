@@ -125,7 +125,7 @@ public class LeadRetryService
         }
         else
         {
-            schedules.cancelPlan(context.planId(), "RETRY_EXHAUSTED", completedAt);
+            schedules.cancelPlan(context.planId(), "EXHAUSTED", completedAt);
             changed(leads.advanceRetryStage(lead.getLeadId(), lead.getRetryStage(), "EXHAUSTED",
                     attemptNo, null, lead.getRowVersion(), actor.userName()));
             pool.moveToPoolBySystem(lead, lead.getRowVersion() + 1, "RETRY_EXHAUSTED");
