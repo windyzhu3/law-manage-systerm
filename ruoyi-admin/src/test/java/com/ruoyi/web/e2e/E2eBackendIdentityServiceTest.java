@@ -3,6 +3,8 @@ package com.ruoyi.web.e2e;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.sql.Connection;
@@ -14,6 +16,8 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PostMapping;
 
 class E2eBackendIdentityServiceTest
 {
@@ -59,5 +63,57 @@ class E2eBackendIdentityServiceTest
     {
         Profile profile=E2eBackendIdentityController.class.getAnnotation(Profile.class);
         assertEquals(java.util.Set.of("e2e","test"),java.util.Set.of(profile.value()));
+    }
+
+    @Test
+    void cleanup_rejects_a_wrong_secret_before_touching_the_file_lifecycle()
+    {
+        E2eBackendIdentityService identity=mock(E2eBackendIdentityService.class);
+        E2eOwnedFileCleanupService cleanup=mock(E2eOwnedFileCleanupService.class);
+        when(identity.identity("wrong","nonce-1","fixture-1"))
+            .thenThrow(new AccessDeniedException("bad secret"));
+        E2eBackendIdentityController controller=new E2eBackendIdentityController(identity,cleanup);
+
+        assertThrows(AccessDeniedException.class,()->controller.retireOwnedFixture(
+            7L,"wrong","nonce-1","fixture-1",
+            new E2eBackendIdentityController.OwnedFileCleanupRequest(
+                "cleanup-7-3",3L,"abc","actual_e2e")));
+        verify(cleanup,never()).retire(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void cleanup_rejects_a_wrong_database_binding_before_touching_the_file_lifecycle()
+    {
+        E2eBackendIdentityService identity=mock(E2eBackendIdentityService.class);
+        E2eOwnedFileCleanupService cleanup=mock(E2eOwnedFileCleanupService.class);
+        when(identity.identity("secret","nonce-1","fixture-1")).thenReturn(
+            new E2eBackendIdentityService.BackendIdentity(
+                "actual_e2e","actual_e2e","nonce-1","fixture-1","0.20.57","proof"));
+        E2eBackendIdentityController controller=new E2eBackendIdentityController(identity,cleanup);
+
+        assertThrows(AccessDeniedException.class,()->controller.retireOwnedFixture(
+            7L,"secret","nonce-1","fixture-1",
+            new E2eBackendIdentityController.OwnedFileCleanupRequest(
+                "cleanup-7-3",3L,"abc","neighbour_e2e")));
+        verify(cleanup,never()).retire(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void cleanup_endpoint_requires_the_dedicated_identity_permission()
+        throws Exception
+    {
+        var method=E2eBackendIdentityController.class.getMethod("retireOwnedFixture",
+            Long.class,String.class,String.class,String.class,
+            E2eBackendIdentityController.OwnedFileCleanupRequest.class);
+        assertEquals("@ss.hasPermi('foundation:e2e:identity')",
+            method.getAnnotation(PreAuthorize.class).value());
+        assertEquals(java.util.List.of("/files/{fileObjectId}/retire-owned-fixture"),
+            java.util.List.of(method.getAnnotation(PostMapping.class).value()));
     }
 }

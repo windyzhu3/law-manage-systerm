@@ -44,6 +44,8 @@ class FoundationTestIdentityEndToEndTest
             "FOUNDATION_TEST_FIRM", 6));
 
     private static final Set<ExpectedUser> EXPECTED_USERS = Set.of(
+        user("ft_info", "\u6d4b\u8bd5\u4fe1\u606f\u5458", "FOUNDATION_TEST_SALES",
+            "lead_information_officer"),
         user("ft_product_owner", "\u6d4b\u8bd5\u4ea7\u54c1\u8d1f\u8d23\u4eba", "FOUNDATION_TEST_GOVERNANCE",
             "foundation_product_owner"),
         user("ft_sales", "\u6d4b\u8bd5\u9500\u552e\u4eba\u5458", "FOUNDATION_TEST_SALES", "sales"),
@@ -64,6 +66,7 @@ class FoundationTestIdentityEndToEndTest
             "foundation_independent_reviewer"));
 
     private static final Map<String, Set<String>> EXPECTED_GOVERNANCE_PERMISSIONS = Map.of(
+        "lead_information_officer", Set.of("lead:query", "lead:tag:confirm"),
         "foundation_product_owner", Set.of(
             "todo:decision:view", "todo:decision:edit", "todo:admission:view", "todo:admission:edit"),
         "foundation_security_reviewer", Set.of("todo:admission:view", "todo:admission:edit"),
@@ -99,7 +102,7 @@ class FoundationTestIdentityEndToEndTest
 
                 FoundationTestIdentityProvisioningResult second = service.provision(database.password());
 
-                assertEquals(new FoundationTestIdentityProvisioningResult(0, 30, 0), second);
+                assertEquals(new FoundationTestIdentityProvisioningResult(0, 32, 0), second);
                 assertEquals(beforeIdempotent, database.snapshot(contextJdbc),
                     "Idempotent provisioning must preserve every relevant row and relationship");
                 assertEquals(originalHashes, activePasswordHashes(contextJdbc),
@@ -286,9 +289,9 @@ class FoundationTestIdentityEndToEndTest
                 rows.getString("dept_code"), rows.getString("role_key"), rows.getString("user_type"),
                 rows.getString("status"), rows.getString("del_flag"), rows.getString("create_by"),
                 rows.getString("remark")));
-        assertEquals(12, userRows.size(), "Foundation state must contain exactly twelve active users and role links");
+        assertEquals(13, userRows.size(), "Foundation state must contain exactly thirteen active users and role links");
         assertEquals(EXPECTED_USERS, new LinkedHashSet<>(userRows));
-        assertEquals(12, activeFoundationRoleLinkCount(jdbc));
+        assertEquals(13, activeFoundationRoleLinkCount(jdbc));
         assertEquals(0, jdbc.queryForObject(
             "select count(*) from sys_user_role ur join sys_user u on u.user_id=ur.user_id "
                 + "join sys_role r on r.role_id=ur.role_id where u.user_type='99' and u.status='0' "
@@ -300,7 +303,7 @@ class FoundationTestIdentityEndToEndTest
             ExpectedUser::userName, expected -> Set.of(expected.roleKey())));
         assertEquals(expectedRoles, activeRoleAssignments(jdbc));
         Map<String, String> hashes = activePasswordHashes(jdbc);
-        assertEquals(12, hashes.size());
+        assertEquals(13, hashes.size());
         hashes.forEach((userName, hash) -> assertTrue(encoder.matches(rawPassword, hash),
             () -> "BCrypt password mismatch for " + userName));
 
@@ -310,7 +313,7 @@ class FoundationTestIdentityEndToEndTest
             "select user_id from sys_user where user_type='99' and status='0' and del_flag='0' order by user_id",
             Long.class);
         assertEquals(6, new LinkedHashSet<>(departmentIds).size());
-        assertEquals(12, new LinkedHashSet<>(userIds).size());
+        assertEquals(13, new LinkedHashSet<>(userIds).size());
         assertTrue(departmentIds.stream().allMatch(id -> id != null && id > 0),
             "MyBatis must return real generated department keys");
         assertTrue(userIds.stream().allMatch(id -> id != null && id > 0),

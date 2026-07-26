@@ -70,11 +70,22 @@ class MapperTodoOrganizationAdapterTest
     void roundRobinNormalizesCandidatesAndRejectsSelectionOutsidePool()
     {
         TodoMapper mapper=mock(TodoMapper.class);
-        when(mapper.selectAndAdvanceRoundRobin("lead:sales",List.of(11L,12L))).thenReturn(99L);
+        when(mapper.selectAndAdvanceRoundRobin("lead:sales",List.of(12L,11L))).thenReturn(99L);
 
         MapperTodoOrganizationAdapter adapter=new MapperTodoOrganizationAdapter(mapper);
 
         assertEquals(Optional.empty(),adapter.roundRobin("lead:sales",java.util.Arrays.asList(12L,11L,12L,null)));
+    }
+
+    @Test
+    void roundRobinPreservesTheGovernedCallerOrder()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectAndAdvanceRoundRobin("lead:policy",List.of(12L,11L))).thenReturn(12L);
+
+        MapperTodoOrganizationAdapter adapter=new MapperTodoOrganizationAdapter(mapper);
+
+        assertEquals(12L,adapter.roundRobin("lead:policy",List.of(12L,11L,12L)).orElseThrow());
     }
 
     @Test

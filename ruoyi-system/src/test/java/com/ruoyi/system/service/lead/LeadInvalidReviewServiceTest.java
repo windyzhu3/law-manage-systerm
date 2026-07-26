@@ -113,13 +113,14 @@ class LeadInvalidReviewServiceTest
     void system_default_review_is_audited_as_system()
     {
         LeadInvalidReviewCommand command = command("TRUE_INVALID", true);
+        review.setReviewerId(9L);
         when(leads.selectLeadById(7L)).thenReturn(stored);
         when(facts.selectInvalidReviewById(61L)).thenReturn(review);
         when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
         when(leads.markInvalidReviewed(7L, "PENDING", "TRUE_INVALID", 5, "system")).thenReturn(1);
         when(facts.completeInvalidReview(61L, "TRUE_INVALID",
-                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system"))
+                "TD-002 overdue automatic confirmation", 9L, "Y", 0, "system"))
                 .thenReturn(1);
         when(deadPool.enterConfirmedInvalid(any(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new LeadDeadPoolService.DeadPoolOutcome(73L, false));
@@ -127,9 +128,12 @@ class LeadInvalidReviewServiceTest
         service.reviewAutomatically(7L,61L,21L,TodoAutoActionService.SERVICE_ACTOR);
 
         verify(facts).completeInvalidReview(61L, "TRUE_INVALID",
-                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system");
+                "TD-002 overdue automatic confirmation", 9L, "Y", 0, "system");
+        ArgumentCaptor<BusinessEventCommand> event=ArgumentCaptor.forClass(BusinessEventCommand.class);
         ArgumentCaptor<BusinessActor> publisherActor=ArgumentCaptor.forClass(BusinessActor.class);
-        verify(events).publish(any(),publisherActor.capture());
+        verify(events).publish(event.capture(),publisherActor.capture());
+        assertEquals(9L,event.getValue().getPayload().get("reviewerId"));
+        assertEquals(0L,event.getValue().getPayload().get("operatorId"));
         assertEquals(0L,publisherActor.getValue().userId());
         assertEquals("system",publisherActor.getValue().userName());
     }
@@ -174,7 +178,6 @@ class LeadInvalidReviewServiceTest
         LeadInvalidReviewCommand command = command("TRUE_INVALID", false);
         review.setReviewerId(9L);
         review.setTodoId(20L);
-        when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(facts.selectInvalidReviewById(61L)).thenReturn(review);
 
@@ -189,7 +192,6 @@ class LeadInvalidReviewServiceTest
     {
         LeadInvalidReviewCommand command=command("TRUE_INVALID",false);
         review.setReviewerId(9L);
-        when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(facts.selectInvalidReviewById(61L)).thenReturn(review);
 
@@ -204,7 +206,8 @@ class LeadInvalidReviewServiceTest
     {
         LeadInvalidReviewCommand command=command("TRUE_INVALID",false);
         when(actors.current()).thenReturn(actor());
-        when(access.requireOperable(7L)).thenThrow(new com.ruoyi.common.exception.ServiceException(
+        when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+        when(access.requireReviewable(7L,8L)).thenThrow(new com.ruoyi.common.exception.ServiceException(
                 "out of scope",com.law.business.shared.error.BusinessErrorCode.ACCESS_DENIED.name()));
 
         com.ruoyi.common.exception.ServiceException error=
@@ -212,7 +215,7 @@ class LeadInvalidReviewServiceTest
                         ()->service.review(command));
 
         assertEquals("ACCESS_DENIED",error.getBusinessCode());
-        verify(facts,org.mockito.Mockito.never()).selectInvalidReviewById(any());
+        verify(leads,org.mockito.Mockito.never()).markInvalidReviewed(any(),any(),any(),any(),any());
     }
 
     @Test
@@ -226,7 +229,7 @@ class LeadInvalidReviewServiceTest
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
         when(leads.markInvalidReviewed(7L, "PENDING", "TRUE_INVALID", 5, "system")).thenReturn(1);
         when(facts.completeInvalidReview(61L, "TRUE_INVALID",
-                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system")).thenReturn(1);
+                "TD-002 overdue automatic confirmation", 9L, "Y", 0, "system")).thenReturn(1);
         when(deadPool.enterConfirmedInvalid(any(), anyInt(), any(), any(), any(), any(), any()))
                 .thenReturn(new LeadDeadPoolService.DeadPoolOutcome(73L, false));
 
@@ -235,7 +238,7 @@ class LeadInvalidReviewServiceTest
 
         assertEquals("TRUE_INVALID", outcome.result());
         verify(facts).completeInvalidReview(61L, "TRUE_INVALID",
-                "TD-002 overdue automatic confirmation", 0L, "Y", 0, "system");
+                "TD-002 overdue automatic confirmation", 9L, "Y", 0, "system");
     }
 
     @Test
@@ -258,9 +261,9 @@ class LeadInvalidReviewServiceTest
         review.setReviewResult("TRUE_INVALID");
         review.setReviewerId(8L);
         review.setTodoId(21L);
-        when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+        when(access.requireReviewable(7L,8L)).thenReturn(stored);
         when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
 
@@ -273,9 +276,9 @@ class LeadInvalidReviewServiceTest
 
     private void common(LeadInvalidReviewCommand command)
     {
-        when(access.requireOperable(7L)).thenReturn(stored);
         when(actors.current()).thenReturn(actor());
         when(facts.selectInvalidReviewById(61L)).thenReturn(review);
+        when(access.requireReviewable(7L,8L)).thenReturn(stored);
         when(dictionaries.selectDictDataByType("law_lead_invalid_review_result"))
                 .thenReturn(dict("TRUE_INVALID", "MISJUDGED_VALID"));
     }

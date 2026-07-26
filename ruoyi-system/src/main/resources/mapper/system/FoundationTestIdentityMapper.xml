@@ -33,6 +33,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="delFlag" column="del_flag" />
         <result property="createBy" column="create_by" />
         <result property="remark" column="remark" />
+        <result property="pwdUpdateDate" column="pwd_update_date" />
     </resultMap>
 
     <sql id="selectFoundationDepartment">
@@ -92,7 +93,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <select id="selectUsersByUserName" parameterType="String" resultMap="FoundationUserResult">
         select u.user_id, u.dept_id, u.user_name, u.nick_name, u.user_type, u.status, u.del_flag,
-               u.create_by, u.remark
+               u.create_by, u.remark, u.pwd_update_date
         from sys_user u
         where u.user_name = #{userName}
     </select>
@@ -100,10 +101,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <insert id="insertUser" parameterType="SysUser" useGeneratedKeys="true" keyProperty="userId">
         insert into sys_user
             (dept_id, user_name, nick_name, user_type, email, phonenumber, sex, avatar, password,
-             status, del_flag, create_by, create_time, remark)
+             status, del_flag, create_by, create_time, pwd_update_date, remark)
         values
             (#{deptId}, #{userName}, #{nickName}, #{userType}, #{email}, #{phonenumber}, #{sex}, #{avatar},
-             #{password}, #{status}, #{delFlag}, #{createBy}, sysdate(), #{remark})
+             #{password}, #{status}, #{delFlag}, #{createBy}, sysdate(), #{pwdUpdateDate}, #{remark})
     </insert>
 
     <select id="selectRoleIdsByUserId" parameterType="Long" resultType="Long">
@@ -120,6 +121,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 
     <update id="updateTestUserPlacement">
         update sys_user set dept_id = #{deptId}, update_time = sysdate() where user_id = #{userId}
+    </update>
+
+    <update id="activateTestUser" parameterType="Long">
+        update sys_user
+        set pwd_update_date = sysdate(), update_time = sysdate()
+        where user_id = #{userId} and pwd_update_date is null
     </update>
 
 </mapper>

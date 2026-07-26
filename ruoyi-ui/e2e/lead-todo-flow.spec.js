@@ -7,6 +7,9 @@ const {
   cleanupLeadTodoFixtures,
   assertNoLeadTodoFixtures,
   leadState,
+  todoRuntimeState,
+  slaWorkerState,
+  makeSellerUnavailable,
   evidenceNames,
   policySnapshot
 } = require('./support/lead-todo-e2e-database')
@@ -15,7 +18,10 @@ const enabled = String(process.env.LEAD_TODO_E2E).toLowerCase() === 'true'
 let fixtures
 let runContext
 let cleanupRequest
+let supervisorRequest
+let informationRequest
 let verifiedRun
+let slaWorkerBaseline
 let setupAttempted = false
 
 test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL fixtures', () => {
@@ -26,7 +32,10 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
     let ready = false
     try {
       cleanupRequest = await authenticatedApiRequest(runContext.seller)
+      supervisorRequest = await authenticatedApiRequest(runContext.supervisor)
+      informationRequest = await authenticatedApiRequest(runContext.informationOfficer)
       verifiedRun = await verifyBackendIdentity(runContext, cleanupRequest)
+      slaWorkerBaseline = slaWorkerState(runContext).successfulRuns
       setupAttempted = true
       fixtures = setupLeadTodoFixtures(verifiedRun)
       ready = true
@@ -38,6 +47,64 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
     }
   })
 
+  test('01 tag confirmation advances the governed round-robin cursor and assigns the lead', async ({ page }) => {
+    const lead = fixtures.leads.ASSIGN
+    expect(leadState(lead.leadNo, runContext)).toMatchObject({
+      tagConfirmStatus: 'PENDING',
+      ownerId: null
+    })
+    await login(page, process.env.LEAD_INFORMATION_USER)
+    await openIntakeLead(page, lead.leadNo)
+    const debug = await page.evaluate(leadNo => {
+      const component = [...document.querySelectorAll('*')]
+        .map(element => element.__vue__)
+        .find(vm => Array.isArray(vm?.leadList))
+      const row = component?.leadList?.find(item => item.leadNo === leadNo)
+      return {
+        permissions: component?.$store?.getters?.permissions,
+        row,
+        canConfirmTag: component && row ? component.canConfirmTag(row) : null,
+        canConfirmTagPermission: component?.canConfirmTagPermission,
+        permissionRenderKey: component?.permissionRenderKey,
+        authPermission: component ? component.$auth?.hasPermi('lead:tag:confirm') : null,
+        tagButtons: [...document.querySelectorAll(`[data-testid="lead-tag-confirm-${leadNo}"]`)]
+          .map(element => ({
+            text: element.textContent,
+            display: getComputedStyle(element).display,
+            visibility: getComputedStyle(element).visibility,
+            width: element.getBoundingClientRect().width
+          })),
+        operationTexts: [...document.querySelectorAll('.lead-operation-column')]
+          .map(element => element.textContent.trim()).filter(Boolean)
+      }
+    }, lead.leadNo)
+    if (!debug.canConfirmTag || !debug.permissions?.includes('lead:tag:confirm')) {
+      throw new Error(`Tag confirmation UI state mismatch: ${JSON.stringify(debug)}`)
+    }
+    const tagButton = page.locator(`[data-testid="lead-tag-confirm-${lead.leadNo}"]:visible`)
+    await expect(tagButton, `Tag button missing after state check: ${JSON.stringify(debug)}`)
+      .toBeVisible({ timeout: 5000 })
+    await tagButton.click()
+    await expect(page.getByText('标签已确认')).toBeVisible()
+
+    await expect.poll(() => leadState(lead.leadNo, runContext)).toMatchObject({
+      tagConfirmStatus: 'CONFIRMED',
+      ownerName: process.env.LEAD_SALES_USER
+    })
+  })
+
+  test('02 LEAD_ASSIGNED creates exactly one TD-001 owned by the selected salesperson', async ({ page }) => {
+    const lead = fixtures.leads.ASSIGN
+    await login(page, process.env.LEAD_SALES_USER)
+    await openMineLead(page, lead.leadNo)
+    await expect(page.locator(`[data-testid="lead-first-contact-${lead.leadNo}"]:visible`)).toBeVisible()
+    await expect.poll(() => leadState(lead.leadNo, runContext), { timeout: 20000 }).toMatchObject({
+      assignedEventStatus: 'PROCESSED',
+      td001Open: 1,
+      td001Owner: process.env.LEAD_SALES_USER
+    })
+  })
+
   test.afterAll(async () => {
     try {
       if (runContext && verifiedRun && setupAttempted) {
@@ -46,6 +113,8 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
       }
     } finally {
       if (cleanupRequest) await cleanupRequest.dispose()
+      if (supervisorRequest) await supervisorRequest.dispose()
+      if (informationRequest) await informationRequest.dispose()
     }
   })
 
@@ -91,6 +160,34 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
     await expect.poll(() => leadState(lead.leadNo, runContext).manualCalls).toBe(1)
     expect(evidenceNames(lead.leadNo, runContext)).toContain(fileName)
     await expect(drawer.getByText('人工补录', { exact: true }).first()).toBeVisible()
+  })
+
+  test('06 TD-002 due automatic confirmation uses the production worker and records the controlled default', async ({ page }) => {
+    const lead = fixtures.leads.AUTO_REVIEW
+    const worker = slaWorkerState(runContext)
+    expect(worker).toMatchObject({ status: '0', cronExpression: '0/10 * * * * ?' })
+
+    await expect.poll(() => leadState(lead.leadNo, runContext), { timeout: 25000 }).toMatchObject({
+      disposition: 'DEAD_POOL',
+      invalidReviewStatus: 'CONFIRMED',
+      reviewStatus: 'COMPLETED',
+      reviewResult: 'TRUE_INVALID',
+      reviewerUser: process.env.LEAD_SUPERVISOR_USER,
+      reviewSystemDefault: 'Y',
+      deadPoolEnterCount: 1,
+      invalidConfirmedEventCount: 1
+    })
+    await expect.poll(() => todoRuntimeState(lead.leadNo, 'TD-002', runContext),
+      { timeout: 25000 }).toMatchObject({
+      status: 'COMPLETED',
+      autoActionSuccessCount: 1
+    })
+    expect(slaWorkerState(runContext).successfulRuns).toBeGreaterThan(slaWorkerBaseline)
+
+    await login(page, process.env.LEAD_SUPERVISOR_USER)
+    await navigate(page, '/lead/dead-pool')
+    await filterWorkbench(page, lead.leadNo)
+    await expect(tableRow(page, lead.leadNo)).toBeVisible()
   })
 
   test('invalid review TRUE_INVALID is an independent fixture and enters Dead-Pool', async ({ page }) => {
@@ -174,14 +271,50 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
     })
   })
 
+  test('10 SLA 80/100/150 thresholds notify the owner and expose the escalation to the supervisor', async ({ page }) => {
+    const lead = fixtures.leads.SLA
+    await expect.poll(() => todoRuntimeState(lead.leadNo, 'TD-001', runContext),
+      { timeout: 25000 }).toMatchObject({
+      slaStatus: 'ESCALATED',
+      ownerReminderCount: 3,
+      supervisorEscalationCount: 1,
+      autoActionSuccessCount: 1
+    })
+    const state = todoRuntimeState(lead.leadNo, 'TD-001', runContext)
+    expect(state.remind80At).toBeTruthy()
+    expect(state.overdue100At).toBeTruthy()
+    expect(state.escalate150At).toBeTruthy()
+
+    await login(page, process.env.LEAD_SUPERVISOR_USER)
+    await navigate(page, '/todo')
+    await page.locator('input.el-radio-button__orig-radio[value="overdue"]').click({ force: true })
+    const keyword = page.locator('.biz-filter-main .el-input input').first()
+    const responsePromise = page.waitForResponse(response => {
+      if (!response.url().includes('/todo/list') || response.request().method() !== 'GET') return false
+      const url = new URL(response.url())
+      return url.searchParams.get('mode') === 'overdue' &&
+        url.searchParams.get('keyword') === lead.leadNo
+    })
+    await keyword.fill(lead.leadNo)
+    await keyword.press('Enter')
+    const response = await responsePromise
+    const body = await response.json()
+    expect(response.ok()).toBeTruthy()
+    expect(body.total).toBe(1)
+    expect(body.rows).toHaveLength(1)
+    expect(body.rows[0].business_no).toBe(lead.leadNo)
+    await expect(page.locator('.el-table__body-wrapper tr').filter({ hasText: lead.leadNo }).first())
+      .toBeVisible()
+  })
+
   test('Dead-Pool restore requires a reason, submits it and verifies the restored public-pool state', async ({ page }) => {
     const lead = fixtures.leads.DEAD_POOL
     await login(page, process.env.LEAD_SUPERVISOR_USER)
-    await page.goto('/lead/dead-pool')
+    await navigate(page, '/lead/dead-pool')
     await filterWorkbench(page, lead.leadNo)
     const row = tableRow(page, lead.leadNo)
     await expect(row.getByRole('button', { name: '领取' })).toHaveCount(0)
-    await row.getByRole('button', { name: '恢复' }).click()
+    await page.locator(`[data-testid="lead-dead-pool-restore-${lead.leadNo}"]:visible`).click()
     const dialog = page.getByRole('dialog', { name: '恢复 Dead-Pool 线索' })
     await fillFormText(dialog, '恢复原因', '主管复核后确认可重新进入普通公海')
     await dialog.getByTestId('dead-pool-restore-submit').click()
@@ -189,6 +322,72 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
 
     await expect.poll(() => leadState(lead.leadNo, runContext).disposition).toBe('PUBLIC_POOL')
     expect(leadState(lead.leadNo, runContext).restoreCount).toBe(1)
+  })
+
+  test('11 an unavailable salesperson is skipped by the next round-robin assignment', async ({ page }) => {
+    const lead = fixtures.leads.LEAVE
+    expect(makeSellerUnavailable(runContext)).toEqual([['1']])
+    await login(page, process.env.LEAD_INFORMATION_USER)
+    await openIntakeLead(page, lead.leadNo)
+    await page.locator(`[data-testid="lead-tag-confirm-${lead.leadNo}"]:visible`).click()
+    await expect(page.getByText('标签已确认')).toBeVisible()
+
+    await expect.poll(() => leadState(lead.leadNo, runContext), { timeout: 20000 }).toMatchObject({
+      tagConfirmStatus: 'CONFIRMED',
+      assignedEventStatus: 'PROCESSED',
+      ownerName: process.env.LEAD_ALTERNATE_SALES_USER,
+      td001Owner: process.env.LEAD_ALTERNATE_SALES_USER
+    })
+  })
+
+  test('12 duplicate completion is idempotent and an unauthorized actor is rejected', async () => {
+    const lead = fixtures.leads.AUTH
+    const pending = leadState(lead.leadNo, runContext)
+    expect(pending).toMatchObject({
+      disposition: 'ACTIVE',
+      reviewStatus: 'PENDING'
+    })
+    const actionId = `lead-e2e-auth-${fixtures.runId}`
+    const command = {
+      actionId,
+      reviewResult: 'TRUE_INVALID',
+      reviewOpinion: 'E2E duplicate and authorization boundary'
+    }
+    const unauthorized = await informationRequest.post(
+      `/lead/invalid-review/${pending.reviewTodoId}/complete`, { data: command })
+    const unauthorizedBody = await unauthorized.json()
+    expect(unauthorized.status()).toBe(200)
+    expect(Number(unauthorizedBody.code)).toBe(403)
+    expect(leadState(lead.leadNo, runContext)).toMatchObject({
+      disposition: 'ACTIVE',
+      reviewStatus: 'PENDING',
+      deadPoolEnterCount: 0,
+      invalidConfirmedEventCount: 0
+    })
+
+    const first = await supervisorRequest.post(
+      `/lead/invalid-review/${pending.reviewTodoId}/complete`, { data: command })
+    const firstBody = await first.json()
+    expect(first.ok(), JSON.stringify(firstBody)).toBeTruthy()
+    expect(Number(firstBody.code || 200)).toBe(200)
+
+    const replay = await supervisorRequest.post(
+      `/lead/invalid-review/${pending.reviewTodoId}/complete`, { data: command })
+    const replayBody = await replay.json()
+    expect(replay.ok(), JSON.stringify(replayBody)).toBeTruthy()
+    expect(Number(replayBody.code || 200)).toBe(200)
+
+    expect(leadState(lead.leadNo, runContext)).toMatchObject({
+      disposition: 'DEAD_POOL',
+      reviewStatus: 'COMPLETED',
+      reviewSystemDefault: 'N',
+      deadPoolEnterCount: 1,
+      invalidConfirmedEventCount: 1
+    })
+    expect(todoRuntimeState(lead.leadNo, 'TD-002', runContext)).toMatchObject({
+      status: 'COMPLETED',
+      actionCount: 1
+    })
   })
 
   test('assignment policy persists all seven windows and deterministically recovers a concurrent write while preserving the draft', async ({ browser }) => {
@@ -267,17 +466,51 @@ async function login(page, username) {
   await page.goto('/login')
   await page.getByPlaceholder('账号').fill(username || '')
   await page.getByPlaceholder('密码').fill(process.env.LEAD_TODO_E2E_PASSWORD || '')
+  const infoPromise = page.waitForResponse(response =>
+    response.url().includes('/getInfo') && response.request().method() === 'GET')
   await Promise.all([
     page.waitForResponse(response => response.url().includes('/login') && response.request().method() === 'POST'),
     page.getByRole('button', { name: '登录' }).click()
   ])
+  const info = await infoPromise
+  const body = await info.json()
+  expect(info.ok()).toBe(true)
+  expect(body.code).toBe(200)
+  expect(body.user?.userName).toBe(username)
   await expect(page).not.toHaveURL(/\/login(?:\?|$)/)
+  await page.waitForLoadState('networkidle')
+}
+
+async function navigate(page, path) {
+  await page.evaluate(async target => {
+    const app = [...document.querySelectorAll('*')]
+      .map(element => element.__vue__)
+      .find(vm => vm?.$router)
+    if (!app) throw new Error('Vue router is unavailable')
+    try {
+      await app.$router.push(target)
+    } catch (error) {
+      if (!String(error?.message || '').includes('Avoided redundant navigation')) throw error
+    }
+  }, path)
+  await expect(page).toHaveURL(new RegExp(`${escapeRegex(path.split('?')[0])}(?:\\?|$)`))
 }
 
 async function filterWorkbench(page, keyword) {
   const input = page.getByPlaceholder(/线索编号、名称、手机号/)
   await input.fill(keyword)
-  await page.getByRole('button', { name: '查询', exact: true }).click()
+  const responsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return response.request().method() === 'GET'
+      && url.pathname.includes('/prod-api/lead/')
+      && url.searchParams.get('keyword') === keyword
+  })
+  await page.getByTestId('lead-search-submit').click()
+  const response = await responsePromise
+  expect(response.status()).toBe(200)
+  const body = await response.json()
+  expect(body.code).toBe(200)
+  expect(body.rows.some(row => row.leadNo === keyword)).toBe(true)
   await expect(tableRow(page, keyword)).toBeVisible()
 }
 
@@ -286,27 +519,58 @@ function tableRow(page, keyword) {
 }
 
 async function openFirstContact(page, leadNo) {
-  await page.goto('/lead/mine?module=mine')
+  await navigate(page, '/lead/mine?module=mine')
   const input = page.getByPlaceholder('搜索线索名称、单位')
-  await input.fill(leadNo)
-  await page.getByRole('button', { name: '查询', exact: true }).click()
+  await input.fill(`E2E ${leadNo.substring(leadNo.lastIndexOf('_') + 1)}`)
+  await page.getByTestId('lead-search-submit').click()
   const row = tableRow(page, leadNo)
   await expect(row).toBeVisible()
-  await row.getByRole('button', { name: '首联', exact: true }).click()
+  await page.locator(`[data-testid="lead-first-contact-${leadNo}"]:visible`).click()
   await expect(page.getByTestId('lead-first-contact-drawer')).toBeVisible()
 }
 
+async function openMineLead(page, leadNo) {
+  await navigate(page, '/lead/mine?module=mine')
+  const input = page.getByPlaceholder('搜索线索名称、单位')
+  await input.fill(`E2E ${leadNo.substring(leadNo.lastIndexOf('_') + 1)}`)
+  await page.getByTestId('lead-search-submit').click()
+  await expect(tableRow(page, leadNo)).toBeVisible()
+}
+
+async function openIntakeLead(page, leadNo) {
+  await navigate(page, '/lead/all?module=all')
+  const input = page.getByPlaceholder('搜索线索名称、单位')
+  const keyword = `E2E ${leadNo.substring(leadNo.lastIndexOf('_') + 1)}`
+  await input.fill(keyword)
+  const responsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url())
+    return url.pathname.endsWith('/lead/list') &&
+      url.searchParams.get('leadName') === keyword &&
+      url.searchParams.get('listMode') === 'all'
+  })
+  await page.getByTestId('lead-search-submit').click()
+  const response = await responsePromise
+  expect(response.ok()).toBe(true)
+  const requestUrl = new URL(response.url())
+  expect(requestUrl.searchParams.get('pageNum')).toBe('1')
+  expect(requestUrl.searchParams.get('pageSize')).toBe('10')
+  const body = await response.json()
+  expect(body.total).toBe(1)
+  expect((body.rows || []).map(row => row.leadNo)).toEqual([leadNo])
+  await expect(tableRow(page, leadNo)).toBeVisible()
+}
+
 async function openReview(page, leadNo) {
-  await page.goto('/lead/invalid-review')
+  await navigate(page, '/lead/invalid-review')
   await filterWorkbench(page, leadNo)
-  await tableRow(page, leadNo).getByRole('button', { name: '复核', exact: true }).click()
+  await page.locator(`[data-testid="lead-review-${leadNo}"]:visible`).click()
   await expect(page.getByRole('dialog', { name: '确认无效判断' })).toBeVisible()
 }
 
 function formItem(scope, label) {
-  return scope.locator('.el-form-item').filter({
-    has: scope.locator('.el-form-item__label').filter({ hasText: new RegExp(`^${escapeRegex(label)}$`) })
-  }).first()
+  return scope.getByText(label, { exact: true })
+    .locator('xpath=ancestor::div[contains(concat(" ",normalize-space(@class)," ")," el-form-item ")]')
+    .first()
 }
 
 async function fillFormText(scope, label, value) {
@@ -318,9 +582,11 @@ async function fillFormText(scope, label, value) {
 
 async function fillDateTime(scope, label, value) {
   const input = formItem(scope, label).locator('input').first()
+  const displayValue = String(value).replace('T', ' ')
   await input.evaluate(element => element.removeAttribute('readonly'))
-  await input.fill(value)
-  await input.press('Tab')
+  await input.fill(displayValue)
+  await input.press('Enter')
+  await expect(input).toHaveValue(displayValue)
 }
 
 async function selectFormOption(page, scope, label, option) {
@@ -340,10 +606,10 @@ async function uploadMaterial(scope, fileName, body) {
 }
 
 async function completeRetry(page, leadNo, resultLabel, fileName, connected) {
-  await page.goto('/lead/retry')
+  await navigate(page, '/lead/retry')
   await filterWorkbench(page, leadNo)
   const row = tableRow(page, leadNo)
-  await row.getByRole('button', { name: '处理', exact: true }).click()
+  await page.locator(`[data-testid="lead-retry-${leadNo}"]:visible`).click()
   const drawer = page.getByTestId('business-todo-drawer')
   await expect(drawer).toBeVisible()
   const todoRow = drawer.locator('[data-testid^="todo-row-"]').locator('xpath=ancestor::tr')
@@ -351,6 +617,7 @@ async function completeRetry(page, leadNo, resultLabel, fileName, connected) {
   await todoRow.getByRole('button', { name: '完成', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: '完成待办' })
   await selectFormOption(page, dialog, '联系结果', resultLabel)
+  await fillDateTime(dialog, '联系时间', new Date().toISOString().slice(0, 19))
   if (connected) {
     await fillFormText(dialog, '姓名', connected.name)
     await fillFormText(dialog, '城市', connected.city)
@@ -363,7 +630,7 @@ async function completeRetry(page, leadNo, resultLabel, fileName, connected) {
 }
 
 async function openPolicy(page, policyCode) {
-  await page.goto('/lead/assignment-policy')
+  await navigate(page, '/lead/assignment-policy')
   const card = page.getByTestId(`policy-card-${policyCode}`)
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: '编辑策略' }).click()

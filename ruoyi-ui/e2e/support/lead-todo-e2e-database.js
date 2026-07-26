@@ -5,8 +5,8 @@ const { executeSql } = require('../../tests/e2e/support/mysql-e2e-runner')
 
 const WINDOW_CODES = ['T0', 'T1_AM', 'T1_NOON', 'T1_PM', 'T2_AM', 'T2_NOON', 'T2_PM']
 const FIXTURE_CODES = [
-  'VALID', 'MANUAL', 'TRUE_INVALID', 'MISJUDGED', 'RETAIN', 'NEXT',
-  'CONNECTED', 'EXHAUSTED', 'DEAD_POOL'
+  'ASSIGN', 'LEAVE', 'VALID', 'MANUAL', 'TRUE_INVALID', 'MISJUDGED', 'RETAIN', 'NEXT',
+  'CONNECTED', 'EXHAUSTED', 'DEAD_POOL', 'AUTO_REVIEW', 'SLA', 'AUTH'
 ]
 const verifiedRuns = new WeakMap()
 
@@ -52,8 +52,10 @@ function createRunContext(options = {}) {
     prefix,
     sourceCode: `E2E_${runId}`,
     policyCode: `LEAD_E2E_POLICY_${runId}`,
+    informationOfficer: required('LEAD_INFORMATION_USER', env),
     seller: required('LEAD_SALES_USER', env),
     supervisor: required('LEAD_SUPERVISOR_USER', env),
+    alternateSales: required('LEAD_ALTERNATE_SALES_USER', env),
     policyAdmin: required('LEAD_POLICY_ADMIN_USER', env),
     storageRoot: path.resolve(env.TODO_E2E_FILE_STORAGE_ROOT ||
       path.join(env.RUOYI_PROFILE || '/tmp/law-manage/uploads', 'file-center'))
@@ -184,10 +186,11 @@ insert into biz_lead(
 )
 select ${quote(ctx.prefix + code)},${quote(`E2E ${code}`)},${quote(`E2E ${code}`)},
   ${quote(`139${String(FIXTURE_CODES.indexOf(code) + 1).padStart(8, '0')}`)},${quote(ctx.sourceCode)},
-  'CONFIRMED',${quote(overrides.firstStatus || 'PENDING')},${firstResult ? quote(firstResult) : 'null'},
+  ${quote(overrides.tagStatus || 'CONFIRMED')},${quote(overrides.firstStatus || 'PENDING')},${firstResult ? quote(firstResult) : 'null'},
   ${invalidStatus ? quote(invalidStatus) : 'null'},${retryStage ? quote(retryStage) : 'null'},
   0,${quote(status)},${disposition === 'PUBLIC_POOL' ? "'1'" : "'0'"},${quote(disposition)},'2',
-  seller.user_id,seller.dept_id,'0',0,'lead-e2e',sysdate(),'lead-e2e',sysdate()
+  ${overrides.unassigned ? 'null' : 'seller.user_id'},seller.dept_id,
+  '0',0,'lead-e2e',sysdate(),'lead-e2e',sysdate()
 from sys_user seller
 where seller.user_name=${quote(ctx.seller)} and seller.status='0' and seller.del_flag='0';`
 }
@@ -239,6 +242,9 @@ function reviewFixture(ctx, code, result) {
 ${todoInsert(ctx, `${key}_SOURCE`, code, 'TD-001', 'td001', 'COMPLETED', ctx.seller)}
 ${todoInsert(ctx, `${key}_REVIEW`, code, 'TD-002', 'td002', result ? 'COMPLETED' : 'SUBMITTED',
     ctx.supervisor, `${key}_SOURCE`, `${key}_SOURCE`)}
+update todo_instance
+set due_at=date_add(sysdate(),interval 1 day),update_time=sysdate()
+where todo_id=@${key}_REVIEW and status<>'COMPLETED';
 insert into biz_lead_invalid_review(
   lead_id,reason_code,sales_explanation,submitted_by,submitted_at,reviewer_id,
   review_result,review_comment,reviewed_at,todo_id,status,idempotency_key,create_by,row_version
@@ -298,14 +304,19 @@ function setupLeadTodoFixtures(capability, dependencies = {}) {
   const setup = `
 set names utf8mb4 collate utf8mb4_unicode_ci;
 create temporary table tmp_lead_e2e_identity_guard(
-  seller_count int not null,supervisor_count int not null,admin_count int not null,
+  information_count int not null,seller_count int not null,alternate_count int not null,
+  supervisor_count int not null,admin_count int not null,
+  constraint chk_lead_e2e_information check(information_count=1),
   constraint chk_lead_e2e_seller check(seller_count=1),
+  constraint chk_lead_e2e_alternate check(alternate_count=1),
   constraint chk_lead_e2e_supervisor check(supervisor_count=1),
   constraint chk_lead_e2e_admin check(admin_count=1)
 ) engine=innodb;
 insert into tmp_lead_e2e_identity_guard
 select
+  (select count(*) from sys_user where user_name=${quote(ctx.informationOfficer)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.seller)} and status='0' and del_flag='0'),
+  (select count(*) from sys_user where user_name=${quote(ctx.alternateSales)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.supervisor)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.policyAdmin)} and status='0' and del_flag='0');
 drop temporary table tmp_lead_e2e_identity_guard;
@@ -333,9 +344,13 @@ set @policy_id=last_insert_id();
 insert into biz_lead_assignment_policy_candidate(
   policy_id,user_id,sort_order,status,create_by,create_time
 )
-select @policy_id,user_id,0,'ACTIVE','lead-e2e',sysdate()
-from sys_user where user_name=${quote(ctx.seller)};
+select @policy_id,user_id,
+  case when user_name=${quote(ctx.seller)} then 0 else 1 end,
+  'ACTIVE','lead-e2e',sysdate()
+from sys_user where user_name in(${quote(ctx.seller)},${quote(ctx.alternateSales)});
 
+${leadInsert(ctx, 'ASSIGN', { tagStatus: 'PENDING', unassigned: true })}
+${leadInsert(ctx, 'LEAVE', { tagStatus: 'PENDING', unassigned: true })}
 ${leadInsert(ctx, 'VALID')}
 ${leadInsert(ctx, 'MANUAL')}
 ${leadInsert(ctx, 'TRUE_INVALID', { firstResult: 'SUSPECT_INVALID', invalidStatus: 'PENDING' })}
@@ -348,6 +363,9 @@ ${leadInsert(ctx, 'DEAD_POOL', {
     firstResult: 'SUSPECT_INVALID', invalidStatus: 'CONFIRMED', disposition: 'DEAD_POOL',
     firstStatus: 'COMPLETED', status: '4'
   })}
+${leadInsert(ctx, 'AUTO_REVIEW', { firstResult: 'SUSPECT_INVALID', invalidStatus: 'PENDING' })}
+${leadInsert(ctx, 'SLA')}
+${leadInsert(ctx, 'AUTH', { firstResult: 'SUSPECT_INVALID', invalidStatus: 'PENDING' })}
 
 ${todoInsert(ctx, 'VALID_TODO', 'VALID', 'TD-001', 'td001', 'SUBMITTED', ctx.seller)}
 ${todoInsert(ctx, 'MANUAL_TODO', 'MANUAL', 'TD-001', 'td001', 'SUBMITTED', ctx.seller)}
@@ -358,6 +376,47 @@ ${retryFixture(ctx, 'NEXT', 1, true)}
 ${retryFixture(ctx, 'CONNECTED', 2, true)}
 ${retryFixture(ctx, 'EXHAUSTED', 1, false)}
 ${reviewFixture(ctx, 'DEAD_POOL', 'TRUE_INVALID')}
+${reviewFixture(ctx, 'AUTO_REVIEW')}
+${todoInsert(ctx, 'SLA_TODO', 'SLA', 'TD-001', 'td001', 'IN_PROGRESS', ctx.seller)}
+${reviewFixture(ctx, 'AUTH')}
+
+update todo_instance
+set due_at=date_sub(sysdate(),interval 1 minute),update_time=sysdate()
+where todo_id=@AUTOREVIEW_REVIEW;
+
+insert into todo_sla_record(
+  todo_id,calendar_id,start_at,due_at,original_due_at,remind80_due_at,
+  overdue100_due_at,escalate150_due_at,status,version
+)
+select @SLA_TODO,c.calendar_id,date_sub(sysdate(),interval 10 minute),
+  date_sub(sysdate(),interval 3 minute),date_sub(sysdate(),interval 3 minute),
+  date_sub(sysdate(),interval 5 minute),date_sub(sysdate(),interval 3 minute),
+  date_sub(sysdate(),interval 1 minute),'RUNNING',0
+from todo_work_calendar c where c.calendar_code='DEFAULT' and c.status='0';
+update todo_instance
+set due_at=date_sub(sysdate(),interval 3 minute),sla_status='NORMAL',update_time=sysdate()
+where todo_id=@SLA_TODO;
+
+update sys_dept sales_dept
+join sys_user seller on seller.dept_id=sales_dept.dept_id
+join sys_user supervisor on supervisor.user_name=${quote(ctx.supervisor)}
+set sales_dept.leader=supervisor.user_name,
+    sales_dept.update_by=concat('lead-e2e-',${quote(ctx.runId)}),
+    sales_dept.update_time=sysdate()
+where seller.user_name=${quote(ctx.seller)}
+  and (sales_dept.leader is null or sales_dept.leader=supervisor.user_name);
+
+insert into biz_business_tag(
+  tag_code,tag_name,tag_level,applicable_business_type,status,create_by,create_time
+) values(${quote(`LEAD_E2E_TAG_${ctx.runId}`)},${quote(`E2E source ${ctx.marker}`)},
+  'SOURCE','LEAD','0','lead-e2e',sysdate());
+set @e2e_tag=last_insert_id();
+insert into biz_business_tag_rel(
+  business_type,business_id,tag_id,tag_source,confirm_status,create_by,create_time
+)
+select 'LEAD',lead_id,@e2e_tag,'SYSTEM','PENDING','lead-e2e',sysdate()
+from biz_lead where lead_no in(
+  ${quote(ctx.prefix + 'ASSIGN')},${quote(ctx.prefix + 'LEAVE')});
 
 update biz_lead
 set dead_pool_time=sysdate(),dead_pool_reason='E2E confirmed invalid'
@@ -424,6 +483,17 @@ function leadState(leadNo, ctx = createRunContext(), dependencies = {}) {
   const row = queryRows(`
 select json_object(
   'leadNo',l.lead_no,'disposition',l.disposition,'firstContactResult',l.first_contact_result,
+  'tagConfirmStatus',l.tag_confirm_status,'ownerId',l.owner_id,
+  'ownerName',(select user_name from sys_user where user_id=l.owner_id),
+  'assignedEventStatus',(select e.event_status from business_event e
+    where e.aggregate_type='LEAD' and e.aggregate_id=l.lead_id and e.event_type='LEAD_ASSIGNED'
+    order by e.event_id desc limit 1),
+  'assignedEventError',(select e.error_message from business_event e
+    where e.aggregate_type='LEAD' and e.aggregate_id=l.lead_id and e.event_type='LEAD_ASSIGNED'
+    order by e.event_id desc limit 1),
+  'td001Owner',(select u.user_name from todo_instance t join sys_user u on u.user_id=t.owner_id
+    where t.business_type='LEAD' and t.business_id=l.lead_id and t.template_code='TD-001'
+    order by t.todo_id desc limit 1),
   'invalidReviewStatus',l.invalid_review_status,'retryStage',l.retry_stage,
   'retryAttemptCount',l.retry_attempt_count,
   'td001Open',(select count(*) from todo_instance t where t.business_type='LEAD'
@@ -444,11 +514,85 @@ select json_object(
     join todo_schedule_window w on w.plan_id=p.plan_id
     where p.business_type='LEAD' and p.business_id=l.lead_id and w.status='CANCELLED'),
   'restoreCount',(select count(*) from biz_lead_dead_pool_log d
-    where d.lead_id=l.lead_id and d.action_type='RESTORE')
+    where d.lead_id=l.lead_id and d.action_type='RESTORE'),
+  'reviewTodoId',(select t.todo_id from todo_instance t
+    where t.business_type='LEAD' and t.business_id=l.lead_id and t.template_code='TD-002'
+    order by t.todo_id desc limit 1),
+  'reviewStatus',(select r.status from biz_lead_invalid_review r
+    where r.lead_id=l.lead_id order by r.review_id desc limit 1),
+  'reviewResult',(select r.review_result from biz_lead_invalid_review r
+    where r.lead_id=l.lead_id order by r.review_id desc limit 1),
+  'reviewerUser',(select reviewer.user_name from biz_lead_invalid_review r
+    left join sys_user reviewer on reviewer.user_id=r.reviewer_id
+    where r.lead_id=l.lead_id order by r.review_id desc limit 1),
+  'reviewSystemDefault',(select r.system_default from biz_lead_invalid_review r
+    where r.lead_id=l.lead_id order by r.review_id desc limit 1),
+  'deadPoolEnterCount',(select count(*) from biz_lead_dead_pool_log d
+    where d.lead_id=l.lead_id and d.action_type='ENTER'),
+  'invalidConfirmedEventCount',(select count(*) from business_event e
+    where e.aggregate_type='LEAD' and e.aggregate_id=l.lead_id
+      and e.event_type='LEAD_INVALID_REVIEW_CONFIRMED')
 )
 from biz_lead l where l.lead_no=${quote(leadNo)};`, ctx, dependencies)[0]
   if (!row) throw new Error(`No E2E Lead state found for ${leadNo}`)
   return JSON.parse(row[0])
+}
+
+function todoRuntimeState(leadNo, templateCode, ctx = createRunContext(), dependencies = {}) {
+  const row = queryRows(`
+select json_object(
+  'todoId',t.todo_id,'status',t.status,'slaStatus',t.sla_status,'version',t.version,
+  'remind80At',s.remind80_at,'overdue100At',s.overdue100_at,'escalate150At',s.escalate150_at,
+  'ownerReminderCount',(select count(*) from todo_notification n
+    where n.todo_id=t.todo_id and n.user_id=t.owner_id
+      and n.notification_type in('REMINDED_80','OVERDUE_100','ESCALATED_150')),
+  'supervisorEscalationCount',(select count(*) from todo_notification n
+    join sys_user supervisor on supervisor.user_id=n.user_id
+    where n.todo_id=t.todo_id and supervisor.user_name=${quote(ctx.supervisor)}
+      and n.notification_type='ESCALATED_150'),
+  'autoActionSuccessCount',(select count(*) from todo_auto_action_execution a
+    where a.todo_id=t.todo_id and a.status='SUCCESS'),
+  'actionCount',(select count(*) from todo_action_log a where a.todo_id=t.todo_id)
+)
+from todo_instance t
+join biz_lead l on l.lead_id=t.business_id and t.business_type='LEAD'
+left join todo_sla_record s on s.todo_id=t.todo_id
+where l.lead_no=${quote(leadNo)} and t.template_code=${quote(templateCode)}
+order by t.todo_id desc limit 1;`, ctx, dependencies)[0]
+  if (!row) throw new Error(`No E2E Todo state found for ${leadNo}/${templateCode}`)
+  return JSON.parse(row[0])
+}
+
+function slaWorkerState(ctx = createRunContext(), dependencies = {}) {
+  const row = queryRows(`
+select json_object(
+  'jobId',j.job_id,'status',j.status,'cronExpression',j.cron_expression,
+  'successfulRuns',(select count(*) from sys_job_log l
+    where l.invoke_target=j.invoke_target and l.status='0'),
+  'lastSuccessAt',(select max(l.end_time) from sys_job_log l
+    where l.invoke_target=j.invoke_target and l.status='0')
+)
+from sys_job j where j.invoke_target='todoSlaTask.scan' limit 1;`, ctx, dependencies)[0]
+  if (!row) throw new Error('Todo SLA production worker is not registered')
+  return JSON.parse(row[0])
+}
+
+function makeSellerUnavailable(ctx = createRunContext(), dependencies = {}) {
+  return queryRows(`
+insert into sys_user_availability(
+  user_id,status,effective_from,effective_to,reason,create_by,create_time,update_time
+)
+select user_id,'UNAVAILABLE',date_sub(sysdate(),interval 1 minute),
+  date_add(sysdate(),interval 1 day),'E2E leave skip',
+  concat('lead-e2e-',${quote(ctx.runId)}),sysdate(),sysdate()
+from sys_user where user_name=${quote(ctx.seller)};
+select count(*) from sys_user_availability availability
+join sys_user user_account on user_account.user_id=availability.user_id
+where user_account.user_name=${quote(ctx.seller)}
+  and availability.create_by=concat('lead-e2e-',${quote(ctx.runId)})
+  and availability.status='UNAVAILABLE'
+  and availability.effective_from<=sysdate()
+  and availability.effective_to>sysdate();`, ctx, dependencies)
 }
 
 function evidenceNames(leadNo, ctx = createRunContext(), dependencies = {}) {
@@ -486,6 +630,9 @@ order by todo_id;`, ctx, dependencies)
 select plan_id from todo_schedule_plan where business_type='LEAD'
 and business_id in(select lead_id from biz_lead where lead_no in(${exactList(ctx.leadNos)}))
 order by plan_id;`, ctx, dependencies)
+  const policyRows = queryRows(`
+select policy_id from biz_lead_assignment_policy
+where policy_code=${quote(ctx.policyCode)} order by policy_id;`, ctx, dependencies)
   const fileRows = queryRows(`
 select distinct r.file_object_id,r.relation_id,v.version_no,v.object_key,f.status,r.active,
   coalesce(all_scope.active_relation_count,0) active_relation_count
@@ -524,6 +671,7 @@ and r.business_id in(select lead_id from biz_lead where lead_no in(${exactList(c
     leadIds,
     todoIds: todoRows.map(row => Number(row[0])),
     planIds: planRows.map(row => Number(row[0])),
+    policyIds: policyRows.map(row => Number(row[0])),
     files: [...files.values()].map(file => ({
       fileObjectId: file.fileObjectId,
       relationIds: [...file.relationIds],
@@ -548,13 +696,21 @@ async function retireOwnedFiles(capability, ownership, dependencies = {}) {
       const relationId = file.activeFixtureRelationIds[index]
       const retireObjectIfUnreferenced = file.exclusive &&
         index === file.activeFixtureRelationIds.length - 1
-      const response = await apiRequest.post(`/files/${file.fileObjectId}/retire`, {
+      const request = {
+        headers: {
+          'X-E2E-Identity-Secret': ctx.identitySecret,
+          'X-E2E-Run-Nonce': ctx.nonce,
+          'X-E2E-Fixture-Marker': ctx.marker
+        },
         data: {
           actionId: `lead-e2e-retire-${ctx.runId}-${file.fileObjectId}-${relationId}`,
           relationId,
-          retireObjectIfUnreferenced
+          runId: ctx.runId,
+          database: ctx.database
         }
-      })
+      }
+      const response = await apiRequest.post(
+        `/foundation/e2e/files/${file.fileObjectId}/retire-owned-fixture`, request)
       const body = await response.json().catch(() => ({}))
       if (!response.ok() || Number(body.code || 200) !== 200) {
         throw new Error(`Production file retire failed for ${file.fileObjectId}: ${body.msg || response.status()}`)
@@ -563,6 +719,18 @@ async function retireOwnedFiles(capability, ownership, dependencies = {}) {
         throw new Error(`Exclusive file ${file.fileObjectId} was not retired after its final relation`)
       }
       if (body.data?.objectRetired) file.objectRetired = true
+
+      // The exact same signed cleanup command must be safely replayable after
+      // its relation has become inactive; this exercises production idempotency.
+      const replay = await apiRequest.post(
+        `/foundation/e2e/files/${file.fileObjectId}/retire-owned-fixture`, request)
+      const replayBody = await replay.json().catch(() => ({}))
+      if (!replay.ok() || Number(replayBody.code || 200) !== 200 ||
+          Number(replayBody.data?.fileObjectId) !== file.fileObjectId ||
+          Number(replayBody.data?.relationId) !== relationId ||
+          Boolean(replayBody.data?.objectRetired) !== Boolean(body.data?.objectRetired)) {
+        throw new Error(`Production file retire idempotency replay failed for ${file.fileObjectId}`)
+      }
     }
     for (const relationId of file.relationIds) {
       const token = await apiRequest.get(
@@ -657,8 +825,19 @@ delete from biz_lead_assignment_log where lead_id in(select lead_id from tmp_lea
 delete from biz_lead where lead_id in(select lead_id from tmp_lead_e2e_leads);
 delete from biz_lead_assignment_policy_candidate where policy_id in(
   select policy_id from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)});
+delete from todo_round_robin_cursor where strategy_key=concat('LEAD_ASSIGNMENT_POLICY:',(
+  select policy_id from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)}));
 delete from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)};
 delete from biz_lead_setting where setting_type='source' and setting_code=${quote(ctx.sourceCode)};
+delete from sys_user_availability where create_by=concat('lead-e2e-',${quote(ctx.runId)});
+update sys_dept sales_dept
+join sys_user seller on seller.dept_id=sales_dept.dept_id
+set sales_dept.leader=null,sales_dept.update_by=null,sales_dept.update_time=sysdate()
+where seller.user_name=${quote(ctx.seller)}
+  and sales_dept.leader=${quote(ctx.supervisor)}
+  and sales_dept.update_by=concat('lead-e2e-',${quote(ctx.runId)});
+delete from biz_business_tag where tag_code=${quote(`LEAD_E2E_TAG_${ctx.runId}`)}
+  and create_by='lead-e2e';
 drop temporary table tmp_lead_e2e_plans;
 drop temporary table tmp_lead_e2e_todos;
 drop temporary table tmp_lead_e2e_leads;
@@ -668,12 +847,14 @@ commit;`
   return ownership
 }
 
-function assertNoLeadTodoFixtures(existingContext, ownership = { leadIds: [], todoIds: [], planIds: [], files: [] },
+function assertNoLeadTodoFixtures(existingContext,
+  ownership = { leadIds: [], todoIds: [], planIds: [], policyIds: [], files: [] },
   dependencies = {}) {
   const ctx = existingContext || createRunContext()
   const leadIds = ownership.leadIds.length ? ownership.leadIds.join(',') : '0'
   const todoIds = ownership.todoIds.length ? ownership.todoIds.join(',') : '0'
   const planIds = ownership.planIds.length ? ownership.planIds.join(',') : '0'
+  const policyIds = ownership.policyIds?.length ? ownership.policyIds.join(',') : '0'
   const fileIds = ownership.files.length ? ownership.files.map(file => file.fileObjectId).join(',') : '0'
   const relationIds = ownership.files.length
     ? ownership.files.flatMap(file => file.relationIds).join(',')
@@ -715,7 +896,16 @@ select
   (select count(*) from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)}),
   (select count(*) from biz_lead_assignment_policy_candidate where policy_id in(
     select policy_id from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)})),
+  (select count(*) from todo_round_robin_cursor
+    where strategy_key in(select concat('LEAD_ASSIGNMENT_POLICY:',policy_id)
+      from biz_lead_assignment_policy where policy_id in(${policyIds}))),
   (select count(*) from biz_lead_setting where setting_type='source' and setting_code=${quote(ctx.sourceCode)}),
+  (select count(*) from sys_user_availability
+    where create_by=concat('lead-e2e-',${quote(ctx.runId)})),
+  (select count(*) from biz_business_tag
+    where tag_code=${quote(`LEAD_E2E_TAG_${ctx.runId}`)} and create_by='lead-e2e'),
+  (select count(*) from sys_dept
+    where update_by=concat('lead-e2e-',${quote(ctx.runId)})),
   (select count(*) from file_business_relation where relation_id in(${relationIds}) and active=1),
   (select count(*) from file_object where file_object_id in(${retiredFileIds}) and status<>'DISABLED'),
   (select count(*) from file_storage_cleanup where file_object_id in(${retiredFileIds}) and status<>'COMPLETED');`,
@@ -773,6 +963,9 @@ module.exports = {
   withVerifiedLeadTodoFixtures,
   ownershipManifest,
   leadState,
+  todoRuntimeState,
+  slaWorkerState,
+  makeSellerUnavailable,
   evidenceNames,
   policySnapshot
 }

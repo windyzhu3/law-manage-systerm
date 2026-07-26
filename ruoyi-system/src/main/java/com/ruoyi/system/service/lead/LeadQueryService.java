@@ -107,17 +107,18 @@ public class LeadQueryService
         if(rows==null||rows.isEmpty())return rows==null?List.of():rows;
         if(todoViews==null)return rows;
         Actor todoActor=new Actor(actor.userId(),actor.userName(),actor.deptId());
-        List<TodoInstance> todos=rows.stream().map(row->{
+        List<TodoInstance> todos=rows.stream().filter(row->row.getTodoId()!=null).map(row->{
             TodoInstance todo=new TodoInstance();
             todo.setTodoId(row.getTodoId());todo.setStatus(row.getTodoStatus());
             todo.setOwnerId(row.getTodoOwnerId());
             todo.setOwnerDeptId(row.getBusinessDeptId());
             return todo;
         }).toList();
-        Map<Long,List<String>> actions=todoViews.allowedActions(todos,todoActor);
+        Map<Long,List<String>> actions=todos.isEmpty()?Map.of():todoViews.allowedActions(todos,todoActor);
         for(LeadTodoWorkItemView row:rows)
         {
-            row.setAllowedActions(actions.getOrDefault(row.getTodoId(),List.of()));
+            row.setAllowedActions(row.getTodoId()==null?List.of():
+                    actions.getOrDefault(row.getTodoId(),List.of()));
         }
         return rows;
     }

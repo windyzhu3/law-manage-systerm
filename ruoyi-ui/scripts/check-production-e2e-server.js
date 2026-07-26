@@ -45,8 +45,15 @@ async function main() {
     const spa = await fetch(`http://127.0.0.1:${frontendPort}/todo-template`)
     assert.strictEqual(root.status, 200)
     assert.strictEqual(spa.status, 200)
-    assert.match(root.headers.get('content-type') || '', /text\/html/)
-    assert.strictEqual(await spa.text(), await root.text(), 'SPA fallback must serve production index.html')
+    assert.match(root.headers.get('content-type') || '', /text\/html;\s*charset=utf-8/i)
+    const rootHtml = await root.text()
+    assert.match(rootHtml, /<meta charset=utf-8>/i, 'Production HTML must declare UTF-8')
+    assert.strictEqual(await spa.text(), rootHtml, 'SPA fallback must serve production index.html')
+
+    const scriptPath = rootHtml.match(/<script src=([^ >]+\.js)>/i)
+    assert.ok(scriptPath, 'Production HTML must reference a JavaScript bundle')
+    const script = await fetch(`http://127.0.0.1:${frontendPort}${scriptPath[1]}`)
+    assert.match(script.headers.get('content-type') || '', /application\/javascript;\s*charset=utf-8/i)
 
     const proxy = await fetch(`http://127.0.0.1:${frontendPort}/prod-api/probe?source=contract`)
     assert.strictEqual(proxy.status, 200)

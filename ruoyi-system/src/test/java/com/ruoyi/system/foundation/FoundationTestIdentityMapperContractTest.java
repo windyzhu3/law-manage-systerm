@@ -59,7 +59,8 @@ class FoundationTestIdentityMapperContractTest
         assertMethod(mapper, "deleteRoleLinksByUserId", int.class, Long.class);
         assertParameterizedMethod(mapper, "insertUserRole", "userId", "roleId");
         assertParameterizedMethod(mapper, "updateTestUserPlacement", "userId", "deptId");
-        assertEquals(11, mapper.getDeclaredMethods().length,
+        assertMethod(mapper, "activateTestUser", int.class, Long.class);
+        assertEquals(12, mapper.getDeclaredMethods().length,
             "The dedicated mapper must not gain role or role-menu creation powers");
     }
 

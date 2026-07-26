@@ -79,7 +79,7 @@ public interface TodoMapper
     default Long selectAndAdvanceRoundRobin(String strategyKey,List<Long> candidates)
     {
         if(strategyKey==null||strategyKey.isBlank()||candidates==null||candidates.isEmpty())return null;
-        List<Long> stable=candidates.stream().filter(value->value!=null&&value>0).distinct().sorted().toList();
+        List<Long> stable=candidates.stream().filter(value->value!=null&&value>0).distinct().toList();
         if(stable.isEmpty())return null;
         insertRoundRobinCursorIfAbsent(strategyKey);
         Map<String,Object> cursor=selectRoundRobinCursorForUpdate(strategyKey);
@@ -91,7 +91,6 @@ public interface TodoMapper
         {
             int current=stable.indexOf(previous);
             if(current>=0)selected=stable.get((current+1)%stable.size());
-            else for(Long candidate:stable)if(candidate>previous){selected=candidate;break;}
         }
         if(!stable.contains(selected))throw new IllegalStateException("Round-robin selected outside candidate pool");
         if(advanceRoundRobinCursorConditionally(strategyKey,selected,previous,version)!=1)

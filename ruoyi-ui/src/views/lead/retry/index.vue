@@ -9,7 +9,7 @@
       <el-select v-model="query.status" clearable placeholder="窗口状态">
         <el-option label="待处理" value="PENDING" /><el-option label="已接通" value="CONNECTED" /><el-option label="已耗尽" value="EXHAUSTED" />
       </el-select>
-      <el-button type="primary" icon="el-icon-search" @click="search">查询</el-button><el-button @click="reset">重置</el-button>
+      <el-button type="primary" icon="el-icon-search" data-testid="lead-search-submit" @click="search">查询</el-button><el-button @click="reset">重置</el-button>
     </div>
     <div v-if="error" role="alert"><el-alert class="lead-state-error" :title="error" type="error" :closable="false" show-icon /></div>
     <section class="lead-workbench__card">
@@ -22,7 +22,7 @@
         <el-table-column label="结果" width="120"><template slot-scope="{ row }">{{ resultLabel(row.result || row.factStatus) }}</template></el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template slot-scope="{ row }">
-            <el-button v-hasPermi="['lead:retry:handle']" type="primary" plain size="small" :disabled="!canHandle(row)" @click="handle(row)">处理</el-button>
+            <el-button v-hasPermi="['lead:retry:handle']" type="primary" plain size="small" :disabled="!canHandle(row)" :data-testid="`lead-retry-${row.leadNo}`" @click="handle(row)">处理</el-button>
             <el-button type="text" @click="timeline(row)">时间线</el-button>
           </template>
         </el-table-column>

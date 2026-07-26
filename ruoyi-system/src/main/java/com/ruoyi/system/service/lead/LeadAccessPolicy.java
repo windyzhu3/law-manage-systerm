@@ -30,6 +30,27 @@ public class LeadAccessPolicy
         return requireReadable(leadId, false, false);
     }
 
+    /**
+     * A review assignment is an explicit, occurrence-scoped access grant. It
+     * lets only the exact TD-002 reviewer inspect the source lead even when the
+     * sales and reviewer departments are siblings. Peers still fall through to
+     * the ordinary lead data-scope policy.
+     */
+    public BizLead requireReviewable(Long leadId, Long reviewerId)
+    {
+        BizLead lead = mapper.selectLeadById(leadId);
+        if (lead == null || DELETED.equals(lead.getDelFlag()))
+        {
+            throw error(BusinessErrorCode.DATA_NOT_FOUND, "线索不存在或已删除");
+        }
+        BusinessActor actor = actors.current();
+        if (actor.administrator() || (reviewerId != null && reviewerId.equals(actor.userId())))
+        {
+            return lead;
+        }
+        return requireReadable(leadId, false, false);
+    }
+
     public BizLead requireReadable(Long leadId, boolean includeDeleted, boolean allowPool)
     {
         BizLead lead = mapper.selectLeadById(leadId);

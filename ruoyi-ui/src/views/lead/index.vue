@@ -14,11 +14,11 @@
         <main>
           <div class="table-card">
             <div class="filter-toolbar">
-              <el-input v-model="query.leadName" prefix-icon="el-icon-search" placeholder="搜索线索名称、单位" clearable @keyup.enter.native="search" />
+              <el-input v-model="query.leadName" data-testid="lead-list-keyword" prefix-icon="el-icon-search" placeholder="搜索线索名称、单位" clearable @keyup.enter.native="search" />
               <el-select v-model="query.sourceCode" placeholder="来源：全部" clearable><el-option v-for="item in settingOptions('source')" :key="item.settingCode" :label="item.settingName" :value="item.settingCode" /></el-select>
               <el-select v-if="mode !== 'pool' && mode !== 'recycle'" v-model="query.status" placeholder="状态：全部" clearable><el-option v-for="item in dict.type.law_lead_status" :key="item.value" :label="item.label" :value="item.value" /></el-select>
               <el-select v-model="query.priority" placeholder="优先级：全部" clearable><el-option v-for="item in dict.type.law_lead_priority" :key="item.value" :label="item.label" :value="item.value" /></el-select>
-              <el-button type="primary" icon="el-icon-search" @click="search">查询</el-button><el-button icon="el-icon-refresh" @click="resetSearch">重置</el-button>
+              <el-button type="primary" icon="el-icon-search" data-testid="lead-search-submit" @click="search">查询</el-button><el-button icon="el-icon-refresh" @click="resetSearch">重置</el-button>
             </div>
             <div class="status-tabs">
               <button v-for="item in quickTabs" :key="item.value" :class="{ active: query.status === item.value }" @click="quickStatus(item.value)">{{ item.label }} <em>{{ item.count }}</em></button>
@@ -26,7 +26,7 @@
               <el-button v-else-if="mode === 'mine'" v-hasPermi="['lead:tag:confirm']" size="mini" :loading="tagSubmitting" :disabled="!confirmableSelection.length" icon="el-icon-price-tag" @click="confirmSelectedTags">批量确认标签</el-button>
             </div>
             <div class="lead-table-wrap">
-              <el-table v-loading="loading" :data="leadList" size="mini" @selection-change="selectionChanged">
+              <el-table :key="permissionRenderKey" v-loading="loading" :data="leadList" size="mini" @selection-change="selectionChanged">
                 <el-table-column type="selection" width="42" align="center" />
                 <el-table-column label="线索编号" min-width="142" align="center"><template slot-scope="{row}"><span :data-testid="`lead-row-${row.leadNo}`">{{ row.leadNo }}</span></template></el-table-column>
                 <el-table-column label="客户信息" min-width="150" align="center"><template slot-scope="{row}"><a v-if="canQueryLead" class="lead-link" @click="openDetail(row)">{{ row.contactName || row.leadName }}</a><span v-else>{{ row.contactName || row.leadName }}</span><span class="sub-text">{{ maskMobile(row.mobile) }}</span></template></el-table-column>
@@ -40,7 +40,7 @@
                 <el-table-column label="操作" :width="operationColumnWidth" align="center" class-name="small-padding fixed-width lead-operation-column" fixed="right"><template slot-scope="{row}">
                   <template v-if="mode === 'recycle'"><el-button v-hasPermi="['lead:recycle:restore']" size="mini" type="text" icon="el-icon-refresh-left" @click="restoreOne(row)">恢复</el-button><el-button v-hasPermi="['lead:recycle:purge']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="purgeOne(row)">彻底删除</el-button></template>
                   <template v-else-if="mode === 'pool'"><el-button v-if="canClaim(row)" v-hasPermi="['lead:pool:claim']" size="mini" type="text" icon="el-icon-user" @click="claim(row)">领取</el-button><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">详情</el-button></template>
-                  <template v-else><span class="action-buttons"><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">查看</el-button><el-button v-if="canConfirmTag(row)" v-hasPermi="['lead:tag:confirm']" size="mini" type="text" icon="el-icon-price-tag" @click="confirmTag(row)">确认标签</el-button><el-button v-if="canFirstContact(row)" v-hasPermi="['lead:first-contact:handle']" size="mini" type="text" icon="el-icon-phone-outline" @click="openFirstContact(row)">首联</el-button><el-button v-if="canEdit(row)" v-hasPermi="['lead:edit']" size="mini" type="text" icon="el-icon-edit" @click="openLeadDialog(row)">编辑</el-button><el-button v-if="canFollow(row)" v-hasPermi="leadFollowPerms" size="mini" type="text" icon="el-icon-chat-line-round" @click="openFollowDialog(row)">跟进</el-button><el-button v-if="canAssign(row)" v-hasPermi="['lead:assign']" size="mini" type="text" icon="el-icon-user" @click="openAssignDialog(row)">分配</el-button><el-button v-if="canMovePool(row)" v-hasPermi="leadMovePoolPerms" size="mini" type="text" icon="el-icon-office-building" @click="toPool(row)">公海</el-button><el-button v-if="canConvert(row)" v-hasPermi="leadConvertPerms" size="mini" type="text" icon="el-icon-circle-check" @click="convert(row)">转化</el-button><el-button v-hasPermi="['lead:remove']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="remove(row)">删除</el-button></span></template>
+                  <template v-else><span :key="`actions:${permissionRenderKey}:${row.leadNo}`" class="action-buttons"><span :key="`tag-confirm:${permissionRenderKey}:${row.leadNo}`"><el-button v-if="canConfirmTag(row) && canConfirmTagPermission" size="mini" type="text" icon="el-icon-price-tag" :data-testid="`lead-tag-confirm-${row.leadNo}`" @click="confirmTag(row)">确认标签</el-button></span><el-button v-hasPermi="leadQueryPerms" size="mini" type="text" icon="el-icon-view" @click="openDetail(row)">查看</el-button><el-button v-if="canFirstContact(row)" v-hasPermi="['lead:first-contact:handle']" size="mini" type="text" icon="el-icon-phone-outline" :data-testid="`lead-first-contact-${row.leadNo}`" @click="openFirstContact(row)">首联</el-button><el-button v-if="canEdit(row)" v-hasPermi="['lead:edit']" size="mini" type="text" icon="el-icon-edit" @click="openLeadDialog(row)">编辑</el-button><el-button v-if="canFollow(row)" v-hasPermi="leadFollowPerms" size="mini" type="text" icon="el-icon-chat-line-round" @click="openFollowDialog(row)">跟进</el-button><el-button v-if="canAssign(row)" v-hasPermi="['lead:assign']" size="mini" type="text" icon="el-icon-user" @click="openAssignDialog(row)">分配</el-button><el-button v-if="canMovePool(row)" v-hasPermi="leadMovePoolPerms" size="mini" type="text" icon="el-icon-office-building" @click="toPool(row)">公海</el-button><el-button v-if="canConvert(row)" v-hasPermi="leadConvertPerms" size="mini" type="text" icon="el-icon-circle-check" @click="convert(row)">转化</el-button><el-button v-hasPermi="['lead:remove']" size="mini" type="text" icon="el-icon-delete" class="danger-text" @click="remove(row)">删除</el-button></span></template>
                 </template></el-table-column>
               </el-table>
             </div>
@@ -91,6 +91,7 @@ import LeadMetrics from './components/LeadMetrics'
 import LeadAssignDialog from './components/LeadAssignDialog'
 import LeadDetailDrawer from './components/LeadDetailDrawer'
 import LeadFirstContactDrawer from './components/LeadFirstContactDrawer'
+const { hasTagConfirmPermission, tagPermissionRenderKey } = require('./tag-confirm-permission')
 import { getDashboard,listLeadOwner,listLead,getLead,addLead,updateLead,delLead,restoreLead,purgeLead,assignLead,moveLeadToPool,claimLead,convertLead,listFollowup,addFollowup,delFollowup,listSetting,addSetting,updateSetting,delSetting,confirmLeadTag } from '@/api/lead'
 export default {
   name: 'Lead',
@@ -156,6 +157,12 @@ export default {
       return ['lead:query']
     },
     canQueryLead() { return this.$auth.hasPermiOr(this.leadQueryPerms) },
+    canConfirmTagPermission() {
+      return hasTagConfirmPermission(this.$store.getters.permissions)
+    },
+    permissionRenderKey() {
+      return tagPermissionRenderKey(this.mode, this.$store.getters.permissions)
+    },
     confirmableSelection() { return this.selectedRows.filter(row => this.canConfirmTag(row)) },
     leadFollowPerms() { return this.mode === 'mine' ? ['lead:mine:followup'] : ['lead:followup:add'] },
     leadMovePoolPerms() { return this.mode === 'mine' ? ['lead:mine:pool:move'] : ['lead:pool:move'] },

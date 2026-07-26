@@ -30,4 +30,6 @@ public interface FoundationTestIdentityMapper
     int insertUserRole(@Param("userId") Long userId, @Param("roleId") Long roleId);
 
     int updateTestUserPlacement(@Param("userId") Long userId, @Param("deptId") Long deptId);
+
+    int activateTestUser(Long userId);
 }

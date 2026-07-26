@@ -608,7 +608,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         left join todo_sla_record sla on sla.todo_id=t.todo_id
         <where>
           <if test="status!=null and status!=''">
-            and coalesce(occurrence.status,window_item.status,plan.status)=#{status}
+            <choose>
+              <when test="status == 'PENDING'">
+                and occurrence.todo_id is not null
+                and occurrence.status in ('RETRY','CLAIMED','MATERIALIZED')
+                and t.status not in ('COMPLETED','CANCELLED')
+              </when>
+              <when test="status == 'CONNECTED' or status == 'EXHAUSTED'">
+                and occurrence.result_code=#{status}
+              </when>
+              <otherwise>
+                and coalesce(occurrence.status,window_item.status,plan.status)=#{status}
+              </otherwise>
+            </choose>
           </if>
           <if test="keyword!=null and keyword!=''">
             and (l.lead_no like concat('%',#{keyword},'%')
@@ -677,18 +689,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
               or l.mobile like concat('%',#{keyword},'%'))
           </if>
           <if test="dataScope != null and dataScope">
-            and exists (
-              select 1 from sys_user_role ur
-              join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
-              where ur.user_id=#{currentUserId} and (
-                role_scope.data_scope='1'
-                or (role_scope.data_scope='2' and origin_user.dept_id in (
-                  select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
-                or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
-                or (role_scope.data_scope='4' and origin_user.dept_id in (
-                  select sd.dept_id from sys_dept sd
-                  where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
-                or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+            and (
+              review.reviewer_id=#{currentUserId}
+              or exists (
+                select 1 from sys_user_role ur
+                join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+                where ur.user_id=#{currentUserId} and (
+                  role_scope.data_scope='1'
+                  or (role_scope.data_scope='2' and origin_user.dept_id in (
+                    select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+                  or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
+                  or (role_scope.data_scope='4' and origin_user.dept_id in (
+                    select sd.dept_id from sys_dept sd
+                    where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+                  or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+                )
               )
             )
           </if>
@@ -720,18 +735,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           select max(latest_log.dead_pool_log_id) from biz_lead_dead_pool_log latest_log
           where latest_log.lead_id=l.lead_id and latest_log.action_type='ENTER')
         where l.lead_id=#{leadId} and l.del_flag='0'
-          and exists (
-            select 1 from sys_user_role ur
-            join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
-            where ur.user_id=#{currentUserId} and (
-              role_scope.data_scope='1'
-              or (role_scope.data_scope='2' and origin_user.dept_id in (
-                select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
-              or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
-              or (role_scope.data_scope='4' and origin_user.dept_id in (
-                select sd.dept_id from sys_dept sd
-                where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
-              or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+          and (
+            review.reviewer_id=#{currentUserId}
+            or exists (
+              select 1 from sys_user_role ur
+              join sys_role role_scope on role_scope.role_id=ur.role_id and role_scope.status='0'
+              where ur.user_id=#{currentUserId} and (
+                role_scope.data_scope='1'
+                or (role_scope.data_scope='2' and origin_user.dept_id in (
+                  select rd.dept_id from sys_role_dept rd where rd.role_id=role_scope.role_id))
+                or (role_scope.data_scope='3' and origin_user.dept_id=#{currentDeptId})
+                or (role_scope.data_scope='4' and origin_user.dept_id in (
+                  select sd.dept_id from sys_dept sd
+                  where sd.dept_id=#{currentDeptId} or find_in_set(#{currentDeptId},sd.ancestors)))
+                or (role_scope.data_scope='5' and review.submitted_by=#{currentUserId})
+              )
             )
           )
     </select>

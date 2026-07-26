@@ -5,6 +5,7 @@ import com.ruoyi.common.core.domain.entity.SysRole;
 import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.mapper.FoundationTestIdentityMapper;
 import java.util.HashMap;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -234,6 +235,12 @@ public class FoundationTestIdentityProvisioningService
                 counts.repaired++;
             }
 
+            if (existing.getPwdUpdateDate() == null)
+            {
+                requireSingleWrite(mapper.activateTestUser(existing.getUserId()), "user-password-activation");
+                counts.repaired++;
+            }
+
             List<Long> roleIds = mapper.selectRoleIdsByUserId(existing.getUserId());
             if (roleIds != null && roleIds.size() == 1 && Objects.equals(roleIds.get(0), role.getRoleId()))
             {
@@ -280,6 +287,7 @@ public class FoundationTestIdentityProvisioningService
         user.setSex("2");
         user.setAvatar("");
         user.setPassword(encodedPassword);
+        user.setPwdUpdateDate(new Date());
         user.setStatus(ACTIVE);
         user.setDelFlag(NOT_DELETED);
         user.setCreateBy(FoundationTestIdentityCatalog.CREATED_BY);

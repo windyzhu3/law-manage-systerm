@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import com.law.business.event.BusinessEventCommand;
 import com.law.business.event.BusinessEventPublisher;
@@ -28,9 +29,18 @@ public class LeadTagConfirmationService
     private final BusinessActorProvider actors;
     private final ISysDictTypeService dictionaries;
     private final BusinessEventPublisher events;
+    private final LeadRoundRobinAssignmentService roundRobin;
 
     public LeadTagConfirmationService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
             BusinessActorProvider actors, ISysDictTypeService dictionaries, BusinessEventPublisher events)
+    {
+        this(leads,facts,access,actors,dictionaries,events,null);
+    }
+
+    @Autowired
+    public LeadTagConfirmationService(BizLeadMapper leads, LeadFlowMapper facts, LeadAccessPolicy access,
+            BusinessActorProvider actors, ISysDictTypeService dictionaries, BusinessEventPublisher events,
+            LeadRoundRobinAssignmentService roundRobin)
     {
         this.leads = leads;
         this.facts = facts;
@@ -38,6 +48,7 @@ public class LeadTagConfirmationService
         this.actors = actors;
         this.dictionaries = dictionaries;
         this.events = events;
+        this.roundRobin = roundRobin;
     }
 
     @Transactional
@@ -65,6 +76,7 @@ public class LeadTagConfirmationService
         events.publish(new BusinessEventCommand(BusinessEventType.LEAD_TAG_CONFIRMED, "LEAD",
                 lead.getLeadId(), lead.getLeadNo(), "LEAD_TAG_CONFIRMED:" + lead.getLeadId() + ":"
                         + command.getTagRelationId(), payload),actor);
+        if(roundRobin!=null)roundRobin.assignConfirmedTag(lead);
     }
 
     @Transactional

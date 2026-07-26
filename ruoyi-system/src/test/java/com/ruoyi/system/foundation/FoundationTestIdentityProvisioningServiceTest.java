@@ -27,6 +27,7 @@ import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.mapper.FoundationTestIdentityMapper;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,7 @@ class FoundationTestIdentityProvisioningServiceTest
 {
     private static final String RAW_PASSWORD = "Foundation!234";
     private static final Map<String, Set<String>> GOVERNANCE_PERMISSIONS = Map.of(
+        "lead_information_officer", Set.of("lead:query", "lead:tag:confirm"),
         "foundation_product_owner", Set.of(
             "todo:decision:view", "todo:decision:edit", "todo:admission:view", "todo:admission:edit"),
         "foundation_security_reviewer", Set.of("todo:admission:view", "todo:admission:edit"),
@@ -74,10 +76,11 @@ class FoundationTestIdentityProvisioningServiceTest
             invocation -> realPasswordEncoder.encode(invocation.getArgument(0)));
         when(mapper.insertUserRole(anyLong(), anyLong())).thenReturn(1);
         when(mapper.updateTestUserPlacement(anyLong(), anyLong())).thenReturn(1);
+        when(mapper.activateTestUser(anyLong())).thenReturn(1);
     }
 
     @Test
-    void createsSixDepartmentsTwelveUsersAndTwelveExactRoleLinksOnFirstRun()
+    void createsSixDepartmentsThirteenUsersAndThirteenExactRoleLinksOnFirstRun()
     {
         List<SysDept> insertedDepartments = new ArrayList<>();
         List<SysUser> insertedUsers = new ArrayList<>();
@@ -97,14 +100,35 @@ class FoundationTestIdentityProvisioningServiceTest
             verify(mapper).selectPermissionKeysByRoleId(roles.get(expected.getKey()).getRoleId());
         }
         verify(mapper, times(6)).insertDepartment(any(SysDept.class));
-        verify(mapper, times(12)).insertUser(any(SysUser.class));
-        verify(passwordEncoder, times(12)).encode(RAW_PASSWORD);
-        verify(mapper, times(12)).insertUserRole(anyLong(), anyLong());
+        verify(mapper, times(13)).insertUser(any(SysUser.class));
+        verify(passwordEncoder, times(13)).encode(RAW_PASSWORD);
+        verify(mapper, times(13)).insertUserRole(anyLong(), anyLong());
         assertExactDepartmentPayloads(insertedDepartments);
         assertExactUserAndRolePayloads(insertedDepartments, insertedUsers, insertedRoleLinks);
-        assertEquals(30, result.created());
+        assertEquals(32, result.created());
         assertEquals(0, result.reused());
         assertEquals(0, result.repaired());
+    }
+
+    @Test
+    void repairsOnlyMarkedTestIdentityMissingPasswordActivationWithoutChangingItsPassword()
+    {
+        Map<String, SysDept> departments = stubExistingDepartments();
+        stubExistingUsers(departments);
+        FoundationTestIdentityCatalog.UserSpec target = FoundationTestIdentityCatalog.users().get(1);
+        SysUser inactivePassword = markedUser(809L, target,
+            departments.get(target.departmentCode()).getDeptId(), "0");
+        inactivePassword.setPwdUpdateDate(null);
+        when(mapper.selectUsersByUserName(target.userName())).thenReturn(List.of(inactivePassword));
+        when(mapper.selectRoleIdsByUserId(inactivePassword.getUserId()))
+            .thenReturn(List.of(roles.get(target.roleKey()).getRoleId()));
+
+        FoundationTestIdentityProvisioningResult result = service.provision(RAW_PASSWORD);
+
+        verify(mapper).activateTestUser(inactivePassword.getUserId());
+        verify(passwordEncoder, never()).encode(anyString());
+        assertEquals("existing-hash-must-not-change", inactivePassword.getPassword());
+        assertEquals(1, result.repaired());
     }
 
     @Test
@@ -119,10 +143,11 @@ class FoundationTestIdentityProvisioningServiceTest
         verify(mapper, never()).insertDepartment(any());
         verify(mapper, never()).insertUser(any());
         verify(mapper, never()).updateTestUserPlacement(anyLong(), anyLong());
+        verify(mapper, never()).activateTestUser(anyLong());
         verify(mapper, never()).deleteRoleLinksByUserId(anyLong());
         verify(mapper, never()).insertUserRole(anyLong(), anyLong());
         assertEquals(0, result.created());
-        assertEquals(30, result.reused());
+        assertEquals(32, result.reused());
         assertEquals(0, result.repaired());
     }
 
@@ -207,7 +232,7 @@ class FoundationTestIdentityProvisioningServiceTest
 
         verify(passwordEncoder, never()).encode(anyString());
         verify(mapper, never()).insertUser(any());
-        assertEquals(30, result.reused());
+        assertEquals(32, result.reused());
     }
 
     @Test
@@ -475,6 +500,7 @@ class FoundationTestIdentityProvisioningServiceTest
             assertEquals(FoundationTestIdentityCatalog.CREATED_BY, actual.getCreateBy());
             assertEquals("0", actual.getStatus());
             assertEquals("0", actual.getDelFlag());
+            assertTrue(actual.getPwdUpdateDate() != null);
             assertNotEquals(RAW_PASSWORD, actual.getPassword());
             assertTrue(realPasswordEncoder.matches(RAW_PASSWORD, actual.getPassword()));
             assertEquals(actual.getUserId(), link.userId());
@@ -541,6 +567,7 @@ class FoundationTestIdentityProvisioningServiceTest
         user.setCreateBy(FoundationTestIdentityCatalog.CREATED_BY);
         user.setRemark(FoundationTestIdentityCatalog.USER_MARKER + "|" + spec.roleKey());
         user.setPassword("existing-hash-must-not-change");
+        user.setPwdUpdateDate(new Date(1_700_000_000_000L));
         return user;
     }
 

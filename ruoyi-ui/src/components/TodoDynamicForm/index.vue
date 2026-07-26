@@ -10,9 +10,8 @@
       <span slot="label" :id="labelId(field)">{{ field.label }}</span>
       <component
         :is="componentFor(field)"
-        v-bind="controlAttrs(field)"
+        v-bind="componentAttrs(field)"
         :value="valueFor(field)"
-        v-bind="propsFor(field)"
         @input="setValue(field, $event)"
       />
       <small v-if="field.help" class="field-help">{{ field.help }}</small>
@@ -104,6 +103,12 @@ export default {
       return {
         id: this.controlId(field),
         'aria-label': field.label
+      }
+    },
+    componentAttrs(field) {
+      return {
+        ...this.controlAttrs(field),
+        ...this.propsFor(field)
       }
     },
     componentFor(field) { return resolveFieldComponent(field.type) },

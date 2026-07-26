@@ -51,7 +51,7 @@ public class MapperTodoOrganizationAdapter implements TodoOrganizationPort
     public Optional<Long> roundRobin(String strategyKey,List<Long> sortedAvailableCandidates)
     {
         if(strategyKey==null||strategyKey.isBlank())return Optional.empty();
-        List<Long> candidates=normalized(sortedAvailableCandidates);
+        List<Long> candidates=stableOrder(sortedAvailableCandidates);
         if(candidates.isEmpty())return Optional.empty();
         Long selected=mapper.selectAndAdvanceRoundRobin(strategyKey.trim(),candidates);
         return candidates.contains(selected)?Optional.of(selected):Optional.empty();
@@ -77,6 +77,12 @@ public class MapperTodoOrganizationAdapter implements TodoOrganizationPort
     {
         if(values==null)return List.of();
         return values.stream().filter(value->value!=null&&value>0).distinct().sorted().toList();
+    }
+
+    private List<Long> stableOrder(List<Long> values)
+    {
+        if(values==null)return List.of();
+        return values.stream().filter(value->value!=null&&value>0).distinct().toList();
     }
 
     private Optional<Long> positive(Long value)

@@ -88,6 +88,28 @@ class LeadTodoReadModelTest
     }
 
     @Test
+    void retryQueueKeepsFutureWindowsWithoutPassingNullTodoIdsToActionProjection()
+    {
+        when(actors.current()).thenReturn(actor());
+        LeadTodoWorkItemView active = item(7L, 92L);
+        active.setTodoStatus("CREATED");
+        LeadTodoWorkItemView futureWindow = item(7L, null);
+        when(mapper.selectLeadRetryQueue("PENDING", "LEAD-7", 8L, 3L, true))
+                .thenReturn(List.of(active, futureWindow));
+        when(todoViews.allowedActions(
+                org.mockito.ArgumentMatchers.<List<TodoInstance>>argThat(todos ->
+                        todos.size() == 1 && Long.valueOf(92L).equals(todos.get(0).getTodoId())),
+                org.mockito.ArgumentMatchers.any(Actor.class)))
+                .thenReturn(Map.of(92L, List.of("complete")));
+
+        List<LeadTodoWorkItemView> rows = new LeadQueryService(
+                mapper, actors, access, todoViews).retryQueue("PENDING", "LEAD-7");
+
+        assertEquals(List.of("complete"), rows.get(0).getAllowedActions());
+        assertEquals(List.of(), rows.get(1).getAllowedActions());
+    }
+
+    @Test
     void retryAndDeadPoolQueuesUseTheSameRoleDataScopeContract()
     {
         when(actors.current()).thenReturn(actor());

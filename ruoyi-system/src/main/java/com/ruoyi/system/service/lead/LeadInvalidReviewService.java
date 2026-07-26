@@ -72,15 +72,15 @@ public class LeadInvalidReviewService
                 "Review identity is incomplete");
         permissions.require(LeadPermissions.INVALID_REVIEW_HANDLE);
         BusinessActor actor = actors.current();
-        BizLead lead = access.requireOperable(command.getLeadId());
         BizLeadInvalidReview review = facts.selectInvalidReviewById(command.getReviewId());
-        require(lead != null && review != null && lead.getLeadId().equals(review.getLeadId()),
+        require(review != null && command.getLeadId().equals(review.getLeadId()),
                 "Invalid-review fact not found");
         require(command.getTodoId() != null && command.getTodoId().equals(review.getTodoId()),
                 "LEAD_INVALID_REVIEW_SOURCE_TODO_INVALID");
         require(review.getReviewerId() != null
                 && (actor.administrator() || actor.userId().equals(review.getReviewerId())),
                 "LEAD_INVALID_REVIEW_REVIEWER_INVALID");
+        BizLead lead = access.requireReviewable(command.getLeadId(),review.getReviewerId());
         require(organization.isAvailable(review.getReviewerId(),LocalDateTime.now()),
                 "TODO_OWNER_UNAVAILABLE");
         String result = trim(command.getReviewResult());
@@ -119,11 +119,13 @@ public class LeadInvalidReviewService
         require("ACTIVE".equals(lead.getDisposition()) && "PENDING".equals(lead.getInvalidReviewStatus()),
                 "LEAD_INVALID_REVIEW_STATE_INVALID");
         require("PENDING".equals(review.getStatus()), "LEAD_INVALID_REVIEW_STATE_INVALID");
+        Long responsibleReviewerId = systemDefault ? review.getReviewerId() : actor.userId();
+        require(responsibleReviewerId != null, "LEAD_INVALID_REVIEW_REVIEWER_INVALID");
 
         changed(leads.markInvalidReviewed(lead.getLeadId(), "PENDING", result, lead.getRowVersion(),
                 actor.userName()));
         changed(facts.completeInvalidReview(review.getReviewId(), result, trim(command.getReviewComment()),
-                actor.userId(), systemDefault ? "Y" : "N", review.getRowVersion(), actor.userName()));
+                responsibleReviewerId, systemDefault ? "Y" : "N", review.getRowVersion(), actor.userName()));
 
         Long qualityId = null;
         Long deadPoolLogId = null;
@@ -142,7 +144,7 @@ public class LeadInvalidReviewService
         }
         else require(false, "Unknown review result");
 
-        publish(lead, review, result, qualityId, actor);
+        publish(lead, review, result, qualityId, responsibleReviewerId, actor);
         return new InvalidReviewOutcome(result, review.getReviewId(), qualityId, deadPoolLogId, false,
                 "MISJUDGED_VALID".equals(result)?lead.getOwnerId():null);
     }
@@ -169,13 +171,13 @@ public class LeadInvalidReviewService
     }
 
     private void publish(BizLead lead, BizLeadInvalidReview review, String result, Long qualityId,
-            BusinessActor actor)
+            Long reviewerId, BusinessActor actor)
     {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("schemaVersion", 1);
         payload.put("leadId", lead.getLeadId());
         payload.put("reviewId", review.getReviewId());
-        payload.put("reviewerId", actor.userId());
+        payload.put("reviewerId", reviewerId);
         payload.put("reviewResult", result);
         payload.put("operatorId", actor.userId());
         BusinessEventType type;

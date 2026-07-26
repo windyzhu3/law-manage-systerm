@@ -108,6 +108,12 @@ final class LeadTodoPayloadMapper
             Integer attempt=integer(call.get("attemptCount"),"attemptCount");
             if(todo.getOccurrenceKey()!=null&&attempt!=null&&attempt>0)
                 return "TD-003:"+todo.getTodoId()+":"+todo.getOccurrenceKey()+":ATTEMPT:"+attempt;
+            Object suppliedStart=call.containsKey("startedAt")
+                    ?call.get("startedAt"):call.get("contactedAt");
+            LocalDateTime startedAt=dateTime(suppliedStart,"startedAt");
+            if(todo.getOccurrenceKey()!=null&&startedAt!=null)
+                return "TD-003:"+todo.getTodoId()+":"+todo.getOccurrenceKey()
+                        +":START:"+startedAt;
         }
         return null;
     }

@@ -35,6 +35,21 @@ const dictRenderer = dynamicFormSource.slice(
 const dictFieldWithoutOptionsRendersInput = /h\(['"]el-input['"]/.test(dictRenderer)
 strict.equal(dictFieldWithoutOptionsRendersInput, false)
 
+const dynamicComponent = dynamicFormSource.slice(
+  dynamicFormSource.indexOf('<component'),
+  dynamicFormSource.indexOf('/>', dynamicFormSource.indexOf('<component')) + 2)
+strict.equal(
+  (dynamicComponent.match(/\bv-bind\s*=/g) || []).length,
+  1,
+  'Vue 2 dynamic component must expose one merged v-bind only'
+)
+strict.match(dynamicComponent, /v-bind=["']componentAttrs\(field\)["']/)
+strict.match(
+  dynamicFormSource,
+  /componentAttrs\(field\)\s*\{\s*return\s*\{\s*\.\.\.this\.controlAttrs\(field\),\s*\.\.\.this\.propsFor\(field\)/s,
+  'componentAttrs must retain both accessibility/control attributes and field props'
+)
+
 const missingDictionaryErrors = runtime.validateFormState(formView, {
   fields: { contactResult: 'VALID', name: 'Alice', city: 'Shanghai' },
   materials: []

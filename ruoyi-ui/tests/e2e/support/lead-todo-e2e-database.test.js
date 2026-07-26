@@ -16,7 +16,9 @@ function environment() {
     TODO_E2E_REAL_BACKEND: 'true',
     TODO_E2E_DB_NAME: 'lead_fixture_e2e',
     FOUNDATION_E2E_IDENTITY_SECRET: 'a-dedicated-e2e-secret-that-is-long-enough',
+    LEAD_INFORMATION_USER: 'ft_info',
     LEAD_SALES_USER: 'ft_sales',
+    LEAD_ALTERNATE_SALES_USER: 'ft_case_manager',
     LEAD_SUPERVISOR_USER: 'ft_partner_manager',
     LEAD_POLICY_ADMIN_USER: 'ft_product_owner',
     TODO_E2E_FILE_STORAGE_ROOT: 'C:\\isolated-e2e-storage'
@@ -186,5 +188,5 @@ test('overlapping run markers clean only their exact manifest and never the neig
   const cleanup = calls.find(sql => sql.includes('delete from biz_lead where'))
   assert.doesNotMatch(cleanup, /\blike\b/i)
   assert.equal(cleanup.includes(right.leadNos[0]), false)
-  assert.equal(FIXTURE_CODES.length, 9)
+  assert.equal(FIXTURE_CODES.length, 14)
 })

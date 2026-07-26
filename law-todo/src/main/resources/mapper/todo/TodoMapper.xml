@@ -1,11 +1,45 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.law.todo.mapper.TodoMapper">
+  <resultMap id="TodoInstanceResult" type="com.law.todo.domain.model.TodoInstance">
+    <id property="todoId" column="todo_id"/>
+    <result property="todoNo" column="todo_no"/>
+    <result property="templateId" column="template_id"/>
+    <result property="templateVersionId" column="template_version_id"/>
+    <result property="templateCode" column="template_code"/>
+    <result property="title" column="title"/>
+    <result property="businessType" column="business_type"/>
+    <result property="businessId" column="business_id"/>
+    <result property="businessNo" column="business_no"/>
+    <result property="ownerId" column="owner_id"/>
+    <result property="ownerDeptId" column="owner_dept_id"/>
+    <result property="status" column="status"/>
+    <result property="priority" column="priority"/>
+    <result property="slaStatus" column="sla_status"/>
+    <result property="createdAt" column="created_at"/>
+    <result property="dueAt" column="due_at"/>
+    <result property="completedAt" column="completed_at"/>
+    <result property="previousTodoId" column="previous_todo_id"/>
+    <result property="rootTodoId" column="root_todo_id"/>
+    <result property="triggerEventId" column="trigger_event_id"/>
+    <result property="triggerIdempotencyKey" column="trigger_idempotency_key"/>
+    <result property="nextIdempotencyKey" column="next_idempotency_key"/>
+    <result property="dodSnapshotJson" column="dod_snapshot_json"/>
+    <result property="version" column="version"/>
+    <result property="routeNodeKey" column="route_node_key"/>
+    <result property="definitionHash" column="definition_hash"/>
+    <result property="routeDefinitionVersionId" column="route_definition_version_id"/>
+    <result property="uiSchemaSnapshot" column="ui_schema_snapshot"/>
+    <result property="slaSnapshot" column="sla_snapshot"/>
+    <result property="routeToken" column="route_token"/>
+    <result property="occurrenceKey" column="occurrence_key"/>
+    <result property="payloadSchemaVersion" column="payload_schema_version"/>
+  </resultMap>
   <insert id="insertInstance" useGeneratedKeys="true" keyProperty="todoId">
     insert into todo_instance(todo_no,template_id,template_version_id,template_code,title,business_type,business_id,business_no,owner_id,owner_dept_id,status,priority,sla_status,created_at,due_at,previous_todo_id,root_todo_id,trigger_event_id,trigger_idempotency_key,next_idempotency_key,dod_snapshot_json,definition_hash,route_definition_version_id,ui_schema_snapshot,sla_snapshot,route_node_key,route_token,occurrence_key,payload_schema_version,version)
     values(#{todoNo},#{templateId},#{templateVersionId},#{templateCode},#{title},#{businessType},#{businessId},#{businessNo},#{ownerId},#{ownerDeptId},#{status},#{priority},#{slaStatus},#{createdAt},#{dueAt},#{previousTodoId},#{rootTodoId},#{triggerEventId},#{triggerIdempotencyKey},#{nextIdempotencyKey},#{dodSnapshotJson},#{definitionHash},#{routeDefinitionVersionId},#{uiSchemaSnapshot},#{slaSnapshot},#{routeNodeKey},#{routeToken},#{occurrenceKey},#{payloadSchemaVersion},0)
   </insert>
-  <select id="selectById" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where todo_id=#{todoId}</select>
+  <select id="selectById" resultMap="TodoInstanceResult">select * from todo_instance where todo_id=#{todoId}</select>
   <select id="selectByTriggerKey" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where trigger_idempotency_key=#{key}</select>
   <select id="selectByNextKey" resultType="com.law.todo.domain.model.TodoInstance">select * from todo_instance where next_idempotency_key=#{key}</select>
   <update id="updateStatusConditionally">update todo_instance set status=#{toStatus},owner_id=coalesce(#{ownerId},owner_id),owner_dept_id=case when #{ownerId} is not null then (select dept_id from sys_user where user_id=#{ownerId} and status='0' and del_flag='0') else owner_dept_id end,claimed_at=case when #{toStatus}='CLAIMED' and claimed_at is null then sysdate() else claimed_at end,started_at=case when #{toStatus}='IN_PROGRESS' and started_at is null then sysdate() else started_at end,submitted_at=case when #{toStatus}='SUBMITTED' then sysdate() else submitted_at end,completed_at=case when #{toStatus}='COMPLETED' then sysdate() else completed_at end,cancelled_at=case when #{toStatus}='CANCELLED' then sysdate() else cancelled_at end,version=version+1,update_by=#{operator},update_time=sysdate() where todo_id=#{todoId} and status=#{fromStatus}</update>

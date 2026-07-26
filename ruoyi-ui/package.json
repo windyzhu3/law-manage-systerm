@@ -9,7 +9,7 @@
     "build:prod": "vue-cli-service build",
     "build:stage": "vue-cli-service build --mode staging",
     "preview": "node build/index.js --preview",
-    "test:todo": "node scripts/check-todo-ui.js && node scripts/check-historical-migration-export-response.js",
+    "test:todo": "node scripts/check-todo-ui.js && node scripts/check-historical-migration-export-response.js && node scripts/check-todo-lead-dynamic-form.js",
     "test:todo-config": "node scripts/check-todo-config-center.js",
     "test:todo-phase-two": "node scripts/check-todo-journey-model.js && node scripts/check-todo-phase-two-ux.js",
     "test:todo-schema": "node scripts/check-todo-schema-runtime.js",

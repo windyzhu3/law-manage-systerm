@@ -9,7 +9,7 @@
       <el-select v-model="query.reasonCode" clearable placeholder="无效原因">
         <el-option v-for="item in reasonOptions" :key="item.value" :label="item.label" :value="item.value" />
       </el-select>
-      <el-button type="primary" icon="el-icon-search" @click="search">查询</el-button><el-button @click="reset">重置</el-button>
+      <el-button type="primary" icon="el-icon-search" data-testid="lead-search-submit" @click="search">查询</el-button><el-button @click="reset">重置</el-button>
     </div>
     <div v-if="error" role="alert"><el-alert class="lead-state-error" :title="error" type="error" :closable="false" show-icon /></div>
     <section class="lead-workbench__card">
@@ -21,7 +21,7 @@
         <el-table-column label="操作" width="160" fixed="right">
           <template slot-scope="{ row }">
             <el-button type="primary" plain size="small" @click="detail(row)">详情</el-button>
-            <el-button v-hasPermi="['lead:dead-pool:restore']" type="text" @click="openRestore(row)">恢复</el-button>
+            <el-button v-hasPermi="['lead:dead-pool:restore']" type="text" :data-testid="`lead-dead-pool-restore-${row.leadNo}`" @click="openRestore(row)">恢复</el-button>
           </template>
         </el-table-column>
         <template slot="empty"><el-empty description="Dead-Pool 暂无线索" :image-size="72" /></template>

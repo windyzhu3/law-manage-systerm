@@ -53,6 +53,30 @@ class LeadAccessPolicyTest
     }
 
     @Test
+    void exactAssignedInvalidReviewerCanReadTheLeadAcrossDepartmentBoundaries()
+    {
+        BizLead stored=lead(7L,"2","0");
+        when(mapper.selectLeadById(7L)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+
+        assertSame(stored,new LeadAccessPolicy(mapper,actors).requireReviewable(7L,8L));
+        verify(mapper,never()).countLeadInDataScope(7L,8L,3L,false);
+    }
+
+    @Test
+    void unassignedPeerCannotUseTheReviewAccessPath()
+    {
+        BizLead stored=lead(7L,"2","0");
+        when(mapper.selectLeadById(7L)).thenReturn(stored);
+        when(actors.current()).thenReturn(actor());
+        when(mapper.countLeadInDataScope(7L,8L,3L,false)).thenReturn(0);
+
+        ServiceException error=assertThrows(ServiceException.class,
+            ()->new LeadAccessPolicy(mapper,actors).requireReviewable(7L,9L));
+        assertEquals("ACCESS_DENIED",error.getBusinessCode());
+    }
+
+    @Test
     void deadPoolUsesOriginatingSalesScopeAfterOwnerAndDepartmentWereCleared()
     {
         BizLead dead = lead(7L, "4", "0");

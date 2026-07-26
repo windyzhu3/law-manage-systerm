@@ -19,6 +19,8 @@ public final class FoundationTestIdentityCatalog
         new DepartmentSpec("FOUNDATION_TEST_GOVERNANCE", "Foundation测试治理组", "FOUNDATION_TEST_FIRM", 6));
 
     private static final List<UserSpec> USERS = List.of(
+        new UserSpec("ft_info", "\u6d4b\u8bd5\u4fe1\u606f\u5458", "FOUNDATION_TEST_SALES",
+            "lead_information_officer"),
         new UserSpec("ft_product_owner", "测试产品负责人", "FOUNDATION_TEST_GOVERNANCE", "foundation_product_owner"),
         new UserSpec("ft_sales", "测试销售人员", "FOUNDATION_TEST_SALES", "sales"),
         new UserSpec("ft_case_manager", "测试案管员", "FOUNDATION_TEST_CASE_MANAGEMENT", "case_manager"),
@@ -33,7 +35,8 @@ public final class FoundationTestIdentityCatalog
         new UserSpec("ft_independent_reviewer", "测试独立准入评审人", "FOUNDATION_TEST_GOVERNANCE", "foundation_independent_reviewer"));
 
     private static final Set<String> REQUIRED_ROLE_KEYS = Set.of(
-        "foundation_product_owner", "sales", "case_manager", "law_partner_manager", "lawyer", "intern_lawyer",
+        "foundation_product_owner", "lead_information_officer", "sales", "case_manager",
+        "law_partner_manager", "lawyer", "intern_lawyer",
         "finance_manager", "foundation_security_reviewer", "foundation_arch_dba_reviewer", "foundation_qa_acceptor",
         "foundation_independent_reviewer");
 
@@ -42,6 +45,7 @@ public final class FoundationTestIdentityCatalog
         "execution_assistant_l1", "execution_assistant_l2");
 
     private static final Map<String, Set<String>> GOVERNANCE_ROLE_PERMISSIONS = Map.of(
+        "lead_information_officer", Set.of("lead:query", "lead:tag:confirm"),
         "foundation_product_owner", Set.of(
             "todo:decision:view", "todo:decision:edit", "todo:admission:view", "todo:admission:edit"),
         "foundation_security_reviewer", Set.of("todo:admission:view", "todo:admission:edit"),

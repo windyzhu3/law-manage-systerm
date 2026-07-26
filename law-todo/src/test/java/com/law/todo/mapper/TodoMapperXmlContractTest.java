@@ -341,6 +341,26 @@ class TodoMapperXmlContractTest
         }
     }
 
+    @Test void typedTodoReadsExplicitlyMapSnakeCaseIdentityAndAccessColumns() throws Exception
+    {
+        try(InputStream input=getClass().getResourceAsStream("/mapper/todo/TodoMapper.xml"))
+        {
+            String xml=new String(input.readAllBytes(),StandardCharsets.UTF_8);
+            assertTrue(xml.contains("<resultMap id=\"TodoInstanceResult\""));
+            for(String mapping:new String[]{
+                    "property=\"todoId\" column=\"todo_id\"",
+                    "property=\"templateVersionId\" column=\"template_version_id\"",
+                    "property=\"ownerId\" column=\"owner_id\"",
+                    "property=\"ownerDeptId\" column=\"owner_dept_id\"",
+                    "property=\"dodSnapshotJson\" column=\"dod_snapshot_json\"",
+                    "property=\"routeDefinitionVersionId\" column=\"route_definition_version_id\""})
+                assertTrue(xml.contains(mapping),mapping);
+            String select=statement(xml,"select","selectById");
+            assertTrue(select.contains("resultMap=\"TodoInstanceResult\""));
+            assertFalse(select.contains("resultType="));
+        }
+    }
+
     private String statement(String xml,String tag,String id)
     {
         int start=xml.indexOf("<"+tag+" id=\""+id+"\"");
