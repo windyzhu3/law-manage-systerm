@@ -799,7 +799,7 @@ git commit -m "feat(lead): expose todo flow operations"
 - Consumes Task 9 APIs and Todo dynamic form/file APIs.
 - Produces tag confirmation, first-contact drawer, review queue, retry timeline, Dead-Pool, and policy pages.
 
-- [ ] **Step 1: Write failing structural/frontend behavior contract**
+- [x] **Step 1: Write failing structural/frontend behavior contract**
 
 Assert:
 
@@ -811,7 +811,7 @@ assertNoRawOwnerIdInput()
 assertConditionalFields(['name','city','demand','visited'],'contactResult','VALID')
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```powershell
 node ruoyi-ui/scripts/check-lead-todo-flow-ui.js
@@ -819,15 +819,15 @@ node ruoyi-ui/scripts/check-lead-todo-flow-ui.js
 
 Expected: FAIL because pages/components/routes are absent.
 
-- [ ] **Step 3: Implement API and focused components**
+- [x] **Step 3: Implement API and focused components**
 
 Reuse `TodoDynamicForm`, file picker, `BusinessTodoSummary`, timeline, and existing page-shell styles. Do not duplicate Todo action state transitions in the lead page.
 
-- [ ] **Step 4: Implement operational pages**
+- [x] **Step 4: Implement operational pages**
 
 Show SLA remaining time, Owner, current window, evidence, business status, and allowed actions. Dead-Pool has no claim button. Review page shows the 24-hour default behavior before confirmation.
 
-- [ ] **Step 5: Run frontend contracts and production build**
+- [x] **Step 5: Run frontend contracts and production build**
 
 ```powershell
 node ruoyi-ui/scripts/check-lead-todo-flow-ui.js
@@ -836,7 +836,7 @@ npm --prefix ruoyi-ui run build:prod
 
 Expected: PASS and no new encoding/build errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add ruoyi-ui/src/api/lead.js ruoyi-ui/src/views/lead/index.vue ruoyi-ui/src/views/lead/components/LeadDetailDrawer.vue ruoyi-ui/src/views/lead/components/LeadFirstContactDrawer.vue ruoyi-ui/src/views/lead/components/LeadCallTimeline.vue ruoyi-ui/src/views/lead/components/LeadRetryTimeline.vue ruoyi-ui/src/views/lead/review/index.vue ruoyi-ui/src/views/lead/retry/index.vue ruoyi-ui/src/views/lead/dead-pool/index.vue ruoyi-ui/src/views/lead/policy/index.vue ruoyi-ui/scripts/check-lead-todo-flow-ui.js ruoyi-ui/e2e/lead-todo-flow.spec.js
