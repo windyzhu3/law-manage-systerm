@@ -854,7 +854,7 @@ git commit -m "feat(lead-ui): add todo flow workbenches"
 - Produces transaction-level evidence against MySQL 8.
 - Consumes all prior tasks.
 
-- [ ] **Step 1: Write a failing real-database golden-path test**
+- [x] **Step 1: Write a failing real-database golden-path test**
 
 The test must:
 
@@ -869,7 +869,7 @@ assert exactly one branch Todo and business fact
 rollback all fixtures
 ```
 
-- [ ] **Step 2: Run and confirm RED**
+- [x] **Step 2: Run and confirm RED**
 
 ```powershell
 $env:TODO_MIGRATION_DB_URL='jdbc:mysql://127.0.0.1:3306/law_lead_todo_e2e?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci'
@@ -880,7 +880,7 @@ mvn -pl ruoyi-admin -am "-Dtest=LeadTodoFlowEndToEndTest,LeadTodoScheduleEndToEn
 
 Expected: initial FAIL at the first unclosed integration boundary, not a skipped test.
 
-- [ ] **Step 3: Add all golden scenarios**
+- [x] **Step 3: Add all golden scenarios**
 
 Cover:
 
@@ -897,7 +897,7 @@ duplicate event/action/window idempotency
 business failure rollback
 ```
 
-- [ ] **Step 4: Run baseline-to-head Flyway and real tests**
+- [x] **Step 4: Run baseline-to-head Flyway and real tests**
 
 ```powershell
 mvn -pl ruoyi-admin -am "-Dtest=FlywayMigrationTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
@@ -906,7 +906,7 @@ mvn -pl ruoyi-admin -am "-Dtest=LeadTodoFlowEndToEndTest,LeadTodoScheduleEndToEn
 
 Expected: PASS with zero skipped golden scenarios.
 
-- [ ] **Step 5: Record evidence and commit**
+- [x] **Step 5: Record evidence and commit**
 
 The matrix records scenario, fixture, action, business assertions, Todo assertions, audit assertions, and exact test method.
 
