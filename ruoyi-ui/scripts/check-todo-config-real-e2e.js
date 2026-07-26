@@ -53,7 +53,7 @@ if (journeySkips.length !== 1 || !journeySpec.includes("test.skip(!realBackend, 
 for (const required of [
   "loginAs(page, 'todo_config_admin'",
   "pathname === '/prod-api/login'",
-  'expectSuccessfulApiResponse(await loginResponsePromise)',
+  'expectSuccessfulApiResponse(loginResponsePromise)',
   "not.toHaveURL(/\\/login(?:\\?|$)/, { timeout: 15000 })",
   "page.goto('/todo-engine/todo-template')",
   '新建配置',

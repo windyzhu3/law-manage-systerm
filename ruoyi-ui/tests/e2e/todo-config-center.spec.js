@@ -43,7 +43,7 @@ async function loginAs(page, username, secret) {
     { timeout: 15000 }
   )
   await page.getByRole('button', { name: '登录系统' }).click()
-  await expectSuccessfulApiResponse(await loginResponsePromise)
+  await expectSuccessfulApiResponse(loginResponsePromise)
   await expect(page).not.toHaveURL(/\/login(?:\?|$)/, { timeout: 15000 })
 }
 
@@ -56,7 +56,8 @@ function publishedVersionSnapshot() {
   `, database)).trim()
 }
 
-async function expectSuccessfulApiResponse(response) {
+async function expectSuccessfulApiResponse(responsePromise) {
+  const response = await responsePromise
   expect(response.status()).toBe(200)
   expect((await response.json()).code).toBe(200)
 }
