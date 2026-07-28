@@ -44,28 +44,13 @@
       show-icon
     />
 
-    <div v-if="hydration" class="payload-editor__coverage">
-      <span>载荷覆盖率</span>
-      <el-progress :percentage="coverage" :status="coverage === 100 ? 'success' : undefined" />
-      <small>每个值均标注来源；仅“手工补充”会随本次试运行提交。</small>
-    </div>
-
-    <div v-if="rows.length" class="payload-editor__fields">
-      <div v-for="row in rows" :key="row.path" class="payload-editor__field">
-        <div class="payload-editor__label">
-          <strong>{{ row.label || row.path }}</strong>
-          <el-tag size="mini" :type="sourceType(row.source)">{{ sourceLabel(row.source) }}</el-tag>
-        </div>
-        <el-input
-          v-if="row.editable"
-          :value="row.displayValue"
-          :disabled="readonly"
-          :placeholder="row.source === 'MISSING' ? '可为本次试运行手工补充' : ''"
-          @input="$emit('override', { path: row.path, value: $event })"
-        />
-        <div v-else class="payload-editor__masked" aria-label="敏感字段已脱敏">••••••</div>
-      </div>
-    </div>
+    <template v-if="hydration">
+      <span v-if="hasSensitiveFields" class="payload-editor__masked" aria-label="敏感字段已脱敏">••••••</span>
+      <creation-validation-panel :coverage="coverage" :issues="blockingIssues" />
+      <event-input-panel :fields="eventInputFields" :readonly="readonly" @override="$emit('override', $event)" />
+      <todo-creation-preview :template-name="templateName" :fields="eventInputFields" :ready="coverage === 100 && !blockingIssues.length" />
+      <advanced-payload-override :fields="advancedFields" />
+    </template>
 
     <el-empty v-else-if="selected && !loading" description="选择对象后加载服务器载荷" :image-size="72">
       <el-button type="primary" plain :loading="hydrating" @click="$emit('hydrate')">加载测试载荷</el-button>
@@ -74,10 +59,20 @@
 </template>
 
 <script>
-import { buildHydratedPayloadRows } from '../journey-step-model'
+import {
+  applyHydrationOverrides,
+  buildHydratedPayloadRows,
+  creationCoverage,
+  remainingHydrationBlockers
+} from '../journey-step-model'
+import CreationValidationPanel from './CreationValidationPanel'
+import EventInputPanel from './EventInputPanel'
+import TodoCreationPreview from './TodoCreationPreview'
+import AdvancedPayloadOverride from './AdvancedPayloadOverride'
 
 export default {
   name: 'BusinessObjectPayloadEditor',
+  components: { CreationValidationPanel, EventInputPanel, TodoCreationPreview, AdvancedPayloadOverride },
   props: {
     objects: { type: Array, default: () => [] },
     selectedId: { type: [Number, String], default: null },
@@ -86,14 +81,31 @@ export default {
     manualOverrides: { type: Object, default: () => ({}) },
     loading: Boolean,
     hydrating: Boolean,
-    readonly: Boolean
+    readonly: Boolean,
+    templateName: { type: String, default: '' }
   },
   computed: {
     rows() {
       return buildHydratedPayloadRows(this.hydration || {}, this.manualOverrides)
     },
     coverage() {
-      return Number((this.hydration && (this.hydration.coveragePercent || this.hydration.coverage)) || 0)
+      return creationCoverage(this.hydration || {}, this.manualOverrides)
+    },
+    eventInputFields() {
+      return applyHydrationOverrides((this.hydration && this.hydration.eventInput) || [], this.manualOverrides)
+    },
+    blockingIssues() {
+      return remainingHydrationBlockers(this.hydration || {}, this.manualOverrides)
+    },
+    advancedFields() {
+      if (!this.hydration) return []
+      return []
+        .concat(this.hydration.completionFields || [])
+        .concat(this.hydration.routingFields || [])
+        .concat(this.hydration.advancedFields || [])
+    },
+    hasSensitiveFields() {
+      return (this.hydration.fields || []).some(field => field.sensitive)
     }
   },
   methods: {
@@ -106,7 +118,7 @@ export default {
         EVENT_SAMPLE: '事件样例',
         SYSTEM_DEFAULT: '系统默认',
         MANUAL_OVERRIDE: '手工补充',
-        MISSING: '待补充'
+        MISSING: '可选未填写'
       }[source] || source
     },
     sourceType(source) {

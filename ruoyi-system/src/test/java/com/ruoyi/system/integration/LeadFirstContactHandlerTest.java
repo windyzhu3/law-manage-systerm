@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -136,6 +137,20 @@ class LeadFirstContactHandlerTest
         assertEquals(8L,result.routingPayload().get("ownerId"));
         assertEquals(91L,result.routingPayload().get("reviewerId"));
         assertEquals(61L,result.routingPayload().get("reviewId"));
+    }
+
+    @Test
+    void dryRunReportsDeferredRetryTodoWithoutMutatingLeadData()
+    {
+        LeadFirstContactHandler handler=new LeadFirstContactHandler(firstContacts);
+
+        var result=handler.simulate(todo("TD-001","First contact"),
+                Map.of("contactResult","UNREACHABLE","contactedAt","2026-07-28T09:00:00"));
+
+        assertTrue(handler.supportsSimulation());
+        assertEquals(Map.of("contactResult","UNREACHABLE"),result.routingPayload());
+        assertEquals(java.util.List.of("TD-003"),result.producedTemplateCodes());
+        verifyNoInteractions(firstContacts);
     }
 
     private TodoInstance todo(String code,String title)

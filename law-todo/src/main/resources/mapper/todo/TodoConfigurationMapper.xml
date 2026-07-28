@@ -392,4 +392,31 @@
       status=#{status},sort_order=#{sortOrder},update_by=#{updateBy},update_time=sysdate(),version=version+1
     where resource_item_id=#{resourceItemId} and version=#{expectedVersion}
   </update>
+  <select id="selectTemplateIdByCode" resultType="long">
+    select template_id from todo_template where template_code=#{templateCode} limit 1
+  </select>
+  <select id="selectTemplateCodeByVersionId" resultType="string">
+    select t.template_code from todo_template_version v
+    join todo_template t on t.template_id=v.template_id
+    where v.version_id=#{versionId}
+  </select>
+  <select id="selectTemplateIdentityByVersionId" resultType="java.util.Map">
+    select t.template_id,t.template_code,t.business_type
+    from todo_template_version v join todo_template t on t.template_id=v.template_id
+    where v.version_id=#{versionId}
+  </select>
+  <insert id="insertSimulationEvidence" useGeneratedKeys="true" keyProperty="evidenceId">
+    insert ignore into todo_simulation_evidence(
+      template_id,version_id,definition_hash,scenario_code,scenario_version,result_status,input_hash,
+      trace_summary_json,executed_by,executed_time,expire_time)
+    values(#{templateId},#{versionId},#{definitionHash},#{scenarioCode},#{scenarioVersion},#{resultStatus},
+      #{inputHash},cast(#{traceSummaryJson} as json),#{executedBy},#{executedTime},#{expireTime})
+  </insert>
+  <select id="selectPassingSimulationEvidence" resultType="java.util.Map">
+    select * from todo_simulation_evidence
+    where template_id=#{templateId} and version_id=#{versionId} and definition_hash=#{definitionHash}
+      and scenario_code=#{scenarioCode} and scenario_version=#{scenarioVersion} and result_status='PASSED'
+      and (expire_time is null or expire_time &gt; sysdate())
+    order by executed_time desc,evidence_id desc limit 1
+  </select>
 </mapper>

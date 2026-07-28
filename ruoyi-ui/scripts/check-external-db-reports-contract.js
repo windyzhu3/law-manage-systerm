@@ -15,6 +15,7 @@ const classes = [
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
+  'TodoScenarioSimulationExternalMysqlIT',
   'TodoTriggerRuleMetadataMigrationContractTest',
   'LeadFlowMapperExternalMysqlIT',
   'LeadTodoProductionPortsExternalMysqlIT',
@@ -41,12 +42,12 @@ try {
 
   for (const className of ['LeadTodoFlowEndToEndTest', 'LeadTodoScheduleEndToEndTest']) {
     fs.unlinkSync(reportPath(className))
-    requireFailure(`missing ${className} report`)
+    requireFailure(`missing report: ${className}`)
     writeReport(className, { tests: className === 'LeadTodoFlowEndToEndTest' ? 6 : 4 })
   }
 
   writeReport('LeadTodoFlowEndToEndTest', { tests: 0 })
-  requireFailure('zero Task 11 flow tests')
+  requireFailure('zero tests: Task 11 flow')
   writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
 
   writeReport('LeadTodoFlowEndToEndTest', { tests: 5 })
@@ -54,7 +55,7 @@ try {
   writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
 
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4, skipped: 1 })
-  requireFailure('skipped Task 11 schedule test')
+  requireFailure('skipped test: Task 11 schedule')
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
 
   writeReport(classes[3], { failures: 1 })

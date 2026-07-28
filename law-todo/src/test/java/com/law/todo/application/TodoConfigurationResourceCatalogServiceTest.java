@@ -138,6 +138,29 @@ class TodoConfigurationResourceCatalogServiceTest
         assertEquals(List.of("LEAD_ASSIGNED"),fields.get(0).sourceEvents());
     }
 
+    @Test void exposesSemanticMetadataFromGovernedFieldsAndEventSchemas()
+    {
+        when(mapper.selectConfigurationResourceItems("FIELD","LEAD")).thenReturn(List.of(
+                resource("FIELD","contactResult","首联结果",
+                        "{\"type\":\"string\",\"semanticType\":\"DICT\",\"dictType\":\"law_lead_contact_result\"}")));
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(Map.of(
+                "event_type","LEAD_ASSIGNED","payload_version",1,"payload_schema_json","""
+                {"type":"object","properties":{
+                  "ownerId":{"type":"integer","title":"负责人","x-semantic-type":"USER_ID","x-option-source":"SYSTEM_USER"},
+                  "contactResult":{"type":"string","title":"首联结果","x-semantic-type":"DICT",
+                    "x-dict-type":"law_lead_contact_result"}}}
+                """)));
+
+        var fields=service.fields("LEAD","LEAD_ASSIGNED");
+        var owner=fields.stream().filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
+        var result=fields.stream().filter(field->field.code().equals("contactResult")).findFirst().orElseThrow();
+
+        assertEquals("USER_ID",owner.semanticType());
+        assertEquals("SYSTEM_USER",owner.optionSource());
+        assertEquals("DICT",result.semanticType());
+        assertEquals("law_lead_contact_result",result.dictType());
+    }
+
     @Test void returnsBusinessMaterialsAndRecipesAsTypedResources()
     {
         when(mapper.selectConfigurationResourceItems("MATERIAL","MATTER")).thenReturn(List.of(resource("MATERIAL","ARCHIVE_FORM","归档表","{}")));

@@ -141,6 +141,7 @@ public class TodoConfigurationResourceCatalogService
         private final Set<String> eventVersions=new LinkedHashSet<>();
         private Long resourceItemId;private int version;private String source="EVENT_SCHEMA";
         private String description;private String businessType;private String status;private int sortOrder;
+        private String semanticType="PLAIN_VALUE";private String optionSource;private String dictType;private String displayPattern;
         private MutableField(String code){this.code=code;}
         private void mergeGoverned(Map<String,Object> row,String governedName,JSONObject value)
         {
@@ -152,6 +153,9 @@ public class TodoConfigurationResourceCatalogService
             required|=Boolean.TRUE.equals(value.getBoolean("required"));if(example==null)example=value.get("example");
             sensitive|=Boolean.TRUE.equals(value.getBoolean("sensitive"))||Boolean.TRUE.equals(value.getBoolean("x-sensitive"));
             operators.addAll(strings(value.get("operators")));options.addAll(objects(value.get("options")));
+            semanticType=semantic(value,semanticType);optionSource=firstText(value,"optionSource","x-option-source",optionSource);
+            dictType=firstText(value,"dictType","x-dict-type",dictType);
+            displayPattern=firstText(value,"displayPattern","x-display-pattern",displayPattern);
         }
         private void merge(PayloadFieldDescriptor descriptor,String event,int payloadVersion)
         {
@@ -162,31 +166,49 @@ public class TodoConfigurationResourceCatalogService
             {
                 events.add(event);if(payloadVersion>0)eventVersions.add(event+"@"+payloadVersion);
             }
+            if(!"PLAIN_VALUE".equals(descriptor.semanticType()))semanticType=descriptor.semanticType();
+            if(descriptor.optionSource()!=null)optionSource=descriptor.optionSource();
+            if(descriptor.dictType()!=null)dictType=descriptor.dictType();
+            if(descriptor.displayPattern()!=null)displayPattern=descriptor.displayPattern();
         }
         private FieldResource view()
         {return new FieldResource(code,name,type,required,sensitive?null:example,sensitive,
                 operators.isEmpty()?operators(type):List.copyOf(operators),List.copyOf(events),List.copyOf(options),
-                resourceItemId,version,source,description,businessType,status,sortOrder,List.copyOf(eventVersions));}
+                resourceItemId,version,source,description,businessType,status,sortOrder,List.copyOf(eventVersions),
+                semanticType,optionSource,dictType,displayPattern);}
+        private String semantic(JSONObject value,String fallback)
+        {
+            String candidate=firstText(value,"semanticType","x-semantic-type",null);
+            return candidate==null?fallback:candidate.toUpperCase();
+        }
+        private String firstText(JSONObject value,String first,String second,String fallback)
+        {
+            String candidate=value.getString(first);if(candidate==null||candidate.isBlank())candidate=value.getString(second);
+            return candidate==null||candidate.isBlank()?fallback:candidate.trim();
+        }
     }
     public record ValidatorResource(String code,String name,String description,List<String> businessTypes,
             String configuredStatus,String effectiveStatus,boolean selectable,long referenceCount) { }
     public record FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
             List<String> operators,List<String> sourceEvents,List<Object> options,
             Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder,
-            List<String> sourceEventVersions)
+            List<String> sourceEventVersions,String semanticType,String optionSource,String dictType,String displayPattern)
     {
         public FieldResource
         {
             name=businessLabel(name)?name.trim():"业务字段";operators=operators==null?List.of():List.copyOf(operators);
             sourceEvents=sourceEvents==null?List.of():List.copyOf(sourceEvents);options=options==null?List.of():List.copyOf(options);
             sourceEventVersions=sourceEventVersions==null?List.of():List.copyOf(sourceEventVersions);
+            semanticType=semanticType==null||semanticType.isBlank()?"PLAIN_VALUE":semanticType.trim().toUpperCase();
             if(sensitive)example=null;
         }
         public FieldResource(String code,String name,String type,boolean required,List<String> operators,List<String> sourceEvents)
-        {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0,List.of());}
+        {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0,List.of(),
+                "PLAIN_VALUE",null,null,null);}
         public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
                 List<String> operators,List<String> sourceEvents,List<Object> options)
-        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0,List.of());}
+        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0,List.of(),
+                "PLAIN_VALUE",null,null,null);}
     }
     public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder,
             Long resourceItemId,int version,String source)

@@ -1,0 +1,113 @@
+package com.law.todo.application;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
+import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
+import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationEvidenceSummary;
+import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationScenario;
+import com.law.todo.definition.compiler.DefinitionValidationReport;
+import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
+import com.law.todo.mapper.TodoConfigurationMapper;
+
+@Service
+public class TodoSimulationEvidenceService
+{
+    private final TodoConfigurationMapper mapper;
+    private final TodoSimulationScenarioCatalog scenarios;
+
+    public TodoSimulationEvidenceService(TodoConfigurationMapper mapper)
+    {this(mapper,new TodoSimulationScenarioCatalog(mapper));}
+
+    @Autowired
+    public TodoSimulationEvidenceService(TodoConfigurationMapper mapper,TodoSimulationScenarioCatalog scenarios)
+    {this.mapper=mapper;this.scenarios=scenarios;}
+
+    @Transactional
+    public SimulationEvidenceSummary record(long templateId,SimulationScenario scenario,
+            ScenarioSimulationCommand command,String actualNextTemplateCode,boolean passed,
+            List<String> traceCodes,Actor actor)
+    {
+        String inputHash=inputHash(templateId,scenario,command);
+        LocalDateTime executed=LocalDateTime.now();
+        Map<String,Object> summary=new TreeMap<>();
+        summary.put("actualNextTemplateCode",actualNextTemplateCode);
+        summary.put("expectedNextTemplateCode",scenario.expectedNextTemplateCode());
+        summary.put("passed",passed);summary.put("traceCodes",traceCodes==null?List.of():traceCodes);
+        Map<String,Object> row=new HashMap<>();
+        row.put("templateId",templateId);row.put("versionId",command.versionId());
+        row.put("definitionHash",command.definitionHash());row.put("scenarioCode",scenario.scenarioCode());
+        row.put("scenarioVersion",scenario.scenarioVersion());row.put("resultStatus",passed?"PASSED":"FAILED");
+        row.put("inputHash",inputHash);
+        row.put("traceSummaryJson",JSON.toJSONString(summary,JSONWriter.Feature.SortMapEntriesByKeys));
+        row.put("executedBy",actor.userId());row.put("executedTime",executed);
+        row.put("expireTime",null);mapper.insertSimulationEvidence(row);
+        return new SimulationEvidenceSummary(scenario.scenarioCode(),scenario.scenarioVersion(),
+                command.definitionHash(),passed?"PASSED":"FAILED",inputHash,executed,null);
+    }
+
+    @Transactional(readOnly=true)
+    public PublicationGate gate(long templateId,long versionId,String definitionHash,List<SimulationScenario> scenarios)
+    {
+        List<String> blockers=new ArrayList<>();
+        for(SimulationScenario scenario:scenarios==null?List.<SimulationScenario>of():scenarios)
+        {
+            if(!scenario.requiredForPublish()||!"ACTIVE".equals(scenario.status()))continue;
+            Map<String,Object> query=new HashMap<>();query.put("templateId",templateId);query.put("versionId",versionId);
+            query.put("definitionHash",definitionHash);query.put("scenarioCode",scenario.scenarioCode());
+            query.put("scenarioVersion",scenario.scenarioVersion());
+            if(mapper.selectPassingSimulationEvidence(query)==null)blockers.add(scenario.scenarioCode());
+        }
+        return new PublicationGate(blockers.isEmpty(),blockers);
+    }
+
+    @Transactional(readOnly=true)
+    public DefinitionValidationReport applyPreflightGate(long versionId,DefinitionValidationReport report)
+    {
+        Map<String,Object> identity=mapper.selectTemplateIdentityByVersionId(versionId);
+        if(identity==null||identity.isEmpty())return report;
+        long templateId=Long.parseLong(String.valueOf(value(identity,"template_id","templateId")));
+        String templateCode=String.valueOf(value(identity,"template_code","templateCode"));
+        String businessType=String.valueOf(value(identity,"business_type","businessType"));
+        List<SimulationScenario> required=scenarios.scenarios(templateCode,businessType);
+        if(required.stream().noneMatch(SimulationScenario::requiredForPublish))return report;
+        PublicationGate gate=gate(templateId,versionId,report.definitionHash(),required);
+        if(gate.publicationReady())return report;
+        List<ValidationIssue> errors=new ArrayList<>(report.errors());
+        errors.add(new ValidationIssue("TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE","simulation.scenarios",
+                "Required simulation scenarios are incomplete: "+String.join(",",gate.blockingScenarioCodes())));
+        return new DefinitionValidationReport(errors,report.warnings(),report.compiledJson(),report.definitionHash());
+    }
+
+    String inputHash(long templateId,SimulationScenario scenario,ScenarioSimulationCommand command)
+    {
+        Map<String,Object> canonical=new TreeMap<>();
+        canonical.put("templateId",templateId);canonical.put("versionId",command.versionId());
+        canonical.put("definitionHash",command.definitionHash());canonical.put("scenarioCode",scenario.scenarioCode());
+        canonical.put("scenarioVersion",scenario.scenarioVersion());canonical.put("businessType",command.businessType());
+        canonical.put("businessId",command.businessId());canonical.put("manualOverrides",command.manualOverrides());
+        canonical.put("effectiveAt",command.effectiveAt().toString());
+        return TodoDefinitionSimulationService.sha256(
+                JSON.toJSONString(canonical,JSONWriter.Feature.SortMapEntriesByKeys));
+    }
+
+    private Object value(Map<String,Object> row,String snake,String camel)
+    {return row.containsKey(snake)?row.get(snake):row.get(camel);}
+
+    public record PublicationGate(boolean publicationReady,List<String> blockingScenarioCodes)
+    {
+        public PublicationGate
+        {blockingScenarioCodes=blockingScenarioCodes==null?List.of():List.copyOf(blockingScenarioCodes);}
+    }
+}

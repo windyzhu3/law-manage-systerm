@@ -753,6 +753,32 @@ check('stores only explicit manual payload overrides', () => {
   })
 })
 
+check('projects event input overrides into validation fields and local creation coverage', () => {
+  const hydration = {
+    creationCoveragePercent: 40,
+    eventInput: [
+      { path: 'assignmentId', required: true, missing: true, rawValue: null, issueMessage: 'required' },
+      { path: 'operatorId', required: true, missing: true, rawValue: null, issueMessage: 'required' },
+      { path: 'ownerId', required: true, missing: false, rawValue: 113, displayValue: 'Todo admin' },
+      { path: 'ownerDeptId', required: true, missing: false, rawValue: 103, displayValue: 'Test department' },
+      { path: 'schemaVersion', required: true, missing: true, rawValue: null, issueMessage: 'required' }
+    ],
+    blockingIssues: [
+      { fieldPath: 'assignmentId', message: 'required' },
+      { fieldPath: 'operatorId', message: 'required' },
+      { fieldPath: 'schemaVersion', message: 'required' }
+    ]
+  }
+  const overrides = { assignmentId: 9001, operatorId: 113, schemaVersion: 1 }
+  const fields = steps.applyHydrationOverrides(hydration.eventInput, overrides)
+  assert.strictEqual(fields[0].rawValue, 9001)
+  assert.strictEqual(fields[0].missing, false)
+  assert.strictEqual(fields[0].issueMessage, null)
+  assert.strictEqual(fields[2].displayValue, 'Todo admin')
+  assert.deepStrictEqual(steps.remainingHydrationBlockers(hydration, overrides), [])
+  assert.strictEqual(steps.creationCoverage(hydration, overrides), 100)
+})
+
 check('orders simulation trace by the governed journey and keeps repair targets', () => {
   assert.strictEqual(typeof steps.orderedSimulationTrace, 'function')
   const trace = steps.orderedSimulationTrace([

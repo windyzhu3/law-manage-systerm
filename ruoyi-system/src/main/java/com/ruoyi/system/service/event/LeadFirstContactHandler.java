@@ -30,6 +30,19 @@ public class LeadFirstContactHandler implements TodoCompletionHandler
     }
 
     @Override public String catalogCode(){return "TD-001_COMPLETE";}
+    @Override public boolean supportsSimulation(){return true;}
+    @Override public String simulationDescription()
+    {return "Pure dry-run reports the deferred retry Todo without writing lead data";}
+
+    @Override
+    public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
+    {
+        String contactResult=LeadTodoPayloadMapper.text(payload,"contactResult");
+        Map<String,Object> routing=contactResult==null?Map.of():Map.of("contactResult",contactResult);
+        return "UNREACHABLE".equals(contactResult)
+                ?SimulationResult.produces(routing,java.util.List.of("TD-003"))
+                :SimulationResult.none(routing);
+    }
 
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)

@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 
 export function getTodoConfigDashboard() { return request({ url: '/todo/config/dashboard', method: 'get' }) }
+export function listTodoFieldOptions(params) { return request({ url: '/todo/config/resources/field-options', method: 'get', params }) }
 
 export function listSlaRules(params) { return request({ url: '/todo/config/sla-rules', method: 'get', params }) }
 export function getSlaRule(id) { return request({ url: `/todo/config/sla-rules/${id}`, method: 'get' }) }
@@ -32,6 +33,9 @@ export function getTodoTemplateJourney(id) { return request({ url: `/todo/config
 export function listTodoTemplateWorkbench(params) { return request({ url: '/todo/config/templates/workbench', method: 'get', params }) }
 export function hydrateTodoJourneyPayload(id, data) { return request({ url: `/todo/config/templates/${id}/journey/payload`, method: 'post', data }) }
 export function simulateTodoJourney(id, data) { return request({ url: `/todo/config/templates/${id}/journey/simulate`, method: 'post', data }) }
+export function listJourneyScenarios(id) { return request({ url: `/todo/config/templates/${id}/journey/scenarios`, method: 'get' }) }
+export function simulateJourneyScenario(id, scenarioCode, data) { return request({ url: `/todo/config/templates/${id}/journey/scenarios/${scenarioCode}/simulate`, method: 'post', data }) }
+export function batchSimulateJourneyScenarios(id, data) { return request({ url: `/todo/config/templates/${id}/journey/scenarios/batch-simulate`, method: 'post', data }) }
 export function previewTodoJourneySla(data) { return request({ url: '/todo/config/journey/sla-preview', method: 'post', data }) }
 export function listTemplateVersions(id) { return request({ url: `/todo/config/templates/${id}/versions`, method: 'get' }) }
 export function diffTemplateVersions(left, right) { return request({ url: `/todo/definitions/versions/${left}/diff/${right}`, method: 'get' }) }

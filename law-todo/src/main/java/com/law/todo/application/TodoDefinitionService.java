@@ -51,22 +51,28 @@ public class TodoDefinitionService
     private final TodoDefinitionCompiler compiler;
     private final TodoConfigurationMapper configurationMapper;
     private final TodoDictionaryValidationPort dictionaries;
+    private final TodoSimulationEvidenceService simulationEvidence;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
     @Autowired
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
-            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
+            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
+            TodoSimulationEvidenceService simulationEvidence)
     {
         this.mapper = mapper;
         this.compiler = compiler;
         this.configurationMapper=configurationMapper;this.dictionaries=dictionaries;
+        this.simulationEvidence=simulationEvidence;
     }
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
+            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
+    {this(mapper,compiler,configurationMapper,dictionaries,null);}
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,TodoConfigurationMapper configurationMapper)
-    {this(mapper,compiler,configurationMapper,(type,value)->true);}
+    {this(mapper,compiler,configurationMapper,(type,value)->true,null);}
 
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
-    {this(mapper,compiler,null,(type,value)->true);}
+    {this(mapper,compiler,null,(type,value)->true,null);}
 
     public TodoDefinitionService(TodoMapper mapper)
     {
@@ -77,7 +83,7 @@ public class TodoDefinitionService
     public TodoDefinitionService(TodoMapper mapper,TodoAutoActionCapabilityRegistry autoActions)
     {
         this(mapper,new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
-                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true);
+                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true,null);
     }
 
     public List<Map<String, Object>> versions(Long templateId)
@@ -589,6 +595,7 @@ public class TodoDefinitionService
         });
         DefinitionValidationReport report = applyPrdCatalogueGate(compiler.compile(definition, context), current,
                 prdBlocked);
+        if(simulationEvidence!=null)report=simulationEvidence.applyPreflightGate(versionId,report);
         Map<String, Object> persisted = new HashMap<>();
         persisted.put("versionId", versionId);
         persisted.put("definitionSchemaVersion", definition.schemaVersion());

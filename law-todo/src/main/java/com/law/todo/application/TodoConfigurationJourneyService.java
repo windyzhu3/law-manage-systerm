@@ -72,6 +72,13 @@ public class TodoConfigurationJourneyService
                 preview.project(detail,definition),evaluation.issues(),permissions(actor));
     }
 
+    /** Internal canonical source; deliberately excluded from the HTTP journey view. */
+    public String canonicalDefinition(long templateId,Actor actor)
+    {
+        TemplateConfigurationDetail detail=query.template(templateId);
+        return Objects.requireNonNull(detail.editableVersion(),"editableVersion").definitionJson();
+    }
+
     public TemplateWorkbenchPage workbench(Map<String,Object> query,Actor actor)
     {
         Map<String,Object> normalized=normalize(query);

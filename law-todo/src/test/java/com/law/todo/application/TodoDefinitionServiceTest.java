@@ -50,6 +50,7 @@ import com.law.todo.mapper.TodoMapper;
 class TodoDefinitionServiceTest
 {
     @Mock TodoMapper mapper;
+    @Mock TodoSimulationEvidenceService simulationEvidence;
     private final Actor actor=new Actor(7L,"alice",3L);
 
     @BeforeEach void lockedVersionUsesTheExistingVersionStub()
@@ -348,6 +349,30 @@ class TodoDefinitionServiceTest
         assertTrue(result.report().publishable());
         assertEquals(64,result.report().definitionHash().length());
         verify(mapper).updateDefinitionCompilation(anyMap());
+    }
+
+    @Test void preflightIncludesTheRequiredScenarioEvidenceGate()
+    {
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(draft(null,null));
+        registeredEvent();
+        when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        when(simulationEvidence.applyPreflightGate(
+                org.mockito.ArgumentMatchers.eq(9L),org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(invocation->{
+                    var report=invocation.<com.law.todo.definition.compiler.DefinitionValidationReport>getArgument(1);
+                    return new com.law.todo.definition.compiler.DefinitionValidationReport(
+                            List.of(new com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue(
+                                    "TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE","simulation.scenarios",
+                                    "TD001_VALID")),report.warnings(),report.compiledJson(),report.definitionHash());
+                });
+        TodoDefinitionService service=new TodoDefinitionService(mapper,compiler(),null,
+                (type,value)->true,simulationEvidence);
+
+        var result=service.preflight(9L);
+
+        assertFalse(result.publishable());
+        assertTrue(result.report().errors().stream().anyMatch(issue->
+                "TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE".equals(issue.code())));
     }
 
     @Test void draftPublishPreflightAllowsItsOwnStartTaskVersion()

@@ -897,6 +897,51 @@ function updateManualOverrides(current, path, value) {
   return next
 }
 
+function hasHydrationOverride(manualOverrides, path) {
+  const overrides = object(manualOverrides)
+  const key = String(path || '')
+  return Object.prototype.hasOwnProperty.call(overrides, key) &&
+    overrides[key] !== '' && overrides[key] != null
+}
+
+function applyHydrationOverrides(fields, manualOverrides) {
+  const overrides = object(manualOverrides)
+  return list(fields).map(row => {
+    const field = object(row)
+    const path = String(field.path || field.code || '')
+    if (!hasHydrationOverride(overrides, path)) return clone(field)
+    const value = clone(overrides[path])
+    return {
+      ...clone(field),
+      rawValue: value,
+      displayValue: value,
+      source: 'MANUAL_OVERRIDE',
+      missing: false,
+      issueCode: null,
+      issueMessage: null
+    }
+  })
+}
+
+function remainingHydrationBlockers(hydration, manualOverrides) {
+  const source = object(hydration)
+  return list(source.blockingIssues).filter(issue =>
+    !hasHydrationOverride(manualOverrides, object(issue).fieldPath)
+  ).map(clone)
+}
+
+function creationCoverage(hydration, manualOverrides) {
+  const source = object(hydration)
+  const required = list(source.eventInput).filter(field => object(field).required === true)
+  if (!required.length) return Number(source.creationCoveragePercent || source.coveragePercent || source.coverage || 0)
+  const ready = required.filter(field => {
+    const row = object(field)
+    const path = String(row.path || row.code || '')
+    return !row.missing || hasHydrationOverride(manualOverrides, path)
+  }).length
+  return Math.round((ready * 100) / required.length)
+}
+
 function orderedSimulationTrace(trace) {
   const rows = list(trace)
   const byCode = new Map(rows.map(row => [String(row && row.code || '').toUpperCase(), clone(row)]))
@@ -983,6 +1028,9 @@ module.exports = {
   completeResourceRepair,
   buildHydratedPayloadRows,
   updateManualOverrides,
+  applyHydrationOverrides,
+  remainingHydrationBlockers,
+  creationCoverage,
   orderedSimulationTrace,
   publishPreflightGate,
   simulationPublishCapabilities

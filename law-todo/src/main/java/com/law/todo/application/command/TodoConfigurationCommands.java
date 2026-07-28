@@ -83,7 +83,7 @@ public final class TodoConfigurationCommands
     }
 
     public record ConfigurationResourceCommand(Long resourceItemId,
-            @NotBlank @Pattern(regexp="FIELD|MATERIAL|DOD_RECIPE") String resourceType,
+            @NotBlank @Pattern(regexp="FIELD|MATERIAL|DOD_RECIPE|SIMULATION_SCENARIO") String resourceType,
             @NotBlank String resourceCode,@NotBlank String resourceName,String description,
             @NotBlank @Pattern(regexp="LEAD|CUSTOMER|CONTRACT|CASE|MATTER") String businessType,
             @NotBlank String valueJson,@NotBlank @Pattern(regexp="ACTIVE|DISABLED") String status,
@@ -111,6 +111,17 @@ public final class TodoConfigurationCommands
         }
     }
 
+    public record FieldOptionQuery(@NotBlank String semanticType,@NotBlank String optionSource,
+            String dictType,String keyword,@Positive Integer pageNum,@Positive @Max(100) Integer pageSize)
+    {
+        public FieldOptionQuery
+        {
+            pageNum=pageNum==null?1:pageNum;
+            pageSize=pageSize==null?20:pageSize;
+        }
+        public int offset(){return (pageNum-1)*pageSize;}
+    }
+
     public record JourneySimulationCommand(@NotNull @Positive Long templateId,@NotNull @Positive Long versionId,
             @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,@NotBlank String businessType,
             @NotNull Long businessId,Map<String,Object> manualOverrides,@NotNull LocalDateTime effectiveAt,
@@ -133,6 +144,15 @@ public final class TodoConfigurationCommands
                     +", manualOverrideCount="+manualOverrides.size()
                     +", taskCompletionCount="+taskCompletions.size()+"]";
         }
+    }
+
+    public record ScenarioSimulationCommand(@NotNull @Positive Long versionId,@NotBlank String definitionHash,
+            @NotBlank String businessType,@NotNull Long businessId,Map<String,Object> manualOverrides,
+            @NotNull LocalDateTime effectiveAt,@NotBlank String requestId)
+    {
+        public ScenarioSimulationCommand { manualOverrides=immutableMap(manualOverrides); }
+        @AssertTrue(message="Simulation business ID must not be zero")
+        public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
     }
 
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,

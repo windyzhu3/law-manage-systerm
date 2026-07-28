@@ -47,7 +47,8 @@ public class TodoPayloadSchemaDescriptor
             }
             boolean sensitive=sensitive(property);
             fields.add(new PayloadFieldDescriptor(path,label(property),type,required.contains(name),sensitive?null:example(property),sourceObject,
-                    sensitive,operators(type),options(property)));
+                    sensitive,operators(type),options(property),semantic(property),text(property,"x-option-source","optionSource"),
+                    text(property,"x-dict-type","dictType"),text(property,"displayPattern","x-display-pattern")));
         }
     }
 
@@ -75,6 +76,20 @@ public class TodoPayloadSchemaDescriptor
     }
     private boolean sensitive(JSONObject property)
     {return Boolean.TRUE.equals(property.getBoolean("x-sensitive"))||Boolean.TRUE.equals(property.getBoolean("sensitive"));}
+    private String semantic(JSONObject property)
+    {
+        String value=text(property,"x-semantic-type","semanticType");
+        return value==null||value.isBlank()?"PLAIN_VALUE":value.trim().toUpperCase();
+    }
+    private String text(JSONObject property,String... keys)
+    {
+        for(String key:keys)
+        {
+            String value=property.getString(key);
+            if(value!=null&&!value.isBlank())return value.trim();
+        }
+        return null;
+    }
     private List<Object> options(JSONObject property)
     {
         JSONArray values=property.getJSONArray("enum");
@@ -91,12 +106,14 @@ public class TodoPayloadSchemaDescriptor
     }
 
     public record PayloadFieldDescriptor(String path,String label,String type,boolean required,Object example,
-            String sourceObject,boolean sensitive,List<String> operators,List<Object> options)
+            String sourceObject,boolean sensitive,List<String> operators,List<Object> options,
+            String semanticType,String optionSource,String dictType,String displayPattern)
     {
         public PayloadFieldDescriptor
         {
             operators=operators==null?List.of():List.copyOf(operators);
             options=options==null?List.of():List.copyOf(options);
+            semanticType=semanticType==null||semanticType.isBlank()?"PLAIN_VALUE":semanticType.trim().toUpperCase();
             if(sensitive)example=null;
         }
     }

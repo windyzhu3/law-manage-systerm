@@ -33,7 +33,8 @@ class SpringMultiConstructorBeanContextTest
             context.registerBean(TodoConfigurationMapper.class, () -> mock(TodoConfigurationMapper.class));
             context.register(HistoricalMigrationExportArchiveWriter.class, TodoAssignmentResolver.class,
                 TodoHistoricalMigrationPreflightService.class, RoutingGraphValidator.class, TodoRoutingEngine.class,
-                TodoConfigurationResourceCatalogService.class);
+                TodoConfigurationResourceCatalogService.class, TodoSimulationScenarioCatalog.class,
+                TodoSimulationEvidenceService.class);
 
             context.refresh();
 
@@ -43,6 +44,7 @@ class SpringMultiConstructorBeanContextTest
             assertNotNull(context.getBean(RoutingGraphValidator.class));
             assertNotNull(context.getBean(TodoRoutingEngine.class));
             assertNotNull(context.getBean(TodoConfigurationResourceCatalogService.class));
+            assertNotNull(context.getBean(TodoSimulationEvidenceService.class));
         }
     }
 }

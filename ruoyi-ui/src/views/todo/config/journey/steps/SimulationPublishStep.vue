@@ -21,11 +21,38 @@
       :loading="objectLoading"
       :hydrating="hydrating"
       :readonly="readonly"
+      :template-name="template.templateName"
       @search="searchObjects"
       @sample="searchObjects('示例')"
       @select="selectObject"
       @hydrate="hydratePayload"
       @override="changeOverride"
+    />
+
+    <scenario-selector
+      :scenarios="scenarios"
+      :selected-code="selectedScenarioCode"
+      :results="scenarioResults"
+      @select="selectScenario"
+    />
+
+    <completion-form-renderer
+      :scenario="selectedScenario"
+      :completion-fields="completionFields"
+      :overrides="scenarioOverrides"
+      :effective-at="effectiveAt || localDateTimeNow()"
+      :loading="simulatingScenario"
+      :business-selected="Boolean(selectedObject)"
+      @override="changeScenarioOverride"
+      @run="runSelectedScenario"
+    />
+
+    <batch-scenario-gate
+      :gate="scenarioGateState"
+      :scenarios="scenarios"
+      :loading="batchSimulating"
+      :disabled="!selectedObject || dirty || saving"
+      @run-batch="runScenarioBatch"
     />
 
     <div class="simulation-publish-step__actions">
@@ -87,6 +114,9 @@
 import BusinessObjectPayloadEditor from '../components/BusinessObjectPayloadEditor'
 import SimulationTrace from '../components/SimulationTrace'
 import PublishPreflightPanel from '../components/PublishPreflightPanel'
+import ScenarioSelector from '../components/ScenarioSelector'
+import CompletionFormRenderer from '../components/CompletionFormRenderer'
+import BatchScenarioGate from '../components/BatchScenarioGate'
 import {
   listBusinessObjects,
   hydrateTodoJourneyPayload,
@@ -94,17 +124,28 @@ import {
   preflightTemplateDraft,
   listTemplateVersions,
   diffTemplateVersions,
-  publishReleaseRecord
+  publishReleaseRecord,
+  listJourneyScenarios,
+  simulateJourneyScenario,
+  batchSimulateJourneyScenarios
 } from '@/api/todo-config'
 import {
   updateManualOverrides,
   publishPreflightGate,
   simulationPublishCapabilities
 } from '../journey-step-model'
+import { scenarioGate } from '../simulation-workbench-model'
 
 export default {
   name: 'SimulationPublishStep',
-  components: { BusinessObjectPayloadEditor, SimulationTrace, PublishPreflightPanel },
+  components: {
+    BusinessObjectPayloadEditor,
+    SimulationTrace,
+    PublishPreflightPanel,
+    ScenarioSelector,
+    CompletionFormRenderer,
+    BatchScenarioGate
+  },
   props: {
     template: { type: Object, required: true },
     value: { type: Object, default: () => ({}) },
@@ -133,7 +174,14 @@ export default {
       preflight: null,
       diff: null,
       warningReason: '',
-      publishing: false
+      publishing: false,
+      scenarios: [],
+      selectedScenarioCode: '',
+      scenarioOverrides: {},
+      scenarioResults: {},
+      simulatingScenario: false,
+      batchSimulating: false,
+      serverScenarioGate: null
     }
   },
   computed: {
@@ -141,6 +189,9 @@ export default {
     canOperate() { return !this.readonly },
     draftHash() { return String(this.authoritativeDraftHash || this.template.definitionHash || '') },
     simulationState() {
+      if (this.scenarioGateState.publicationReady) {
+        return { successful: true, definitionHash: this.draftHash }
+      }
       if (!this.simulation) return {}
       const issues = this.simulation.issues || []
       const definitionHash = (this.simulation.engine && this.simulation.engine.definitionHash) ||
@@ -156,6 +207,16 @@ export default {
     },
     publishGate() {
       return publishPreflightGate(this.simulationState, this.preflight || {}, this.warningReason)
+    },
+    selectedScenario() {
+      return this.scenarios.find(item => item.scenarioCode === this.selectedScenarioCode) || null
+    },
+    completionFields() {
+      return (this.hydration && this.hydration.completionFields) || []
+    },
+    scenarioGateState() {
+      if (this.serverScenarioGate && this.serverScenarioGate.publicationReady) return this.serverScenarioGate
+      return scenarioGate(this.scenarios, this.scenarioResults, this.draftHash)
     }
   },
   watch: {
@@ -174,7 +235,10 @@ export default {
     }
   },
   mounted() {
-    if (this.canOperate && this.capabilities.canSimulate) this.searchObjects('')
+    if (this.canOperate && this.capabilities.canSimulate) {
+      this.searchObjects('')
+      this.loadScenarios()
+    }
   },
   methods: {
     actionId(action) {
@@ -187,6 +251,9 @@ export default {
       this.preflight = null
       this.diff = null
       this.warningReason = ''
+      this.scenarioResults = {}
+      this.scenarioOverrides = {}
+      this.serverScenarioGate = null
     },
     requireSavedDraft() {
       if (!this.dirty && !this.saving) return true
@@ -233,6 +300,9 @@ export default {
       this.simulation = null
       this.preflight = null
       this.manualOverrides = {}
+      this.scenarioOverrides = {}
+      this.scenarioResults = {}
+      this.serverScenarioGate = null
     },
     async hydratePayload() {
       if (!this.selectedObject) return
@@ -250,6 +320,94 @@ export default {
       this.manualOverrides = updateManualOverrides(this.manualOverrides, change.path, change.value)
       this.simulation = null
       this.preflight = null
+    },
+    async loadScenarios() {
+      try {
+        const response = await listJourneyScenarios(this.template.templateId)
+        this.scenarios = response.data || []
+        if (!this.scenarios.some(item => item.scenarioCode === this.selectedScenarioCode)) {
+          this.selectedScenarioCode = this.scenarios.length ? this.scenarios[0].scenarioCode : ''
+        }
+      } catch (error) {
+        this.scenarios = []
+        this.$modal.msgError((error && (error.msg || error.message)) || '场景目录加载失败')
+      }
+    },
+    selectScenario(code) {
+      this.selectedScenarioCode = code
+      this.scenarioOverrides = {}
+    },
+    changeScenarioOverride(change) {
+      this.scenarioOverrides = updateManualOverrides(this.scenarioOverrides, change.path, change.value)
+      this.serverScenarioGate = null
+      this.preflight = null
+    },
+    scenarioCommand(action) {
+      return {
+        versionId: Number(this.currentVersionId),
+        definitionHash: this.draftHash,
+        businessType: this.businessType,
+        businessId: Number(this.selectedId),
+        manualOverrides: { ...this.manualOverrides, ...this.scenarioOverrides },
+        effectiveAt: this.effectiveAt || this.localDateTimeNow(),
+        requestId: this.actionId(action)
+      }
+    },
+    async prepareScenarioRun() {
+      if (!this.selectedObject || !this.requireSavedDraft()) return false
+      if (!this.preflight || !this.draftHash) {
+        if (!(await this.runPreflight({ includeDiff: false, quiet: true }))) return false
+      }
+      const configurationErrors = ((this.preflight && this.preflight.errors) || [])
+        .filter(issue => issue.code !== 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE')
+      if (configurationErrors.length) {
+        this.$modal.msgWarning('请先修复场景证据以外的配置阻塞项')
+        return false
+      }
+      if (!this.hydration) await this.hydratePayload()
+      return true
+    },
+    async runSelectedScenario() {
+      if (!this.selectedScenario || !(await this.prepareScenarioRun())) return
+      this.simulatingScenario = true
+      try {
+        const response = await simulateJourneyScenario(this.template.templateId,
+          this.selectedScenario.scenarioCode, this.scenarioCommand(`scenario-${this.selectedScenario.scenarioCode}`))
+        const result = response.data || {}
+        this.$set(this.scenarioResults, this.selectedScenario.scenarioCode, result)
+        this.simulation = result.simulation || null
+        this.serverScenarioGate = null
+        this.preflight = null
+        if (result.passed) this.$modal.msgSuccess('当前场景验证通过')
+        else this.$modal.msgWarning(result.message || '当前场景未通过')
+      } catch (error) {
+        this.$modal.msgError((error && (error.msg || error.message)) || '场景验证失败')
+      } finally {
+        this.simulatingScenario = false
+      }
+    },
+    async runScenarioBatch() {
+      if (!(await this.prepareScenarioRun())) return
+      this.batchSimulating = true
+      try {
+        const response = await batchSimulateJourneyScenarios(
+          this.template.templateId, this.scenarioCommand('scenario-batch'))
+        const result = response.data || {}
+        for (const item of result.results || []) this.$set(this.scenarioResults, item.scenarioCode, item)
+        this.serverScenarioGate = {
+          publicationReady: Boolean(result.publicationReady),
+          blockingScenarioCodes: result.blockingScenarioCodes || []
+        }
+        const last = (result.results || []).slice(-1)[0]
+        this.simulation = (last && last.simulation) || this.simulation
+        await this.runPreflight({ includeDiff: false, quiet: true })
+        if (result.publicationReady) this.$modal.msgSuccess('三个必测场景均已通过')
+        else this.$modal.msgWarning('仍有场景未通过，请查看预期与实际下一待办')
+      } catch (error) {
+        this.$modal.msgError((error && (error.msg || error.message)) || '批量场景验证失败')
+      } finally {
+        this.batchSimulating = false
+      }
     },
     async runSimulation() {
       if (!this.canOperate || !this.capabilities.canSimulate || !this.selectedObject || !this.requireSavedDraft()) return

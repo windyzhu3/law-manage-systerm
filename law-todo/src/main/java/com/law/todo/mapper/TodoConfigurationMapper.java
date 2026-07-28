@@ -53,4 +53,9 @@ public interface TodoConfigurationMapper
     int insertConfigurationResourceItem(Map<String,Object> row);
     int updateConfigurationResourceItemConditionally(Map<String,Object> row);
     List<Map<String,Object>> selectPublishedSimulationCandidates();
+    Long selectTemplateIdByCode(String templateCode);
+    String selectTemplateCodeByVersionId(Long versionId);
+    Map<String,Object> selectTemplateIdentityByVersionId(Long versionId);
+    int insertSimulationEvidence(Map<String,Object> row);
+    Map<String,Object> selectPassingSimulationEvidence(Map<String,Object> query);
 }

@@ -441,4 +441,60 @@ check('closes the journey with governed simulation and immutable publishing', ()
   assert(!step.includes('createRuntime'), 'simulation UI must never request runtime persistence')
 })
 
+check('groups creation validation and renders governed semantic labels', () => {
+  const components = [
+    'src/views/todo/config/journey/components/CreationValidationPanel.vue',
+    'src/views/todo/config/journey/components/EventInputPanel.vue',
+    'src/views/todo/config/journey/components/TodoCreationPreview.vue',
+    'src/views/todo/config/journey/components/SemanticValueRenderer.vue',
+    'src/views/todo/config/journey/components/SemanticOptionSelector.vue',
+    'src/views/todo/config/journey/components/AdvancedPayloadOverride.vue'
+  ]
+  for (const componentPath of components) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing semantic simulation component: ${componentPath}`)
+  }
+  const payload = read('src/views/todo/config/journey/components/BusinessObjectPayloadEditor.vue')
+  const api = read('src/api/todo-config.js')
+  assert(payload.includes('CreationValidationPanel'), 'payload editor must show creation blockers separately')
+  assert(payload.includes('EventInputPanel'), 'payload editor must group event inputs')
+  assert(payload.includes('TodoCreationPreview'), 'payload editor must preview the created Todo')
+  assert(payload.includes('AdvancedPayloadOverride'), 'technical overrides must remain advanced-only')
+  assert(payload.includes('applyHydrationOverrides'), 'manual event inputs must remain visible after reactive updates')
+  assert(payload.includes('remainingHydrationBlockers'), 'manual event inputs must clear their matching blockers')
+  assert(payload.includes('creationCoverage'), 'manual event inputs must update local creation coverage')
+  const semanticSelector = read('src/views/todo/config/journey/components/SemanticOptionSelector.vue')
+  assert(semanticSelector.includes('seedCurrentOption'), 'semantic selectors must display the current governed label instead of a raw ID')
+  assert(api.includes('listTodoFieldOptions'), 'semantic selectors need a governed options endpoint')
+  assert(!payload.includes("MISSING: '待补充'"), 'optional missing fields must not be labelled as blockers')
+})
+
+check('runs governed completion scenarios and blocks publish until all pass', () => {
+  const components = [
+    'src/views/todo/config/journey/components/ScenarioSelector.vue',
+    'src/views/todo/config/journey/components/CompletionFormRenderer.vue',
+    'src/views/todo/config/journey/components/BatchScenarioGate.vue'
+  ]
+  for (const componentPath of components) {
+    assert(fs.existsSync(path.join(root, componentPath)), `missing scenario workbench component: ${componentPath}`)
+  }
+  const step = read('src/views/todo/config/journey/steps/SimulationPublishStep.vue')
+  const selector = read(components[0])
+  const form = read(components[1])
+  const gate = read(components[2])
+  const api = read('src/api/todo-config.js')
+  for (const token of ['有效首联', '疑似无效', '未接通', '预期下一待办', '实际下一待办']) {
+    assert(selector.includes(token) || gate.includes(token), `scenario workbench missing label: ${token}`)
+  }
+  assert(step.includes('listJourneyScenarios'), 'scenario list must be server governed')
+  assert(step.includes('simulateJourneyScenario'), 'single scenario execution must use the server')
+  assert(step.includes('batchSimulateJourneyScenarios'), 'batch scenario gate must use the server')
+  assert(form.includes('SemanticOptionSelector'), 'completion dictionaries must reuse governed semantic selectors')
+  assert(form.includes('contactedAt'), 'simulation time must be available as the contactedAt default')
+  assert(!form.includes('reviewResult'), 'TD-001 completion form must not hard-code downstream review fields')
+  assert(gate.includes('批量验证三个场景'), 'batch gate must provide one clear action')
+  for (const apiName of ['listJourneyScenarios', 'simulateJourneyScenario', 'batchSimulateJourneyScenarios']) {
+    assert(api.includes(`function ${apiName}`), `missing scenario API: ${apiName}`)
+  }
+})
+
 console.log(`todo phase two ux contract passed (${checks} checks)`)

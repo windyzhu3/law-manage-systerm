@@ -70,7 +70,7 @@ public class TodoDefinitionSimulationService
     {this(mapper,owners,handlers,compiler(mapper));}
 
     @Autowired
-    TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,
+    public TodoDefinitionSimulationService(TodoMapper mapper,TodoAssignmentResolver owners,
             List<TodoCompletionHandler> handlers,TodoDefinitionCompiler compiler)
     {this.mapper=mapper;this.owners=owners;this.handlers=handlers==null?List.of():List.copyOf(handlers);this.compiler=compiler;}
 

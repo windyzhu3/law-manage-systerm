@@ -145,6 +145,30 @@ class TodoConfigurationResourceManagementServiceTest
         }
     }
 
+    @Test
+    void acceptsACompleteGovernedSimulationScenario()
+    {
+        claim("resource-scenario",true);
+        when(mapper.insertConfigurationResourceItem(anyMap())).thenAnswer(invocation->{
+            invocation.<Map<String,Object>>getArgument(0).put("resourceItemId",51L);
+            return 1;
+        });
+        when(catalog.isKnownField("contactResult","LEAD")).thenReturn(true);
+        when(catalog.isKnownField("contactedAt","LEAD")).thenReturn(true);
+        when(mapper.selectTemplateIdByCode("TD-001")).thenReturn(1L);
+        when(mapper.selectTemplateIdByCode("TD-004")).thenReturn(4L);
+        String value="{\"templateCode\":\"TD-001\",\"scenarioVersion\":1,"
+                +"\"completionPayload\":{\"contactResult\":\"VALID\",\"contactedAt\":\"${SIMULATION_NOW}\"},"
+                +"\"editableFields\":[\"contactResult\",\"contactedAt\"],\"requiredMaterials\":[],"
+                +"\"completionNodeKey\":\"TD-001\",\"occurrence\":1,\"expectedNextTemplateCode\":\"TD-004\","
+                +"\"requiredForPublish\":true}";
+        ConfigurationResourceCommand command=new ConfigurationResourceCommand(null,"SIMULATION_SCENARIO",
+                "TD001_VALID","有效首联","验证有效首联路由","LEAD",value,"ACTIVE",10,
+                "resource-scenario",0);
+
+        assertEquals(51L,resources.save(command,actor));
+    }
+
     private ConfigurationResourceCommand field(Long id,String valueJson,int version)
     {
         return new ConfigurationResourceCommand(id,"FIELD","contactedAt","联系时间","实际联系时间","LEAD",

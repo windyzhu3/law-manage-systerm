@@ -27,6 +27,9 @@ public class TodoConfigurationResourceManagementService
     private static final Set<String> FIELD_TYPES=Set.of("string","integer","number","boolean","object","array");
     private static final Set<String> RECIPE_KEYS=Set.of("businessActions","templateStages","recommendationPriority",
             "requiredFields","requiredAttachments","validatorRefs","conditionalRules","employeeInstructions");
+    private static final Set<String> SCENARIO_KEYS=Set.of("templateCode","scenarioVersion","completionPayload",
+            "editableFields","requiredMaterials","completionNodeKey","occurrence",
+            "expectedNextTemplateCode","requiredForPublish");
     private final TodoConfigurationMapper mapper;
     private final TodoMapper todoMapper;
     private final TodoConfigurationResourceCatalogService catalog;
@@ -79,9 +82,43 @@ public class TodoConfigurationResourceManagementService
             case "FIELD"->validateField(value);
             case "MATERIAL"->{ }
             case "DOD_RECIPE"->validateRecipe(command.businessType(),value);
+            case "SIMULATION_SCENARIO"->validateScenario(command.businessType(),value);
             default->throw invalid("Unsupported configuration resource type");
         }
     }
+
+    private void validateScenario(String businessType,JSONObject value)
+    {
+        if(!value.keySet().containsAll(SCENARIO_KEYS)
+                ||blank(value.getString("templateCode"))||!positiveInteger(value.get("scenarioVersion"))
+                ||!(value.get("completionPayload") instanceof JSONObject)
+                ||!stringArray(value,"editableFields")||!stringArray(value,"requiredMaterials")
+                ||blank(value.getString("completionNodeKey"))||!positiveInteger(value.get("occurrence"))
+                ||blank(value.getString("expectedNextTemplateCode"))
+                ||!(value.get("requiredForPublish") instanceof Boolean))
+            throw invalid("Simulation scenario metadata is incomplete or invalid");
+        if(mapper.selectTemplateIdByCode(value.getString("templateCode"))==null)
+            throw unknown("template",value.getString("templateCode"));
+        if(mapper.selectTemplateIdByCode(value.getString("expectedNextTemplateCode"))==null)
+            throw unknown("template",value.getString("expectedNextTemplateCode"));
+        for(String field:strings(value.getJSONArray("editableFields")))
+            if(!catalog.isKnownField(field,businessType))throw unknown("field",field);
+        for(String material:strings(value.getJSONArray("requiredMaterials")))
+            if(!catalog.isKnownMaterial(material,businessType))throw unknown("material",material);
+        validatePlaceholders(value.get("completionPayload"));
+    }
+
+    private void validatePlaceholders(Object value)
+    {
+        if(value instanceof Map<?,?> map)map.values().forEach(this::validatePlaceholders);
+        else if(value instanceof List<?> list)list.forEach(this::validatePlaceholders);
+        else if(value instanceof String text&&text.contains("${")&&!"${SIMULATION_NOW}".equals(text))
+            throw invalid("Unsupported simulation placeholder "+text);
+    }
+
+    private boolean positiveInteger(Object value)
+    {return value instanceof Number number&&number.intValue()>0&&number.doubleValue()==number.intValue();}
+    private boolean blank(String value){return value==null||value.isBlank();}
 
     private void validateField(JSONObject value)
     {
