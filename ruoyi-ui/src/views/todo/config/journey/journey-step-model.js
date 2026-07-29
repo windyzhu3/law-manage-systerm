@@ -906,10 +906,61 @@ function normalizedOutcome(row, index) {
     ...clone(value),
     id: routeKey(value.id, index),
     label: String(value.label || `业务结果 ${index + 1}`),
+    resultField: value.resultField ? String(value.resultField) : null,
+    resultValue: value.resultValue === null || value.resultValue === undefined ? null : String(value.resultValue),
+    resultLabel: value.resultLabel ? String(value.resultLabel) : null,
     resultType: String(value.resultType || 'NEXT').toUpperCase(),
     targetVersionId: Number(value.targetVersionId) || null,
     default: value.default === true
   }
+}
+
+function literalCondition(field, value) {
+  return {
+    $expression: {
+      version: 1,
+      root: {
+        type: 'AND',
+        conditions: [{ field, operator: 'EQ', value }]
+      }
+    }
+  }
+}
+
+function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, current) {
+  const catalog = object(outcomeSet)
+  const routingTargets = list(targets)
+  const resultField = String(catalog.resultField || '')
+  const resultFieldName = String(catalog.resultFieldName || resultField)
+  const options = list(catalog.options)
+  const outcomes = options.map((option, index) => {
+    const value = String(option.value || '')
+    const target = routingTargets.find(item =>
+      Number(item.versionId || item.version_id) === Number(option.targetVersionId) ||
+      String(item.templateCode || item.template_code || '') === String(option.targetTemplateCode || '')
+    )
+    const targetVersionId = target
+      ? Number(target.versionId || target.version_id)
+      : Number(option.targetVersionId) || null
+    const resultLabel = String(option.label || value)
+    return {
+      id: routeKey(`${resultField}_${value}`, index),
+      label: `当${resultFieldName}为${resultLabel}时`,
+      resultField,
+      resultValue: value,
+      resultLabel,
+      resultType: 'NEXT',
+      targetVersionId,
+      targetTemplateCode: option.targetTemplateCode || (target && (target.templateCode || target.template_code)) || null,
+      default: index === options.length - 1,
+      condition: literalCondition(resultField, value)
+    }
+  })
+  return buildBusinessRoutingPatch(outcomes, {
+    mode: 'SEQUENTIAL',
+    joinMode: 'ALL',
+    currentVersionId
+  }, current)
 }
 
 function buildSequentialRoute(outcomes, currentVersionId) {
@@ -1009,7 +1060,8 @@ function buildBusinessRoutingPatch(rows, options, current) {
 
 function routingDraftBlocker(rows, options) {
   const outcomes = list(rows).map(normalizedOutcome)
-  const mode = String(object(options).mode || 'SEQUENTIAL').toUpperCase()
+  const settings = object(options)
+  const mode = String(settings.mode || 'SEQUENTIAL').toUpperCase()
   if (outcomes.some(row => row.resultType === 'NEXT' && !row.targetVersionId)) {
     return {
       code: 'TODO_JOURNEY_ROUTING_TARGET_REQUIRED',
@@ -1022,6 +1074,50 @@ function routingDraftBlocker(rows, options) {
       code: 'TODO_JOURNEY_ROUTING_PARALLEL_BRANCHES_REQUIRED',
       severity: 'BLOCKER',
       message: '并行办理至少需要两个有效的后续待办'
+    }
+  }
+  const outcomeSet = object(settings.outcomeSet)
+  if (mode === 'SEQUENTIAL' && outcomeSet.resultField && list(outcomeSet.options).length) {
+    const expected = list(outcomeSet.options).map(option => String(option.value))
+    const actual = outcomes.map(row => String(row.resultValue || ''))
+    if (actual.some(value => !value)) {
+      return {
+        code: 'TODO_ROUTING_OUTCOME_INCOMPLETE',
+        severity: 'BLOCKER',
+        message: '请选择每个分支对应的业务结果'
+      }
+    }
+    if (new Set(actual).size !== actual.length) {
+      return {
+        code: 'TODO_ROUTING_OUTCOME_DUPLICATE',
+        severity: 'BLOCKER',
+        message: '同一个业务结果只能配置一个后续分支'
+      }
+    }
+    const missing = expected.filter(value => !actual.includes(value))
+    if (missing.length) {
+      return {
+        code: 'TODO_ROUTING_OUTCOME_INCOMPLETE',
+        severity: 'BLOCKER',
+        message: '还有业务结果尚未设置后续待办'
+      }
+    }
+    const targets = list(settings.routingTargets)
+    const businessType = String(settings.businessType || '')
+    const invalidTarget = outcomes.find(row => {
+      if (row.resultType !== 'NEXT') return false
+      const target = targets.find(item =>
+        Number(item.versionId || item.version_id) === Number(row.targetVersionId)
+      )
+      return !target || String(target.status || '').toUpperCase() !== 'PUBLISHED' ||
+        (businessType && String(target.businessType || target.business_type || '') !== businessType)
+    })
+    if (invalidTarget) {
+      return {
+        code: 'TODO_JOURNEY_ROUTING_TARGET_INVALID',
+        severity: 'BLOCKER',
+        message: '后续待办不存在、未发布或业务类型不一致'
+      }
     }
   }
   return null
@@ -1241,6 +1337,7 @@ module.exports = {
   buildSlaTimeline,
   slaRepairBlocker,
   buildBusinessRoutingPatch,
+  materializeOutcomeRouting,
   routingDraftBlocker,
   createRepairRequest,
   resourceRepairAccess,

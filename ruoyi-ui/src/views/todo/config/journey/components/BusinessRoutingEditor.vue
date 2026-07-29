@@ -3,12 +3,45 @@
     <header>
       <div>
         <h3>完成后下一步</h3>
-        <p>按业务结果从上到下判断，命中后进入下一张待办或结束当前流程。</p>
+        <p v-if="typedMode">
+          选择员工提交的“{{ outcomeSet.resultFieldName }}”，系统会自动生成判断条件和后续待办。
+        </p>
+        <p v-else>按业务结果从上到下判断，命中后进入下一张待办或结束当前流程。</p>
       </div>
-      <el-button v-if="!readonly" size="small" icon="el-icon-plus" @click="addOutcome">添加业务结果</el-button>
+      <div v-if="!readonly" class="business-routing__actions">
+        <el-button
+          v-if="typedMode && outcomeSet.recommendationCode"
+          size="small"
+          type="primary"
+          icon="el-icon-magic-stick"
+          @click="applyRecommendation"
+        >
+          应用首联推荐路由
+        </el-button>
+        <el-button
+          v-if="!typedMode"
+          size="small"
+          icon="el-icon-plus"
+          @click="addOutcome"
+        >
+          添加业务结果
+        </el-button>
+      </div>
     </header>
 
-    <div class="business-routing__mode">
+    <el-alert
+      v-if="typedMode"
+      class="business-routing__governed"
+      type="info"
+      :closable="false"
+      show-icon
+    >
+      <template slot="title">
+        业务结果来自“{{ outcomeSet.resultFieldName }}”字典，共 {{ outcomeOptions.length }} 项；每项必须且只能配置一次。
+      </template>
+    </el-alert>
+
+    <div v-if="!typedMode" class="business-routing__mode">
       <span>执行方式</span>
       <el-radio-group v-model="mode" :disabled="readonly" size="small" @change="modeChanged">
         <el-radio-button label="SEQUENTIAL">按结果选择一步</el-radio-button>
@@ -24,27 +57,58 @@
       <article v-for="(row, index) in draftRows" :key="row.id" class="routing-outcome">
         <div class="routing-outcome__order">
           <span>{{ index + 1 }}</span>
-          <el-button-group v-if="!readonly">
+          <el-button-group v-if="!readonly && !typedMode">
             <el-button type="text" icon="el-icon-top" :disabled="index === 0" @click="move(index, -1)" />
             <el-button type="text" icon="el-icon-bottom" :disabled="index === draftRows.length - 1" @click="move(index, 1)" />
           </el-button-group>
         </div>
+
         <div class="routing-outcome__body">
           <div class="routing-outcome__main">
-            <el-input v-model.trim="row.label" :disabled="readonly" placeholder="填写业务结果，例如：审批通过" @change="commit">
+            <el-select
+              v-if="typedMode"
+              v-model="row.resultValue"
+              :disabled="readonly"
+              placeholder="选择业务结果"
+              @change="outcomeChanged(row, index)"
+            >
+              <el-option
+                v-for="option in availableOutcomeOptions(row)"
+                :key="option.value"
+                :label="option.label"
+                :value="String(option.value)"
+              />
+            </el-select>
+            <el-input
+              v-else
+              v-model="row.label"
+              :disabled="readonly"
+              placeholder="填写业务结果，例如：审批通过"
+              @change="commit"
+            >
               <template slot="prepend">业务结果</template>
             </el-input>
-            <el-select v-model="row.resultType" :disabled="readonly || mode === 'PARALLEL'" @change="resultTypeChanged(row)">
+
+            <template v-if="typedMode">
+              <div class="routing-outcome__next-label">进入下一张待办</div>
+            </template>
+            <el-select
+              v-else
+              v-model="row.resultType"
+              :disabled="readonly || mode === 'PARALLEL'"
+              @change="resultTypeChanged(row)"
+            >
               <el-option label="进入下一张待办" value="NEXT" />
               <el-option label="结束" value="END" />
             </el-select>
+
             <el-select
               v-if="row.resultType === 'NEXT'"
               v-model="row.targetVersionId"
               :disabled="readonly"
               filterable
               placeholder="选择下一张待办"
-              @change="commit"
+              @change="targetChanged(row)"
             >
               <el-option
                 v-for="target in routingTargets"
@@ -56,9 +120,16 @@
                 <small>{{ target.templateCode || target.template_code }} · 已发布 v{{ target.versionNo || target.version_no }}</small>
               </el-option>
             </el-select>
-            <div v-else class="routing-outcome__end"><i class="el-icon-circle-close" />流程在此结束，不再创建后续待办</div>
+            <div v-else class="routing-outcome__end">
+              <i class="el-icon-circle-close" />流程在此结束，不再创建后续待办
+            </div>
           </div>
-          <div v-if="mode === 'SEQUENTIAL'" class="routing-outcome__condition">
+
+          <p v-if="typedMode" class="routing-outcome__sentence">
+            <i class="el-icon-right" />{{ resultSentence(row) }}
+          </p>
+
+          <div v-else-if="mode === 'SEQUENTIAL'" class="routing-outcome__condition">
             <el-checkbox v-model="row.default" :disabled="readonly" @change="defaultChanged(index)">
               其他结果都不匹配时走此分支
             </el-checkbox>
@@ -74,10 +145,22 @@
             </el-collapse>
           </div>
         </div>
-        <el-button v-if="!readonly" type="text" class="is-danger" @click="removeOutcome(index)">删除</el-button>
+
+        <el-button
+          v-if="!readonly && !typedMode"
+          type="text"
+          class="is-danger"
+          @click="removeOutcome(index)"
+        >
+          删除
+        </el-button>
       </article>
     </div>
-    <el-empty v-else description="尚未设置完成后的业务结果" :image-size="68" />
+    <el-empty
+      v-else
+      :description="typedMode ? '点击“应用首联推荐路由”自动生成完整分支' : '尚未设置完成后的业务结果'"
+      :image-size="68"
+    />
 
     <el-alert
       v-if="blocker"
@@ -89,7 +172,7 @@
     />
 
     <el-alert
-      v-if="mode === 'PARALLEL'"
+      v-if="mode === 'PARALLEL' && !typedMode"
       title="并行办理说明"
       :description="joinMode === 'ALL' ? '系统会同时创建以上待办，全部完成后再继续。' : '系统会同时创建以上待办，任一完成后即可汇合继续。'"
       type="info"
@@ -101,7 +184,11 @@
 
 <script>
 import TypedConditionBuilder from './TypedConditionBuilder'
-import { emptyConditionDocument, routingDraftBlocker } from '../journey-step-model'
+import {
+  emptyConditionDocument,
+  materializeOutcomeRouting,
+  routingDraftBlocker
+} from '../journey-step-model'
 
 const clone = value => JSON.parse(JSON.stringify(value == null ? [] : value))
 
@@ -113,6 +200,9 @@ export default {
     options: { type: Object, default: () => ({}) },
     routingTargets: { type: Array, default: () => [] },
     fields: { type: Array, default: () => [] },
+    outcomeSet: { type: Object, default: () => ({}) },
+    currentVersionId: [Number, String],
+    businessType: String,
     readonly: Boolean
   },
   data() {
@@ -124,30 +214,82 @@ export default {
     }
   },
   computed: {
-    blocker() { return routingDraftBlocker(this.draftRows, { mode: this.mode, joinMode: this.joinMode }) }
+    outcomeOptions() {
+      return Array.isArray(this.outcomeSet.options) ? this.outcomeSet.options : []
+    },
+    typedMode() {
+      return Boolean(this.outcomeSet.resultField && this.outcomeOptions.length)
+    },
+    blocker() {
+      return routingDraftBlocker(this.draftRows, {
+        mode: this.mode,
+        joinMode: this.joinMode,
+        outcomeSet: this.outcomeSet,
+        routingTargets: this.routingTargets,
+        businessType: this.businessType
+      })
+    }
   },
   watch: {
     rows: { immediate: true, deep: true, handler() { if (!this.syncing) this.hydrate() } },
     options: { immediate: true, deep: true, handler() { if (!this.syncing) this.hydrateSettings() } },
+    outcomeSet: { deep: true, handler() { if (!this.syncing) this.hydrate() } },
     blocker: {
       immediate: true,
-      handler(value) { this.$emit('issue-change', value ? { ...value, stepCode: 'ROUTING', fieldPath: 'routing.businessOutcomes' } : null) }
+      handler(value) {
+        this.$emit('issue-change', value
+          ? { ...value, stepCode: 'ROUTING', fieldPath: 'routing.businessOutcomes' }
+          : null)
+      }
     }
   },
   methods: {
     hydrate() {
-      this.draftRows = clone(this.rows).map((row, index) => ({
-        id: row.id || `result_${index + 1}`,
-        label: row.label || '',
-        resultType: row.resultType || 'NEXT',
-        targetVersionId: Number(row.targetVersionId) || null,
-        default: row.default === true,
-        condition: clone(row.condition || {})
-      }))
+      this.draftRows = clone(this.rows).map((row, index) => {
+        const resultValue = row.resultValue || this.conditionResult(row.condition)
+        const option = this.outcomeOptions.find(item => String(item.value) === String(resultValue))
+        return {
+          id: row.id || `result_${index + 1}`,
+          label: row.label || '',
+          resultField: row.resultField || (option && this.outcomeSet.resultField) || null,
+          resultValue: resultValue == null ? null : String(resultValue),
+          resultLabel: row.resultLabel || (option && option.label) || null,
+          resultType: row.resultType || 'NEXT',
+          targetVersionId: Number(row.targetVersionId) || null,
+          targetTemplateCode: row.targetTemplateCode || (option && option.targetTemplateCode) || null,
+          default: row.default === true,
+          condition: clone(row.condition || {})
+        }
+      })
     },
     hydrateSettings() {
-      this.mode = this.options.mode || 'SEQUENTIAL'
+      this.mode = this.typedMode ? 'SEQUENTIAL' : (this.options.mode || 'SEQUENTIAL')
       this.joinMode = this.options.joinMode || 'ALL'
+    },
+    conditionResult(condition) {
+      const root = condition && condition.$expression && condition.$expression.root
+      const predicate = root && Array.isArray(root.conditions) && root.conditions[0]
+      return predicate && predicate.operator === 'EQ' ? predicate.value : null
+    },
+    applyRecommendation() {
+      const patch = materializeOutcomeRouting(
+        this.outcomeSet,
+        this.routingTargets,
+        this.currentVersionId,
+        { config: {} }
+      )
+      this.mode = 'SEQUENTIAL'
+      this.joinMode = 'ALL'
+      this.draftRows = clone(patch.config.businessOutcomes || [])
+      this.commit()
+    },
+    availableOutcomeOptions(row) {
+      const selected = new Set(this.draftRows
+        .filter(item => item !== row && item.resultValue)
+        .map(item => String(item.resultValue)))
+      return this.outcomeOptions.filter(option =>
+        String(option.value) === String(row.resultValue) || !selected.has(String(option.value))
+      )
     },
     addOutcome() {
       const id = `result_${Date.now()}`
@@ -161,6 +303,33 @@ export default {
         condition: emptyConditionDocument()
       })
       this.commit()
+    },
+    outcomeChanged(row, index) {
+      const recommended = materializeOutcomeRouting(
+        { ...this.outcomeSet, options: this.outcomeOptions.filter(option => String(option.value) === String(row.resultValue)) },
+        this.routingTargets,
+        this.currentVersionId,
+        { config: {} }
+      ).config.businessOutcomes[0]
+      if (recommended) {
+        Object.assign(row, recommended, {
+          id: row.id || recommended.id || `result_${index + 1}`,
+          default: index === this.draftRows.length - 1
+        })
+      }
+      this.commit()
+    },
+    targetChanged(row) {
+      const target = this.routingTargets.find(item => this.versionId(item) === Number(row.targetVersionId))
+      row.targetTemplateCode = target ? (target.templateCode || target.template_code) : null
+      this.commit()
+    },
+    resultSentence(row) {
+      const result = row.resultLabel || row.resultValue || '未选择结果'
+      const target = row.resultType === 'END'
+        ? '结束当前流程'
+        : `创建“${this.templateNameByVersion(row.targetVersionId)}”待办`
+      return `当“${this.outcomeSet.resultFieldName || row.resultField || '业务结果'}”为“${result}”时，${target}`
     },
     removeOutcome(index) {
       this.draftRows.splice(index, 1)
@@ -204,11 +373,21 @@ export default {
     },
     commit() {
       this.syncing = true
-      this.$emit('change', clone(this.draftRows), { mode: this.mode, joinMode: this.joinMode })
+      this.$emit('change', clone(this.draftRows), {
+        mode: this.mode,
+        joinMode: this.joinMode,
+        outcomeSet: clone(this.outcomeSet),
+        routingTargets: clone(this.routingTargets),
+        businessType: this.businessType
+      })
       this.$nextTick(() => { this.syncing = false })
     },
     versionId(target) { return Number(target.versionId || target.version_id) },
-    templateName(target) { return target.templateName || target.template_name || '未命名待办' }
+    templateName(target) { return target.templateName || target.template_name || '未命名待办' },
+    templateNameByVersion(versionId) {
+      const target = this.routingTargets.find(item => this.versionId(item) === Number(versionId))
+      return target ? this.templateName(target) : '尚未选择的后续待办'
+    }
   }
 }
 </script>
@@ -219,13 +398,17 @@ export default {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    gap: 16px;
 
     h3 { margin: 0; font-size: 16px; color: #0B2A55; }
-    p { margin: 4px 0 0; font-size: 12px; color: #65758A; }
+    p { margin: 4px 0 0; font-size: 12px; line-height: 20px; color: #65758A; }
   }
 
   > .el-alert { margin-top: 14px; }
 }
+
+.business-routing__actions { flex: 0 0 auto; }
+.business-routing__governed { margin-bottom: 14px; }
 
 .business-routing__mode {
   display: flex;
@@ -278,6 +461,29 @@ export default {
   display: grid;
   grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr);
   gap: 9px;
+  align-items: center;
+}
+
+.routing-outcome__next-label {
+  padding: 10px 12px;
+  font-size: 13px;
+  text-align: center;
+  color: #53667C;
+  background: #F7F9FC;
+  border-radius: 6px;
+}
+
+.routing-outcome__sentence {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #0B2A55;
+  background: #F3F7FC;
+  border-left: 3px solid #C89A3D;
+  border-radius: 4px;
+
+  i { margin-right: 6px; color: #C89A3D; }
 }
 
 .routing-outcome__end {
@@ -303,6 +509,11 @@ export default {
 }
 
 @media (max-width: 760px) {
+  .business-routing > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .business-routing__actions .el-button { width: 100%; }
   .business-routing__mode { align-items: stretch; flex-direction: column; }
   .routing-outcome { grid-template-columns: 38px minmax(0, 1fr); }
   .routing-outcome > .is-danger { grid-column: 2; }

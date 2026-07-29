@@ -45,21 +45,29 @@ public class TodoConfigurationJourneyService
     private final TodoEmployeeTodoPreviewProjector preview;
     private final TodoTemplateService templates;
     private final TodoEventResourceService eventResources;
+    private final TodoBusinessOutcomeCatalogService outcomes;
 
     @Autowired
     public TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
-            TodoEventResourceService eventResources)
-    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources);}
+            TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
+    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources)
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null);}
+
+    TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
+            TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
+            TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
+            TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
     {
         this.query=query;this.codec=codec;this.mapper=mapper;this.resourceCatalog=resourceCatalog;
         this.evaluator=evaluator;this.preview=preview;this.templates=templates;this.eventResources=eventResources;
+        this.outcomes=outcomes;
     }
 
     public TodoConfigurationJourneyView load(long templateId,Actor actor)
@@ -68,7 +76,7 @@ public class TodoConfigurationJourneyService
         TemplateVersionDetail version=Objects.requireNonNull(detail.editableVersion(),"editableVersion");
         TodoDefinitionDocument definition=codec.read(version.definitionJson());
         TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluate(detail,definition);
-        return new TodoConfigurationJourneyView(summary(detail,version),evaluation.steps(),resources(detail),
+        return new TodoConfigurationJourneyView(summary(detail,version),evaluation.steps(),resources(detail,definition),
                 preview.project(detail,definition),evaluation.issues(),permissions(actor));
     }
 
@@ -115,14 +123,16 @@ public class TodoConfigurationJourneyService
                 version.definitionHash());
     }
 
-    private CurrentResources resources(TemplateConfigurationDetail detail)
+    private CurrentResources resources(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
     {
         String businessType=detail.businessType();
         var fields=resourceCatalog.fields(businessType);
         var events=eventResources.list(Map.of("businessObjectType",businessType,"offset",0,"limit",500)).rows();
         return new CurrentResources(events,fields,query.ownerCatalog(),
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
-                templates.listTemplateCalendarCatalog(),templates.listRoutingTargetCatalog());
+                templates.listTemplateCalendarCatalog(),templates.listRoutingTargetCatalog(),
+                outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
+                        outcomes.resolve(detail.templateCode(),businessType,definition));
     }
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row)

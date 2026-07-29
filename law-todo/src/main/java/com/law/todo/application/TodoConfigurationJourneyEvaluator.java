@@ -23,17 +23,22 @@ import com.law.todo.routing.RoutingGraphValidator;
 public class TodoConfigurationJourneyEvaluator
 {
     private static final TodoConfigurationJourneyEvaluator PURE_COMPATIBILITY=
-            new TodoConfigurationJourneyEvaluator(null,null);
+            new TodoConfigurationJourneyEvaluator(null,null,null);
     private final TodoConfigurationResourceCatalogService resources;
     private final TodoTemplateService templates;
+    private final TodoBusinessOutcomeCatalogService outcomes;
 
     /** Compatibility constructor for focused callers that do not have catalog access. */
     public TodoConfigurationJourneyEvaluator()
-    {this(null,null);}
+    {this(null,null,null);}
+
+    public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,TodoTemplateService templates)
+    {this(resources,templates,null);}
 
     @Autowired
-    public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,TodoTemplateService templates)
-    {this.resources=resources;this.templates=templates;}
+    public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,
+            TodoTemplateService templates,TodoBusinessOutcomeCatalogService outcomes)
+    {this.resources=resources;this.templates=templates;this.outcomes=outcomes;}
 
     public Evaluation evaluate(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
     {
@@ -43,7 +48,7 @@ public class TodoConfigurationJourneyEvaluator
         steps.add(evaluateOwner(definition,issues));
         steps.add(evaluateDod(definition,issues));
         steps.add(evaluateSla(definition,issues));
-        steps.add(evaluateRouting(definition,issues));
+        steps.add(evaluateRouting(detail,definition,issues));
         steps.add(evaluateSimulation(detail,definition,issues));
         return new Evaluation(steps,issues);
     }
@@ -154,14 +159,18 @@ public class TodoConfigurationJourneyEvaluator
         append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty(),fieldValue("config",sla));
     }
 
-    private JourneyStep evaluateRouting(TodoDefinitionDocument definition,List<JourneyIssue> issues)
+    private JourneyStep evaluateRouting(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
         Map<String,Object> routing=config(definition==null?null:definition.routing());
-        if(routing.isEmpty())return step("ROUTING","Routing",List.of(),true,true,fieldValue("config",routing));
         List<JourneyIssue> local=new ArrayList<>();
-        if(definition.routing()==null||!new RoutingGraphValidator(new com.law.todo.expression.ConditionValidator()).validate(definition.routing()).isEmpty())
+        if(!routing.isEmpty()&&(definition.routing()==null
+                ||!new RoutingGraphValidator(new com.law.todo.expression.ConditionValidator()).validate(definition.routing()).isEmpty()))
             local.add(blocker("TODO_JOURNEY_ROUTING_INVALID","ROUTING","routing",
                     "The routing path is incomplete or invalid","Repair the routing path"));
+        if(outcomes!=null&&detail!=null)
+            for(var issue:outcomes.validate(detail.templateCode(),detail.businessType(),definition))
+                local.add(blocker(issue.code(),"ROUTING",issue.path(),issue.message(),
+                        "返回后续路由并修复“"+issue.message()+"”"));
         append(issues,local);return step("ROUTING","Routing",local,true,local.isEmpty(),fieldValue("config",routing));
     }
 

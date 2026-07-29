@@ -32,11 +32,12 @@ class TodoConfigurationJourneyEvaluatorTest
 {
     @Mock TodoConfigurationResourceCatalogService resources;
     @Mock TodoTemplateService templates;
+    @Mock TodoBusinessOutcomeCatalogService outcomes;
     private TodoConfigurationJourneyEvaluator evaluator;
 
     @BeforeEach void setUp()
     {
-        evaluator=new TodoConfigurationJourneyEvaluator(resources,templates);
+        evaluator=new TodoConfigurationJourneyEvaluator(resources,templates,outcomes);
         List<FieldResource> fields=List.of(
                 new FieldResource("leadId","Lead","integer",true,List.of(),List.of("LEAD_ASSIGNED")),
                 new FieldResource("assignmentId","分配记录ID","integer",false,List.of("EQ","NE","NOT_EMPTY"),List.of("LEAD_ASSIGNED")));
@@ -210,6 +211,24 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.step("ROUTING").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code).contains(
                 "TODO_JOURNEY_CALENDAR_REQUIRED","TODO_JOURNEY_ROUTING_INVALID");
+    }
+
+    @Test void mapsTypedOutcomeCompletenessIssuesToTheRoutingStep()
+    {
+        TodoDefinitionDocument definition=definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS"));
+        when(outcomes.validate("TODO-42","LEAD",definition)).thenReturn(List.of(
+                new TodoBusinessOutcomeCatalogService.OutcomeIssue(
+                        "TODO_ROUTING_OUTCOME_INCOMPLETE","routing.businessOutcomes",
+                        "请为每个首联结果配置唯一的后续待办")));
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.step("ROUTING").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).anySatisfy(issue->{
+            assertThat(issue.code()).isEqualTo("TODO_ROUTING_OUTCOME_INCOMPLETE");
+            assertThat(issue.stepCode()).isEqualTo("ROUTING");
+            assertThat(issue.fieldPath()).isEqualTo("routing.businessOutcomes");
+        });
     }
 
     private TemplateConfigurationDetail detail()

@@ -1475,4 +1475,49 @@ check('builds ordered terminal and parallel routing graphs while preserving adva
   )
 })
 
+check('materializes the governed first-contact outcomes without free-text business results', () => {
+  const outcomeSet = {
+    resultField: 'contactResult',
+    resultFieldName: '首联结果',
+    recommendationCode: 'TD001_STANDARD_ROUTE',
+    options: [
+      { value: 'VALID', label: '有效', targetTemplateCode: 'TD-004', targetVersionId: 104 },
+      { value: 'SUSPECT_INVALID', label: '疑似无效', targetTemplateCode: 'TD-002', targetVersionId: 102 },
+      { value: 'UNREACHABLE', label: '无法联系', targetTemplateCode: 'TD-003', targetVersionId: 103 }
+    ]
+  }
+  const targets = [
+    { templateCode: 'TD-004', templateName: '5天实质进展', versionId: 104, businessType: 'LEAD', status: 'PUBLISHED' },
+    { templateCode: 'TD-002', templateName: '疑似无效复核', versionId: 102, businessType: 'LEAD', status: 'PUBLISHED' },
+    { templateCode: 'TD-003', templateName: '无法联系重试', versionId: 103, businessType: 'LEAD', status: 'PUBLISHED' }
+  ]
+
+  const patch = steps.materializeOutcomeRouting(outcomeSet, targets, 101, { config: { preserve: true } })
+  const outcomes = patch.config.businessOutcomes
+
+  assert.deepStrictEqual(outcomes.map(row => [row.resultField, row.resultValue, row.resultLabel]), [
+    ['contactResult', 'VALID', '有效'],
+    ['contactResult', 'SUSPECT_INVALID', '疑似无效'],
+    ['contactResult', 'UNREACHABLE', '无法联系']
+  ])
+  assert.deepStrictEqual(outcomes.map(row => row.targetVersionId), [104, 102, 103])
+  assert.deepStrictEqual(outcomes.map(row =>
+    row.condition.$expression.root.conditions[0]
+  ), [
+    { field: 'contactResult', operator: 'EQ', value: 'VALID' },
+    { field: 'contactResult', operator: 'EQ', value: 'SUSPECT_INVALID' },
+    { field: 'contactResult', operator: 'EQ', value: 'UNREACHABLE' }
+  ])
+  assert.strictEqual(patch.config.preserve, true)
+  assert.strictEqual(
+    steps.routingDraftBlocker(outcomes, {
+      mode: 'SEQUENTIAL',
+      outcomeSet,
+      routingTargets: targets,
+      businessType: 'LEAD'
+    }),
+    null
+  )
+})
+
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

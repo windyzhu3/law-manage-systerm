@@ -20,6 +20,9 @@
       :options="routingOptions"
       :routing-targets="resources.routingTargets || []"
       :fields="resources.fields || []"
+      :outcome-set="resources.businessOutcomeSet || {}"
+      :current-version-id="currentVersionId"
+      :business-type="businessType"
       :readonly="readonly"
       @change="businessChanged"
       @issue-change="$emit('issue-change', $event)"
@@ -65,6 +68,7 @@ export default {
     value: { type: Object, default: () => ({}) },
     resources: { type: Object, default: () => ({}) },
     currentVersionId: [Number, String],
+    businessType: String,
     readonly: Boolean
   },
   computed: {

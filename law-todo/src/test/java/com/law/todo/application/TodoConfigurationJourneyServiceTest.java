@@ -38,6 +38,7 @@ class TodoConfigurationJourneyServiceTest
     @Mock TodoConfigurationResourceCatalogService resources;
     @Mock TodoTemplateService templates;
     @Mock TodoEventResourceService eventResources;
+    @Mock TodoBusinessOutcomeCatalogService outcomes;
     private TodoConfigurationJourneyService service;
     private final Actor actor=new Actor(7L,"configuration-manager",3L);
 
@@ -45,7 +46,7 @@ class TodoConfigurationJourneyServiceTest
     {
         service=new TodoConfigurationJourneyService(query,new TodoDefinitionCodec(),mapper,resources,
                 new TodoConfigurationJourneyEvaluator(resources,templates),new TodoEmployeeTodoPreviewProjector(),
-                templates,eventResources);
+                templates,eventResources,outcomes);
         lenient().when(eventResources.list(anyMap())).thenReturn(
                 new com.law.todo.application.view.TodoResourceViews.EventResourcePage(List.of(),0));
     }
@@ -121,6 +122,25 @@ class TodoConfigurationJourneyServiceTest
         verify(mapper,times(1)).selectTemplateJourneySummaries(anyMap());
         verify(mapper,never()).countTemplateJourneySummaries(anyMap());
         verifyNoInteractions(query,resources,templates);
+    }
+
+    @Test void exposesTypedBusinessOutcomesWithTheCurrentJourneyResources()
+    {
+        when(query.template(42L)).thenReturn(fixtureTemplate());
+        when(outcomes.resolve(org.mockito.ArgumentMatchers.eq("TODO-42"),
+                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new TodoBusinessOutcomeCatalogService.BusinessOutcomeSet(
+                        "contactResult","首联结果","首联后的联系结论",
+                        List.of(new TodoBusinessOutcomeCatalogService.BusinessOutcomeOption(
+                                "VALID","有效","TD-004","5天实质进展",104L)),
+                        "TD001_STANDARD_ROUTE"));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().businessOutcomeSet().resultFieldName()).isEqualTo("首联结果");
+        assertThat(view.resources().businessOutcomeSet().options())
+                .extracting(TodoBusinessOutcomeCatalogService.BusinessOutcomeOption::label)
+                .containsExactly("有效");
     }
 
     @Test void persistedWarningDoesNotCompleteAnEvaluatorStepThatHasNotStarted()

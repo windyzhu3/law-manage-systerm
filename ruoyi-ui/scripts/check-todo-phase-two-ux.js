@@ -404,6 +404,23 @@ check('keeps backend routing issues authoritative in the normal journey', () => 
   assert(step.includes('step.issueCount'), 'routing step must present authoritative backend issue state')
 })
 
+check('configures governed completion results without free-text routing rules', () => {
+  const step = read('src/views/todo/config/journey/steps/RoutingStep.vue')
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  assert(step.includes(':outcome-set="resources.businessOutcomeSet || {}"'),
+    'routing step must provide the governed completion-result catalog')
+  assert(routing.includes('应用首联推荐路由'),
+    'lead routing must offer one-click recommended routes')
+  assert(routing.includes('v-model="row.resultValue"'),
+    'ordinary routing must select a governed result value')
+  assert(routing.includes('materializeOutcomeRouting'),
+    'recommended routes must use the tested canonical materializer')
+  assert(routing.includes('resultSentence'),
+    'ordinary routing must explain each branch in business language')
+  assert(!routing.includes('v-model.trim="row.label"'),
+    'ordinary typed routing must not ask users to type an opaque business result')
+})
+
 check('closes the journey with governed simulation and immutable publishing', () => {
   for (const componentPath of simulationPublishPaths) {
     assert(fs.existsSync(path.join(root, componentPath)), `missing Task 13 component: ${componentPath}`)

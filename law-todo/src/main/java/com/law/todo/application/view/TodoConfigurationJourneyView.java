@@ -8,6 +8,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService.DodRecip
 import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldResource;
 import com.law.todo.application.TodoConfigurationResourceCatalogService.MaterialResource;
 import com.law.todo.application.TodoConfigurationResourceCatalogService.ValidatorResource;
+import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeSet;
 import com.law.todo.application.view.TodoConfigurationViews.OwnerCatalogEntry;
 import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 import com.law.todo.application.view.TodoResourceViews.EventResourceListItem;
@@ -32,7 +33,14 @@ public record TodoConfigurationJourneyView(
     public record CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
             List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
             List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
-            List<RoutingTargetCatalogEntry> routingTargets) { }
+            List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet)
+    {
+        public CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
+                List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
+                List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
+                List<RoutingTargetCatalogEntry> routingTargets)
+        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,BusinessOutcomeSet.empty());}
+    }
     public record EmployeeTodoPreview(String title,String assigneeSummary,List<PreviewField> fields,
             List<PreviewMaterial> materials,List<String> completionInstructions,String dueSummary) { }
     public record PreviewField(String code,String label,String type,boolean required) { }
