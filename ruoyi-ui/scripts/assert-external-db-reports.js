@@ -14,6 +14,7 @@ const requiredClasses = [
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
   'NavigationMenuEncodingExternalMysqlIT',
+  'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
   'TodoTriggerRuleMetadataMigrationContractTest',
   'LeadFlowMapperExternalMysqlIT',

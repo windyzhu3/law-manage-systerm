@@ -16,6 +16,7 @@ const classes = [
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
   'NavigationMenuEncodingExternalMysqlIT',
+  'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
   'TodoTriggerRuleMetadataMigrationContractTest',
   'LeadFlowMapperExternalMysqlIT',

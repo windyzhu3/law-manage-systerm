@@ -183,6 +183,7 @@ for (const required of [
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
   'NavigationMenuEncodingExternalMysqlIT',
+  'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
   'tests > 0',
   'skipped === 0',
