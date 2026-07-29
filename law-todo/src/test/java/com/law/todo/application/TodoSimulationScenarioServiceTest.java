@@ -67,6 +67,28 @@ class TodoSimulationScenarioServiceTest
     }
 
     @Test
+    void resolvesTheGovernedTemplateReferenceToTheConfiguredTaskNode()
+    {
+        SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(
+                definition().replace("\"start\":\"td001\"","\"start\":\"current_task\"")
+                        .replace("\"key\":\"td001\"","\"key\":\"current_task\"")
+                        .replace("\"from\":\"td001\"","\"from\":\"current_task\""));
+        when(simulations.simulate(any(JourneySimulationCommand.class),any())).thenReturn(result(104L));
+        when(mapper.selectTemplateCodeByVersionId(104L)).thenReturn("TD-004");
+
+        service().simulate(42L,"TD001_VALID",command(),actor());
+
+        ArgumentCaptor<JourneySimulationCommand> submitted=
+                ArgumentCaptor.forClass(JourneySimulationCommand.class);
+        verify(simulations).simulate(submitted.capture(),any());
+        assertThat(submitted.getValue().taskCompletions().get(0).nodeKey())
+                .isEqualTo("current_task");
+    }
+
+    @Test
     void batchPreservesGovernedOrderAndReportsEveryOutcome()
     {
         var valid=scenario("TD001_VALID","VALID","TD-004");

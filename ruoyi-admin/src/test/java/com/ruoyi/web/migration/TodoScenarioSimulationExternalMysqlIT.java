@@ -43,6 +43,7 @@ import com.law.todo.definition.catalog.TodoDecisionService;
 import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.compiler.TodoDefinitionCompiler;
+import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.mapper.TodoConfigurationMapper;
@@ -102,7 +103,10 @@ class TodoScenarioSimulationExternalMysqlIT
                 Map<String,Object> completion=completion(scenario.completionPayload());
                 TodoSimulationView result=simulator.simulate(governed.versionId(),
                         new SimulateDefinitionCommand(eventPayload,"LEAD",575L,NOW,
-                                List.of(new VirtualTaskCompletionSample("td001",0,completion,NOW))),
+                                List.of(new VirtualTaskCompletionSample(
+                                        completionNodeKey(governed.compiledJson(),
+                                                scenario.completionNodeKey()),
+                                        Math.max(0,scenario.occurrence()-1),completion,NOW))),
                         "LEAD_ASSIGNED",1,"LEAD");
                 String actual=result.routes().stream()
                         .filter(route->route.templateVersionId()!=null
@@ -161,7 +165,7 @@ class TodoScenarioSimulationExternalMysqlIT
     private static GovernedDefinition governedTd001(Connection connection) throws Exception
     {
         try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
-                select t.template_id,v.version_id,v.definition_hash
+                select t.template_id,v.version_id,v.definition_hash,cast(v.compiled_json as char)
                 from todo_template t join todo_template_version v on v.template_id=t.template_id
                 where t.template_code='TD-001' and v.status in ('DRAFT','BLOCKED','PUBLISHED')
                   and v.compiled_json is not null and v.definition_hash is not null
@@ -170,8 +174,28 @@ class TodoScenarioSimulationExternalMysqlIT
                 """))
         {
             assertTrue(rows.next(),"A compiled governed TD-001 definition is required");
-            return new GovernedDefinition(rows.getLong(1),rows.getLong(2),rows.getString(3));
+            return new GovernedDefinition(rows.getLong(1),rows.getLong(2),rows.getString(3),
+                    rows.getString(4));
         }
+    }
+
+    private static String completionNodeKey(String compiledJson,String reference)
+    {
+        TodoDefinitionDocument definition=new TodoDefinitionCodec().read(compiledJson);
+        Object rawNodes=definition.routing().config().get("nodes");
+        assertTrue(rawNodes instanceof List<?>,"The governed route must define nodes");
+        List<?> nodes=(List<?>)rawNodes;
+        List<String> matches=nodes.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .filter(node->"TASK".equals(String.valueOf(node.get("type"))))
+                .filter(node->reference.equals(String.valueOf(node.get("key")))
+                        ||reference.equals(String.valueOf(node.get("templateCode"))))
+                .map(node->String.valueOf(node.get("key")))
+                .distinct().toList();
+        assertEquals(1,matches.size(),
+                "The governed completion reference must resolve to exactly one task node");
+        return matches.get(0);
     }
 
     private static Map<String,Object> completion(Map<String,Object> source)
@@ -243,6 +267,7 @@ class TodoScenarioSimulationExternalMysqlIT
         };
     }
 
-    private record GovernedDefinition(long templateId,long versionId,String definitionHash) { }
+    private record GovernedDefinition(long templateId,long versionId,String definitionHash,
+            String compiledJson) { }
     private record TableFingerprint(long rows,String sha256) { }
 }
