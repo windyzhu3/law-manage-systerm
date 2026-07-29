@@ -18,6 +18,12 @@ const OPERATOR_LABELS = {
   EMPTY: '为空',
   NOT_EMPTY: '不为空'
 }
+const NO_VALUE_OPERATORS = new Set(['EXISTS', 'NOT_EXISTS', 'EMPTY', 'NOT_EMPTY'])
+const SCENARIO_LABELS = {
+  TD001_VALID: '有效线索',
+  TD001_SUSPECT_INVALID: '疑似无效',
+  TD001_UNREACHABLE: '无法联系'
+}
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value))
@@ -42,7 +48,7 @@ function operatorsForField(field) {
 }
 
 function controlForField(field, operator) {
-  if (['EXISTS', 'NOT_EXISTS', 'EMPTY', 'NOT_EMPTY'].includes(normalizeOperator(operator))) return 'NONE'
+  if (NO_VALUE_OPERATORS.has(normalizeOperator(operator))) return 'NONE'
   if (Array.isArray(field && field.options) && field.options.length) return 'SELECT'
   const type = String((field && field.type) || 'string').toLowerCase()
   if (type === 'boolean') return 'BOOLEAN'
@@ -200,6 +206,168 @@ function normalizeConditionDocument(condition) {
       ? source
       : { $expression: { version: 1, root: { type: 'AND', conditions: [root] } } },
     supported: true
+  }
+}
+
+function conditionNodes(document) {
+  const normalized = normalizeConditionDocument(document)
+  if (!normalized.supported) return null
+  const root = conditionRoot(normalized.document)
+  const visit = node => isGroup(node)
+    ? node.conditions.flatMap(visit)
+    : [node]
+  return root ? visit(root) : []
+}
+
+function missingConditionValue(value, operator) {
+  if (NO_VALUE_OPERATORS.has(operator)) return false
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim() === ''
+  return ['IN', 'NOT_IN'].includes(operator) && (!Array.isArray(value) || value.length === 0)
+}
+
+function conditionValueMatches(field, value) {
+  const type = String((field && field.type) || '').toLowerCase()
+  if (!type) return true
+  if (type === 'integer') return typeof value === 'number' && Number.isInteger(value)
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value)
+  if (type === 'boolean') return typeof value === 'boolean'
+  if (type === 'array') return Array.isArray(value)
+  if (type === 'object') return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+  return typeof value === 'string'
+}
+
+function conditionDraftBlocker(document, fields) {
+  const nodes = conditionNodes(document)
+  if (nodes === null) {
+    return {
+      code: 'TODO_CONDITION_INVALID',
+      severity: 'BLOCKER',
+      stepCode: 'TRIGGER',
+      fieldPath: 'event.condition',
+      message: '触发条件结构无效，请重新建立'
+    }
+  }
+  const descriptors = Array.isArray(fields) ? fields : []
+  for (const node of nodes) {
+    const operator = normalizeOperator(node && node.operator)
+    const field = descriptors.find(item => item.code === (node && node.field))
+    const fieldName = field ? (field.name || field.label || field.code) : (node && node.field) || '未选择字段'
+    const fieldPath = `event.condition.${(node && node.field) || ''}`.replace(/\.$/, '')
+    if (!field) {
+      return {
+        code: 'TODO_CONDITION_FIELD_UNKNOWN',
+        severity: 'BLOCKER',
+        stepCode: 'TRIGGER',
+        fieldPath,
+        message: `当前事件中不存在“${fieldName}”字段`
+      }
+    }
+    if (NO_VALUE_OPERATORS.has(operator)) {
+      if (node.value !== null && node.value !== undefined) {
+        return {
+          code: 'TODO_CONDITION_VALUE_NOT_ALLOWED',
+          severity: 'BLOCKER',
+          stepCode: 'TRIGGER',
+          fieldPath,
+          message: `“${fieldName}”当前判断方式不需要比较值`
+        }
+      }
+      continue
+    }
+    if (missingConditionValue(node.value, operator)) {
+      return {
+        code: 'TODO_CONDITION_VALUE_REQUIRED',
+        severity: 'BLOCKER',
+        stepCode: 'TRIGGER',
+        fieldPath,
+        message: `请为“${fieldName}”选择或填写比较值`
+      }
+    }
+    const values = ['IN', 'NOT_IN'].includes(operator) ? node.value : [node.value]
+    if (!values.every(value => conditionValueMatches(field, value))) {
+      return {
+        code: 'TODO_CONDITION_VALUE_TYPE_INVALID',
+        severity: 'BLOCKER',
+        stepCode: 'TRIGGER',
+        fieldPath,
+        message: `条件值与“${fieldName}”字段类型不匹配`
+      }
+    }
+  }
+  return null
+}
+
+function conditionDisplayValue(field, value) {
+  const options = Array.isArray(field && field.options) ? field.options : []
+  const label = raw => {
+    const option = options.find(item =>
+      String(item && typeof item === 'object' ? item.value : item) === String(raw)
+    )
+    if (option && typeof option === 'object') return String(option.label !== undefined ? option.label : raw)
+    return option !== undefined ? String(option) : String(raw)
+  }
+  return Array.isArray(value) ? value.map(label).join('、') : label(value)
+}
+
+function conditionSummary(document, fields) {
+  const normalized = normalizeConditionDocument(document)
+  if (!normalized.supported) return '当前规则包含高级条件，请在高级模式查看。'
+  const root = conditionRoot(normalized.document)
+  if (!root || !root.conditions.length) return '当前规则：业务事件到达后直接创建待办。'
+  const descriptors = Array.isArray(fields) ? fields : []
+  const describe = node => {
+    if (isGroup(node)) {
+      return `（${node.conditions.map(describe).join(node.type === 'AND' ? ' 且 ' : ' 或 ')}）`
+    }
+    const field = descriptors.find(item => item.code === node.field)
+    const operator = normalizeOperator(node.operator)
+    const fieldName = field ? (field.name || field.label || field.code) : '未选择字段'
+    const operatorName = OPERATOR_LABELS[operator] || '未选择判断'
+    if (NO_VALUE_OPERATORS.has(operator)) return `${fieldName} ${operatorName}`
+    const value = missingConditionValue(node.value, operator)
+      ? '（待选择比较值）'
+      : conditionDisplayValue(field, node.value)
+    return `${fieldName} ${operatorName}${value.startsWith('（') ? '' : ' '}${value}`
+  }
+  return `当前规则：${root.conditions.map(describe).join(root.type === 'AND' ? '，并且 ' : '，或者 ')}。`
+}
+
+function localizedJourneyIssue(issue, context) {
+  const source = object(issue)
+  const code = String(source.code || '')
+  const fieldPath = String(source.fieldPath || source.path || '')
+  const fieldCode = fieldPath.startsWith('event.condition.')
+    ? fieldPath.slice('event.condition.'.length)
+    : ''
+  const fields = Array.isArray(context && context.fields) ? context.fields : []
+  const field = fields.find(item => item.code === fieldCode)
+  const fieldName = (field && (field.name || field.label || field.code)) || fieldCode || '所选业务字段'
+  const stepCode = source.stepCode || (
+    code.startsWith('TODO_CONDITION_') || fieldPath.startsWith('event.condition') ? 'TRIGGER'
+      : code.startsWith('TODO_OWNER_') || fieldPath.startsWith('owner') ? 'OWNER'
+        : code.startsWith('TODO_ROUTING_') || fieldPath.startsWith('routing') ? 'ROUTING'
+          : code.includes('SIMULATION') || fieldPath.startsWith('simulation') ? 'SIMULATION_PUBLISH'
+            : fieldPath.startsWith('event') ? 'EVENT' : 'SIMULATION_PUBLISH'
+  )
+  let message = source.message || code
+  if (code === 'TODO_CONDITION_VALUE_REQUIRED') message = `请为“${fieldName}”选择或填写比较值`
+  if (code === 'TODO_CONDITION_VALUE_TYPE_INVALID') message = `条件值与“${fieldName}”字段类型不匹配`
+  if (code === 'TODO_CONDITION_VALUE_NOT_ALLOWED') message = `“${fieldName}”当前判断方式不需要比较值`
+  if (code === 'TODO_OWNER_FIELD_NOT_ELIGIBLE') message = `“${fieldName}”不是当前事件声明的负责人字段`
+  if (code === 'TODO_ROUTING_OUTCOME_INCOMPLETE') message = '还有业务结果尚未设置后续待办'
+  if (code === 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE') {
+    const codes = Array.isArray(source.missingScenarioCodes)
+      ? source.missingScenarioCodes
+      : String(source.message || '').match(/TD001_[A-Z_]+/g) || []
+    const names = [...new Set(codes)].map(item => SCENARIO_LABELS[item] || item)
+    message = names.length ? `还有必测场景未通过：${names.join('、')}` : '还有必测场景未通过'
+  }
+  return {
+    ...source,
+    fieldPath,
+    stepCode,
+    message
   }
 }
 
@@ -992,6 +1160,9 @@ module.exports = {
   MAX_CONDITION_GROUP_DEPTH,
   operatorsForField,
   controlForField,
+  conditionDraftBlocker,
+  conditionSummary,
+  localizedJourneyIssue,
   emptyConditionDocument,
   normalizeConditionDocument,
   conditionGroupDepth,

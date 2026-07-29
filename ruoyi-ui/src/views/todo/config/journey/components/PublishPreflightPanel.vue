@@ -50,6 +50,8 @@
 </template>
 
 <script>
+import { localizedJourneyIssue } from '../journey-step-model'
+
 export default {
   name: 'PublishPreflightPanel',
   props: {
@@ -57,11 +59,18 @@ export default {
     gate: { type: Object, default: () => ({}) },
     warningReason: { type: String, default: '' },
     diff: { type: Object, default: null },
+    fields: { type: Array, default: () => [] },
     loading: Boolean
   },
   computed: {
-    errors() { return (this.preflight && this.preflight.errors) || [] },
-    warnings() { return (this.preflight && this.preflight.warnings) || [] }
+    errors() {
+      return ((this.preflight && this.preflight.errors) || [])
+        .map(issue => localizedJourneyIssue(issue, { fields: this.fields }))
+    },
+    warnings() {
+      return ((this.preflight && this.preflight.warnings) || [])
+        .map(issue => localizedJourneyIssue(issue, { fields: this.fields }))
+    }
   },
   methods: {
     issueKey(issue) { return `${issue.code || 'issue'}-${issue.fieldPath || issue.path || ''}` },

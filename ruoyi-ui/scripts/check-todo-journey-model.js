@@ -905,6 +905,60 @@ check('enforces two condition-group levels while preserving canonical patch shap
   }).supported, false)
 })
 
+check('blocks missing typed condition values and never renders undefined in summaries', () => {
+  const fields = [{
+    code: 'assignmentId',
+    name: '分配记录ID',
+    type: 'integer',
+    operators: ['EQ', 'NE', 'NOT_EMPTY']
+  }]
+  const missing = {
+    $expression: {
+      version: 1,
+      root: {
+        type: 'AND',
+        conditions: [{ field: 'assignmentId', operator: 'NE', value: undefined }]
+      }
+    }
+  }
+  const noValue = {
+    $expression: {
+      version: 1,
+      root: {
+        type: 'AND',
+        conditions: [{ field: 'assignmentId', operator: 'NOT_EMPTY', value: null }]
+      }
+    }
+  }
+
+  assert.strictEqual(steps.conditionDraftBlocker(missing, fields).code, 'TODO_CONDITION_VALUE_REQUIRED')
+  assert.strictEqual(steps.conditionDraftBlocker(noValue, fields), null)
+  assert.strictEqual(steps.conditionSummary(noValue, fields), '当前规则：分配记录ID 不为空。')
+  assert(!steps.conditionSummary(missing, fields).includes('undefined'))
+  assert.strictEqual(steps.conditionSummary(missing, fields), '当前规则：分配记录ID 不等于（待选择比较值）。')
+})
+
+check('localizes known publish blockers and sends repairs to the correct step', () => {
+  const condition = steps.localizedJourneyIssue({
+    code: 'TODO_CONDITION_VALUE_TYPE_INVALID',
+    path: 'event.condition.assignmentId',
+    message: 'Condition value does not match the event field type'
+  }, { fields: [{ code: 'assignmentId', name: '分配记录ID' }] })
+  const scenarios = steps.localizedJourneyIssue({
+    code: 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
+    message: 'Required simulation scenarios are incomplete: TD001_VALID,TD001_SUSPECT_INVALID,TD001_UNREACHABLE'
+  })
+
+  assert.strictEqual(condition.stepCode, 'TRIGGER')
+  assert.strictEqual(condition.fieldPath, 'event.condition.assignmentId')
+  assert.strictEqual(condition.message, '条件值与“分配记录ID”字段类型不匹配')
+  assert.strictEqual(scenarios.stepCode, 'SIMULATION_PUBLISH')
+  assert(scenarios.message.includes('有效线索'))
+  assert(scenarios.message.includes('疑似无效'))
+  assert(scenarios.message.includes('无法联系'))
+  assert(!scenarios.message.includes('Required simulation'))
+})
+
 check('models schema health, owner blockers, and contextual resource return semantics', () => {
   const healthy = steps.eventSchemaHealth(
     { eventType: 'CONTRACT_APPROVED', payloadVersion: 2, schemaStatus: 'READY' },

@@ -3,6 +3,7 @@ package com.law.todo.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,8 +37,11 @@ class TodoConfigurationJourneyEvaluatorTest
     @BeforeEach void setUp()
     {
         evaluator=new TodoConfigurationJourneyEvaluator(resources,templates);
-        when(resources.fields("LEAD")).thenReturn(List.of(new FieldResource("leadId","Lead", "integer",true,
-                List.of(),List.of("LEAD_ASSIGNED"))));
+        List<FieldResource> fields=List.of(
+                new FieldResource("leadId","Lead","integer",true,List.of(),List.of("LEAD_ASSIGNED")),
+                new FieldResource("assignmentId","分配记录ID","integer",false,List.of("EQ","NE","NOT_EMPTY"),List.of("LEAD_ASSIGNED")));
+        when(resources.fields("LEAD")).thenReturn(fields);
+        lenient().when(resources.fields("LEAD","LEAD_ASSIGNED")).thenReturn(fields);
         when(templates.listTemplateCalendarCatalog()).thenReturn(List.of(Map.of("calendarCode","DEFAULT")));
     }
 
@@ -118,6 +122,30 @@ class TodoConfigurationJourneyEvaluatorTest
 
         assertThat(result.step("SIMULATION_PUBLISH").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_SIMULATION_REQUIRED");
+    }
+
+    @Test void mapsMissingConditionValuesToTheTriggerStepAndExactField()
+    {
+        Map<String,Object> predicate=new java.util.LinkedHashMap<>();
+        predicate.put("field","assignmentId");predicate.put("operator","NE");predicate.put("value",null);
+        Map<String,Object> condition=Map.of("$expression",Map.of(
+                "version",1,"root",Map.of("type","AND","conditions",List.of(predicate))));
+        TodoDefinitionDocument definition=new TodoDefinitionDocument(1,"TODO-42",
+                new EventRule("LEAD_ASSIGNED",1,condition),
+                new OwnerRule(Map.of("type","USER","value",7)),
+                new DodRule(Map.of("requiredFields",List.of("leadId"))),
+                new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),
+                new UiSchema(Map.of("simulationStatus","SUCCESS")),
+                new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
+
+        var result=evaluator.evaluate(detail(),definition);
+
+        assertThat(result.step("TRIGGER").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).anySatisfy(issue->{
+            assertThat(issue.code()).isEqualTo("TODO_CONDITION_VALUE_REQUIRED");
+            assertThat(issue.stepCode()).isEqualTo("TRIGGER");
+            assertThat(issue.fieldPath()).isEqualTo("event.condition.assignmentId");
+        });
     }
 
     @Test void canonicalMaterialAndConditionalEvidenceCompletesDodStep()

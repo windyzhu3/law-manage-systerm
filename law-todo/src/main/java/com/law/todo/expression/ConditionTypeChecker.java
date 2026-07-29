@@ -60,6 +60,12 @@ public final class ConditionTypeChecker
                     "Condition field is not declared by the event payload schema"));
             return;
         }
+        if (requiresValue(predicate.operator()) && missingValue(predicate.value()))
+        {
+            issues.add(issue("TODO_CONDITION_VALUE_REQUIRED", path,
+                    "A comparison value is required for this condition"));
+            return;
+        }
         switch (predicate.operator())
         {
             case EXISTS, NOT_EXISTS, EMPTY, NOT_EMPTY -> {
@@ -87,6 +93,24 @@ public final class ConditionTypeChecker
                             "Condition value does not match the event field type"));
             }
         }
+    }
+
+    private boolean requiresValue(ConditionExpression.ConditionOperator operator)
+    {
+        return switch (operator)
+        {
+            case EXISTS, NOT_EXISTS, EMPTY, NOT_EMPTY -> false;
+            default -> true;
+        };
+    }
+
+    private boolean missingValue(Object value)
+    {
+        if (value == null)
+            return true;
+        if (value instanceof String text)
+            return text.isBlank();
+        return value instanceof Collection<?> values && values.isEmpty();
     }
 
     private static ValidationIssue issue(String code, String path, String message)
@@ -119,6 +143,45 @@ public final class ConditionTypeChecker
             }
             if (document == null)
                 throw new IllegalArgumentException("Event payload schema must be a JSON object");
+            return new JsonSchema(document);
+        }
+
+        public static JsonSchema fromFieldTypes(Map<String, String> fieldTypes)
+        {
+            Map<String, Object> document = new LinkedHashMap<>();
+            Map<String, Object> properties = new LinkedHashMap<>();
+            document.put("type", "object");
+            document.put("properties", properties);
+            for (Map.Entry<String, String> entry : fieldTypes == null
+                    ? Map.<String, String>of().entrySet() : fieldTypes.entrySet())
+            {
+                if (entry.getKey() == null || entry.getKey().isBlank())
+                    continue;
+                Map<String, Object> currentProperties = properties;
+                String[] segments = entry.getKey().split("\\.");
+                for (int index = 0; index < segments.length; index++)
+                {
+                    String segment = segments[index];
+                    if (index == segments.length - 1)
+                    {
+                        currentProperties.put(segment, Map.of(
+                                "type", entry.getValue() == null || entry.getValue().isBlank()
+                                        ? "string" : entry.getValue()));
+                        continue;
+                    }
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> property = (Map<String, Object>) currentProperties.computeIfAbsent(segment,
+                            ignored -> {
+                                Map<String, Object> nested = new LinkedHashMap<>();
+                                nested.put("type", "object");
+                                nested.put("properties", new LinkedHashMap<String, Object>());
+                                return nested;
+                            });
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> nestedProperties = (Map<String, Object>) property.get("properties");
+                    currentProperties = nestedProperties;
+                }
+            }
             return new JsonSchema(document);
         }
 

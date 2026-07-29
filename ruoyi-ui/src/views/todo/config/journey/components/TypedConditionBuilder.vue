@@ -87,6 +87,14 @@
         <el-button plain size="small" icon="el-icon-plus" :disabled="!fields.length" @click="addRule([])">添加条件</el-button>
         <el-button plain size="small" icon="el-icon-folder-add" :disabled="!fields.length" @click="addGroup">添加条件组</el-button>
       </footer>
+      <el-alert
+        v-if="blocker"
+        class="typed-condition__blocker"
+        :title="blocker.message"
+        type="error"
+        :closable="false"
+        show-icon
+      />
       <p class="typed-condition__summary">{{ summary }}</p>
     </template>
   </section>
@@ -98,6 +106,8 @@ import {
   controlForField,
   emptyConditionDocument,
   normalizeConditionDocument,
+  conditionDraftBlocker,
+  conditionSummary,
   addConditionGroup,
   addPredicate,
   replaceConditionNode,
@@ -247,19 +257,8 @@ export default {
   },
   computed: {
     root() { return this.document.$expression.root },
-    summary() {
-      if (!this.root.conditions.length) return '当前规则：业务事件到达后直接创建待办。'
-      const describe = node => {
-        if (this.isGroup(node)) {
-          return `（${node.conditions.map(describe).join(node.type === 'AND' ? ' 且 ' : ' 或 ')}）`
-        }
-        const field = this.fields.find(item => item.code === node.field)
-        const operator = operatorsForField(field).find(item => item.value === node.operator)
-        const value = noValueOperators.includes(node.operator) ? '' : ` ${Array.isArray(node.value) ? node.value.join('、') : node.value}`
-        return `${field ? field.name : '未选择字段'} ${operator ? operator.label : '未选择判断'}${value}`
-      }
-      return `当前规则：${this.root.conditions.map(describe).join(this.root.type === 'AND' ? '，并且 ' : '，或者 ')}。`
-    }
+    blocker() { return conditionDraftBlocker(this.document, this.fields) },
+    summary() { return conditionSummary(this.document, this.fields) }
   },
   watch: {
     value: {
@@ -271,6 +270,11 @@ export default {
         this.document = normalized.document
         this.unsupported = !normalized.supported
       }
+    },
+    blocker: {
+      immediate: true,
+      deep: true,
+      handler(value) { this.$emit('issue-change', value) }
     }
   },
   methods: {
@@ -278,7 +282,9 @@ export default {
     nodeKey(node, index) { return `${node.type || node.field || 'condition'}-${index}` },
     commit() {
       this.syncing = true
-      this.$emit('input', clone(this.document))
+      const blocker = conditionDraftBlocker(this.document, this.fields)
+      this.$emit('issue-change', blocker)
+      if (!blocker) this.$emit('input', clone(this.document))
       this.$nextTick(() => { this.syncing = false })
     },
     replaceNode(path, node) {
@@ -450,6 +456,10 @@ export default {
   color: #3F536A;
   background: #F0F4F8;
   border-radius: 8px;
+}
+
+.typed-condition__blocker {
+  margin-top: 16px;
 }
 
 .is-danger {

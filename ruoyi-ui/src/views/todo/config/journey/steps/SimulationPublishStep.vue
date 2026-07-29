@@ -87,6 +87,7 @@
       :gate="publishGate"
       :warning-reason.sync="warningReason"
       :diff="diff"
+      :fields="resources.fields || []"
       :loading="preflightLoading"
       @reload="runPreflight"
       @repair="$emit('navigate-repair', $event)"
@@ -153,6 +154,7 @@ export default {
     businessType: { type: String, default: '' },
     currentVersionId: { type: [Number, String], required: true },
     permissions: { type: Array, default: () => [] },
+    resources: { type: Object, default: () => ({}) },
     readonly: Boolean,
     dirty: Boolean,
     saving: Boolean

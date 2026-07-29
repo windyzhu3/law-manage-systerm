@@ -14,6 +14,8 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyIssue;
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyStep;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.definition.model.TodoDefinitionDocument;
+import com.law.todo.expression.ConditionExpression;
+import com.law.todo.expression.ConditionTypeChecker;
 import com.law.todo.routing.RoutingGraphValidator;
 
 /** Deterministic, read-only health projection for the editable configuration snapshot. */
@@ -37,7 +39,7 @@ public class TodoConfigurationJourneyEvaluator
     {
         List<JourneyStep> steps=new ArrayList<>();List<JourneyIssue> issues=new ArrayList<>();
         steps.add(evaluateEvent(detail,definition,issues));
-        steps.add(evaluateTrigger(definition,issues));
+        steps.add(evaluateTrigger(detail,definition,issues));
         steps.add(evaluateOwner(definition,issues));
         steps.add(evaluateDod(definition,issues));
         steps.add(evaluateSla(definition,issues));
@@ -63,7 +65,7 @@ public class TodoConfigurationJourneyEvaluator
         append(issues,local);return step("EVENT","Event",local,true,local.isEmpty(),value);
     }
 
-    private JourneyStep evaluateTrigger(TodoDefinitionDocument definition,List<JourneyIssue> issues)
+    private JourneyStep evaluateTrigger(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
         Map<String,Object> value=fieldValue("condition",definition==null||definition.event()==null?Map.of():definition.event().condition());
         if(definition==null||definition.event()==null||blank(definition.event().eventType()))
@@ -72,7 +74,48 @@ public class TodoConfigurationJourneyEvaluator
         if(definition.event().condition().isEmpty())
             local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
                     "This todo will start for every matching event","Add a business condition if this should be more selective"));
-        append(issues,local);return step("TRIGGER","Trigger",local,true,true,value);
+        else if(resources!=null)
+            validateCondition(detail,definition,local);
+        append(issues,local);return step("TRIGGER","Trigger",local,true,local.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())),value);
+    }
+
+    private void validateCondition(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> local)
+    {
+        try
+        {
+            List<TodoConfigurationResourceCatalogService.FieldResource> fields=resources.fields(
+                    detail==null?null:detail.businessType(),definition.event().eventType());
+            Map<String,String> types=new LinkedHashMap<>();
+            fields.forEach(field->types.put(field.code(),field.type()));
+            var expression=ConditionExpression.decodeMap(definition.event().condition()).expression();
+            var schema=ConditionTypeChecker.JsonSchema.fromFieldTypes(types);
+            for(var issue:new ConditionTypeChecker().check(expression,schema))
+            {
+                String fieldCode=issue.path().substring(issue.path().lastIndexOf('.')+1);
+                String fieldName=fields.stream().filter(field->field.code().equals(fieldCode))
+                        .map(TodoConfigurationResourceCatalogService.FieldResource::name).findFirst().orElse(fieldCode);
+                local.add(blocker(issue.code(),"TRIGGER",issue.path(),conditionMessage(issue.code(),fieldName),
+                        "返回触发条件并修复“"+fieldName+"”"));
+            }
+        }
+        catch(IllegalArgumentException invalid)
+        {
+            local.add(blocker("TODO_CONDITION_INVALID","TRIGGER","event.condition",
+                    "触发条件结构无效","重新建立触发条件"));
+        }
+    }
+
+    private String conditionMessage(String code,String fieldName)
+    {
+        return switch(code)
+        {
+            case "TODO_CONDITION_VALUE_REQUIRED" -> "请为“"+fieldName+"”选择或填写比较值";
+            case "TODO_CONDITION_VALUE_TYPE_INVALID" -> "条件值与“"+fieldName+"”字段类型不匹配";
+            case "TODO_CONDITION_VALUE_NOT_ALLOWED" -> "“"+fieldName+"”当前判断方式不需要比较值";
+            case "TODO_CONDITION_FIELD_UNKNOWN" -> "当前事件中不存在“"+fieldName+"”字段";
+            case "TODO_CONDITION_OPERATOR_TYPE_INVALID" -> "“"+fieldName+"”不支持当前判断方式";
+            default -> "“"+fieldName+"”条件配置无效";
+        };
     }
 
     private JourneyStep evaluateOwner(TodoDefinitionDocument definition,List<JourneyIssue> issues)

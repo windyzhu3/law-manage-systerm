@@ -127,7 +127,7 @@ class ConditionEvaluatorTest
 
         assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",
                 checker.check(predicate("numberOrBoolean", GT, true), union).get(0).code());
-        assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",
+        assertEquals("TODO_CONDITION_VALUE_REQUIRED",
                 checker.check(predicate("numberOrNull", GT, null), union).get(0).code());
     }
 

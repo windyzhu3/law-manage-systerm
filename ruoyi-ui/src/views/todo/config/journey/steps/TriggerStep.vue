@@ -32,6 +32,7 @@
       :fields="fields"
       :readonly="readonly || !fields.length"
       @input="change"
+      @issue-change="$emit('issue-change', $event)"
     />
   </section>
 </template>
