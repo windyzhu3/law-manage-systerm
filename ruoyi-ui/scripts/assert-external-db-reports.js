@@ -13,6 +13,7 @@ const requiredClasses = [
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
+  'NavigationMenuEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
   'TodoTriggerRuleMetadataMigrationContractTest',
   'LeadFlowMapperExternalMysqlIT',
