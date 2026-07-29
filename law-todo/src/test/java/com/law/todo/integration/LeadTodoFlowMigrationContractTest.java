@@ -22,6 +22,29 @@ class LeadTodoFlowMigrationContractTest
     private static final Path ROOT=Path.of("..");
     private static final Path MIGRATION=ROOT.resolve(Path.of("ruoyi-admin","src","main","resources","db","migration",
             "V0_20_48__lead_todo_flow.sql"));
+    private static final Path CONFIGURATION_HARDENING=ROOT.resolve(Path.of("ruoyi-admin","src","main","resources",
+            "db","migration","V0_20_65__lead_template_configuration_hardening.sql"));
+
+    @Test
+    void forwardConfigurationRepairKeepsPublishedHistoryImmutable() throws Exception
+    {
+        assertTrue(Files.exists(CONFIGURATION_HARDENING));
+        String sql=normalized(CONFIGURATION_HARDENING);
+
+        assertTrue(sql.contains("insert into todo_template_version"));
+        assertTrue(sql.contains("'draft'"));
+        assertTrue(sql.contains("'$.event.condition',json_object()"));
+        assertTrue(sql.contains("'field','ownerid'"));
+        assertTrue(sql.contains("'resultvalue','valid'"));
+        assertTrue(sql.contains("'targettemplatecode','td-004'"));
+        assertTrue(sql.contains("'resultvalue','suspect_invalid'"));
+        assertTrue(sql.contains("'targettemplatecode','td-002'"));
+        assertTrue(sql.contains("'resultvalue','unreachable'"));
+        assertTrue(sql.contains("'targettemplatecode','td-003'"));
+        assertFalse(sql.matches("(?s).*update\\s+todo_template_version\\b.*"));
+        assertFalse(sql.matches("(?s).*\\b(?:insert\\s+into|update|delete\\s+from)\\s+"
+                +"todo_simulation_evidence\\b.*"));
+    }
 
     @Test
     void migrationDefinesLeadFactsDictionariesPermissionsAndEvents() throws Exception
