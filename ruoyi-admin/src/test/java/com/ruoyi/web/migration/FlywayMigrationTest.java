@@ -47,6 +47,15 @@ class FlywayMigrationTest
         baselineFlyway.migrate();
         assertNoHistoricalMigrationExportRoleGrant(url);
         RoleSnapshot beforeFoundationGovernanceMigration = snapshotRoleState(url);
+        Flyway foundationGovernanceFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.28")
+            .load();
+        foundationGovernanceFlyway.migrate();
+        verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
         Flyway prePublishFlyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
             .baselineOnMigrate(true)
@@ -86,7 +95,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.54", current.getVersion().getVersion());
+        assertEquals("0.20.69", current.getVersion().getVersion());
         verifyTodoSchedulePolicySnapshotSchema(url);
         verifyPublishedLeadTodoFlow(url);
         verifyDatabaseInvariants(url);
@@ -100,7 +109,6 @@ class FlywayMigrationTest
         verifyFinanceReadinessSchema(url);
         verifyAcceptanceReadinessSchema(url);
         verifyFoundationAdmissionAggregateQuery(url);
-        verifyFoundationGovernanceRoles(url, beforeFoundationGovernanceMigration);
         verifySameMarkerRoleCollisionReceivesNoGrants(url);
         verifyTodoConfigurationCenterSchema(url);
         verifyTodoConfigurationResourceSchema(url);
@@ -558,8 +566,11 @@ class FlywayMigrationTest
                     + "and sample_payload_json is not null"));
             assertEquals(5L, count(connection,
                 "select count(*) from todo_validator_metadata where status='ACTIVE'"));
-            assertEquals(36L, count(connection,
+            assertEquals(38L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='FIELD' and status='ACTIVE'"));
+            assertEquals(2L, count(connection,
+                "select count(*) from todo_configuration_resource_item where resource_type='FIELD' "
+                    + "and status='ACTIVE' and resource_code in ('invalidReasonCode','salesExplanation')"));
             assertEquals(15L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='MATERIAL' and status='ACTIVE'"));
             assertEquals(5L, count(connection,
@@ -1293,7 +1304,17 @@ class FlywayMigrationTest
             assertEquals(3L,count(connection,"select count(*) from sys_dict_data where dict_type='law_business_line' and status='0' "
                 + "and dict_value in ('NON_LITIGATION','COMPREHENSIVE','EXECUTION')"));
             assertEquals(1L,count(connection,"select count(*) from sys_role where role_key='sales' and status='0' and del_flag='0'"));
-            assertEquals(0L,count(connection,"select count(*) from sys_role_menu rm join sys_role r on r.role_id=rm.role_id where r.role_key='sales'"));
+            assertEquals(15L,count(connection,"select count(distinct m.perms) from sys_role_menu rm "
+                + "join sys_role r on r.role_id=rm.role_id join sys_menu m on m.menu_id=rm.menu_id "
+                + "where r.role_key='sales' and m.perms in ("
+                + "'lead:dashboard:view','lead:mine:list','lead:mine:query',"
+                + "'lead:first-contact:handle','lead:retry:list','lead:retry:handle',"
+                + "'lead:call-record:add','lead:call-record:view','todo:list','todo:query',"
+                + "'todo:complete','todo:chain:query','file:object:upload',"
+                + "'file:object:relate','file:object:read')"));
+            assertEquals(0L,count(connection,"select count(*) from sys_role_menu rm "
+                + "join sys_role r on r.role_id=rm.role_id join sys_menu m on m.menu_id=rm.menu_id "
+                + "where r.role_key='sales' and m.perms='lead:tag:confirm'"));
         }
         catch (SQLException exception)
         {

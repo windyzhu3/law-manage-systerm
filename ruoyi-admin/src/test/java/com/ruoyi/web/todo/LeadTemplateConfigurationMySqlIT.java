@@ -41,6 +41,29 @@ class LeadTemplateConfigurationMySqlIT
 
         try(Connection connection=DriverManager.getConnection(url,user,password))
         {
+            String unrelatedPolicyVersion=scalar(connection,"""
+                    select cast(v.version_id as char)
+                    from todo_template t
+                    join todo_template_version v
+                      on v.template_id=t.template_id and v.version_no=t.current_version
+                    where t.template_code='TD-004' and v.status='PUBLISHED'
+                    """);
+            try(Statement statement=connection.createStatement())
+            {
+                statement.executeUpdate("""
+                        insert into biz_lead_assignment_policy(
+                          policy_code,policy_name,sales_dept_id,source_code,business_type,
+                          retry_rule_json,status,row_version,create_by)
+                        values(
+                          'P0P1_CANARY_POLICY','不相关策略保护探针',-9001,'P0P1_CANARY','LEAD',
+                          json_object('templateVersionId',%s),'ACTIVE',0,'p0-p1-test')
+                        """.formatted(unrelatedPolicyVersion));
+            }
+            String unrelatedPolicyBefore=fingerprint(connection,"""
+                    select retry_rule_json,row_version,update_by,update_time
+                    from biz_lead_assignment_policy
+                    where policy_code='P0P1_CANARY_POLICY'
+                    """);
             String publishedBefore=fingerprint(connection,"""
                     select v.version_id,v.version_no,v.status,v.source_version_id,
                            v.definition_hash,cast(v.definition_json as char)
@@ -64,7 +87,7 @@ class LeadTemplateConfigurationMySqlIT
 
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.66",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.69",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""
@@ -87,6 +110,11 @@ class LeadTemplateConfigurationMySqlIT
                     join todo_trigger_rule r on r.template_id=t.template_id
                     where t.template_code='TD-001' and r.event_type='LEAD_ASSIGNED' and r.enabled='Y'
                     """));
+            assertEquals(unrelatedPolicyBefore,fingerprint(connection,"""
+                    select retry_rule_json,row_version,update_by,update_time
+                    from biz_lead_assignment_policy
+                    where policy_code='P0P1_CANARY_POLICY'
+                    """),"TD-003 publication must not rewrite an unrelated assignment policy");
 
             assertEventSemantics(connection);
             assertDraft(connection);
@@ -163,6 +191,14 @@ class LeadTemplateConfigurationMySqlIT
                         join todo_template_version v on v.template_id=t.template_id
                         where v.version_id=%d and v.status='PUBLISHED'
                         """.formatted(targetVersionId)));
+                assertEquals(String.valueOf(targetVersionId),scalar(connection,"""
+                        select cast(v.version_id as char)
+                        from todo_template t
+                        join todo_template_version v
+                          on v.template_id=t.template_id and v.version_no=t.current_version
+                        where t.template_code='%s' and v.status='PUBLISHED'
+                        """.formatted(code)),
+                        "TD-001 business outcomes must target each template's current published version");
                 actual.put(outcome.getString("resultValue"),code);
             }
             assertEquals(expected,actual);

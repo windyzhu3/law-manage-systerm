@@ -45,7 +45,8 @@ class TodoBusinessOutcomeCatalogServiceTest
         when(templates.listRoutingTargetCatalog()).thenReturn(List.of(
                 target(4L,"TD-004","5天实质进展",104L),
                 target(2L,"TD-002","疑似无效复核",102L),
-                target(3L,"TD-003","无法联系重试",103L)));
+                target(3L,"TD-003","无法联系重试",103L),
+                target(3L,"TD-003","无法联系重试（历史版本）",84L)));
     }
 
     @Test void returnsTheTypedFirstContactOutcomeSetAndRecommendedTargets()

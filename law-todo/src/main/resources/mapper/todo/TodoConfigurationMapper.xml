@@ -406,7 +406,7 @@
     where v.version_id=#{versionId}
   </select>
   <insert id="insertSimulationEvidence" useGeneratedKeys="true" keyProperty="evidenceId">
-    insert ignore into todo_simulation_evidence(
+    insert into todo_simulation_evidence(
       template_id,version_id,definition_hash,scenario_code,scenario_version,result_status,input_hash,
       trace_summary_json,executed_by,executed_time,expire_time)
     values(#{templateId},#{versionId},#{definitionHash},#{scenarioCode},#{scenarioVersion},#{resultStatus},

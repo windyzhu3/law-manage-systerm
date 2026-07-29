@@ -8,11 +8,13 @@
       </div>
     </header>
 
-    <el-form-item label="起始节点">
-      <el-select v-model="graph.start" :disabled="readonly" placeholder="请选择 TASK 起点" @change="commit">
-        <el-option v-for="node in graph.nodes" :key="node.key" :label="node.key" :value="node.key" />
-      </el-select>
-    </el-form-item>
+    <el-form label-position="top">
+      <el-form-item label="起始节点">
+        <el-select v-model="graph.start" :disabled="readonly" placeholder="请选择 TASK 起点" @change="commit">
+          <el-option v-for="node in graph.nodes" :key="node.key" :label="node.key" :value="node.key" />
+        </el-select>
+      </el-form-item>
+    </el-form>
 
     <el-table :data="graph.nodes" size="mini" border row-key="key">
       <el-table-column label="节点 Key" min-width="135">

@@ -252,8 +252,10 @@
   <select id="selectPublishedTemplateVersionCatalog" resultType="java.util.Map">select v.version_id,v.version_no,v.status from todo_template_version v where v.template_id=#{templateId} and v.status='PUBLISHED' order by v.version_no desc,v.version_id desc</select>
   <select id="selectRoutingTargetCatalog" resultType="java.util.Map">
     select t.template_id,t.template_code,t.template_name,t.business_type,v.version_id,v.version_no,v.status
-    from todo_template t join todo_template_version v on v.template_id=t.template_id and v.status='PUBLISHED'
-    where t.status='0' order by t.template_code,v.version_no desc,v.version_id desc
+    from todo_template t
+    join todo_template_version v
+      on v.template_id=t.template_id and v.version_no=t.current_version and v.status='PUBLISHED'
+    where t.status='0' order by t.template_code
   </select>
   <insert id="insertTemplate" useGeneratedKeys="true" keyProperty="templateId">insert into todo_template(template_code,template_name,business_type,current_version,status,create_by) values(#{templateCode},#{templateName},#{businessType},0,coalesce(#{status},'0'),#{createBy})</insert>
   <update id="updateTemplate">update todo_template set template_name=#{templateName},version=version+1,update_by=#{updateBy},update_time=sysdate() where template_id=#{templateId}</update>

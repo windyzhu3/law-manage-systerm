@@ -40,7 +40,7 @@ public class TodoBusinessOutcomeCatalogService
         if(resultField==null)return BusinessOutcomeSet.empty();
         Map<String,RoutingTargetCatalogEntry> targetsByCode=new LinkedHashMap<>();
         for(RoutingTargetCatalogEntry target:templates.listRoutingTargetCatalog())
-            if(target.templateCode()!=null)targetsByCode.put(target.templateCode(),target);
+            if(target.templateCode()!=null)targetsByCode.putIfAbsent(target.templateCode(),target);
         List<BusinessOutcomeOption> options=new ArrayList<>();
         for(Map<String,Object> option:options(resultField))
         {
