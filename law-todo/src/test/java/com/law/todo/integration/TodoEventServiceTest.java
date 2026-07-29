@@ -36,6 +36,11 @@ import com.law.todo.definition.catalog.TodoEventCatalogService;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.expression.ConditionEvaluator;
 import com.law.todo.spi.TodoOrganizationPort;
+import com.law.todo.domain.service.WorkingTimeCalculator;
+import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.util.Set;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness=Strictness.LENIENT)
@@ -332,7 +337,10 @@ class TodoEventServiceTest
         TodoInstance created=new TodoEventService(mapper,new TodoAssignmentResolver()).handle(event()).get(0);
 
         assertEquals(dodSnapshot,created.getDodSnapshotJson());
-        assertEquals(45L,java.time.Duration.between(created.getCreatedAt(),created.getDueAt()).toMinutes());
+        WorkCalendar calendar=new WorkCalendar(Set.of(DayOfWeek.values()),
+                LocalTime.MIN,LocalTime.of(23,59),Map.of());
+        assertEquals(45L,new WorkingTimeCalculator().workingMinutesBetween(
+                created.getCreatedAt(),created.getDueAt(),calendar));
         verifyNoInteractions(configurationMapper);
     }
 
