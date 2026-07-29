@@ -138,6 +138,55 @@ class TodoConfigurationResourceCatalogServiceTest
         assertEquals(List.of("LEAD_ASSIGNED"),fields.get(0).sourceEvents());
     }
 
+    @Test void placeholderFromAnotherEventDoesNotOverwriteTheSelectedBusinessLabel()
+    {
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(
+                Map.of("event_type","LEAD_ASSIGNED","payload_version",1,"owner_field_paths_json","[\"ownerId\"]",
+                        "payload_schema_json","""
+                        {"type":"object","properties":{
+                          "ownerId":{"type":"integer","title":"线索负责人","x-semantic-type":"USER_ID"}
+                        }}
+                        """),
+                Map.of("event_type","LEAD_FIRST_CONTACT_VALID","payload_version",1,"owner_field_paths_json","[]",
+                        "payload_schema_json","""
+                        {"type":"object","properties":{
+                          "ownerId":{"type":"integer","x-semantic-type":"USER_ID"}
+                        }}
+                        """)));
+
+        var owner=service.fields("LEAD").stream()
+                .filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
+
+        assertEquals("线索负责人",owner.name());
+    }
+
+    @Test void eventOwnerWhitelistExcludesTheOperatorFromOwnerSelection()
+    {
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(
+                Map.of("event_type","LEAD_ASSIGNED","payload_version",1,
+                        "owner_field_paths_json","[\"ownerId\"]",
+                        "payload_schema_json","""
+                        {"type":"object","properties":{
+                          "ownerId":{"type":"integer","title":"线索负责人",
+                            "x-semantic-type":"USER_ID","x-option-source":"SYSTEM_USER"},
+                          "operatorId":{"type":"integer","title":"操作人",
+                            "x-semantic-type":"USER_ID","x-option-source":"SYSTEM_USER"}
+                        }}
+                        """)));
+
+        var fields=service.fields("LEAD","LEAD_ASSIGNED");
+        var owner=fields.stream().filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
+        var operator=fields.stream().filter(field->field.code().equals("operatorId")).findFirst().orElseThrow();
+
+        assertEquals("LEAD_ASSIGNED@1:ownerId",owner.fieldKey());
+        assertEquals("OWNER",owner.eventRole());
+        assertTrue(owner.ownerEligible());
+        assertEquals(List.of("LEAD_ASSIGNED@1"),owner.ownerSourceEventVersions());
+        assertEquals("OPERATOR",operator.eventRole());
+        assertFalse(operator.ownerEligible());
+        assertTrue(operator.ownerSourceEventVersions().isEmpty());
+    }
+
     @Test void exposesSemanticMetadataFromGovernedFieldsAndEventSchemas()
     {
         when(mapper.selectConfigurationResourceItems("FIELD","LEAD")).thenReturn(List.of(
