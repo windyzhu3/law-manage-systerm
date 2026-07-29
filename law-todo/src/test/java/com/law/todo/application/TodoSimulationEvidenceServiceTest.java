@@ -18,12 +18,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationScenario;
+import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
 @ExtendWith(MockitoExtension.class)
 class TodoSimulationEvidenceServiceTest
 {
     @Mock TodoConfigurationMapper mapper;
+    @Mock TodoSimulationScenarioCatalog scenarios;
 
     @Test
     void persistsOnlyHashesAndARedactedOutcomeSummary()
@@ -50,11 +52,36 @@ class TodoSimulationEvidenceServiceTest
     {
         TodoSimulationEvidenceService service=new TodoSimulationEvidenceService(mapper);
         when(mapper.selectPassingSimulationEvidence(anyMap())).thenReturn(null);
+        when(mapper.selectLatestSimulationEvidence(anyMap())).thenReturn(Map.of(
+                "definition_hash","old-definition-hash","result_status","PASSED"));
 
         var gate=service.gate(42L,9L,"new-definition-hash",List.of(scenario()));
 
         assertThat(gate.publicationReady()).isFalse();
         assertThat(gate.blockingScenarioCodes()).containsExactly("TD001_VALID");
+        assertThat(gate.blockers()).containsExactly(
+                new TodoSimulationEvidenceService.SimulationGateBlocker("TD001_VALID","DEFINITION_CHANGED"));
+    }
+
+    @Test
+    void preflightExplainsMissingEvidenceWithChineseScenarioNamesAndReasons()
+    {
+        when(mapper.selectTemplateIdentityByVersionId(9L)).thenReturn(Map.of(
+                "template_id",42L,"template_code","TD-001","business_type","LEAD"));
+        when(scenarios.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario()));
+        when(mapper.selectPassingSimulationEvidence(anyMap())).thenReturn(null);
+        when(mapper.selectLatestSimulationEvidence(anyMap())).thenReturn(Map.of(
+                "definition_hash","old-definition-hash","result_status","PASSED"));
+        TodoSimulationEvidenceService service=new TodoSimulationEvidenceService(mapper,scenarios);
+
+        var result=service.applyPreflightGate(9L,
+                new DefinitionValidationReport(List.of(),List.of(),"{}","new-definition-hash"));
+
+        assertThat(result.errors()).singleElement().satisfies(issue->{
+            assertThat(issue.code()).isEqualTo("TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE");
+            assertThat(issue.message()).contains("有效首联","配置已变更","请重新验证")
+                    .doesNotContain("TD001_VALID","Required simulation scenarios are incomplete");
+        });
     }
 
     private SimulationScenario scenario()

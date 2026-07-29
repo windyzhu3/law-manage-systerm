@@ -32,7 +32,15 @@
           <el-tag v-if="item.sample" size="mini" type="warning">只读样例</el-tag>
         </el-option>
       </el-select>
-      <el-button plain icon="el-icon-magic-stick" :disabled="readonly" @click="$emit('sample')">加载只读样例</el-button>
+      <el-button
+        plain
+        icon="el-icon-magic-stick"
+        :disabled="readonly"
+        :loading="hydrating"
+        @click="$emit('sample-load')"
+      >
+        一键加载只读样例
+      </el-button>
     </div>
 
     <el-alert

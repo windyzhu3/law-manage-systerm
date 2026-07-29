@@ -60,16 +60,22 @@ public class TodoSimulationEvidenceService
     @Transactional(readOnly=true)
     public PublicationGate gate(long templateId,long versionId,String definitionHash,List<SimulationScenario> scenarios)
     {
-        List<String> blockers=new ArrayList<>();
+        List<SimulationGateBlocker> blockers=new ArrayList<>();
         for(SimulationScenario scenario:scenarios==null?List.<SimulationScenario>of():scenarios)
         {
             if(!scenario.requiredForPublish()||!"ACTIVE".equals(scenario.status()))continue;
             Map<String,Object> query=new HashMap<>();query.put("templateId",templateId);query.put("versionId",versionId);
             query.put("definitionHash",definitionHash);query.put("scenarioCode",scenario.scenarioCode());
             query.put("scenarioVersion",scenario.scenarioVersion());
-            if(mapper.selectPassingSimulationEvidence(query)==null)blockers.add(scenario.scenarioCode());
+            if(mapper.selectPassingSimulationEvidence(query)==null)
+            {
+                Map<String,Object> latest=mapper.selectLatestSimulationEvidence(query);
+                blockers.add(new SimulationGateBlocker(scenario.scenarioCode(),
+                        evidenceReason(latest,definitionHash)));
+            }
         }
-        return new PublicationGate(blockers.isEmpty(),blockers);
+        return new PublicationGate(blockers.isEmpty(),
+                blockers.stream().map(SimulationGateBlocker::scenarioCode).toList(),blockers);
     }
 
     @Transactional(readOnly=true)
@@ -85,8 +91,13 @@ public class TodoSimulationEvidenceService
         PublicationGate gate=gate(templateId,versionId,report.definitionHash(),required);
         if(gate.publicationReady())return report;
         List<ValidationIssue> errors=new ArrayList<>(report.errors());
+        Map<String,String> names=new HashMap<>();
+        required.forEach(scenario->names.put(scenario.scenarioCode(),scenario.scenarioName()));
+        String details=gate.blockers().stream().map(blocker->
+                names.getOrDefault(blocker.scenarioCode(),blocker.scenarioCode())
+                        +"（"+reasonLabel(blocker.reason())+"）").collect(java.util.stream.Collectors.joining("、"));
         errors.add(new ValidationIssue("TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE","simulation.scenarios",
-                "Required simulation scenarios are incomplete: "+String.join(",",gate.blockingScenarioCodes())));
+                "以下必测场景尚未通过："+details));
         return new DefinitionValidationReport(errors,report.warnings(),report.compiledJson(),report.definitionHash());
     }
 
@@ -105,9 +116,42 @@ public class TodoSimulationEvidenceService
     private Object value(Map<String,Object> row,String snake,String camel)
     {return row.containsKey(snake)?row.get(snake):row.get(camel);}
 
-    public record PublicationGate(boolean publicationReady,List<String> blockingScenarioCodes)
+    private String evidenceReason(Map<String,Object> latest,String definitionHash)
+    {
+        if(latest==null||latest.isEmpty())return "MISSING";
+        Object hash=value(latest,"definition_hash","definitionHash");
+        if(hash==null||!definitionHash.equals(String.valueOf(hash)))return "DEFINITION_CHANGED";
+        Object status=value(latest,"result_status","resultStatus");
+        if(status==null||!"PASSED".equals(String.valueOf(status)))return "LAST_RUN_FAILED";
+        Object expires=value(latest,"expire_time","expireTime");
+        if(expires instanceof LocalDateTime time&&!time.isAfter(LocalDateTime.now()))return "EVIDENCE_EXPIRED";
+        return "EVIDENCE_UNAVAILABLE";
+    }
+
+    private String reasonLabel(String reason)
+    {
+        return switch(reason)
+        {
+            case "DEFINITION_CHANGED" -> "配置已变更，请重新验证";
+            case "LAST_RUN_FAILED" -> "最近一次验证未通过";
+            case "EVIDENCE_EXPIRED" -> "验证结果已过期，请重新验证";
+            case "EVIDENCE_UNAVAILABLE" -> "验证结果不可用，请重新验证";
+            default -> "尚未验证";
+        };
+    }
+
+    public record SimulationGateBlocker(String scenarioCode,String reason) { }
+
+    public record PublicationGate(boolean publicationReady,List<String> blockingScenarioCodes,
+            List<SimulationGateBlocker> blockers)
     {
         public PublicationGate
-        {blockingScenarioCodes=blockingScenarioCodes==null?List.of():List.copyOf(blockingScenarioCodes);}
+        {
+            blockingScenarioCodes=blockingScenarioCodes==null?List.of():List.copyOf(blockingScenarioCodes);
+            blockers=blockers==null?List.of():List.copyOf(blockers);
+        }
+        public PublicationGate(boolean publicationReady,List<String> blockingScenarioCodes)
+        {this(publicationReady,blockingScenarioCodes,blockingScenarioCodes==null?List.of():
+                blockingScenarioCodes.stream().map(code->new SimulationGateBlocker(code,"MISSING")).toList());}
     }
 }

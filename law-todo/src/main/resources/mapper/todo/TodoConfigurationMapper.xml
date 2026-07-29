@@ -419,4 +419,10 @@
       and (expire_time is null or expire_time &gt; sysdate())
     order by executed_time desc,evidence_id desc limit 1
   </select>
+  <select id="selectLatestSimulationEvidence" resultType="java.util.Map">
+    select * from todo_simulation_evidence
+    where template_id=#{templateId} and version_id=#{versionId}
+      and scenario_code=#{scenarioCode} and scenario_version=#{scenarioVersion}
+    order by executed_time desc,evidence_id desc limit 1
+  </select>
 </mapper>

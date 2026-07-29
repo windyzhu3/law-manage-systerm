@@ -28,11 +28,24 @@ export default {
   },
   computed: {
     missingLabels() {
-      const codes = this.gate.blockingScenarioCodes || []
-      return codes.map(code => {
-        const scenario = this.scenarios.find(item => item.scenarioCode === code)
-        return scenario ? scenario.scenarioName : code
-      }).join('、') || '有效首联、疑似无效、未接通'
+      const blockers = this.gate.blockingScenarios || (this.gate.blockingScenarioCodes || [])
+        .map(code => ({ scenarioCode: code, reason: 'MISSING' }))
+      return blockers.map(blocker => {
+        const scenario = this.scenarios.find(item => item.scenarioCode === blocker.scenarioCode)
+        const name = blocker.scenarioName || (scenario && scenario.scenarioName) || blocker.scenarioCode
+        return `${name}（${this.reasonLabel(blocker.reason)}）`
+      }).join('、') || '有效首联、疑似无效、无法联系'
+    }
+  },
+  methods: {
+    reasonLabel(reason) {
+      return {
+        DEFINITION_CHANGED: '配置已变更，请重新验证',
+        LAST_RUN_FAILED: '最近一次验证未通过',
+        EVIDENCE_EXPIRED: '验证结果已过期',
+        EVIDENCE_UNAVAILABLE: '验证结果不可用',
+        MISSING: '尚未验证'
+      }[reason] || '尚未验证'
     }
   }
 }

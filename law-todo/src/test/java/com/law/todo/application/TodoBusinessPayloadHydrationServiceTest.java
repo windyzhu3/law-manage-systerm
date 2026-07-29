@@ -61,7 +61,7 @@ class TodoBusinessPayloadHydrationServiceTest
     @Test void sampleObjectUsesEventSampleAndRemainsReadOnly()
     {
         when(resources.fields("LEAD","LEAD_ASSIGNED")).thenReturn(List.of(
-                field("leadId",true,false,"LEAD_ASSIGNED"),field("ownerId",true,false,"LEAD_ASSIGNED")));
+                field("leadId",true,false,"LEAD_ASSIGNED"),ownerField()));
         when(samples.contains("LEAD",-1001L)).thenReturn(true);
         when(samples.samplePayload("LEAD_ASSIGNED",1,"LEAD","LEAD",-1001L))
                 .thenReturn(Map.of("leadId",-1001L,"ownerId",11L));
@@ -69,7 +69,7 @@ class TodoBusinessPayloadHydrationServiceTest
         PayloadHydration result=service.hydrate("LEAD_ASSIGNED",1,"LEAD",-1001L,actor);
 
         assertThat(result.sample()).isTrue();
-        assertThat(result.payload()).containsEntry("leadId",-1001L).containsEntry("ownerId",11L);
+        assertThat(result.payload()).containsEntry("leadId",-1001L).containsEntry("ownerId",actor.userId());
         assertThat(result.fields()).allMatch(field->!"BUSINESS_OBJECT".equals(field.source()));
         assertThat(result.fields()).filteredOn(field->!field.missing())
                 .allMatch(field->"EVENT_SAMPLE".equals(field.source()));
@@ -310,6 +310,13 @@ class TodoBusinessPayloadHydrationServiceTest
 
     private FieldResource field(String code,boolean required,boolean sensitive,String event)
     {return new FieldResource(code,code,"string",required,null,sensitive,List.of("EQ"),List.of(event),List.of());}
+    private FieldResource ownerField()
+    {
+        return new FieldResource("ownerId","线索负责人","integer",true,null,false,List.of("EQ"),
+                List.of("LEAD_ASSIGNED"),List.of(),null,0,"EVENT_SCHEMA","已分配的线索负责人",
+                "LEAD","ACTIVE",10,List.of("LEAD_ASSIGNED@1"),"USER_ID","SYSTEM_USER",
+                null,null,"ownerId","OWNER",true,List.of("LEAD_ASSIGNED@1"));
+    }
     private PayloadFieldSource source(String path,Object value,String source)
     {return new PayloadFieldSource(path,value,source,false,false,null,false);}
     private void stubLeadResources()

@@ -18,9 +18,9 @@
         <span class="scenario-card__title">{{ scenario.scenarioName }}</span>
         <el-tag v-if="result(scenario).passed" size="mini" type="success">已通过</el-tag>
         <el-tag v-else size="mini" type="info">待验证</el-tag>
-        <small>预期下一待办：{{ scenario.expectedNextTemplateCode }}</small>
+        <small>预期下一待办：{{ targetLabel(scenario.expectedNextTemplateCode) }}</small>
         <small v-if="result(scenario).actualNextTemplateCode">
-          实际下一待办：{{ result(scenario).actualNextTemplateCode }}
+          实际下一待办：{{ targetLabel(result(scenario).actualNextTemplateCode) }}
         </small>
       </button>
     </div>
@@ -29,15 +29,19 @@
 </template>
 
 <script>
+import { scenarioTargetLabel } from '../simulation-workbench-model'
+
 export default {
   name: 'ScenarioSelector',
   props: {
     scenarios: { type: Array, default: () => [] },
     selectedCode: { type: String, default: '' },
-    results: { type: Object, default: () => ({}) }
+    results: { type: Object, default: () => ({}) },
+    routingTargets: { type: Array, default: () => [] }
   },
   methods: {
-    result(scenario) { return this.results[scenario.scenarioCode] || {} }
+    result(scenario) { return this.results[scenario.scenarioCode] || {} },
+    targetLabel(code) { return scenarioTargetLabel(code, this.routingTargets) }
   }
 }
 </script>

@@ -23,7 +23,7 @@
       :readonly="readonly"
       :template-name="template.templateName"
       @search="searchObjects"
-      @sample="searchObjects('示例')"
+      @sample-load="loadReadOnlySample"
       @select="selectObject"
       @hydrate="hydratePayload"
       @override="changeOverride"
@@ -33,6 +33,7 @@
       :scenarios="scenarios"
       :selected-code="selectedScenarioCode"
       :results="scenarioResults"
+      :routing-targets="resources.routingTargets || []"
       @select="selectScenario"
     />
 
@@ -294,6 +295,16 @@ export default {
       } finally {
         this.objectLoading = false
       }
+    },
+    async loadReadOnlySample() {
+      await this.searchObjects('示例')
+      const sample = this.objects.find(item => item.sample)
+      if (!sample) {
+        this.$modal.msgWarning('当前业务类型没有可用的只读样例')
+        return
+      }
+      this.selectObject(sample.businessId)
+      await this.hydratePayload()
     },
     selectObject(id) {
       this.selectedId = id

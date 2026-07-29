@@ -492,6 +492,8 @@ check('groups creation validation and renders governed semantic labels', () => {
   assert(payload.includes('creationCoverage'), 'manual event inputs must update local creation coverage')
   const semanticSelector = read('src/views/todo/config/journey/components/SemanticOptionSelector.vue')
   assert(semanticSelector.includes('seedCurrentOption'), 'semantic selectors must display the current governed label instead of a raw ID')
+  assert(semanticSelector.includes('ensureCurrentOptions'),
+    'controlled semantic selectors must resolve a non-null initial value without waiting for focus')
   assert(api.includes('listTodoFieldOptions'), 'semantic selectors need a governed options endpoint')
   assert(!payload.includes("MISSING: '待补充'"), 'optional missing fields must not be labelled as blockers')
 })
@@ -516,6 +518,14 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   assert(step.includes('listJourneyScenarios'), 'scenario list must be server governed')
   assert(step.includes('simulateJourneyScenario'), 'single scenario execution must use the server')
   assert(step.includes('batchSimulateJourneyScenarios'), 'batch scenario gate must use the server')
+  assert(step.includes('@sample-load="loadReadOnlySample"'),
+    'sample loading must be a one-click search, select and hydrate action')
+  assert(step.includes('await this.hydratePayload()'),
+    'one-click sample loading must hydrate the selected sample')
+  assert(selector.includes('scenarioTargetLabel'),
+    'scenario target codes must be rendered with the governed template name')
+  assert(gate.includes('reasonLabel'),
+    'scenario blockers must explain whether evidence is missing, stale or failed')
   assert(form.includes('SemanticOptionSelector'), 'completion dictionaries must reuse governed semantic selectors')
   assert(form.includes('contactedAt'), 'simulation time must be available as the contactedAt default')
   assert(!form.includes('reviewResult'), 'TD-001 completion form must not hard-code downstream review fields')

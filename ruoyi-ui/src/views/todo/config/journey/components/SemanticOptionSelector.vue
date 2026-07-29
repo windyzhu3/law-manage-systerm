@@ -29,10 +29,26 @@ export default {
   data: () => ({ options: [], loading: false }),
   computed: { controlled() { return ['USER_ID', 'DEPT_ID', 'POST_ID', 'ROLE_KEY', 'DICT', 'BUSINESS_REF'].includes(this.field.semanticType) } },
   watch: {
-    field: { immediate: true, deep: true, handler() { this.seedCurrentOption() } },
-    value() { this.seedCurrentOption() }
+    field: { immediate: true, deep: true, handler() { this.ensureCurrentOptions() } },
+    value() { this.ensureCurrentOptions() }
   },
   methods: {
+    ensureCurrentOptions() {
+      if (!this.controlled || this.value === '' || this.value == null) return
+      this.seedCurrentOption()
+      if (this.options.some(option =>
+        String(option.rawValue) === String(this.value) && option.displayValue !== '正在解析…'
+      )) return
+      if (!this.options.some(option => String(option.rawValue) === String(this.value))) {
+        this.options = [{
+          rawValue: this.value,
+          displayValue: '正在解析…',
+          selectable: false,
+          meta: {}
+        }, ...this.options]
+      }
+      this.load('')
+    },
     seedCurrentOption() {
       if (!this.controlled || this.value === '' || this.value == null || !this.field.displayValue) return
       const current = {

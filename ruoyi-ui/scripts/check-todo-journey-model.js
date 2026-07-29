@@ -2,6 +2,7 @@ const assert = require('assert')
 const model = require('../src/views/todo/config/journey/journey-model')
 const steps = require('../src/views/todo/config/journey/journey-step-model')
 const runtime = require('../src/views/todo/config/journey/journey-runtime')
+const simulationWorkbench = require('../src/views/todo/config/journey/simulation-workbench-model')
 
 const STEP_CODES = ['EVENT', 'TRIGGER', 'OWNER', 'DOD', 'SLA', 'ROUTING', 'SIMULATION_PUBLISH']
 let checks = 0
@@ -1518,6 +1519,32 @@ check('materializes the governed first-contact outcomes without free-text busine
     }),
     null
   )
+})
+
+check('explains semantic scenario evidence and target templates in business language', () => {
+  const scenarios = [
+    { scenarioCode: 'TD001_VALID', scenarioName: '有效首联', requiredForPublish: true },
+    { scenarioCode: 'TD001_SUSPECT_INVALID', scenarioName: '疑似无效', requiredForPublish: true },
+    { scenarioCode: 'TD001_UNREACHABLE', scenarioName: '无法联系', requiredForPublish: true }
+  ]
+  const gate = simulationWorkbench.scenarioGate(scenarios, {
+    TD001_VALID: {
+      passed: true,
+      evidence: { definitionHash: 'old-hash' }
+    },
+    TD001_SUSPECT_INVALID: { passed: false }
+  }, 'current-hash')
+  assert.deepStrictEqual(gate.blockingScenarios, [
+    { scenarioCode: 'TD001_VALID', scenarioName: '有效首联', reason: 'DEFINITION_CHANGED' },
+    { scenarioCode: 'TD001_SUSPECT_INVALID', scenarioName: '疑似无效', reason: 'LAST_RUN_FAILED' },
+    { scenarioCode: 'TD001_UNREACHABLE', scenarioName: '无法联系', reason: 'MISSING' }
+  ])
+  assert.strictEqual(simulationWorkbench.scenarioTargetLabel('TD-004', [
+    { templateCode: 'TD-004', templateName: '5天实质进展' }
+  ]), '5天实质进展（TD-004）')
+  assert.strictEqual(simulationWorkbench.semanticOptionLabel('VALID', [
+    { rawValue: 'VALID', displayValue: '有效' }
+  ]), '有效')
 })
 
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

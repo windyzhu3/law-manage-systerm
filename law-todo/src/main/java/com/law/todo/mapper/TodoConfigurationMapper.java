@@ -58,4 +58,5 @@ public interface TodoConfigurationMapper
     Map<String,Object> selectTemplateIdentityByVersionId(Long versionId);
     int insertSimulationEvidence(Map<String,Object> row);
     Map<String,Object> selectPassingSimulationEvidence(Map<String,Object> query);
+    Map<String,Object> selectLatestSimulationEvidence(Map<String,Object> query);
 }

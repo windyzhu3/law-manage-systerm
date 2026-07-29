@@ -67,7 +67,7 @@ public class TodoBusinessPayloadHydrationService
         String physicalType=physicalType(eventType,businessType);
         PayloadHydration base=businessId<0?sample(eventType,payloadVersion,businessType,physicalType,businessId):
                 adapter(physicalType).hydrate(eventType,payloadVersion,physicalType,businessId,actor);
-        return normalize(eventType,businessType,base,manualOverrides);
+        return normalize(eventType,businessType,base,manualOverrides,actor);
     }
 
     @Transactional(readOnly=true)
@@ -98,7 +98,8 @@ public class TodoBusinessPayloadHydrationService
         if(samples==null||!samples.contains(physicalType,businessId))
             throw new TodoException("TODO_SIMULATION_BUSINESS_OBJECT_NOT_FOUND",
                     "Simulation sample business object does not exist");
-        Map<String,Object> values=samples.samplePayload(eventType,payloadVersion,logicalType,physicalType,businessId);
+        Map<String,Object> values=deepMutable(
+                samples.samplePayload(eventType,payloadVersion,logicalType,physicalType,businessId));
         List<PayloadFieldSource> fields=flatten(values).entrySet().stream()
                 .map(entry->new PayloadFieldSource(entry.getKey(),entry.getValue(),"EVENT_SAMPLE",
                         false,false,null,false)).toList();
@@ -116,16 +117,19 @@ public class TodoBusinessPayloadHydrationService
     }
 
     private ExecutionHydration normalize(String eventType,String businessType,PayloadHydration base,
-            Map<String,Object> manualOverrides)
+            Map<String,Object> manualOverrides,Actor actor)
     {
         Map<String,Object> executionValues=deepMutable(base.payload());
+        List<FieldResource> descriptors=resources==null?List.of():resources.fields(businessType,eventType);
+        if(base.sample()&&actor!=null&&actor.userId()!=null)
+            descriptors.stream().filter(field->field.ownerEligible()||"USER_ID".equals(field.semanticType()))
+                    .forEach(field->putPath(executionValues,field.code(),actor.userId()));
         Map<String,Object> overrides=flatten(manualOverrides==null?Map.of():manualOverrides);
         overrides.forEach((path,value)->putPath(executionValues,path,value));
         Map<String,Object> publicValues=deepMutable(executionValues);
         Map<String,PayloadFieldSource> provided=new LinkedHashMap<>();
         for(PayloadFieldSource field:base.fields())provided.put(field.path(),field);
 
-        List<FieldResource> descriptors=resources==null?List.of():resources.fields(businessType,eventType);
         Set<String> paths=new LinkedHashSet<>();
         descriptors.forEach(field->paths.add(field.code()));paths.addAll(provided.keySet());paths.addAll(overrides.keySet());
         Map<String,FieldResource> descriptorByPath=new LinkedHashMap<>();
