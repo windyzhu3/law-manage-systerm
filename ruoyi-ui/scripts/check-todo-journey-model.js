@@ -143,7 +143,7 @@ check('patches a step and its derived definition immutably', () => {
   assert.strictEqual(changed.dirty, true)
   assert.strictEqual(changed.saveState, 'IDLE')
   assert.strictEqual(changed.preflightGate, null)
-  assert.strictEqual(changed.steps.find(step => step.code === 'OWNER').state, 'IN_PROGRESS')
+  assert.strictEqual(changed.steps.find(step => step.code === 'OWNER').state, 'BLOCKED')
   assert.strictEqual(changed.steps.find(step => step.code === 'OWNER').value.config.type, 'BUSINESS_OWNER')
   assert.strictEqual(changed.definition.owner.config.type, 'BUSINESS_OWNER')
   assert.strictEqual(JSON.stringify(journey), snapshot)
@@ -1545,6 +1545,46 @@ check('explains semantic scenario evidence and target templates in business lang
   assert.strictEqual(simulationWorkbench.semanticOptionLabel('VALID', [
     { rawValue: 'VALID', displayValue: '有效' }
   ]), '有效')
+})
+
+check('keeps server journey blockers authoritative over optimistic local states', () => {
+  const steps = STEP_CODES.map(code => ({
+    code,
+    state: 'COMPLETED',
+    issueCount: 0,
+    value: code === 'EVENT' ? { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 } : { config: {} }
+  }))
+  const result = model.applyAuthoritativeHealth(steps, [{
+    code: 'TODO_CONDITION_VALUE_TYPE_INVALID',
+    severity: 'BLOCKER',
+    stepCode: 'TRIGGER',
+    fieldPath: 'event.condition',
+    message: '条件值类型不匹配'
+  }])
+  assert.strictEqual(result.find(step => step.code === 'TRIGGER').state, 'BLOCKED')
+  assert.strictEqual(result.find(step => step.code === 'TRIGGER').issueCount, 1)
+  assert.strictEqual(result.find(step => step.code === 'EVENT').state, 'COMPLETED')
+})
+
+check('retains authoritative dependency impact returned by a successful save', () => {
+  const journey = model.hydrateJourney({
+    template: { templateId: 42, templateCode: 'TD-001' },
+    steps: STEP_CODES.map(code => ({ code, state: 'COMPLETED', value: code === 'EVENT' ? {} : { config: {} } }))
+  })
+  const saved = model.mergeSaveResult({ ...journey, dirty: true }, {
+    journey: {
+      ...journey,
+      issues: [],
+      steps: journey.steps
+    },
+    impact: {
+      affectedSteps: ['ROUTING', 'SIMULATION_PUBLISH'],
+      invalidatedEvidence: ['SIMULATION_SCENARIOS'],
+      message: '后续路由已变化，需要重新验证'
+    }
+  })
+  assert.deepStrictEqual(saved.impact.affectedSteps, ['ROUTING', 'SIMULATION_PUBLISH'])
+  assert.deepStrictEqual(saved.impact.invalidatedEvidence, ['SIMULATION_SCENARIOS'])
 })
 
 console.log(`todo phase two journey model contract passed (${checks} checks)`)

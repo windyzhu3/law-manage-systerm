@@ -26,6 +26,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbe
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchPage;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
+import com.law.todo.application.view.TodoConfigurationViews.JourneyImpact;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
@@ -46,6 +47,7 @@ public class TodoConfigurationJourneyService
     private final TodoTemplateService templates;
     private final TodoEventResourceService eventResources;
     private final TodoBusinessOutcomeCatalogService outcomes;
+    private final TodoJourneyDependencyService dependencies=new TodoJourneyDependencyService();
 
     @Autowired
     public TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoConfigurationMapper mapper,
@@ -85,6 +87,11 @@ public class TodoConfigurationJourneyService
     {
         TemplateConfigurationDetail detail=query.template(templateId);
         return Objects.requireNonNull(detail.editableVersion(),"editableVersion").definitionJson();
+    }
+
+    public JourneyImpact impact(String beforeDefinitionJson,String afterDefinitionJson)
+    {
+        return dependencies.analyze(codec.read(beforeDefinitionJson),codec.read(afterDefinitionJson));
     }
 
     public TemplateWorkbenchPage workbench(Map<String,Object> query,Actor actor)

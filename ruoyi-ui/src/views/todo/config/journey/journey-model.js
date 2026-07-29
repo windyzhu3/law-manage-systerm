@@ -25,6 +25,27 @@ function orderedSteps(steps) {
   return STEP_CODES.map(code => byCode.get(code) || defaultStep(code))
 }
 
+function applyAuthoritativeHealth(steps, issues) {
+  const normalized = orderedSteps(steps)
+  const byStep = new Map()
+  for (const issue of Array.isArray(issues) ? issues : []) {
+    if (!issue || !STEP_CODES.includes(issue.stepCode)) continue
+    const list = byStep.get(issue.stepCode) || []
+    list.push(issue)
+    byStep.set(issue.stepCode, list)
+  }
+  return normalized.map(step => {
+    const local = byStep.get(step.code) || []
+    if (!local.length) return step
+    const blocked = local.some(issue => String(issue.severity).toUpperCase() === 'BLOCKER')
+    return {
+      ...step,
+      state: blocked ? 'BLOCKED' : 'WARNING',
+      issueCount: local.length
+    }
+  })
+}
+
 function stepValue(steps, code) {
   const step = steps.find(item => item.code === code)
   return step ? object(step.value) : defaultStepValue(code)
@@ -64,7 +85,7 @@ function deriveDefinition(template, steps) {
 function hydrateJourney(payload) {
   const source = clone(payload || {})
   const template = object(source.template)
-  const steps = orderedSteps(source.steps)
+  const steps = applyAuthoritativeHealth(source.steps, source.issues)
   const payloadState = object(source.payload)
   return {
     ...source,
@@ -109,9 +130,10 @@ function applyStepPatch(journey, stepCode, value) {
   if (!STEP_CODES.includes(stepCode)) throw new Error(`Unknown journey step: ${stepCode}`)
   const current = clone(journey)
   const nextValue = object(value)
-  const steps = orderedSteps(current.steps).map(step => step.code === stepCode
+  const optimisticSteps = orderedSteps(current.steps).map(step => step.code === stepCode
     ? { ...step, value: clone(nextValue), state: 'IN_PROGRESS' }
     : step)
+  const steps = applyAuthoritativeHealth(optimisticSteps, current.issues)
   return {
     ...current,
     steps,
@@ -446,7 +468,11 @@ function definedMetadata(source) {
 function saveSuccess(journey, result) {
   const response = result || {}
   const aggregate = response.journey || response
-  const steps = aggregate.steps ? orderedSteps(aggregate.steps) : orderedSteps(journey.steps)
+  const authoritativeIssues = aggregate.issues !== undefined ? aggregate.issues : journey.issues
+  const steps = applyAuthoritativeHealth(
+    aggregate.steps ? aggregate.steps : journey.steps,
+    authoritativeIssues
+  )
   const template = {
     ...object(journey.template),
     ...definedMetadata(response),
@@ -462,7 +488,8 @@ function saveSuccess(journey, result) {
     saveState: 'SAVED',
     saveError: null,
     conflict: null,
-    preflightGate: null
+    preflightGate: null,
+    impact: clone(response.impact || aggregate.impact || null)
   }
   for (const key of ['resources', 'employeePreview', 'issues', 'permissions']) {
     if (aggregate[key] !== undefined) next[key] = clone(aggregate[key])
@@ -656,6 +683,7 @@ function hasUnresolvedFieldConflicts(journey) {
 
 module.exports = {
   hydrateJourney,
+  applyAuthoritativeHealth,
   applyStepPatch,
   derivePrimaryAction,
   mergeSaveResult,

@@ -62,6 +62,7 @@ import com.law.todo.application.command.TodoManagementCommands.TemplateToggleCom
 import com.law.todo.application.command.TodoManagementCommands.TriggerCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerSortCommand;
 import com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand;
+import com.law.todo.application.view.TodoConfigurationViews.JourneySaveResult;
 import com.law.todo.domain.TodoException;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -165,6 +166,19 @@ public class TodoConfigurationController extends BaseController
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/{id}/journey")
     public AjaxResult journey(@PathVariable long id){return success(journeys.load(id,actor()));}
+    @PreAuthorize("@ss.hasAnyPermi('todo:template:edit,todo:template:create,todo:template:copy')")
+    @PutMapping("/templates/{id}/journey")
+    public AjaxResult updateJourney(@PathVariable long id,@Valid @RequestBody UpdateDraftCommand value)
+    {
+        Actor actor=actor();
+        var before=journeys.load(id,actor);
+        requireSame(before.template().versionId(),value.versionId());
+        String previousDefinition=journeys.canonicalDefinition(id,actor);
+        definitions.updateDraft(value,actor);
+        String currentDefinition=journeys.canonicalDefinition(id,actor);
+        return success(new JourneySaveResult(journeys.load(id,actor),
+                journeys.impact(previousDefinition,currentDefinition)));
+    }
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/workbench")
     public TableDataInfo journeyWorkbench(@Valid @ModelAttribute TemplateListQuery value)

@@ -31,6 +31,20 @@
     <div v-if="journey" class="journey-shell" data-testid="template-journey-shell">
       <journey-step-nav :steps="journey.steps" :active-code="activeStep" @select="selectStep" />
 
+      <el-alert
+        v-if="journeyImpact"
+        class="journey-impact-banner"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        <div slot="title">本次保存影响：{{ impactStepLabels }}</div>
+        <div slot="description" class="journey-impact-banner__content">
+          <span>{{ journeyImpact.message }}</span>
+          <el-button type="text" @click="synchronizeImpact">查看受影响步骤</el-button>
+        </div>
+      </el-alert>
+
       <div v-if="activeIssues.length" class="journey-shell__notice" role="status">
         <i class="el-icon-warning-outline" aria-hidden="true" />
         <span>
@@ -129,7 +143,7 @@ import SimulationPublishStep from './steps/SimulationPublishStep'
 import {
   getTodoTemplate,
   getTodoTemplateJourney,
-  updateTemplateDraft,
+  updateTodoTemplateJourney,
   copyTodoTemplate,
   listTemplateEventCatalog,
   listTemplateCalendarCatalog,
@@ -315,6 +329,16 @@ export default {
       const local = this.localStepIssue
       if (local && !current.some(issue => issue.code === local.code)) current.push(local)
       return current
+    },
+    journeyImpact() {
+      const impact = this.journey && this.journey.impact
+      return impact && Array.isArray(impact.affectedSteps) && impact.affectedSteps.length ? impact : null
+    },
+    impactStepLabels() {
+      if (!this.journeyImpact) return ''
+      return this.journeyImpact.affectedSteps
+        .map(code => STEP_TITLES[code] || code)
+        .join('、')
     },
     liveEmployeePreview() {
       if (!this.journey) return {}
@@ -608,7 +632,11 @@ export default {
     },
     async persistJourney(journey, context) {
       const payload = this.buildSavePayload(journey, context)
-      await updateTemplateDraft(context.versionId, payload)
+      const targetTemplateId = Number(
+        (journey.template && journey.template.templateId) || this.templateId
+      )
+      const response = await updateTodoTemplateJourney(targetTemplateId, payload)
+      return response.data || {}
     },
     async saveNow(options) {
       const automatic = Boolean(options && options.automatic)
@@ -620,13 +648,14 @@ export default {
       this.saving = true
       this.journey = { ...this.journey, saveState: 'SAVING', saveError: null }
       try {
-        await this.persistJourney(localSnapshot, this.draftContext)
+        const saveResult = await this.persistJourney(localSnapshot, this.draftContext)
         const fresh = await this.fetchSnapshot(this.templateId)
         this.draftContext = fresh.context
+        const authoritative = { journey: fresh.aggregate, impact: saveResult.impact }
         if (this.editRevision === savedRevision) {
-          this.journey = mergeSaveResult(localSnapshot, fresh.aggregate)
+          this.journey = mergeSaveResult(localSnapshot, authoritative)
         } else {
-          this.journey = rebaseJourneyAfterSave(this.journey, localSnapshot, fresh.aggregate)
+          this.journey = rebaseJourneyAfterSave(this.journey, localSnapshot, authoritative)
           this.scheduleAutosave()
         }
         if (!automatic) this.$modal.msgSuccess('模板配置已保存')
@@ -676,6 +705,13 @@ export default {
         return false
       }
       return this.saveNow({ automatic: false })
+    },
+    synchronizeImpact() {
+      if (!this.journeyImpact) return
+      const next = this.journeyImpact.affectedSteps.find(code => code !== this.activeStep) ||
+        this.journeyImpact.affectedSteps[0]
+      if (STEP_CODES.includes(next)) this.activeStep = next
+      this.journey = { ...this.journey, impact: null }
     },
     async refreshAndMergeConflict() {
       if (!this.journey || !this.journey.conflict) return
@@ -988,6 +1024,17 @@ export default {
   }
 }
 
+.journey-impact-banner {
+  margin-top: 16px;
+}
+
+.journey-impact-banner__content {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .journey-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(420px, 32%);
@@ -1126,6 +1173,11 @@ export default {
 
   .journey-footer__actions {
     justify-content: flex-end;
+  }
+
+  .journey-impact-banner__content {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

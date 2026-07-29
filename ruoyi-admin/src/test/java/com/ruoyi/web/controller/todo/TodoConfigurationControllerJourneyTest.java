@@ -69,6 +69,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateSummar
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchItem;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchPage;
 import com.law.todo.application.view.TodoConfigurationViews.SlaJourneyCalculationResult;
+import com.law.todo.application.view.TodoConfigurationViews.JourneyImpact;
 import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoBusinessPayloadAccess.DataSourceStatus;
 import com.law.todo.spi.TodoBusinessPayloadAccess.PayloadHydration;
@@ -85,6 +86,7 @@ class TodoConfigurationControllerJourneyTest
     @jakarta.annotation.Resource TodoJourneySimulationService simulations;
     @jakarta.annotation.Resource TodoSlaRuleManagementService sla;
     @jakarta.annotation.Resource TodoConfigurationResourceManagementService resources;
+    @jakarta.annotation.Resource TodoDefinitionService definitions;
     @jakarta.annotation.Resource RequestMappingHandlerMapping handlerMapping;
 
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
@@ -116,6 +118,34 @@ class TodoConfigurationControllerJourneyTest
         ArgumentCaptor<Actor> actor=ArgumentCaptor.forClass(Actor.class);
         verify(journeys).load(org.mockito.ArgumentMatchers.eq(42L),actor.capture());
         assertActor(actor.getValue());
+    }
+
+    @Test
+    void savesJourneyAndReturnsAuthoritativeHealthWithDependencyImpact() throws Exception
+    {
+        authenticate("todo:template:edit");
+        when(journeys.canonicalDefinition(org.mockito.ArgumentMatchers.eq(42L),any()))
+                .thenReturn("{\"before\":true}","{\"after\":true}");
+        when(journeys.impact("{\"before\":true}","{\"after\":true}")).thenReturn(
+                new JourneyImpact(List.of("routing.config.businessOutcomes[0].targetTemplateCode"),
+                        List.of("ROUTING","SIMULATION_PUBLISH"),List.of("SIMULATION_SCENARIOS"),
+                        "后续路由发生变化，发布前需要重新验证模拟场景。"));
+
+        mvc().perform(put("/todo/config/templates/42/journey")
+                        .contentType("application/json")
+                        .content("""
+                                {"actionId":"journey-save-1","versionId":9,
+                                 "definitionJson":"{}","expectedDefinitionJson":"{}","ruleReferences":[]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.journey.template.templateId").value(42))
+                .andExpect(jsonPath("$.data.journey.steps.length()").value(7))
+                .andExpect(jsonPath("$.data.impact.affectedSteps[0]").value("ROUTING"))
+                .andExpect(jsonPath("$.data.impact.affectedSteps[1]").value("SIMULATION_PUBLISH"))
+                .andExpect(jsonPath("$.data.impact.invalidatedEvidence[0]").value("SIMULATION_SCENARIOS"));
+
+        verify(definitions).updateDraft(any(),any());
+        verify(journeys).impact("{\"before\":true}","{\"after\":true}");
     }
 
     @Test
@@ -376,13 +406,16 @@ class TodoConfigurationControllerJourneyTest
         }
         @Bean TodoSlaRuleManagementService sla()
         {return org.mockito.Mockito.mock(TodoSlaRuleManagementService.class);}
+        @Bean TodoDefinitionService definitions()
+        {return org.mockito.Mockito.mock(TodoDefinitionService.class);}
         @Bean TodoConfigurationController controller(TodoConfigurationJourneyService journeys,
                 TodoBusinessPayloadHydrationService payloads,TodoJourneySimulationService journeySimulation,
-                TodoConfigurationResourceManagementService resourceManagement,TodoSlaRuleManagementService sla)
+                TodoConfigurationResourceManagementService resourceManagement,TodoSlaRuleManagementService sla,
+                TodoDefinitionService definitions)
         {
             return new TodoConfigurationController(mock(TodoConfigurationQueryService.class),
                     sla,mock(TodoDodRuleManagementService.class),
-                    mock(TodoTemplateService.class),mock(TodoDefinitionService.class),
+                    mock(TodoTemplateService.class),definitions,
                     mock(TodoDefinitionDiffService.class),mock(TodoConfigurationSimulationService.class),
                     mock(TodoDefinitionCatalogService.class),mock(TodoAutoActionCapabilityCatalogService.class),
                     mock(TodoEventResourceService.class),mock(TodoConfigurationResourceCatalogService.class),

@@ -30,6 +30,7 @@
         <span>继续配置后续步骤即可。</span>
       </div>
     </div>
+    <p class="configuration-health__authority">保存后以服务端校验结果为准，页面输入提示仅用于即时辅助。</p>
   </section>
 </template>
 
@@ -154,5 +155,12 @@ export default {
   span {
     color: #617369;
   }
+}
+
+.configuration-health__authority {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #7B8898;
 }
 </style>

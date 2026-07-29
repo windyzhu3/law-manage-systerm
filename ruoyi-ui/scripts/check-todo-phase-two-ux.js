@@ -142,7 +142,7 @@ check('provides the seven-step journey shell and its reusable panels', () => {
     'beforeRouteLeave',
     'canLeave(this.journey)',
     'mergeSaveResult',
-    'updateTemplateDraft',
+    'updateTodoTemplateJourney',
     'getTodoTemplateJourney'
   ]) {
     assert(journey.includes(token), `journey shell missing token: ${token}`)
@@ -533,6 +533,22 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   for (const apiName of ['listJourneyScenarios', 'simulateJourneyScenario', 'batchSimulateJourneyScenarios']) {
     assert(api.includes(`function ${apiName}`), `missing scenario API: ${apiName}`)
   }
+})
+
+check('shows authoritative cross-step impact and keeps the active narrow-screen step visible', () => {
+  const page = read('src/views/todo/config/journey/index.vue')
+  const nav = read('src/views/todo/config/journey/components/JourneyStepNav.vue')
+  const health = read('src/views/todo/config/journey/components/ConfigurationHealthPanel.vue')
+  assert(page.includes('journey-impact-banner'),
+    'the journey must expose the server-computed impact after saving')
+  assert(page.includes('synchronizeImpact'),
+    'the impact banner must provide one synchronization action')
+  assert(health.includes('服务端校验'),
+    'the health panel must explain that saved health is authoritative')
+  assert(nav.includes('scrollIntoView'),
+    'the active narrow-screen step must be scrolled into view')
+  assert(nav.includes('scroll-snap-type'),
+    'the narrow-screen step rail must remain horizontally scrollable')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

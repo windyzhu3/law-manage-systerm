@@ -1,8 +1,9 @@
 <template>
-  <nav class="journey-step-nav" aria-label="待办模板配置步骤">
+  <nav ref="rail" class="journey-step-nav" aria-label="待办模板配置步骤">
     <button
       v-for="(step, index) in steps"
       :key="step.code"
+      :ref="`step-${step.code}`"
       type="button"
       class="journey-step-nav__item"
       :class="[`is-${stateOf(step).toLowerCase()}`, { 'is-active': step.code === activeCode }]"
@@ -40,7 +41,29 @@ export default {
     steps: { type: Array, default: () => [] },
     activeCode: { type: String, default: '' }
   },
+  mounted() {
+    this.ensureActiveVisible()
+  },
+  watch: {
+    activeCode() {
+      this.ensureActiveVisible()
+    }
+  },
   methods: {
+    ensureActiveVisible() {
+      this.$nextTick(() => {
+        const reference = this.$refs[`step-${this.activeCode}`]
+        const target = Array.isArray(reference) ? reference[0] : reference
+        if (!target || typeof target.scrollIntoView !== 'function') return
+        const reduced = typeof window !== 'undefined' &&
+          window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        target.scrollIntoView({
+          behavior: reduced ? 'auto' : 'smooth',
+          block: 'nearest',
+          inline: 'center'
+        })
+      })
+    },
     stateOf(step) {
       const state = String((step && step.state) || 'NOT_STARTED').toUpperCase()
       if (state === 'COMPLETED') return 'COMPLETED'
@@ -183,15 +206,20 @@ export default {
 
 @media (max-width: 640px) {
   .journey-step-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    display: flex;
+    gap: 0;
     padding: 16px;
-    overflow: visible;
+    overflow-x: auto;
+    scroll-padding-inline: 16px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
   }
 
   .journey-step-nav__item {
-    min-width: 0;
+    flex: 0 0 144px;
+    min-width: 144px;
     padding: 6px;
+    scroll-snap-align: center;
 
     &::after {
       display: none;

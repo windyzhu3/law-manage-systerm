@@ -88,6 +88,24 @@ public final class TodoConfigurationViews
 
     public record ConfigurationSimulationResult(TodoSimulationView simulation,long durationMs) { }
 
+    public record JourneyImpact(List<String> changedPaths,List<String> affectedSteps,
+            List<String> invalidatedEvidence,String message)
+    {
+        public JourneyImpact
+        {
+            changedPaths=changedPaths==null?List.of():List.copyOf(changedPaths);
+            affectedSteps=affectedSteps==null?List.of():List.copyOf(affectedSteps);
+            invalidatedEvidence=invalidatedEvidence==null?List.of():List.copyOf(invalidatedEvidence);
+        }
+        public static JourneyImpact none()
+        {return new JourneyImpact(List.of(),List.of(),List.of(),"本次保存未改变配置内容。");}
+    }
+    public record JourneySaveResult(TodoConfigurationJourneyView journey,JourneyImpact impact)
+    {
+        public JourneySaveResult
+        {impact=impact==null?JourneyImpact.none():impact;}
+    }
+
     public record PublishedSimulationDiagnostic(long versionId,long templateId,String templateCode,
             String templateName,String eventType,Integer payloadVersion,String businessType,String status,
             String ownerStatus,List<String> issueCodes,String message,TodoSimulationView simulation)
