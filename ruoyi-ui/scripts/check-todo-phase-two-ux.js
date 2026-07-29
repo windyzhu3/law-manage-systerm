@@ -249,6 +249,17 @@ check('guards owner and condition controls against unsupported runtime values', 
   assert(owner.includes('ownerSelectionStillValid'), 'stale owner-field selections must be cleared and blocked')
 })
 
+check('keeps owner strategy edits local until an explicit apply action', () => {
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  const ownerModel = read('src/views/todo/config/journey/journey-step-model.js')
+  for (const token of ['createOwnerStrategyDrafts', 'updateOwnerStrategyDraft', 'applyOwnerStrategyDraft']) {
+    assert(ownerModel.includes(token), `owner model missing non-destructive draft helper: ${token}`)
+  }
+  assert(owner.includes('应用此规则'), 'owner editor needs an explicit apply action')
+  assert(owner.includes('未应用修改'), 'owner editor must make pending changes visible')
+  assert(ownerModel.includes('ownerEligible'), 'owner editor must honor the event owner whitelist')
+})
+
 check('restores visible focus after contextual event repair', () => {
   const event = read('src/views/todo/config/journey/steps/EventStep.vue')
   assert(event.includes('ref="eventSearch"'), 'event selection control needs a stable focus ref')

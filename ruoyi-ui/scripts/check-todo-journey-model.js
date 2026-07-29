@@ -1045,6 +1045,57 @@ check('models schema health, owner blockers, and contextual resource return sema
   assert.strictEqual(steps.repairFocusTarget('eventType'), 'eventSearch')
 })
 
+check('retains independent owner strategy drafts until the user explicitly applies one', () => {
+  const canonical = {
+    type: 'PAYLOAD',
+    field: 'ownerId',
+    selectionMode: 'EVENT_OWNER',
+    skipUnavailable: true,
+    useDelegation: true
+  }
+  const snapshot = JSON.stringify(canonical)
+  const initial = steps.createOwnerStrategyDrafts(canonical)
+  const withUser = steps.updateOwnerStrategyDraft(initial, 'USER', { value: 104 })
+  const withRole = steps.updateOwnerStrategyDraft(withUser, 'ROLE', { value: 'lead_manager' })
+
+  assert.strictEqual(withRole.EVENT_OWNER.field, 'ownerId')
+  assert.strictEqual(withRole.USER.value, 104)
+  assert.strictEqual(withRole.ROLE.value, 'lead_manager')
+  assert.strictEqual(JSON.stringify(canonical), snapshot)
+  assert.deepStrictEqual(steps.applyOwnerStrategyDraft(withRole, 'EVENT_OWNER'), canonical)
+  assert.deepStrictEqual(steps.applyOwnerStrategyDraft(withRole, 'USER'), {
+    type: 'USER',
+    value: 104,
+    skipUnavailable: true,
+    useDelegation: true
+  })
+})
+
+check('uses the event owner whitelist instead of offering every user-like field', () => {
+  const fields = [
+    {
+      code: 'ownerId',
+      type: 'integer',
+      semanticType: 'USER_ID',
+      ownerEligible: true,
+      sourceEventVersions: ['LEAD_ASSIGNED@1']
+    },
+    {
+      code: 'operatorId',
+      type: 'integer',
+      semanticType: 'USER_ID',
+      ownerEligible: false,
+      eventRole: 'OPERATOR',
+      sourceEventVersions: ['LEAD_ASSIGNED@1']
+    }
+  ]
+
+  assert.deepStrictEqual(
+    steps.scopeOwnerFields(fields, { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 }).map(item => item.code),
+    ['ownerId']
+  )
+})
+
 check('ranks and materializes contextual DoD recipes without mutating catalogs or other drafts', () => {
   const recipes = [
     {

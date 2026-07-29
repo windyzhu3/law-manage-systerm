@@ -452,6 +452,9 @@ function isOwnerField(field) {
   const type = String(value.type || '').toLowerCase()
   const semanticType = String(value.semanticType || value.semantic_type || '').toUpperCase()
   const code = String(value.code || '')
+  if (Object.prototype.hasOwnProperty.call(value, 'ownerEligible')) {
+    return ['integer', 'number'].includes(type) && value.ownerEligible === true
+  }
   return ['integer', 'number'].includes(type) &&
     (semanticType === 'USER_ID' || /(owner|user|lawyer|manager)([._]?id)?$/i.test(code))
 }
@@ -505,6 +508,48 @@ function buildOwnerConfig(strategy, selection, fallback) {
   config.useDelegation = selected.useDelegation !== false
   if (configuredOwner(fallback)) config.fallback = clone(fallback)
   return config
+}
+
+function createOwnerStrategyDrafts(config) {
+  const source = object(config)
+  const strategy = ownerStrategy(source)
+  const drafts = {
+    EVENT_OWNER: { field: '' },
+    BUSINESS_OWNER: {},
+    ROLE: { value: '' },
+    USER: { value: '' },
+    CANDIDATE_POOL: { value: '' },
+    options: {
+      skipUnavailable: source.skipUnavailable !== false,
+      useDelegation: source.useDelegation !== false
+    },
+    fallback: clone(object(source.fallback))
+  }
+  if (strategy === 'EVENT_OWNER') drafts.EVENT_OWNER.field = ownerFieldSelection(source)
+  if (strategy === 'ROLE' || strategy === 'CANDIDATE_POOL') {
+    drafts[strategy].value = source.roleKey || source.value || source.operand || ''
+  }
+  if (strategy === 'USER') drafts.USER.value = source.value || source.operand || ''
+  return drafts
+}
+
+function updateOwnerStrategyDraft(drafts, strategy, value) {
+  const next = clone(object(drafts))
+  const code = String(strategy || '').toUpperCase()
+  if (!['EVENT_OWNER', 'BUSINESS_OWNER', 'ROLE', 'USER', 'CANDIDATE_POOL'].includes(code)) return next
+  next[code] = { ...object(next[code]), ...clone(object(value)) }
+  return next
+}
+
+function applyOwnerStrategyDraft(drafts, strategy, fallback) {
+  const source = object(drafts)
+  const code = String(strategy || '').toUpperCase()
+  const selection = {
+    ...object(source[code]),
+    ...object(source.options)
+  }
+  const resolvedFallback = fallback === undefined ? object(source.fallback) : object(fallback)
+  return buildOwnerConfig(code, selection, resolvedFallback)
 }
 
 function list(value) {
@@ -1182,6 +1227,9 @@ module.exports = {
   ownerSelectionStillValid,
   repairFocusTarget,
   buildOwnerConfig,
+  createOwnerStrategyDrafts,
+  updateOwnerStrategyDraft,
+  applyOwnerStrategyDraft,
   rankDodRecipes,
   normalizeDodConfig,
   hydrateDodConditions,

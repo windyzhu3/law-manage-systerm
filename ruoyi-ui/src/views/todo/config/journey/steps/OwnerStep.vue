@@ -45,34 +45,34 @@
         <h3>负责人来源</h3>
         <el-form label-position="top">
           <el-form-item v-if="strategy === 'EVENT_OWNER'" label="事件中的人员字段">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择负责人字段" @change="commit">
+            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择负责人字段" @change="updateDraft">
               <el-option v-for="field in ownerFields" :key="field.code" :label="field.name" :value="field.code">
                 <span>{{ field.name }}</span><small class="owner-option-note">{{ field.code }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'ROLE'" label="指定角色">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择角色" @change="commit">
+            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择角色" @change="updateDraft">
               <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value">
                 <span>{{ item.label }}</span><small class="owner-option-note">{{ item.secondaryLabel }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'USER'" label="指定人员">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择人员" @change="commit">
+            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择人员" @change="updateDraft">
               <el-option v-for="item in userOptions" :key="item.value" :label="item.label" :value="item.value">
                 <span>{{ item.label }}</span><small class="owner-option-note">{{ item.secondaryLabel }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'CANDIDATE_POOL'" label="候选池范围">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择候选角色" @change="commit">
+            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择候选角色" @change="updateDraft">
               <el-option v-for="item in roleOptions" :key="item.value" :label="`${item.label}候选池`" :value="item.value" />
             </el-select>
           </el-form-item>
           <p v-else class="owner-config__automatic">系统会根据当前业务对象记录的负责人自动解析。</p>
-          <el-checkbox v-model="skipUnavailable" :disabled="readonly" @change="commit">自动跳过离职、停用或请假人员</el-checkbox>
-          <el-checkbox v-model="useDelegation" :disabled="readonly" @change="commit">存在有效委托时优先交给受托人</el-checkbox>
+          <el-checkbox v-model="skipUnavailable" :disabled="readonly" @change="updateDraft">自动跳过离职、停用或请假人员</el-checkbox>
+          <el-checkbox v-model="useDelegation" :disabled="readonly" @change="updateDraft">存在有效委托时优先交给受托人</el-checkbox>
         </el-form>
       </div>
 
@@ -91,7 +91,7 @@
           :disabled="readonly"
           filterable
           placeholder="选择兜底角色"
-          @change="commit"
+          @change="updateFallbackSelection"
         >
           <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
@@ -101,12 +101,18 @@
           :disabled="readonly"
           filterable
           placeholder="选择兜底人员"
-          @change="commit"
+          @change="updateFallbackSelection"
         >
           <el-option v-for="item in userOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
       </div>
     </section>
+
+    <div v-if="strategy && !readonly" class="owner-apply">
+      <span v-if="draftDirty"><i class="el-icon-edit-outline" /> 未应用修改</span>
+      <span v-else><i class="el-icon-circle-check" /> 当前规则已应用</span>
+      <el-button type="primary" :disabled="Boolean(blocker) || !draftDirty" @click="applyStrategy">应用此规则</el-button>
+    </div>
 
     <section class="owner-explanation">
       <div>
@@ -134,12 +140,13 @@
 <script>
 import {
   buildOwnerPatch,
-  buildOwnerConfig,
   ownerStrategy,
   ownerBlocker,
-  ownerFieldSelection,
   scopeOwnerFields,
-  ownerSelectionStillValid
+  ownerSelectionStillValid,
+  createOwnerStrategyDrafts,
+  updateOwnerStrategyDraft,
+  applyOwnerStrategyDraft
 } from '../journey-step-model'
 
 const KNOWN_STRATEGIES = ['EVENT_OWNER', 'BUSINESS_OWNER', 'ROLE', 'USER', 'CANDIDATE_POOL']
@@ -156,11 +163,14 @@ export default {
   data() {
     return {
       strategy: '',
+      strategyDrafts: createOwnerStrategyDrafts({}),
       selection: '',
       fallbackType: '',
       fallbackSelection: '',
       skipUnavailable: true,
       useDelegation: true,
+      draftDirty: false,
+      fallbackDraftSelections: { ROLE: '', USER: '' },
       syncing: false,
       strategies: [
         { value: 'EVENT_OWNER', label: '事件中的负责人', description: '使用业务事件携带的人员字段', icon: 'el-icon-user' },
@@ -177,6 +187,7 @@ export default {
     roleOptions() { return this.owners.filter(item => item.type === 'ROLE') },
     userOptions() { return this.owners.filter(item => item.type === 'USER') },
     ownerFields() {
+      // ownerEligible is supplied by the selected event version's owner whitelist.
       return scopeOwnerFields(this.resources.fields || [], this.event)
     },
     ownerFieldKeys() { return this.ownerFields.map(field => field.code).join('|') },
@@ -219,15 +230,13 @@ export default {
     hydrate() {
       const config = this.config
       const strategy = ownerStrategy(config)
+      this.strategyDrafts = createOwnerStrategyDrafts(config)
       this.strategy = KNOWN_STRATEGIES.includes(strategy) ? strategy : ''
-      const selection = this.strategy === 'EVENT_OWNER'
-        ? ownerFieldSelection(config)
-        : this.strategy === 'ROLE' || this.strategy === 'CANDIDATE_POOL'
-          ? (config.roleKey || config.value || '')
-          : this.strategy === 'USER' ? String(config.value || config.operand || '') : ''
-      this.selection = this.strategy === 'EVENT_OWNER' && !ownerSelectionStillValid(selection, this.ownerFields)
-        ? ''
-        : selection
+      const selection = this.selectionFor(this.strategy)
+      const invalidEventOwner = this.strategy === 'EVENT_OWNER' &&
+        Boolean(selection) && this.ownerFields.length > 0 &&
+        !ownerSelectionStillValid(selection, this.ownerFields)
+      this.selection = invalidEventOwner ? '' : selection
       this.skipUnavailable = config.skipUnavailable !== false
       this.useDelegation = config.useDelegation !== false
       const fallback = config.fallback || {}
@@ -235,24 +244,39 @@ export default {
       this.fallbackSelection = fallback.type === 'ROLE'
         ? (fallback.roleKey || fallback.value || '')
         : fallback.type === 'USER' ? String(fallback.value || fallback.operand || '') : ''
-      if (this.strategy === 'EVENT_OWNER' && selection && !this.selection && !this.readonly) {
-        this.$nextTick(() => this.commit())
+      this.fallbackDraftSelections = {
+        ROLE: fallback.type === 'ROLE' ? this.fallbackSelection : '',
+        USER: fallback.type === 'USER' ? this.fallbackSelection : ''
       }
+      this.draftDirty = invalidEventOwner
+      if (invalidEventOwner) this.strategyDrafts = updateOwnerStrategyDraft(
+        this.strategyDrafts, 'EVENT_OWNER', { field: '' }
+      )
     },
     reconcileOwnerField() {
-      if (this.strategy !== 'EVENT_OWNER' || ownerSelectionStillValid(this.selection, this.ownerFields)) return
+      if (this.strategy !== 'EVENT_OWNER' || !this.ownerFields.length ||
+        ownerSelectionStillValid(this.selection, this.ownerFields)) return
       this.selection = ''
-      if (!this.readonly) this.commit()
+      this.updateDraft()
     },
     chooseStrategy(strategy) {
       if (this.readonly) return
+      this.captureCurrentDraft()
       this.strategy = strategy
-      this.selection = strategy === 'EVENT_OWNER' ? ((this.ownerFields[0] || {}).code || '') : ''
-      this.commit()
+      this.selection = this.selectionFor(strategy)
+      if (!this.selection && strategy === 'EVENT_OWNER') this.selection = ((this.ownerFields[0] || {}).code || '')
+      this.captureCurrentDraft()
+      this.draftDirty = true
     },
     fallbackChanged() {
-      this.fallbackSelection = ''
-      this.commit()
+      this.fallbackSelection = this.fallbackDraftSelections[this.fallbackType] || ''
+      this.updateDraft()
+    },
+    updateFallbackSelection() {
+      if (this.fallbackType === 'ROLE' || this.fallbackType === 'USER') {
+        this.$set(this.fallbackDraftSelections, this.fallbackType, this.fallbackSelection)
+      }
+      this.updateDraft()
     },
     fallbackConfig() {
       if (this.fallbackType === 'BUSINESS_OWNER') return { type: 'BUSINESS_OWNER' }
@@ -262,18 +286,47 @@ export default {
     },
     composeConfig() {
       if (!this.strategy) return this.config
-      const config = buildOwnerConfig(this.strategy, {
-        field: this.selection,
-        value: this.selection,
-        skipUnavailable: this.skipUnavailable,
-        useDelegation: this.useDelegation
-      }, this.fallbackConfig())
+      const drafts = this.currentDrafts()
+      const config = applyOwnerStrategyDraft(drafts, this.strategy, this.fallbackConfig())
       if (Array.isArray(this.config.cc)) config.cc = this.config.cc
       return config
     },
-    commit() {
+    selectionFor(strategy) {
+      const draft = this.strategyDrafts[strategy] || {}
+      if (strategy === 'EVENT_OWNER') return String(draft.field || '')
+      if (strategy === 'ROLE' || strategy === 'CANDIDATE_POOL') return String(draft.value || '')
+      if (strategy === 'USER') return String(draft.value || '')
+      return ''
+    },
+    currentDrafts() {
+      const value = this.strategy === 'EVENT_OWNER'
+        ? { field: this.selection }
+        : { value: this.selection }
+      let drafts = updateOwnerStrategyDraft(this.strategyDrafts, this.strategy, value)
+      return {
+        ...drafts,
+        options: {
+          skipUnavailable: this.skipUnavailable,
+          useDelegation: this.useDelegation
+        },
+        fallback: this.fallbackConfig()
+      }
+    },
+    captureCurrentDraft() {
+      const drafts = this.currentDrafts()
+      this.strategyDrafts = drafts
+      return drafts
+    },
+    updateDraft() {
+      if (this.readonly) return
+      this.captureCurrentDraft()
+      this.draftDirty = true
+    },
+    applyStrategy() {
+      if (this.readonly || this.blocker) return
       this.syncing = true
       this.$emit('change', buildOwnerPatch(this.composeConfig()))
+      this.draftDirty = false
       this.$nextTick(() => { this.syncing = false })
     },
     ownerLabel(type, value) {
@@ -457,6 +510,19 @@ export default {
 
   > i {
     color: #C89A3D;
+  }
+}
+
+.owner-apply {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 0 0;
+
+  span {
+    font-size: 13px;
+    color: #A15C00;
   }
 }
 
