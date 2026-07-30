@@ -127,3 +127,93 @@ export function versionDiffPlan(versions, currentVersionId) {
     reason: ''
   }
 }
+
+export function simulationCompletionMessage(readiness) {
+  return readiness && readiness.publicationReady
+    ? '模拟发布验证已全部通过'
+    : ''
+}
+
+export function readinessRepairTarget(issue, scenarios) {
+  const source = issue || {}
+  const code = String(source.code || '')
+  const stepCode = String(source.stepCode || source.section || 'SIMULATION_PUBLISH').toUpperCase()
+  if (['TODO_FULL_SIMULATION_REQUIRED', 'TODO_FULL_SIMULATION_STALE',
+    'TODO_JOURNEY_SIMULATION_REQUIRED'].includes(code)) {
+    return {
+      stepCode: 'SIMULATION_PUBLISH',
+      scenarioCode: '',
+      focusTarget: 'full-simulation'
+    }
+  }
+  if (code !== 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE') {
+    return { stepCode, scenarioCode: '', focusTarget: '' }
+  }
+  const blockers = source.blockingScenarios || []
+  const blockerCodes = blockers
+    .map(item => typeof item === 'string' ? item : item && item.scenarioCode)
+    .concat(source.blockingScenarioCodes || [])
+    .filter(Boolean)
+  const scenarioCode = blockerCodes.find(candidate =>
+    (scenarios || []).some(item => item.scenarioCode === candidate)
+  ) || ''
+  return {
+    stepCode: 'SIMULATION_PUBLISH',
+    scenarioCode,
+    focusTarget: 'scenario-selector'
+  }
+}
+
+const SIMULATION_READINESS_CODES = [
+  'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
+  'TODO_FULL_SIMULATION_REQUIRED',
+  'TODO_FULL_SIMULATION_STALE',
+  'TODO_JOURNEY_SIMULATION_REQUIRED'
+]
+
+function isSimulationReadinessIssue(issue) {
+  return (issue && issue.stepCode === 'SIMULATION_PUBLISH') ||
+    SIMULATION_READINESS_CODES.includes(String((issue && issue.code) || ''))
+}
+
+export function journeySimulationReadiness(journey) {
+  if (!journey) return null
+  const template = journey.template || {}
+  const step = (journey.steps || []).find(item => item.code === 'SIMULATION_PUBLISH') || {}
+  const issues = (journey.issues || []).filter(isSimulationReadinessIssue)
+  const fullBlocked = issues.some(issue => [
+    'TODO_FULL_SIMULATION_REQUIRED',
+    'TODO_FULL_SIMULATION_STALE',
+    'TODO_JOURNEY_SIMULATION_REQUIRED'
+  ].includes(String(issue.code || '')))
+  return {
+    templateId: Number(template.templateId),
+    versionId: Number(template.versionId),
+    definitionHash: template.definitionHash || '',
+    blockingScenarios: [],
+    fullSimulationPassed: step.state === 'COMPLETED' ||
+      (step.state !== 'NOT_STARTED' && !fullBlocked),
+    publicationReady: step.state === 'COMPLETED',
+    issues
+  }
+}
+
+export function mergeJourneySimulationReadiness(journey, readiness) {
+  if (!journey || !readiness) return journey
+  const otherIssues = (journey.issues || []).filter(issue => !isSimulationReadinessIssue(issue))
+  const simulationIssues = readiness.issues || []
+  const steps = (journey.steps || []).map(step =>
+    step.code === 'SIMULATION_PUBLISH'
+      ? {
+          ...step,
+          state: readiness.publicationReady ? 'COMPLETED' : 'BLOCKED',
+          issueCount: simulationIssues.length
+        }
+      : step
+  )
+  return {
+    ...journey,
+    issues: otherIssues.concat(simulationIssues),
+    steps
+  }
+}

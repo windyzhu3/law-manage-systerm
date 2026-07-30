@@ -6,8 +6,8 @@
         <h2>用真实业务对象试运行，再安全发布</h2>
         <p>试运行只读取数据，不创建待办；发布会生成不可变版本，历史版本不会被覆盖。</p>
       </div>
-      <el-tag v-if="simulationCurrent" type="success">当前草稿试运行通过</el-tag>
-      <el-tag v-else type="info">尚未验证当前草稿</el-tag>
+      <el-tag v-if="simulationCurrent" type="success">模拟发布验证已全部通过</el-tag>
+      <el-tag v-else type="info">尚未完成模拟发布验证</el-tag>
     </header>
 
     <el-alert v-if="!capabilities.canSimulate" title="当前角色仅可查看，不能运行模拟。" type="info" :closable="false" show-icon />
@@ -57,24 +57,37 @@
       @run-batch="runScenarioBatch"
     />
 
-    <div class="simulation-publish-step__actions">
-      <el-date-picker
-        v-if="!readonly"
-        v-model="effectiveAt"
-        type="datetime"
-        value-format="yyyy-MM-dd'T'HH:mm:ss"
-        placeholder="试运行时间（默认现在）"
+    <div
+      ref="fullSimulationBlock"
+      class="simulation-publish-step__full-simulation"
+    >
+      <el-alert
+        v-if="readiness && !readiness.fullSimulationPassed"
+        title="完整试运行尚未通过"
+        description="请运行完整试运行；只有当前草稿的必测场景和完整试运行都通过后，才具备发布资格。"
+        type="warning"
+        :closable="false"
+        show-icon
       />
-      <el-button
-        v-if="canOperate && capabilities.canSimulate"
-        type="primary"
-        :disabled="!selectedObject || dirty || saving"
-        :loading="simulating"
-        data-testid="run-journey-simulation"
-        @click="runSimulation"
-      >
-        运行完整试运行
-      </el-button>
+      <div class="simulation-publish-step__actions">
+        <el-date-picker
+          v-if="!readonly"
+          v-model="effectiveAt"
+          type="datetime"
+          value-format="yyyy-MM-dd'T'HH:mm:ss"
+          placeholder="试运行时间（默认现在）"
+        />
+        <el-button
+          v-if="canOperate && capabilities.canSimulate"
+          type="primary"
+          :disabled="!selectedObject || dirty || saving"
+          :loading="simulating"
+          data-testid="run-journey-simulation"
+          @click="runSimulation"
+        >
+          运行完整试运行
+        </el-button>
+      </div>
     </div>
 
     <simulation-trace
@@ -149,7 +162,8 @@ import {
 import {
   failedScenarioResult,
   scenarioGate,
-  scenarioRepairTarget,
+  readinessRepairTarget,
+  simulationCompletionMessage,
   versionDiffPlan
 } from '../simulation-workbench-model'
 
@@ -171,6 +185,7 @@ export default {
     currentVersionId: { type: [Number, String], required: true },
     permissions: { type: Array, default: () => [] },
     resources: { type: Object, default: () => ({}) },
+    initialReadiness: { type: Object, default: null },
     readonly: Boolean,
     dirty: Boolean,
     saving: Boolean
@@ -188,6 +203,7 @@ export default {
       effectiveAt: '',
       simulating: false,
       simulation: null,
+      readiness: this.initialReadiness,
       preflightLoading: false,
       preflight: null,
       diff: null,
@@ -208,17 +224,10 @@ export default {
     canOperate() { return !this.readonly },
     draftHash() { return String(this.authoritativeDraftHash || this.template.definitionHash || '') },
     simulationState() {
-      if (this.scenarioGateState.publicationReady) {
-        return { successful: true, definitionHash: this.draftHash }
-      }
-      if (!this.simulation) return {}
-      const issues = this.simulation.issues || []
-      const definitionHash = (this.simulation.engine && this.simulation.engine.definitionHash) ||
-        this.simulation.definitionHash
+      if (!this.readiness) return {}
       return {
-        successful: !issues.some(issue => String(issue.severity).toUpperCase() === 'BLOCKER') &&
-          this.simulation.publishEligible !== false,
-        definitionHash
+        successful: Boolean(this.readiness.publicationReady),
+        definitionHash: this.readiness.definitionHash || ''
       }
     },
     simulationCurrent() {
@@ -242,6 +251,7 @@ export default {
     'template.definitionHash'() {
       this.authoritativeDraftHash = ''
       this.simulation = null
+      this.readiness = this.initialReadiness
       this.preflight = null
       this.diff = null
       this.diffError = ''
@@ -252,12 +262,19 @@ export default {
     },
     'template.publishStatus'() {
       this.resetExecutionState()
+    },
+    initialReadiness: {
+      deep: true,
+      handler(value) {
+        this.readiness = value || null
+      }
     }
   },
   mounted() {
     if (this.canOperate && this.capabilities.canSimulate) {
       this.searchObjects('')
       this.loadScenarios()
+      if (this.capabilities.canPublish) this.runPreflight({ quiet: true })
     }
   },
   methods: {
@@ -268,6 +285,7 @@ export default {
       this.authoritativeDraftHash = ''
       this.hydration = null
       this.simulation = null
+      this.readiness = this.initialReadiness
       this.preflight = null
       this.diff = null
       this.diffError = ''
@@ -335,14 +353,18 @@ export default {
       this.scenarioResults = {}
       this.serverScenarioGate = null
     },
-    async hydratePayload() {
-      if (!this.selectedObject) return
+    async hydratePayload(options) {
+      if (!this.selectedObject) return false
       this.hydrating = true
       try {
         const response = await hydrateTodoJourneyPayload(this.template.templateId, this.payloadCommand())
         this.hydration = response.data || {}
+        return true
       } catch (error) {
-        this.$modal.msgError((error && (error.msg || error.message)) || '载荷加载失败')
+        if (!options || !options.quiet) {
+          this.$modal.msgError((error && (error.msg || error.message)) || '载荷加载失败')
+        }
+        return false
       } finally {
         this.hydrating = false
       }
@@ -390,12 +412,12 @@ export default {
         if (!(await this.runPreflight({ includeDiff: false, quiet: true }))) return false
       }
       const configurationErrors = ((this.preflight && this.preflight.errors) || [])
-        .filter(issue => issue.code !== 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE')
+        .filter(issue => !this.isSimulationReadinessIssue(issue))
       if (configurationErrors.length) {
         this.$modal.msgWarning('请先修复场景证据以外的配置阻塞项')
         return false
       }
-      if (!this.hydration) await this.hydratePayload()
+      if (!this.hydration && !(await this.hydratePayload())) return false
       return true
     },
     async runSelectedScenario() {
@@ -435,8 +457,6 @@ export default {
         const last = (result.results || []).slice(-1)[0]
         this.simulation = (last && last.simulation) || this.simulation
         await this.runPreflight({ includeDiff: false, quiet: true })
-        if (result.publicationReady) this.$modal.msgSuccess('三个必测场景均已通过')
-        else this.$modal.msgWarning('仍有场景未通过，请查看预期与实际下一待办')
       } catch (error) {
         this.$modal.msgError((error && (error.msg || error.message)) || '批量场景验证失败')
       } finally {
@@ -448,12 +468,20 @@ export default {
       this.simulating = true
       try {
         const preflightReady = await this.runPreflight({ includeDiff: false, quiet: true })
-        if (!preflightReady) return
-        if (!this.preflight || (this.preflight.errors || []).length) {
-          this.$modal.msgWarning('请先修复发布预检中的阻塞项')
+        if (!preflightReady) {
+          this.$modal.msgError('发布预检失败，未执行完整试运行')
           return
         }
-        await this.hydratePayload()
+        const configurationErrors = ((this.preflight && this.preflight.errors) || [])
+          .filter(issue => !this.isSimulationReadinessIssue(issue))
+        if (configurationErrors.length) {
+          this.$modal.msgWarning(configurationErrors[0].message || '请先修复发布预检中的配置阻塞项')
+          return
+        }
+        if (!(await this.hydratePayload({ quiet: true }))) {
+          this.$modal.msgError('载荷加载失败，未执行完整试运行')
+          return
+        }
         const response = await simulateTodoJourney(this.template.templateId, {
           ...this.payloadCommand(),
           requestId: this.actionId('simulate'),
@@ -461,10 +489,18 @@ export default {
           taskCompletions: []
         })
         this.simulation = response.data || {}
-        this.preflight = null
-        if (this.simulationCurrent) {
-          this.$modal.msgSuccess('当前草稿试运行通过')
-          if (this.capabilities.canPublish) await this.runPreflight()
+        this.readiness = this.simulation.readiness || null
+        if (this.readiness) this.$emit('readiness-change', this.readiness)
+        const refreshed = await this.runPreflight({ includeDiff: true, quiet: true })
+        if (!refreshed) {
+          this.$modal.msgError('完整试运行已执行，但发布预检刷新失败，请重试')
+          return
+        }
+        const completionMessage = simulationCompletionMessage(this.readiness)
+        if (completionMessage) this.$modal.msgSuccess(completionMessage)
+        else {
+          const issue = this.readiness && (this.readiness.issues || [])[0]
+          this.$modal.msgWarning((issue && issue.message) || '模拟发布验证尚未全部通过，请按页面提示修复')
         }
       } catch (error) {
         this.$modal.msgError((error && (error.msg || error.message)) || '试运行失败')
@@ -502,22 +538,44 @@ export default {
         this.preflightLoading = false
       }
     },
+    isSimulationReadinessIssue(issue) {
+      return [
+        'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
+        'TODO_FULL_SIMULATION_REQUIRED',
+        'TODO_FULL_SIMULATION_STALE',
+        'TODO_JOURNEY_SIMULATION_REQUIRED'
+      ].includes(String((issue && issue.code) || ''))
+    },
+    focusReadinessIssue(issue) {
+      this.repairPreflight(issue)
+    },
     repairPreflight(issue) {
-      const target = scenarioRepairTarget(issue, this.scenarioGateState, this.scenarios)
+      const readinessBlockers = (this.readiness && this.readiness.blockingScenarios) || []
+      const target = readinessRepairTarget({
+        ...(issue || {}),
+        blockingScenarios: readinessBlockers.length
+          ? readinessBlockers
+          : (this.scenarioGateState.blockingScenarios || []),
+        blockingScenarioCodes: this.scenarioGateState.blockingScenarioCodes || []
+      }, this.scenarios)
       if (target.stepCode !== 'SIMULATION_PUBLISH') {
         this.$emit('navigate-repair', target.stepCode)
         return
       }
       if (target.scenarioCode) this.selectScenario(target.scenarioCode)
       this.$nextTick(() => {
-        const selector = this.$refs.scenarioSelector
-        if (selector && selector.$el && selector.$el.scrollIntoView) {
-          selector.$el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          selector.$el.classList.add('is-repair-target')
-          window.setTimeout(() => selector.$el.classList.remove('is-repair-target'), 1800)
+        const element = target.focusTarget === 'full-simulation'
+          ? this.$refs.fullSimulationBlock
+          : (this.$refs.scenarioSelector && this.$refs.scenarioSelector.$el)
+        if (element && element.scrollIntoView) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          element.classList.add('is-repair-target')
+          window.setTimeout(() => element.classList.remove('is-repair-target'), 1800)
         }
       })
-      this.$modal.msgInfo('已定位到未通过场景，请运行当前场景或批量验证三个场景')
+      this.$modal.msgInfo(target.focusTarget === 'full-simulation'
+        ? '已定位到完整试运行，请运行后重新检查发布资格'
+        : '已定位到未通过场景，请运行当前场景或批量验证三个场景')
     },
     async loadDiff() {
       if (!this.capabilities.canDiff) return
@@ -579,8 +637,10 @@ export default {
 .simulation-publish-step__eyebrow { color: #C89A3D; font-weight: 700; }
 .simulation-publish-step__header h2 { margin: 6px 0; color: #0B2A55; }
 .simulation-publish-step__header p, .simulation-publish-step__publish p { margin: 0; color: #66758A; }
+.simulation-publish-step__full-simulation { display: grid; gap: 12px; padding: 14px; border: 1px solid transparent; border-radius: 8px; transition: border-color .2s ease, box-shadow .2s ease; }
 .simulation-publish-step__actions { display: flex; justify-content: flex-end; gap: 12px; }
 .simulation-publish-step__publish { display: flex; justify-content: space-between; align-items: center; gap: 20px; border: 1px solid #C89A3D; border-radius: 8px; padding: 18px 20px; background: #FFFCF5; }
+.simulation-publish-step__full-simulation.is-repair-target,
 .simulation-publish-step ::v-deep .scenario-selector.is-repair-target { border-color: #C89A3D; box-shadow: 0 0 0 3px rgba(200, 154, 61, 0.18); }
 @media (max-width: 720px) {
   .simulation-publish-step__header, .simulation-publish-step__publish { flex-direction: column; }

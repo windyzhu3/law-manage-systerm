@@ -17,7 +17,7 @@
       >
         <i :class="severity(issue) === 'BLOCKER' ? 'el-icon-circle-close' : 'el-icon-warning-outline'" aria-hidden="true" />
         <div>
-          <strong>{{ issue.message || issue.title || '此处配置需要检查' }}</strong>
+          <strong>{{ issueMessage(issue) }}</strong>
           <small>{{ severity(issue) === 'BLOCKER' ? '阻塞发布' : '建议修复' }}</small>
         </div>
         <el-button type="text" @click="$emit('repair', issue)">去修复</el-button>
@@ -41,6 +41,16 @@ export default {
     issues: { type: Array, default: () => [] }
   },
   methods: {
+    issueMessage(issue) {
+      const messages = {
+        TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE: '还有必测场景未通过',
+        TODO_FULL_SIMULATION_REQUIRED: '完整试运行尚未通过',
+        TODO_FULL_SIMULATION_STALE: '完整试运行已失效，请使用当前草稿重新运行',
+        TODO_JOURNEY_SIMULATION_REQUIRED: '完整试运行尚未通过'
+      }
+      const code = String((issue && issue.code) || '')
+      return messages[code] || (issue && (issue.message || issue.title)) || '此处配置需要检查'
+    },
     severity(issue) {
       return String((issue && issue.severity) || 'WARNING').toUpperCase() === 'BLOCKER' ? 'BLOCKER' : 'WARNING'
     }

@@ -73,11 +73,13 @@
             :readonly="activeEditorReadonly"
             :dirty="journey.dirty"
             :saving="saving"
+            :initial-readiness="simulationReadiness"
             @change="onStepChange"
             @issue-change="onEditorIssue"
             @repair-resource="openResourceRepair"
             @published="handlePublished"
             @navigate-repair="navigateRepair"
+            @readiness-change="applySimulationReadiness"
           />
         </section>
         <aside class="journey-aside">
@@ -182,6 +184,10 @@ import {
   copyTransitionMatches,
   consumeCopyTransition
 } from './journey-runtime'
+import {
+  journeySimulationReadiness,
+  mergeJourneySimulationReadiness
+} from './simulation-workbench-model'
 import { hydrateTemplateDraft } from '../template/template-draft-model'
 import { toDraftPayload } from '../definition-codec'
 
@@ -413,6 +419,9 @@ export default {
     },
     activeComponent() {
       return this.$options.stepEditors[this.activeStep] || JourneyStepPlaceholder
+    },
+    simulationReadiness() {
+      return journeySimulationReadiness(this.journey)
     },
     primaryAction() {
       if (!this.journey) return { code: 'CONTINUE_CONFIGURATION', label: '继续配置', stepCode: this.activeStep }
@@ -808,7 +817,18 @@ export default {
     repair(issue) {
       const stepCode = issue && issue.stepCode
       if (STEP_CODES.includes(stepCode)) this.activeStep = stepCode
-      if (issue && issue.code === 'TODO_JOURNEY_EVENT_SCHEMA_REQUIRED') {
+      if (issue && [
+        'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
+        'TODO_FULL_SIMULATION_REQUIRED',
+        'TODO_FULL_SIMULATION_STALE',
+        'TODO_JOURNEY_SIMULATION_REQUIRED'
+      ].includes(issue.code)) {
+        this.activeStep = 'SIMULATION_PUBLISH'
+        this.$nextTick(() => {
+          const editor = this.$refs.activeEditor
+          if (editor && editor.focusReadinessIssue) editor.focusReadinessIssue(issue)
+        })
+      } else if (issue && issue.code === 'TODO_JOURNEY_EVENT_SCHEMA_REQUIRED') {
         const event = this.journey && this.journey.definition && this.journey.definition.event
         const resource = ((this.journey && this.journey.resources && this.journey.resources.events) || []).find(item =>
           item.eventType === (event && event.eventType) &&
@@ -931,6 +951,10 @@ export default {
     navigateRepair(stepCode) {
       const code = String(stepCode || '').toUpperCase()
       if (STEP_CODES.includes(code)) this.activeStep = code
+    },
+    applySimulationReadiness(readiness) {
+      if (!this.journey || !readiness) return
+      this.journey = mergeJourneySimulationReadiness(this.journey, readiness)
     },
     async handlePublished() {
       await this.loadJourney()

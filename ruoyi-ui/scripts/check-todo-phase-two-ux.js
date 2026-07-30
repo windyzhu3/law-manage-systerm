@@ -23,7 +23,11 @@ function loadScenarioWorkbenchModel() {
       scenarioRepairTarget,
       versionIdentity,
       versionStatus,
-      versionDiffPlan
+      versionDiffPlan,
+      simulationCompletionMessage,
+      readinessRepairTarget,
+      journeySimulationReadiness,
+      mergeJourneySimulationReadiness
     }`
   )()
 }
@@ -100,6 +104,91 @@ check('normalizes template version identities and never plans an invalid diff re
       reason: 'INVALID_VERSION_ID'
     }
   )
+})
+
+check('uses authoritative readiness for the final message and repair target', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.strictEqual(
+    model.simulationCompletionMessage({ publicationReady: true }),
+    '模拟发布验证已全部通过'
+  )
+  assert.strictEqual(
+    model.simulationCompletionMessage({ publicationReady: false }),
+    ''
+  )
+  assert.deepStrictEqual(
+    model.readinessRepairTarget(
+      { code: 'TODO_FULL_SIMULATION_REQUIRED' },
+      []
+    ),
+    {
+      stepCode: 'SIMULATION_PUBLISH',
+      scenarioCode: '',
+      focusTarget: 'full-simulation'
+    }
+  )
+  assert.deepStrictEqual(
+    model.readinessRepairTarget(
+      {
+        code: 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
+        blockingScenarios: [{ scenarioCode: 'TD001_UNREACHABLE' }]
+      },
+      [{ scenarioCode: 'TD001_UNREACHABLE' }]
+    ),
+    {
+      stepCode: 'SIMULATION_PUBLISH',
+      scenarioCode: 'TD001_UNREACHABLE',
+      focusTarget: 'scenario-selector'
+    }
+  )
+})
+
+check('projects and merges server simulation readiness without losing journey context', () => {
+  const model = loadScenarioWorkbenchModel()
+  const journey = {
+    template: {
+      templateId: 17,
+      versionId: 88,
+      definitionHash: 'hash-88'
+    },
+    steps: [
+      { code: 'EVENT', state: 'COMPLETED', value: { eventType: 'LEAD_ASSIGNED' } },
+      { code: 'SIMULATION_PUBLISH', state: 'BLOCKED', issueCount: 1, value: { config: {} } }
+    ],
+    issues: [
+      { code: 'TODO_JOURNEY_OWNER_FALLBACK_REQUIRED', stepCode: 'OWNER' },
+      { code: 'TODO_FULL_SIMULATION_REQUIRED', stepCode: 'SIMULATION_PUBLISH' }
+    ],
+    employeePreview: { title: '首联待办' }
+  }
+  assert.deepStrictEqual(model.journeySimulationReadiness(journey), {
+    templateId: 17,
+    versionId: 88,
+    definitionHash: 'hash-88',
+    blockingScenarios: [],
+    fullSimulationPassed: false,
+    publicationReady: false,
+    issues: [journey.issues[1]]
+  })
+  const readiness = {
+    templateId: 17,
+    versionId: 88,
+    definitionHash: 'hash-88',
+    blockingScenarios: [],
+    fullSimulationPassed: true,
+    publicationReady: true,
+    issues: []
+  }
+  const merged = model.mergeJourneySimulationReadiness(journey, readiness)
+  assert.notStrictEqual(merged, journey)
+  assert.strictEqual(merged.employeePreview, journey.employeePreview)
+  assert.deepStrictEqual(merged.issues, [journey.issues[0]])
+  assert.deepStrictEqual(merged.steps[1], {
+    code: 'SIMULATION_PUBLISH',
+    state: 'COMPLETED',
+    issueCount: 0,
+    value: { config: {} }
+  })
 })
 
 check('keeps failed scenario diagnostics visible and returns repair to the first blocked scenario', () => {
@@ -622,6 +711,18 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   assert(form.includes('contactedAt'), 'simulation time must be available as the contactedAt default')
   assert(!form.includes('reviewResult'), 'TD-001 completion form must not hard-code downstream review fields')
   assert(gate.includes('批量验证三个场景'), 'batch gate must provide one clear action')
+  const page = read('src/views/todo/config/journey/index.vue')
+  const health = read('src/views/todo/config/journey/components/ConfigurationHealthPanel.vue')
+  assert(page.includes('@readiness-change="applySimulationReadiness"'),
+    'simulation readiness must synchronize the parent journey immediately')
+  assert(step.includes("$emit('readiness-change'"),
+    'the simulation step must emit authoritative readiness')
+  assert(step.includes('模拟发布验证已全部通过'),
+    'the full simulation must have one authoritative success message')
+  assert(step.includes('完整试运行尚未通过'),
+    'the full simulation blocker must be explained in Chinese')
+  assert(health.includes('issueMessage(issue)'),
+    'the health panel must localize legacy simulation blockers')
   for (const apiName of ['listJourneyScenarios', 'simulateJourneyScenario', 'batchSimulateJourneyScenarios']) {
     assert(api.includes(`function ${apiName}`), `missing scenario API: ${apiName}`)
   }
