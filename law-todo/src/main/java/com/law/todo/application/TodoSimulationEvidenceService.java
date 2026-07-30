@@ -79,6 +79,19 @@ public class TodoSimulationEvidenceService
     }
 
     @Transactional(readOnly=true)
+    public boolean hasPassingEvidence(long templateId,long versionId,String definitionHash,
+            String scenarioCode,int scenarioVersion)
+    {
+        Map<String,Object> query=new HashMap<>();
+        query.put("templateId",templateId);
+        query.put("versionId",versionId);
+        query.put("definitionHash",definitionHash);
+        query.put("scenarioCode",scenarioCode);
+        query.put("scenarioVersion",scenarioVersion);
+        return mapper.selectPassingSimulationEvidence(query)!=null;
+    }
+
+    @Transactional(readOnly=true)
     public DefinitionValidationReport applyPreflightGate(long versionId,DefinitionValidationReport report)
     {
         Map<String,Object> identity=mapper.selectTemplateIdentityByVersionId(versionId);
