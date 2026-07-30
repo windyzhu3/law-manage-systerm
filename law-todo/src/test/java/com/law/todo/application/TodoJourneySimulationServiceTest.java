@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -28,6 +31,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyPermiss
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateSummary;
 import com.law.todo.application.view.TodoConfigurationViews.ConfigurationSimulationResult;
 import com.law.todo.application.view.TodoJourneySimulationResult;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.application.view.TodoSimulationView;
 import com.law.todo.application.view.TodoSimulationView.FormTrace;
 import com.law.todo.application.view.TodoSimulationView.OwnerTrace;
@@ -48,6 +52,8 @@ class TodoJourneySimulationServiceTest
     @Mock private TodoConfigurationJourneyService journeys;
     @Mock private TodoConfigurationResourceCatalogService resources;
     @Mock private TodoConfigurationMapper sampleMapper;
+    @Mock private TodoSimulationEvidenceService evidence;
+    @Mock private TodoSimulationReadinessService readiness;
 
     @Test void returnsHydratedPayloadCoverageAndOrderedRedactedTrace()
     {
@@ -77,7 +83,10 @@ class TodoJourneySimulationServiceTest
         ArgumentCaptor<TodoSensitiveDataPolicy> policy=ArgumentCaptor.forClass(TodoSensitiveDataPolicy.class);
         when(simulations.simulate(engineCommand.capture(),any(),policy.capture()))
                 .thenReturn(new ConfigurationSimulationResult(engine(governedSecrets),7L));
-        TodoJourneySimulationService service=new TodoJourneySimulationService(hydration,simulations,journeys);
+        when(readiness.readiness(42L,9L,"definition-hash","LEAD_FIRST_CONTACT","LEAD"))
+                .thenReturn(readiness(true));
+        TodoJourneySimulationService service=
+                new TodoJourneySimulationService(hydration,simulations,journeys,evidence,readiness);
 
         TodoJourneySimulationResult result=service.simulate(command(3L),actor());
 
@@ -99,12 +108,15 @@ class TodoJourneySimulationServiceTest
         assertEquals("[REDACTED]",result.employeePreview().title());
         assertEquals("[REDACTED]",result.payload().values().get("customerPhone"));
         assertTrue(result.publishEligible());
+        assertTrue(result.readiness().publicationReady());
+        verify(evidence).recordFull(eq(42L),eq(command(3L)),eq(true),anyList(),eq(actor()));
     }
 
     @Test void negativeBusinessIdIsAllowedForReadOnlySamplesButZeroIsRejected()
     {
         TodoBusinessPayloadHydrationService hydration=org.mockito.Mockito.mock(TodoBusinessPayloadHydrationService.class);
-        TodoJourneySimulationService service=new TodoJourneySimulationService(hydration,simulations,journeys);
+        TodoJourneySimulationService service=
+                new TodoJourneySimulationService(hydration,simulations,journeys,evidence,readiness);
 
         TodoException error=assertThrows(TodoException.class,()->service.simulate(command(0L),actor()));
 
@@ -125,13 +137,38 @@ class TodoJourneySimulationServiceTest
                         "opaqueAlpha","neutral-secret","opaqueBeta",94736251L,"opaqueGamma",true,
                         "opaqueDelta",List.of("list-secret",73),
                         "opaqueEpsilon",Map.of("inner","deep-secret","amount",91))),3L));
-        TodoJourneySimulationService service=new TodoJourneySimulationService(hydration,simulations,journeys);
+        when(readiness.readiness(42L,9L,"definition-hash","LEAD_FIRST_CONTACT","LEAD"))
+                .thenReturn(readiness(true));
+        TodoJourneySimulationService service=
+                new TodoJourneySimulationService(hydration,simulations,journeys,evidence,readiness);
 
         TodoJourneySimulationResult result=service.simulate(command(-1001L),actor());
 
         assertEquals(-1001L,engineCommand.getValue().businessId());
         assertEquals(-1001L,engineCommand.getValue().payload().get("leadId"));
         assertTrue(result.payload().fields().stream().anyMatch(field->"leadId".equals(field.path())));
+    }
+
+    @Test void recordsFailedFullSimulationWithoutMakingTheDraftReady()
+    {
+        when(sampleMapper.selectEventResourceByTypeVersion("LEAD_CREATED",1)).thenReturn(Map.of(
+                "business_object_type","LEAD","sample_payload_json","{\"ownerId\":11}"));
+        TodoBusinessPayloadHydrationService hydration=new TodoBusinessPayloadHydrationService(List.of(),resources,
+                new TodoSimulationSampleCatalog(sampleMapper));
+        when(resources.fields("LEAD","LEAD_CREATED")).thenReturn(List.of());
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(simulations.simulate(any(),any(),any()))
+                .thenReturn(new ConfigurationSimulationResult(failedEngine(),3L));
+        when(readiness.readiness(42L,9L,"definition-hash","LEAD_FIRST_CONTACT","LEAD"))
+                .thenReturn(readiness(false));
+        TodoJourneySimulationService service=
+                new TodoJourneySimulationService(hydration,simulations,journeys,evidence,readiness);
+
+        TodoJourneySimulationResult result=service.simulate(command(-1001L),actor());
+
+        verify(evidence).recordFull(eq(42L),eq(command(-1001L)),eq(false),anyList(),eq(actor()));
+        assertFalse(result.readiness().publicationReady());
+        assertFalse(result.publishEligible());
     }
 
     private JourneySimulationCommand command(long businessId)
@@ -169,6 +206,21 @@ class TodoJourneySimulationServiceTest
                         "traceObject",governedSecrets.get("opaqueEpsilon")),
                         Map.of("requiredFields",List.of("customerPhone"))),
                 List.of(),List.of(),List.of(),List.of());
+    }
+
+    private TodoSimulationView failedEngine()
+    {
+        return new TodoSimulationView(9L,"definition-hash",
+                new TriggerTrace("NOT_MATCHED","LEAD_CREATED",1,List.of()),
+                new OwnerTrace("NOT_EVALUATED",null,List.of(),List.of(),false,List.of()),
+                new SlaTrace("NOT_EVALUATED",null,null,null,null,null,null,List.of()),
+                new FormTrace(Map.of(),Map.of()),List.of(),List.of(),List.of(),List.of());
+    }
+
+    private TodoSimulationReadinessView readiness(boolean ready)
+    {
+        return new TodoSimulationReadinessView(42L,9L,"definition-hash",
+                3,ready?3:2,List.of(),ready,ready,List.of());
     }
 
     private Actor actor(){return new Actor(7L,"operator",2L);}

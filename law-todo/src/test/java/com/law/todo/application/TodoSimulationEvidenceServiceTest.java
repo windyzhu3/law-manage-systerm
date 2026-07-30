@@ -17,6 +17,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
+import com.law.todo.application.command.TodoDefinitionCommands.VirtualTaskCompletionSample;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationScenario;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.mapper.TodoConfigurationMapper;
@@ -45,6 +47,36 @@ class TodoSimulationEvidenceServiceTest
         assertThat(row.getValue().get("resultStatus")).isEqualTo("PASSED");
         assertThat(row.getValue().get("inputHash")).asString().hasSize(64);
         assertThat(row.getValue().get("traceSummaryJson")).asString().contains("TD-004").doesNotContain("phone");
+    }
+
+    @Test
+    void recordsFullSimulationEvidenceForTheExactDefinitionWithoutLeakingInputs()
+    {
+        when(mapper.insertSimulationEvidence(anyMap())).thenReturn(1);
+        JourneySimulationCommand command=new JourneySimulationCommand(
+                42L,9L,"LEAD_CREATED",1,"LEAD",3L,
+                Map.of("phone","13800138000"),
+                LocalDateTime.of(2026,7,28,9,0),
+                List.of(new VirtualTaskCompletionSample("TD-001",0,
+                        Map.of("contactResult","VALID"),
+                        LocalDateTime.of(2026,7,28,9,30))),
+                "definition-hash");
+        TodoSimulationEvidenceService service=new TodoSimulationEvidenceService(mapper);
+
+        service.recordFull(42L,command,true,List.of("EVENT","ROUTING"),
+                new Actor(7L,"alice",2L));
+
+        ArgumentCaptor<Map<String,Object>> row=ArgumentCaptor.forClass(Map.class);
+        verify(mapper).insertSimulationEvidence(row.capture());
+        assertThat(row.getValue()).containsEntry("templateId",42L)
+                .containsEntry("versionId",9L)
+                .containsEntry("definitionHash","definition-hash")
+                .containsEntry("scenarioCode","FULL_SIMULATION")
+                .containsEntry("scenarioVersion",1)
+                .containsEntry("resultStatus","PASSED");
+        assertThat(row.getValue().get("inputHash")).asString().hasSize(64);
+        assertThat(String.valueOf(row.getValue()))
+                .doesNotContain("13800138000","contactResult");
     }
 
     @Test

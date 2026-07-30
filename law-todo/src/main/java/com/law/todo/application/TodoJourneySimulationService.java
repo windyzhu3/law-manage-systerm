@@ -22,6 +22,7 @@ import com.law.todo.application.view.TodoJourneySimulationResult;
 import com.law.todo.application.view.TodoJourneySimulationResult.HydratedPayload;
 import com.law.todo.application.view.TodoJourneySimulationResult.TraceDetail;
 import com.law.todo.application.view.TodoJourneySimulationResult.TraceSection;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.application.view.TodoSimulationView;
 import com.law.todo.application.view.TodoSimulationView.AutoActionTrace;
 import com.law.todo.application.view.TodoSimulationView.FormTrace;
@@ -44,10 +45,19 @@ public class TodoJourneySimulationService
     private final TodoBusinessPayloadHydrationService hydration;
     private final TodoConfigurationSimulationService simulations;
     private final TodoConfigurationJourneyService journeys;
+    private final TodoSimulationEvidenceService evidence;
+    private final TodoSimulationReadinessService readiness;
 
     public TodoJourneySimulationService(TodoBusinessPayloadHydrationService hydration,
-            TodoConfigurationSimulationService simulations,TodoConfigurationJourneyService journeys)
-    {this.hydration=hydration;this.simulations=simulations;this.journeys=journeys;}
+            TodoConfigurationSimulationService simulations,TodoConfigurationJourneyService journeys,
+            TodoSimulationEvidenceService evidence,TodoSimulationReadinessService readiness)
+    {
+        this.hydration=hydration;
+        this.simulations=simulations;
+        this.journeys=journeys;
+        this.evidence=evidence;
+        this.readiness=readiness;
+    }
 
     @Transactional(readOnly=true)
     public TodoJourneySimulationResult simulate(JourneySimulationCommand command,Actor actor)
@@ -72,12 +82,18 @@ public class TodoJourneySimulationService
         TodoSimulationView engine=sanitizeEngine(simulation.simulation(),policy);
         EmployeeTodoPreview preview=sanitizePreview(journey.employeePreview(),policy);
         boolean successful=successful(engine,command.expectedDefinitionHash());
+        List<TraceSection> trace=trace(engine,preview,policy);
+        evidence.recordFull(command.templateId(),command,successful,
+                trace.stream().map(TraceSection::code).toList(),actor);
+        TodoSimulationReadinessView readinessState=readiness.readiness(
+                command.templateId(),command.versionId(),command.expectedDefinitionHash(),
+                journey.template().templateCode(),command.businessType());
         List<JourneyIssue> issues=issues(journey.issues(),engine,successful,policy);
         HydratedPayload payload=new HydratedPayload(policy.redactMap(publicPayload.payload()),
                 policy.redactFields(publicPayload.fields()),
                 publicPayload.coveragePercent());
-        return new TodoJourneySimulationResult(payload,engine,trace(engine,preview,policy),
-                preview,issues,issues.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())));
+        return new TodoJourneySimulationResult(payload,engine,trace,
+                preview,issues,successful&&readinessState.publicationReady(),readinessState);
     }
 
     private boolean successful(TodoSimulationView engine,String expectedHash)

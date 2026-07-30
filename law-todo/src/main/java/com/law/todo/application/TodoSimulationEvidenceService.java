@@ -9,12 +9,14 @@ import java.util.TreeMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONWriter;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationEvidenceSummary;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationScenario;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
@@ -55,6 +57,34 @@ public class TodoSimulationEvidenceService
         row.put("expireTime",null);mapper.insertSimulationEvidence(row);
         return new SimulationEvidenceSummary(scenario.scenarioCode(),scenario.scenarioVersion(),
                 command.definitionHash(),passed?"PASSED":"FAILED",inputHash,executed,null);
+    }
+
+    @Transactional(propagation=Propagation.REQUIRES_NEW)
+    public SimulationEvidenceSummary recordFull(long templateId,JourneySimulationCommand command,
+            boolean passed,List<String> traceCodes,Actor actor)
+    {
+        String inputHash=fullInputHash(templateId,command);
+        LocalDateTime executed=LocalDateTime.now();
+        Map<String,Object> summary=new TreeMap<>();
+        summary.put("passed",passed);
+        summary.put("traceCodes",traceCodes==null?List.of():traceCodes);
+        Map<String,Object> row=new HashMap<>();
+        row.put("templateId",templateId);
+        row.put("versionId",command.versionId());
+        row.put("definitionHash",command.expectedDefinitionHash());
+        row.put("scenarioCode",TodoSimulationReadinessService.FULL_SIMULATION);
+        row.put("scenarioVersion",TodoSimulationReadinessService.FULL_SIMULATION_VERSION);
+        row.put("resultStatus",passed?"PASSED":"FAILED");
+        row.put("inputHash",inputHash);
+        row.put("traceSummaryJson",JSON.toJSONString(summary,JSONWriter.Feature.SortMapEntriesByKeys));
+        row.put("executedBy",actor.userId());
+        row.put("executedTime",executed);
+        row.put("expireTime",null);
+        mapper.insertSimulationEvidence(row);
+        return new SimulationEvidenceSummary(TodoSimulationReadinessService.FULL_SIMULATION,
+                TodoSimulationReadinessService.FULL_SIMULATION_VERSION,
+                command.expectedDefinitionHash(),passed?"PASSED":"FAILED",
+                inputHash,executed,null);
     }
 
     @Transactional(readOnly=true)
@@ -122,6 +152,21 @@ public class TodoSimulationEvidenceService
         canonical.put("scenarioVersion",scenario.scenarioVersion());canonical.put("businessType",command.businessType());
         canonical.put("businessId",command.businessId());canonical.put("manualOverrides",command.manualOverrides());
         canonical.put("effectiveAt",command.effectiveAt().toString());
+        return TodoDefinitionSimulationService.sha256(
+                JSON.toJSONString(canonical,JSONWriter.Feature.SortMapEntriesByKeys));
+    }
+
+    String fullInputHash(long templateId,JourneySimulationCommand command)
+    {
+        Map<String,Object> canonical=new TreeMap<>();
+        canonical.put("templateId",templateId);
+        canonical.put("versionId",command.versionId());
+        canonical.put("definitionHash",command.expectedDefinitionHash());
+        canonical.put("businessType",command.businessType());
+        canonical.put("businessId",command.businessId());
+        canonical.put("manualOverrides",command.manualOverrides());
+        canonical.put("effectiveAt",command.effectiveAt().toString());
+        canonical.put("taskCompletions",command.taskCompletions());
         return TodoDefinitionSimulationService.sha256(
                 JSON.toJSONString(canonical,JSONWriter.Feature.SortMapEntriesByKeys));
     }

@@ -16,12 +16,20 @@ public record TodoJourneySimulationResult(
         List<TraceSection> trace,
         EmployeeTodoPreview employeePreview,
         List<JourneyIssue> issues,
-        boolean publishEligible)
+        boolean publishEligible,
+        TodoSimulationReadinessView readiness)
 {
     public TodoJourneySimulationResult
     {
         trace=trace==null?List.of():List.copyOf(trace);
         issues=issues==null?List.of():List.copyOf(issues);
+    }
+
+    public TodoJourneySimulationResult(HydratedPayload payload,TodoSimulationView engine,
+            List<TraceSection> trace,EmployeeTodoPreview employeeTodoPreview,
+            List<JourneyIssue> issues,boolean publishEligible)
+    {
+        this(payload,engine,trace,employeeTodoPreview,issues,publishEligible,null);
     }
 
     public record HydratedPayload(Map<String,Object> values,List<PayloadFieldSource> fields,int coveragePercent)
