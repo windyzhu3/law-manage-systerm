@@ -16,7 +16,15 @@ function loadScenarioWorkbenchModel() {
   const source = read('src/views/todo/config/journey/simulation-workbench-model.js')
     .replace(/export function /g, 'function ')
   return new Function(
-    `${source}; return { scenarioGate, failedScenarioResult, scenarioFailureMessage, scenarioRepairTarget }`
+    `${source}; return {
+      scenarioGate,
+      failedScenarioResult,
+      scenarioFailureMessage,
+      scenarioRepairTarget,
+      versionIdentity,
+      versionStatus,
+      versionDiffPlan
+    }`
   )()
 }
 
@@ -54,6 +62,45 @@ const businessFirstComponentPaths = [
   'src/views/todo/config/resource/BusinessDataSourcePanel.vue'
 ]
 const workbench = read(workbenchPath)
+
+check('normalizes template version identities and never plans an invalid diff request', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.strictEqual(model.versionIdentity({ version_id: 82 }), 82)
+  assert.strictEqual(model.versionIdentity({ versionId: 88 }), 88)
+  assert.strictEqual(model.versionIdentity({ id: '79' }), 79)
+  assert.strictEqual(model.versionIdentity({ version_id: undefined }), null)
+  assert.strictEqual(model.versionStatus({ publish_status: 'published' }), 'PUBLISHED')
+  assert.deepStrictEqual(
+    model.versionDiffPlan(
+      [{ version_id: 82, status: 'PUBLISHED' }],
+      88
+    ),
+    {
+      available: true,
+      leftVersionId: 82,
+      rightVersionId: 88,
+      reason: ''
+    }
+  )
+  assert.deepStrictEqual(
+    model.versionDiffPlan([{ version_id: 82, status: 'DRAFT' }], 88),
+    {
+      available: false,
+      leftVersionId: null,
+      rightVersionId: 88,
+      reason: 'NO_PUBLISHED_VERSION'
+    }
+  )
+  assert.deepStrictEqual(
+    model.versionDiffPlan([{ version_id: undefined, status: 'PUBLISHED' }], 88),
+    {
+      available: false,
+      leftVersionId: null,
+      rightVersionId: 88,
+      reason: 'INVALID_VERSION_ID'
+    }
+  )
+})
 
 check('keeps failed scenario diagnostics visible and returns repair to the first blocked scenario', () => {
   const model = loadScenarioWorkbenchModel()

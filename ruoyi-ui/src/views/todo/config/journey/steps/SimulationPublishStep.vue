@@ -83,6 +83,15 @@
       @rerun="runSimulation"
     />
 
+    <el-alert
+      v-if="diffError"
+      class="simulation-publish-step__diff-notice"
+      :title="diffError"
+      type="info"
+      :closable="false"
+      show-icon
+    />
+
     <publish-preflight-panel
       v-if="canOperate && (capabilities.canPublish || preflight)"
       :preflight="preflight"
@@ -140,7 +149,8 @@ import {
 import {
   failedScenarioResult,
   scenarioGate,
-  scenarioRepairTarget
+  scenarioRepairTarget,
+  versionDiffPlan
 } from '../simulation-workbench-model'
 
 export default {
@@ -181,6 +191,7 @@ export default {
       preflightLoading: false,
       preflight: null,
       diff: null,
+      diffError: '',
       warningReason: '',
       publishing: false,
       scenarios: [],
@@ -233,6 +244,7 @@ export default {
       this.simulation = null
       this.preflight = null
       this.diff = null
+      this.diffError = ''
       this.warningReason = ''
     },
     'template.versionId'() {
@@ -258,6 +270,7 @@ export default {
       this.simulation = null
       this.preflight = null
       this.diff = null
+      this.diffError = ''
       this.warningReason = ''
       this.scenarioResults = {}
       this.scenarioOverrides = {}
@@ -477,12 +490,7 @@ export default {
         this.preflight = this.normalizePreflight(response.data)
         this.authoritativeDraftHash = this.preflight.definitionHash || ''
         if ((!options || options.includeDiff !== false) && this.capabilities.canDiff) {
-          try {
-            await this.loadDiff()
-          } catch (_) {
-            this.diff = null
-            this.$modal.msgWarning('版本差异暂时无法加载，发布预检结果不受影响')
-          }
+          await this.loadDiff()
         }
         return true
       } catch (error) {
@@ -513,16 +521,24 @@ export default {
     },
     async loadDiff() {
       if (!this.capabilities.canDiff) return
-      const response = await listTemplateVersions(this.template.templateId)
-      const versions = response.data || response.rows || []
-      const published = versions.find(item => ['PUBLISHED', 'RETIRED'].includes(String(item.status || item.publishStatus).toUpperCase()))
-      if (!published) {
+      this.diffError = ''
+      try {
+        const response = await listTemplateVersions(this.template.templateId)
+        const versions = response.data || response.rows || []
+        const plan = versionDiffPlan(versions, this.currentVersionId)
+        if (!plan.available) {
+          this.diff = { changes: [], overallRisk: 'LOW' }
+          this.diffError = plan.reason === 'NO_PUBLISHED_VERSION'
+            ? '当前为首个待发布版本'
+            : '版本信息不完整，暂时无法加载差异'
+          return
+        }
+        const result = await diffTemplateVersions(plan.leftVersionId, plan.rightVersionId)
+        this.diff = result.data || {}
+      } catch (_) {
         this.diff = { changes: [], overallRisk: 'LOW' }
-        return
+        this.diffError = '版本差异暂时无法加载，发布预检结果不受影响'
       }
-      const publishedId = published.versionId || published.id
-      const result = await diffTemplateVersions(publishedId, this.currentVersionId)
-      this.diff = result.data || {}
     },
     async publish() {
       if (!this.canOperate || !this.requireSavedDraft()) return

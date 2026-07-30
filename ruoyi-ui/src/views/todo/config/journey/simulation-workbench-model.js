@@ -83,3 +83,47 @@ export function semanticOptionLabel(value, options) {
   )
   return option ? (option.displayValue || option.label || String(value)) : String(value == null ? '' : value)
 }
+
+export function versionIdentity(row) {
+  const source = row || {}
+  const value = source.versionId !== undefined
+    ? source.versionId
+    : (source.version_id !== undefined ? source.version_id : source.id)
+  const number = Number(value)
+  return Number.isInteger(number) && number > 0 ? number : null
+}
+
+export function versionStatus(row) {
+  const source = row || {}
+  return String(source.status || source.publishStatus || source.publish_status || '').toUpperCase()
+}
+
+export function versionDiffPlan(versions, currentVersionId) {
+  const rightVersionId = versionIdentity({ versionId: currentVersionId })
+  const published = (versions || []).find(item =>
+    ['PUBLISHED', 'RETIRED'].includes(versionStatus(item))
+  )
+  if (!published) {
+    return {
+      available: false,
+      leftVersionId: null,
+      rightVersionId,
+      reason: 'NO_PUBLISHED_VERSION'
+    }
+  }
+  const leftVersionId = versionIdentity(published)
+  if (!leftVersionId || !rightVersionId) {
+    return {
+      available: false,
+      leftVersionId: null,
+      rightVersionId,
+      reason: 'INVALID_VERSION_ID'
+    }
+  }
+  return {
+    available: true,
+    leftVersionId,
+    rightVersionId,
+    reason: ''
+  }
+}
