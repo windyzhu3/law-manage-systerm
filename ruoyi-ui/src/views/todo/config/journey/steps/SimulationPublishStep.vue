@@ -30,6 +30,7 @@
     />
 
     <scenario-selector
+      ref="scenarioSelector"
       :scenarios="scenarios"
       :selected-code="selectedScenarioCode"
       :results="scenarioResults"
@@ -91,7 +92,7 @@
       :fields="resources.fields || []"
       :loading="preflightLoading"
       @reload="runPreflight"
-      @repair="$emit('navigate-repair', $event)"
+      @repair="repairPreflight"
     />
 
     <div v-if="canOperate && capabilities.canPublish" class="simulation-publish-step__publish">
@@ -136,7 +137,11 @@ import {
   publishPreflightGate,
   simulationPublishCapabilities
 } from '../journey-step-model'
-import { scenarioGate } from '../simulation-workbench-model'
+import {
+  failedScenarioResult,
+  scenarioGate,
+  scenarioRepairTarget
+} from '../simulation-workbench-model'
 
 export default {
   name: 'SimulationPublishStep',
@@ -394,7 +399,10 @@ export default {
         if (result.passed) this.$modal.msgSuccess('当前场景验证通过')
         else this.$modal.msgWarning(result.message || '当前场景未通过')
       } catch (error) {
-        this.$modal.msgError((error && (error.msg || error.message)) || '场景验证失败')
+        const result = failedScenarioResult(this.selectedScenario, error)
+        this.$set(this.scenarioResults, this.selectedScenario.scenarioCode, result)
+        this.serverScenarioGate = null
+        this.preflight = null
       } finally {
         this.simulatingScenario = false
       }
@@ -486,6 +494,23 @@ export default {
         this.preflightLoading = false
       }
     },
+    repairPreflight(issue) {
+      const target = scenarioRepairTarget(issue, this.scenarioGateState, this.scenarios)
+      if (target.stepCode !== 'SIMULATION_PUBLISH') {
+        this.$emit('navigate-repair', target.stepCode)
+        return
+      }
+      if (target.scenarioCode) this.selectScenario(target.scenarioCode)
+      this.$nextTick(() => {
+        const selector = this.$refs.scenarioSelector
+        if (selector && selector.$el && selector.$el.scrollIntoView) {
+          selector.$el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          selector.$el.classList.add('is-repair-target')
+          window.setTimeout(() => selector.$el.classList.remove('is-repair-target'), 1800)
+        }
+      })
+      this.$modal.msgInfo('已定位到未通过场景，请运行当前场景或批量验证三个场景')
+    },
     async loadDiff() {
       if (!this.capabilities.canDiff) return
       const response = await listTemplateVersions(this.template.templateId)
@@ -540,6 +565,7 @@ export default {
 .simulation-publish-step__header p, .simulation-publish-step__publish p { margin: 0; color: #66758A; }
 .simulation-publish-step__actions { display: flex; justify-content: flex-end; gap: 12px; }
 .simulation-publish-step__publish { display: flex; justify-content: space-between; align-items: center; gap: 20px; border: 1px solid #C89A3D; border-radius: 8px; padding: 18px 20px; background: #FFFCF5; }
+.simulation-publish-step ::v-deep .scenario-selector.is-repair-target { border-color: #C89A3D; box-shadow: 0 0 0 3px rgba(200, 154, 61, 0.18); }
 @media (max-width: 720px) {
   .simulation-publish-step__header, .simulation-publish-step__publish { flex-direction: column; }
   .simulation-publish-step__actions { flex-direction: column; }

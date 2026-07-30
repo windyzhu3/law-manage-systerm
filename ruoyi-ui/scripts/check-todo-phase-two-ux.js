@@ -12,6 +12,14 @@ function check(name, assertion) {
   process.stdout.write(`  pass ${name}\n`)
 }
 
+function loadScenarioWorkbenchModel() {
+  const source = read('src/views/todo/config/journey/simulation-workbench-model.js')
+    .replace(/export function /g, 'function ')
+  return new Function(
+    `${source}; return { scenarioGate, failedScenarioResult, scenarioFailureMessage, scenarioRepairTarget }`
+  )()
+}
+
 const workbenchPath = 'src/views/todo/config/template/index.vue'
 const problemPath = 'src/views/todo/config/template/TemplateProblemSummary.vue'
 const progressPath = 'src/views/todo/config/template/TemplateProgressCell.vue'
@@ -46,6 +54,43 @@ const businessFirstComponentPaths = [
   'src/views/todo/config/resource/BusinessDataSourcePanel.vue'
 ]
 const workbench = read(workbenchPath)
+
+check('keeps failed scenario diagnostics visible and returns repair to the first blocked scenario', () => {
+  const model = loadScenarioWorkbenchModel()
+  const scenarios = [
+    { scenarioCode: 'TD001_VALID', scenarioName: '有效首联', requiredForPublish: true },
+    { scenarioCode: 'TD001_UNREACHABLE', scenarioName: '未接通', requiredForPublish: true }
+  ]
+  const failed = model.failedScenarioResult(scenarios[0], {
+    businessCode: 'TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED',
+    message: 'Completion node reference TD-001 does not resolve to one task node'
+  })
+  assert.deepStrictEqual(failed, {
+    scenarioCode: 'TD001_VALID',
+    scenarioName: '有效首联',
+    passed: false,
+    businessCode: 'TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED',
+    message: 'Completion node reference TD-001 does not resolve to one task node'
+  })
+  assert.strictEqual(
+    model.scenarioFailureMessage(failed),
+    '当前场景无法定位待办完成节点，请保存后续路由后重新验证'
+  )
+  const gate = model.scenarioGate(scenarios, { TD001_VALID: failed }, 'draft-hash')
+  assert.strictEqual(gate.blockingScenarios[0].reason, 'LAST_RUN_FAILED')
+  assert.deepStrictEqual(
+    model.scenarioRepairTarget(
+      { code: 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE', stepCode: 'SIMULATION_PUBLISH' },
+      gate,
+      scenarios
+    ),
+    {
+      stepCode: 'SIMULATION_PUBLISH',
+      scenarioCode: 'TD001_VALID',
+      focusTarget: 'scenario-selector'
+    }
+  )
+})
 
 check('renders the task-centered template workbench', () => {
   for (const token of [

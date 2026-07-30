@@ -17,7 +17,7 @@
       </div>
       <div v-for="issue in errors" :key="issueKey(issue)" class="preflight-panel__issue is-blocker">
         <strong>{{ issue.message || issue.code }}</strong>
-        <el-button type="text" @click="$emit('repair', repairStep(issue))">返回修复</el-button>
+        <el-button type="text" @click="$emit('repair', issue)">返回修复</el-button>
       </div>
       <div v-for="issue in warnings" :key="issueKey(issue)" class="preflight-panel__issue is-warning">
         <strong>{{ issue.message || issue.code }}</strong>
@@ -73,8 +73,7 @@ export default {
     }
   },
   methods: {
-    issueKey(issue) { return `${issue.code || 'issue'}-${issue.fieldPath || issue.path || ''}` },
-    repairStep(issue) { return String(issue.stepCode || issue.section || 'EVENT').toUpperCase() }
+    issueKey(issue) { return `${issue.code || 'issue'}-${issue.fieldPath || issue.path || ''}` }
   }
 }
 </script>

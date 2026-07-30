@@ -64,10 +64,11 @@ class TodoSimulationScenarioServiceTest
         assertThat(result.expectedNextTemplateCode()).isEqualTo("TD-004");
         assertThat(result.actualNextTemplateCode()).isEqualTo("TD-004");
         assertThat(result.passed()).isTrue();
+        assertThat(result.message()).isEqualTo("场景验证通过");
     }
 
     @Test
-    void resolvesTheGovernedTemplateReferenceToTheConfiguredTaskNode()
+    void resolvesTheGovernedTemplateReferenceFromTheStartNodeVersionIdentity()
     {
         SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
         when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
@@ -75,8 +76,10 @@ class TodoSimulationScenarioServiceTest
         when(journeys.canonicalDefinition(42L,actor())).thenReturn(
                 definition().replace("\"start\":\"td001\"","\"start\":\"current_task\"")
                         .replace("\"key\":\"td001\"","\"key\":\"current_task\"")
-                        .replace("\"from\":\"td001\"","\"from\":\"current_task\""));
+                        .replace("\"from\":\"td001\"","\"from\":\"current_task\"")
+                        .replace(",\"templateCode\":\"TD-001\"",""));
         when(simulations.simulate(any(JourneySimulationCommand.class),any())).thenReturn(result(104L));
+        when(mapper.selectTemplateCodeByVersionId(9L)).thenReturn("TD-001");
         when(mapper.selectTemplateCodeByVersionId(104L)).thenReturn("TD-004");
 
         service().simulate(42L,"TD001_VALID",command(),actor());

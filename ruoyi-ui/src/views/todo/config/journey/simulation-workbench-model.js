@@ -30,6 +30,44 @@ export function scenarioGate(scenarios, results, definitionHash) {
   }
 }
 
+export function failedScenarioResult(scenario, error) {
+  const source = scenario || {}
+  const failure = error || {}
+  return {
+    scenarioCode: source.scenarioCode || '',
+    scenarioName: source.scenarioName || source.scenarioCode || '',
+    passed: false,
+    businessCode: failure.businessCode || failure.code || '',
+    message: failure.message || ''
+  }
+}
+
+export function scenarioFailureMessage(result) {
+  const source = result || {}
+  if (source.businessCode === 'TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED') {
+    return '当前场景无法定位待办完成节点，请保存后续路由后重新验证'
+  }
+  return source.message || '当前场景验证未通过，请检查配置后重新运行'
+}
+
+export function scenarioRepairTarget(issue, gate, scenarios) {
+  const source = issue || {}
+  const stepCode = String(source.stepCode || source.section || 'SIMULATION_PUBLISH').toUpperCase()
+  if (stepCode !== 'SIMULATION_PUBLISH' &&
+      source.code !== 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE') {
+    return { stepCode, scenarioCode: '', focusTarget: '' }
+  }
+  const blockers = (gate && gate.blockingScenarios) || []
+  const codes = blockers.map(item => item.scenarioCode)
+    .concat((gate && gate.blockingScenarioCodes) || [])
+  const first = codes.find(code => (scenarios || []).some(item => item.scenarioCode === code)) || ''
+  return {
+    stepCode: 'SIMULATION_PUBLISH',
+    scenarioCode: first,
+    focusTarget: 'scenario-selector'
+  }
+}
+
 export function scenarioTargetLabel(templateCode, routingTargets) {
   const code = String(templateCode || '')
   const target = (routingTargets || []).find(item =>

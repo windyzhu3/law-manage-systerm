@@ -17,10 +17,14 @@
       >
         <span class="scenario-card__title">{{ scenario.scenarioName }}</span>
         <el-tag v-if="result(scenario).passed" size="mini" type="success">已通过</el-tag>
+        <el-tag v-else-if="failed(scenario)" size="mini" type="danger">未通过</el-tag>
         <el-tag v-else size="mini" type="info">待验证</el-tag>
         <small>预期下一待办：{{ targetLabel(scenario.expectedNextTemplateCode) }}</small>
         <small v-if="result(scenario).actualNextTemplateCode">
           实际下一待办：{{ targetLabel(result(scenario).actualNextTemplateCode) }}
+        </small>
+        <small v-if="failed(scenario)" class="scenario-card__failure">
+          失败原因：{{ failureMessage(scenario) }}
         </small>
       </button>
     </div>
@@ -29,7 +33,7 @@
 </template>
 
 <script>
-import { scenarioTargetLabel } from '../simulation-workbench-model'
+import { scenarioFailureMessage, scenarioTargetLabel } from '../simulation-workbench-model'
 
 export default {
   name: 'ScenarioSelector',
@@ -41,6 +45,11 @@ export default {
   },
   methods: {
     result(scenario) { return this.results[scenario.scenarioCode] || {} },
+    failed(scenario) {
+      const result = this.result(scenario)
+      return result.passed === false && Boolean(result.businessCode || result.message)
+    },
+    failureMessage(scenario) { return scenarioFailureMessage(this.result(scenario)) },
     targetLabel(code) { return scenarioTargetLabel(code, this.routingTargets) }
   }
 }
@@ -55,5 +64,6 @@ export default {
 .scenario-card:hover, .scenario-card.is-active { border-color: #0B2A55; background: #F5F8FC; }
 .scenario-card__title { font-weight: 700; color: #0B2A55; }
 .scenario-card small { grid-column: 1 / -1; color: #66758A; }
+.scenario-card .scenario-card__failure { color: #B42318; }
 @media (max-width: 860px) { .scenario-selector__cards { grid-template-columns: 1fr; } }
 </style>

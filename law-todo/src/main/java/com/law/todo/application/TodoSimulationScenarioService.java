@@ -180,16 +180,31 @@ public class TodoSimulationScenarioService
         String start=String.valueOf(routing.get("start"));
         String startMatch=taskNodes.stream()
                 .filter(node->start.equals(String.valueOf(node.get("key")))
-                        &&reference.equals(String.valueOf(node.get("templateCode"))))
+                        &&referencesTemplate(node,reference))
                 .map(node->String.valueOf(node.get("key"))).findFirst().orElse(null);
         if(startMatch!=null)return startMatch;
         List<String> matches=taskNodes.stream()
-                .filter(node->reference.equals(String.valueOf(node.get("templateCode"))))
+                .filter(node->referencesTemplate(node,reference))
                 .map(node->String.valueOf(node.get("key"))).distinct().toList();
         if(matches.size()==1)return matches.get(0);
         throw new TodoException("TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED",
                 "TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED: Completion node reference "+reference
                         +" does not resolve to one task node");
+    }
+
+    private boolean referencesTemplate(Map<?,?> node,String reference)
+    {
+        Object configuredCode=node.get("templateCode");
+        if(configuredCode!=null&&reference.equals(String.valueOf(configuredCode)))return true;
+        Object configuredVersion=node.get("templateVersionId");
+        if(configuredVersion==null)return false;
+        try
+        {
+            String resolved=mapper.selectTemplateCodeByVersionId(
+                    Long.parseLong(String.valueOf(configuredVersion)));
+            return reference.equals(resolved);
+        }
+        catch(NumberFormatException ignored){return false;}
     }
 
     /** Governed scenario resources use user-facing one-based occurrences; the route engine is zero-based. */
