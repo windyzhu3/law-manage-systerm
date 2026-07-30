@@ -12,6 +12,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -105,7 +106,7 @@ class TodoScenarioSimulationExternalMysqlIT
                         new SimulateDefinitionCommand(eventPayload,"LEAD",575L,NOW,
                                 List.of(new VirtualTaskCompletionSample(
                                         completionNodeKey(governed.compiledJson(),
-                                                scenario.completionNodeKey()),
+                                                scenario.completionNodeKey(),config),
                                         Math.max(0,scenario.occurrence()-1),completion,NOW))),
                         "LEAD_ASSIGNED",1,"LEAD");
                 String actual=result.routes().stream()
@@ -179,23 +180,52 @@ class TodoScenarioSimulationExternalMysqlIT
         }
     }
 
-    private static String completionNodeKey(String compiledJson,String reference)
+    private static String completionNodeKey(String compiledJson,String reference,
+            TodoConfigurationMapper config)
     {
         TodoDefinitionDocument definition=new TodoDefinitionCodec().read(compiledJson);
         Object rawNodes=definition.routing().config().get("nodes");
         assertTrue(rawNodes instanceof List<?>,"The governed route must define nodes");
         List<?> nodes=(List<?>)rawNodes;
-        List<String> matches=nodes.stream()
-                .filter(Map.class::isInstance)
-                .map(Map.class::cast)
-                .filter(node->"TASK".equals(String.valueOf(node.get("type"))))
-                .filter(node->reference.equals(String.valueOf(node.get("key")))
-                        ||reference.equals(String.valueOf(node.get("templateCode"))))
+        List<Map<?,?>> taskNodes=new ArrayList<>();
+        for(Object value:nodes)
+            if(value instanceof Map<?,?> node
+                    &&"TASK".equals(String.valueOf(node.get("type"))))
+                taskNodes.add(node);
+        String exact=taskNodes.stream()
+                .filter(node->reference.equals(String.valueOf(node.get("key"))))
+                .map(node->String.valueOf(node.get("key")))
+                .findFirst().orElse(null);
+        if(exact!=null)return exact;
+        String start=String.valueOf(definition.routing().config().get("start"));
+        String startMatch=taskNodes.stream()
+                .filter(node->start.equals(String.valueOf(node.get("key")))
+                        &&referencesTemplate(node,reference,config))
+                .map(node->String.valueOf(node.get("key")))
+                .findFirst().orElse(null);
+        if(startMatch!=null)return startMatch;
+        List<String> matches=taskNodes.stream()
+                .filter(node->referencesTemplate(node,reference,config))
                 .map(node->String.valueOf(node.get("key")))
                 .distinct().toList();
         assertEquals(1,matches.size(),
                 "The governed completion reference must resolve to exactly one task node");
         return matches.get(0);
+    }
+
+    private static boolean referencesTemplate(Map<?,?> node,String reference,
+            TodoConfigurationMapper config)
+    {
+        Object templateCode=node.get("templateCode");
+        if(templateCode!=null&&reference.equals(String.valueOf(templateCode)))return true;
+        Object templateVersionId=node.get("templateVersionId");
+        if(templateVersionId==null)return false;
+        try
+        {
+            return reference.equals(config.selectTemplateCodeByVersionId(
+                    Long.parseLong(String.valueOf(templateVersionId))));
+        }
+        catch(NumberFormatException ignored){return false;}
     }
 
     private static Map<String,Object> completion(Map<String,Object> source)

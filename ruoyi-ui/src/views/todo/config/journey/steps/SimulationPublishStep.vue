@@ -161,6 +161,7 @@ import {
 } from '../journey-step-model'
 import {
   failedScenarioResult,
+  persistedScenarioResults,
   scenarioGate,
   readinessRepairTarget,
   simulationCompletionMessage,
@@ -378,6 +379,11 @@ export default {
       try {
         const response = await listJourneyScenarios(this.template.templateId)
         this.scenarios = response.data || []
+        const restored = persistedScenarioResults(this.scenarios, this.readiness, this.draftHash)
+        if (Object.keys(restored).length) {
+          this.scenarioResults = { ...restored, ...this.scenarioResults }
+          this.serverScenarioGate = scenarioGate(this.scenarios, this.scenarioResults, this.draftHash)
+        }
         if (!this.scenarios.some(item => item.scenarioCode === this.selectedScenarioCode)) {
           this.selectedScenarioCode = this.scenarios.length ? this.scenarios[0].scenarioCode : ''
         }

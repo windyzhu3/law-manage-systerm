@@ -27,7 +27,8 @@ function loadScenarioWorkbenchModel() {
       simulationCompletionMessage,
       readinessRepairTarget,
       journeySimulationReadiness,
-      mergeJourneySimulationReadiness
+      mergeJourneySimulationReadiness,
+      persistedScenarioResults
     }`
   )()
 }
@@ -173,7 +174,7 @@ check('projects and merges server simulation readiness without losing journey co
   const readiness = {
     templateId: 17,
     versionId: 88,
-    definitionHash: 'hash-88',
+    definitionHash: 'authoritative-hash-88',
     blockingScenarios: [],
     fullSimulationPassed: true,
     publicationReady: true,
@@ -189,6 +190,11 @@ check('projects and merges server simulation readiness without losing journey co
     issueCount: 0,
     value: { config: {} }
   })
+  assert.deepStrictEqual(
+    model.journeySimulationReadiness(merged),
+    readiness,
+    'the authoritative definition hash and publication gate must survive the parent-child feedback cycle'
+  )
 })
 
 check('keeps failed scenario diagnostics visible and returns repair to the first blocked scenario', () => {
@@ -226,6 +232,44 @@ check('keeps failed scenario diagnostics visible and returns repair to the first
       focusTarget: 'scenario-selector'
     }
   )
+})
+
+check('restores exact-hash scenario evidence after reopening the simulation step', () => {
+  const model = loadScenarioWorkbenchModel()
+  const scenarios = [
+    { scenarioCode: 'TD001_VALID', scenarioName: '有效首联', expectedNextTemplateCode: 'TD-004', requiredForPublish: true },
+    { scenarioCode: 'TD001_UNREACHABLE', scenarioName: '未接通', expectedNextTemplateCode: 'TD-003', requiredForPublish: true }
+  ]
+  const readiness = {
+    definitionHash: 'hash-88',
+    blockingScenarios: [],
+    publicationReady: true,
+    issues: []
+  }
+  assert.deepStrictEqual(model.persistedScenarioResults(scenarios, readiness, 'hash-88'), {
+    TD001_VALID: {
+      scenarioCode: 'TD001_VALID',
+      scenarioName: '有效首联',
+      expectedNextTemplateCode: 'TD-004',
+      actualNextTemplateCode: 'TD-004',
+      passed: true,
+      message: '当前草稿已通过验证',
+      evidence: { definitionHash: 'hash-88' }
+    },
+    TD001_UNREACHABLE: {
+      scenarioCode: 'TD001_UNREACHABLE',
+      scenarioName: '未接通',
+      expectedNextTemplateCode: 'TD-003',
+      actualNextTemplateCode: 'TD-003',
+      passed: true,
+      message: '当前草稿已通过验证',
+      evidence: { definitionHash: 'hash-88' }
+    }
+  })
+  assert.deepStrictEqual(model.persistedScenarioResults(scenarios, {
+    ...readiness,
+    definitionHash: 'old-hash'
+  }, 'hash-88'), {})
 })
 
 check('renders the task-centered template workbench', () => {
@@ -699,6 +743,8 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   assert(step.includes('listJourneyScenarios'), 'scenario list must be server governed')
   assert(step.includes('simulateJourneyScenario'), 'single scenario execution must use the server')
   assert(step.includes('batchSimulateJourneyScenarios'), 'batch scenario gate must use the server')
+  assert(step.includes('persistedScenarioResults'),
+    'reopening the step must restore exact-hash server scenario evidence')
   assert(step.includes('@sample-load="loadReadOnlySample"'),
     'sample loading must be a one-click search, select and hydrate action')
   assert(step.includes('await this.hydratePayload()'),

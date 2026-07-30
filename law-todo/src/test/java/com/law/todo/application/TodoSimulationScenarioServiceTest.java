@@ -68,6 +68,23 @@ class TodoSimulationScenarioServiceTest
     }
 
     @Test
+    void acceptsTheExpectedScenarioRouteBeforeTheOverallPublicationGateIsReady()
+    {
+        SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(JourneySimulationCommand.class),any()))
+                .thenReturn(result(104L,false));
+        when(mapper.selectTemplateCodeByVersionId(104L)).thenReturn("TD-004");
+
+        var result=service().simulate(42L,"TD001_VALID",command(),actor());
+
+        assertThat(result.actualNextTemplateCode()).isEqualTo("TD-004");
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
     void resolvesTheGovernedTemplateReferenceFromTheStartNodeVersionIdentity()
     {
         SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
@@ -176,6 +193,9 @@ class TodoSimulationScenarioServiceTest
     }
 
     private TodoJourneySimulationResult result(Long routeVersion)
+    {return result(routeVersion,true);}
+
+    private TodoJourneySimulationResult result(Long routeVersion,boolean publishEligible)
     {
         TodoSimulationView engine=new TodoSimulationView(9L,"definition-hash",
                 new TriggerTrace("MATCHED","LEAD_ASSIGNED",1,List.of()),
@@ -189,7 +209,7 @@ class TodoSimulationScenarioServiceTest
         return new TodoJourneySimulationResult(
                 new TodoJourneySimulationResult.HydratedPayload(Map.of(),List.of(),100),engine,List.of(),
                 new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),
-                List.of(),true);
+                List.of(),publishEligible);
     }
 
     private static final class DeferredRetrySimulator implements TodoCompletionHandler

@@ -77,7 +77,8 @@ public class TodoSimulationScenarioService
                 command.definitionHash());
         var simulation=simulations.simulate(journeyCommand,actor);
         String actual=actualNext(simulation,businessOutcome);
-        boolean passed=scenario.expectedNextTemplateCode().equals(actual)&&simulation.publishEligible();
+        boolean passed=scenario.expectedNextTemplateCode().equals(actual)
+                &&scenarioSimulationSucceeded(simulation,command.definitionHash());
         SimulationEvidenceSummary stored=evidence.record(templateId,scenario,command,actual,passed,
                 simulation.trace().stream().map(trace->trace.code()+":"+trace.status()).toList(),actor);
         return new ScenarioSimulationResult(scenario.scenarioCode(),scenario.scenarioName(),
@@ -122,7 +123,8 @@ public class TodoSimulationScenarioService
                 command.businessId(),command.manualOverrides(),command.effectiveAt(),List.of(sample),
                 command.definitionHash()),actor);
         String actual=actualNext(simulation,businessOutcome);
-        boolean passed=scenario.expectedNextTemplateCode().equals(actual)&&simulation.publishEligible();
+        boolean passed=scenario.expectedNextTemplateCode().equals(actual)
+                &&scenarioSimulationSucceeded(simulation,command.definitionHash());
         var stored=evidence.record(templateId,scenario,command,actual,passed,
                 simulation.trace().stream().map(trace->trace.code()+":"+trace.status()).toList(),actor);
         return new ScenarioSimulationResult(scenario.scenarioCode(),scenario.scenarioName(),
@@ -149,6 +151,16 @@ public class TodoSimulationScenarioService
                 .filter(code->code!=null&&!code.isBlank()).findFirst().orElse(null);
         return routed!=null?routed:businessOutcome.producedTemplateCodes().stream()
                 .filter(code->code!=null&&!code.isBlank()).findFirst().orElse(null);
+    }
+
+    private boolean scenarioSimulationSucceeded(
+            com.law.todo.application.view.TodoJourneySimulationResult result,String definitionHash)
+    {
+        return result!=null&&result.engine()!=null
+                &&definitionHash.equals(result.engine().definitionHash())
+                &&result.engine().trigger()!=null
+                &&"MATCHED".equals(result.engine().trigger().status())
+                &&result.engine().issues().stream().noneMatch(issue->"ERROR".equals(issue.severity()));
     }
 
     private SimulationResult simulateBusinessOutcome(TodoConfigurationJourneyView journey,

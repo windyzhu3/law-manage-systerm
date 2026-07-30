@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -190,6 +191,30 @@ class TodoSimulationReadinessServiceTest
                         "TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE",
                         "TODO_FULL_SIMULATION_REQUIRED");
         verify(mapper).selectSimulationReadinessBatch(List.of(88L,89L));
+    }
+
+    @Test
+    void keepsLegacyWorkbenchRowsWithMissingDefinitionHashBlockedInsteadOfFailing()
+    {
+        TodoSimulationReadinessService.BatchRequest request=
+                new TodoSimulationReadinessService.BatchRequest(
+                        19L,90L,null,"DRAFT");
+        Map<String,Object> row=new LinkedHashMap<>();
+        row.put("version_id",90L);
+        row.put("definition_hash",null);
+        row.put("required_scenario_count",0L);
+        row.put("passed_scenario_count",0L);
+        row.put("blocking_scenario_codes","");
+        row.put("blocking_scenario_names","");
+        row.put("full_simulation_passed",0);
+        when(mapper.selectSimulationReadinessBatch(List.of(90L))).thenReturn(List.of(row));
+
+        Map<Long,TodoSimulationReadinessView> result=
+                service.readinessBatch(List.of(request));
+
+        assertThat(result.get(90L).publicationReady()).isFalse();
+        assertThat(result.get(90L).issues()).extracting(JourneyIssue::code)
+                .containsExactly("TODO_FULL_SIMULATION_REQUIRED");
     }
 
     private List<SimulationScenario> requiredScenarios()

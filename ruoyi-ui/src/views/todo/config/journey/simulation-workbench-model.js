@@ -42,6 +42,34 @@ export function failedScenarioResult(scenario, error) {
   }
 }
 
+export function persistedScenarioResults(scenarios, readiness, definitionHash) {
+  const state = readiness || {}
+  const hash = String(definitionHash || state.definitionHash || '')
+  if (!hash || String(state.definitionHash || '') !== hash) return {}
+  const blockers = (state.blockingScenarios || [])
+    .map(item => typeof item === 'string' ? item : item && item.scenarioCode)
+    .concat(state.blockingScenarioCodes || [])
+    .filter(Boolean)
+  const blocked = new Set(blockers)
+  const scenarioGateBlocked = (state.issues || []).some(issue =>
+    String((issue && issue.code) || '') === 'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE'
+  )
+  if (scenarioGateBlocked && !blocked.size) return {}
+  return (scenarios || []).reduce((results, scenario) => {
+    if (!scenario.requiredForPublish || blocked.has(scenario.scenarioCode)) return results
+    results[scenario.scenarioCode] = {
+      scenarioCode: scenario.scenarioCode,
+      scenarioName: scenario.scenarioName,
+      expectedNextTemplateCode: scenario.expectedNextTemplateCode,
+      actualNextTemplateCode: scenario.expectedNextTemplateCode,
+      passed: true,
+      message: '当前草稿已通过验证',
+      evidence: { definitionHash: hash }
+    }
+    return results
+  }, {})
+}
+
 export function scenarioFailureMessage(result) {
   const source = result || {}
   if (source.businessCode === 'TODO_SIMULATION_SCENARIO_NODE_UNRESOLVED') {
@@ -178,6 +206,7 @@ function isSimulationReadinessIssue(issue) {
 
 export function journeySimulationReadiness(journey) {
   if (!journey) return null
+  if (journey.simulationReadiness) return journey.simulationReadiness
   const template = journey.template || {}
   const step = (journey.steps || []).find(item => item.code === 'SIMULATION_PUBLISH') || {}
   const issues = (journey.issues || []).filter(isSimulationReadinessIssue)
@@ -213,6 +242,7 @@ export function mergeJourneySimulationReadiness(journey, readiness) {
   )
   return {
     ...journey,
+    simulationReadiness: readiness,
     issues: otherIssues.concat(simulationIssues),
     steps
   }

@@ -148,7 +148,8 @@ public class TodoSimulationReadinessService
 
     private TodoSimulationReadinessView batchProjection(BatchRequest request,Map<String,Object> row)
     {
-        if(row==null||!request.definitionHash().equals(
+        if(row==null||request.definitionHash()==null||request.definitionHash().isBlank()
+                ||!request.definitionHash().equals(
                 stringValue(value(row,"definition_hash","definitionHash"))))
             return projection(request,0,0,List.of(),List.of(),false);
         int required=intValue(value(row,"required_scenario_count","requiredScenarioCount"));
