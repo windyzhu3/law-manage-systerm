@@ -19,6 +19,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldRes
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyIssue;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.definition.model.TodoDefinitionDocument.DodRule;
 import com.law.todo.definition.model.TodoDefinitionDocument.EventRule;
@@ -50,7 +51,7 @@ class TodoConfigurationJourneyEvaluatorTest
     {
         when(resources.fields("LEAD")).thenReturn(List.of());
 
-        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS")));
+        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS")),ready());
 
         assertThat(result.step("EVENT").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
@@ -59,7 +60,7 @@ class TodoConfigurationJourneyEvaluatorTest
 
     @Test void appliesBlockerBeforeWarningAndKeepsSevenStepOrder()
     {
-        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","FAILED")));
+        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","FAILED")),blocked());
 
         assertThat(result.steps()).extracting(step->step.code()).containsExactly(
                 "EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
@@ -86,7 +87,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new OwnerRule(owner),new DodRule(dod),new SlaRule(sla),new UiSchema(ui),new RoutingGraph(routing),
                 List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.steps()).extracting(step->step.code()).containsExactly(
                 "EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
@@ -111,18 +112,19 @@ class TodoConfigurationJourneyEvaluatorTest
                 new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("OWNER").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
     }
 
-    @Test void blocksSuccessfulSimulationWithoutTheCurrentDefinitionHash()
+    @Test void ignoresDefinitionEmbeddedSimulationStatusAndUsesTheReadinessProjection()
     {
-        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS")));
+        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",
+                Map.of("simulationStatus","SUCCESS","simulationDefinitionHash","hash-42")),blocked());
 
         assertThat(result.step("SIMULATION_PUBLISH").state()).isEqualTo("BLOCKED");
-        assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_SIMULATION_REQUIRED");
+        assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_FULL_SIMULATION_REQUIRED");
     }
 
     @Test void mapsMissingConditionValuesToTheTriggerStepAndExactField()
@@ -139,7 +141,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("TRIGGER").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).anySatisfy(issue->{
@@ -162,7 +164,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("DOD").state()).isEqualTo("COMPLETED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
@@ -176,7 +178,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("OWNER").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code).contains("TODO_JOURNEY_OWNER_FALLBACK_REQUIRED");
@@ -190,7 +192,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of()),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("OWNER").state()).isNotEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
@@ -205,7 +207,7 @@ class TodoConfigurationJourneyEvaluatorTest
                 new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(Map.of("simulationStatus","SUCCESS")),
                 new RoutingGraph(Map.of("start","missing","nodes",List.of(),"edges",List.of())),List.of(),List.of(),List.of());
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("SLA").state()).isEqualTo("BLOCKED");
         assertThat(result.step("ROUTING").state()).isEqualTo("BLOCKED");
@@ -221,7 +223,7 @@ class TodoConfigurationJourneyEvaluatorTest
                         "TODO_ROUTING_OUTCOME_INCOMPLETE","routing.businessOutcomes",
                         "请为每个首联结果配置唯一的后续待办")));
 
-        var result=evaluator.evaluate(detail(),definition);
+        var result=evaluator.evaluate(detail(),definition,ready());
 
         assertThat(result.step("ROUTING").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).anySatisfy(issue->{
@@ -244,5 +246,19 @@ class TodoConfigurationJourneyEvaluatorTest
                 new OwnerRule(Map.of("type","USER","value",7)),new DodRule(Map.of("requiredFields",List.of("leadId"))),
                 new SlaRule(Map.of("calendarCode","DEFAULT","minutes",60)),new UiSchema(ui),new RoutingGraph(Map.of()),
                 List.of(),List.of(),List.of());
+    }
+
+    private TodoSimulationReadinessView ready()
+    {
+        return new TodoSimulationReadinessView(42L,101L,"hash-42",
+                3,3,List.of(),true,true,List.of());
+    }
+
+    private TodoSimulationReadinessView blocked()
+    {
+        JourneyIssue issue=new JourneyIssue("TODO_FULL_SIMULATION_REQUIRED","BLOCKER",
+                "SIMULATION_PUBLISH","simulation.full","完整试运行尚未通过","运行完整试运行");
+        return new TodoSimulationReadinessView(42L,101L,"hash-42",
+                3,3,List.of(),false,false,List.of(issue));
     }
 }

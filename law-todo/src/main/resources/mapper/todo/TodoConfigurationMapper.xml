@@ -425,4 +425,64 @@
       and scenario_code=#{scenarioCode} and scenario_version=#{scenarioVersion}
     order by executed_time desc,evidence_id desc limit 1
   </select>
+  <select id="selectSimulationReadinessBatch" resultType="java.util.Map">
+    select v.version_id,v.definition_hash,
+      count(s.resource_item_id) required_scenario_count,
+      coalesce(sum(case when s.resource_item_id is not null and exists(
+        select 1 from todo_simulation_evidence evidence
+        where evidence.template_id=v.template_id
+          and evidence.version_id=v.version_id
+          and evidence.definition_hash=v.definition_hash
+          and evidence.scenario_code=s.resource_code
+          and evidence.scenario_version=coalesce(
+            cast(json_unquote(json_extract(s.value_json,'$.scenarioVersion')) as unsigned),1)
+          and evidence.result_status='PASSED'
+          and (evidence.expire_time is null or evidence.expire_time &gt; sysdate())
+      ) then 1 else 0 end),0) passed_scenario_count,
+      group_concat(case when s.resource_item_id is not null and not exists(
+        select 1 from todo_simulation_evidence evidence
+        where evidence.template_id=v.template_id
+          and evidence.version_id=v.version_id
+          and evidence.definition_hash=v.definition_hash
+          and evidence.scenario_code=s.resource_code
+          and evidence.scenario_version=coalesce(
+            cast(json_unquote(json_extract(s.value_json,'$.scenarioVersion')) as unsigned),1)
+          and evidence.result_status='PASSED'
+          and (evidence.expire_time is null or evidence.expire_time &gt; sysdate())
+      ) then s.resource_code end order by s.sort_order separator '|') blocking_scenario_codes,
+      group_concat(case when s.resource_item_id is not null and not exists(
+        select 1 from todo_simulation_evidence evidence
+        where evidence.template_id=v.template_id
+          and evidence.version_id=v.version_id
+          and evidence.definition_hash=v.definition_hash
+          and evidence.scenario_code=s.resource_code
+          and evidence.scenario_version=coalesce(
+            cast(json_unquote(json_extract(s.value_json,'$.scenarioVersion')) as unsigned),1)
+          and evidence.result_status='PASSED'
+          and (evidence.expire_time is null or evidence.expire_time &gt; sysdate())
+      ) then s.resource_name end order by s.sort_order separator '|') blocking_scenario_names,
+      case when exists(
+        select 1 from todo_simulation_evidence full_evidence
+        where full_evidence.template_id=v.template_id
+          and full_evidence.version_id=v.version_id
+          and full_evidence.definition_hash=v.definition_hash
+          and full_evidence.scenario_code='FULL_SIMULATION'
+          and full_evidence.scenario_version=1
+          and full_evidence.result_status='PASSED'
+          and (full_evidence.expire_time is null or full_evidence.expire_time &gt; sysdate())
+      ) then 1 else 0 end full_simulation_passed
+    from todo_template_version v
+    join todo_template t on t.template_id=v.template_id
+    left join todo_configuration_resource_item s
+      on s.resource_type='SIMULATION_SCENARIO'
+      and s.status='ACTIVE'
+      and s.business_type=t.business_type
+      and json_unquote(json_extract(s.value_json,'$.templateCode'))=t.template_code
+      and json_unquote(json_extract(s.value_json,'$.requiredForPublish'))='true'
+    where v.version_id in
+    <foreach collection="versionIds" item="versionId" open="(" separator="," close=")">
+      #{versionId}
+    </foreach>
+    group by v.version_id,v.definition_hash,v.template_id
+  </select>
 </mapper>

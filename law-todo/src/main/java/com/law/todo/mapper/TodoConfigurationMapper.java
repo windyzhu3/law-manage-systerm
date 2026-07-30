@@ -59,4 +59,6 @@ public interface TodoConfigurationMapper
     int insertSimulationEvidence(Map<String,Object> row);
     Map<String,Object> selectPassingSimulationEvidence(Map<String,Object> query);
     Map<String,Object> selectLatestSimulationEvidence(Map<String,Object> query);
+    List<Map<String,Object>> selectSimulationReadinessBatch(
+            @Param("versionIds") List<Long> versionIds);
 }

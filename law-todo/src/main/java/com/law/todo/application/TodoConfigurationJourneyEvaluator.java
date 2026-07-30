@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyIssue;
 import com.law.todo.application.view.TodoConfigurationJourneyView.JourneyStep;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.expression.ConditionExpression;
 import com.law.todo.expression.ConditionTypeChecker;
@@ -42,6 +43,12 @@ public class TodoConfigurationJourneyEvaluator
 
     public Evaluation evaluate(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
     {
+        return evaluate(detail,definition,unverified(detail));
+    }
+
+    public Evaluation evaluate(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,
+            TodoSimulationReadinessView readiness)
+    {
         List<JourneyStep> steps=new ArrayList<>();List<JourneyIssue> issues=new ArrayList<>();
         steps.add(evaluateEvent(detail,definition,issues));
         steps.add(evaluateTrigger(detail,definition,issues));
@@ -49,13 +56,17 @@ public class TodoConfigurationJourneyEvaluator
         steps.add(evaluateDod(definition,issues));
         steps.add(evaluateSla(definition,issues));
         steps.add(evaluateRouting(detail,definition,issues));
-        steps.add(evaluateSimulation(detail,definition,issues));
+        steps.add(evaluateSimulation(definition,readiness,issues));
         return new Evaluation(steps,issues);
     }
 
     /** Structural compatibility projection that never consults resource or template catalogs. */
     public Evaluation evaluatePure(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
-    {return PURE_COMPATIBILITY.evaluate(detail,definition);}
+    {return PURE_COMPATIBILITY.evaluate(detail,definition,unverified(detail));}
+
+    public Evaluation evaluatePure(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,
+            TodoSimulationReadinessView readiness)
+    {return PURE_COMPATIBILITY.evaluate(detail,definition,readiness);}
 
     private JourneyStep evaluateEvent(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
     {
@@ -174,17 +185,30 @@ public class TodoConfigurationJourneyEvaluator
         append(issues,local);return step("ROUTING","Routing",local,true,local.isEmpty(),fieldValue("config",routing));
     }
 
-    private JourneyStep evaluateSimulation(TemplateConfigurationDetail detail,TodoDefinitionDocument definition,List<JourneyIssue> issues)
+    private JourneyStep evaluateSimulation(TodoDefinitionDocument definition,
+            TodoSimulationReadinessView readiness,List<JourneyIssue> issues)
     {
-        Map<String,Object> ui=config(definition==null?null:definition.ui());List<JourneyIssue> local=new ArrayList<>();
-        String status=text(ui.containsKey("simulationStatus")?ui.get("simulationStatus"):ui.get("lastSimulationStatus"));
-        boolean success=Boolean.TRUE.equals(ui.get("simulationSuccessful"))||"SUCCESS".equalsIgnoreCase(status)
-                ||"SUCCEEDED".equalsIgnoreCase(status)||"PASSED".equalsIgnoreCase(status);
-        String simulatedHash=text(ui.get("simulationDefinitionHash"));String currentHash=detail==null||detail.editableVersion()==null?null:detail.editableVersion().definitionHash();
-        success=success&&!blank(simulatedHash)&&simulatedHash.equals(currentHash);
-        if(!success)local.add(blocker("TODO_JOURNEY_SIMULATION_REQUIRED","SIMULATION_PUBLISH","ui.simulationStatus",
-                "A successful simulation of this editable definition is required","Run a successful simulation before publishing"));
-        append(issues,local);return step("SIMULATION_PUBLISH","Simulation and publish",local,success,success,fieldValue("config",ui));
+        Map<String,Object> ui=config(definition==null?null:definition.ui());
+        TodoSimulationReadinessView state=readiness==null?unverified(null):readiness;
+        List<JourneyIssue> local=state.issues();
+        append(issues,local);
+        boolean started=state.requiredScenarioCount()>0||state.fullSimulationPassed();
+        return step("SIMULATION_PUBLISH","Simulation and publish",local,
+                started,state.publicationReady(),fieldValue("config",ui));
+    }
+
+    private static TodoSimulationReadinessView unverified(TemplateConfigurationDetail detail)
+    {
+        long templateId=detail==null?0L:detail.templateId();
+        long versionId=detail==null||detail.editableVersion()==null?0L:
+                detail.editableVersion().versionId();
+        String hash=detail==null||detail.editableVersion()==null?null:
+                detail.editableVersion().definitionHash();
+        JourneyIssue issue=new JourneyIssue("TODO_FULL_SIMULATION_REQUIRED","BLOCKER",
+                "SIMULATION_PUBLISH","simulation.full",
+                "完整试运行尚未通过","运行完整试运行");
+        return new TodoSimulationReadinessView(templateId,versionId,hash,
+                0,0,List.of(),false,false,List.of(issue));
     }
 
     private boolean hasUsableSchema(TemplateConfigurationDetail detail,String event)

@@ -27,6 +27,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView;
 import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbenchPage;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -39,6 +40,7 @@ class TodoConfigurationJourneyServiceTest
     @Mock TodoTemplateService templates;
     @Mock TodoEventResourceService eventResources;
     @Mock TodoBusinessOutcomeCatalogService outcomes;
+    @Mock TodoSimulationReadinessService readiness;
     private TodoConfigurationJourneyService service;
     private final Actor actor=new Actor(7L,"configuration-manager",3L);
 
@@ -46,9 +48,19 @@ class TodoConfigurationJourneyServiceTest
     {
         service=new TodoConfigurationJourneyService(query,new TodoDefinitionCodec(),mapper,resources,
                 new TodoConfigurationJourneyEvaluator(resources,templates),new TodoEmployeeTodoPreviewProjector(),
-                templates,eventResources,outcomes);
+                templates,eventResources,outcomes,readiness);
         lenient().when(eventResources.list(anyMap())).thenReturn(
                 new com.law.todo.application.view.TodoResourceViews.EventResourcePage(List.of(),0));
+        lenient().when(readiness.readiness(42L,101L,"hash-42","TODO-42","LEAD"))
+                .thenReturn(ready(42L,101L,"hash-42"));
+        lenient().when(readiness.readinessBatch(org.mockito.ArgumentMatchers.anyList()))
+                .thenAnswer(invocation->{
+                    List<TodoSimulationReadinessService.BatchRequest> requests=invocation.getArgument(0);
+                    Map<Long,TodoSimulationReadinessView> result=new java.util.LinkedHashMap<>();
+                    requests.forEach(request->result.put(request.versionId(),
+                            ready(request.templateId(),request.versionId(),request.definitionHash())));
+                    return result;
+                });
     }
 
     @Test void loadsSevenOrderedStepsAndKeepsOptimisticLockVersion()
@@ -73,6 +85,11 @@ class TodoConfigurationJourneyServiceTest
                 .map(component->component.getName())).doesNotContain("definitionJson");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::code)
                 .containsExactly("EVENT","TRIGGER","OWNER","DOD","SLA","ROUTING","SIMULATION_PUBLISH");
+        assertThat(view.steps()).filteredOn(step->"SIMULATION_PUBLISH".equals(step.code()))
+                .extracting(TodoConfigurationJourneyView.JourneyStep::state)
+                .containsExactly("COMPLETED");
+        assertThat(view.issues()).extracting(TodoConfigurationJourneyView.JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_SIMULATION_REQUIRED","TODO_FULL_SIMULATION_REQUIRED");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::value).containsExactly(
                 Map.of("eventType","LEAD_CREATED","payloadVersion",1),
                 Map.of("condition",Map.of("all",List.of(Map.of("field","lead.source","operator","EQ","value","WEB")))),
@@ -94,6 +111,7 @@ class TodoConfigurationJourneyServiceTest
         assertThat(view.resources().routingTargets())
                 .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateName)
                 .containsExactly("下一步办理");
+        verify(readiness).readiness(42L,101L,"hash-42","TODO-42","LEAD");
     }
 
     @Test void returnsTruthfulProgressHealthStateAndTemplateCodeWithoutPerRowQueries()
@@ -284,5 +302,11 @@ class TodoConfigurationJourneyServiceTest
                 "routing":{"config":{"start":"review","nodes":[{"key":"review"}],"edges":[]}},
                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """;
+    }
+
+    private TodoSimulationReadinessView ready(long templateId,long versionId,String hash)
+    {
+        return new TodoSimulationReadinessView(templateId,versionId,hash,
+                3,3,List.of(),true,true,List.of());
     }
 }

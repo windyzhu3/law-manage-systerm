@@ -27,6 +27,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbe
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
 import com.law.todo.application.view.TodoConfigurationViews.JourneyImpact;
+import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
@@ -47,29 +48,38 @@ public class TodoConfigurationJourneyService
     private final TodoTemplateService templates;
     private final TodoEventResourceService eventResources;
     private final TodoBusinessOutcomeCatalogService outcomes;
+    private final TodoSimulationReadinessService readiness;
     private final TodoJourneyDependencyService dependencies=new TodoJourneyDependencyService();
 
     @Autowired
     public TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
-            TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
-    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes);}
+            TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
+            TodoSimulationReadinessService readiness)
+    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,readiness);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources)
-    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null);}
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null,null);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,null);}
+
+    TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
+            TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
+            TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
+            TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
+            TodoSimulationReadinessService readiness)
     {
         this.query=query;this.codec=codec;this.mapper=mapper;this.resourceCatalog=resourceCatalog;
         this.evaluator=evaluator;this.preview=preview;this.templates=templates;this.eventResources=eventResources;
-        this.outcomes=outcomes;
+        this.outcomes=outcomes;this.readiness=readiness;
     }
 
     public TodoConfigurationJourneyView load(long templateId,Actor actor)
@@ -77,7 +87,10 @@ public class TodoConfigurationJourneyService
         TemplateConfigurationDetail detail=query.template(templateId);
         TemplateVersionDetail version=Objects.requireNonNull(detail.editableVersion(),"editableVersion");
         TodoDefinitionDocument definition=codec.read(version.definitionJson());
-        TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluate(detail,definition);
+        TodoSimulationReadinessView state=readiness==null?null:readiness.readiness(
+                templateId,version.versionId(),version.definitionHash(),
+                detail.templateCode(),detail.businessType());
+        TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluate(detail,definition,state);
         return new TodoConfigurationJourneyView(summary(detail,version),evaluation.steps(),resources(detail,definition),
                 preview.project(detail,definition),evaluation.issues(),permissions(actor));
     }
@@ -112,8 +125,10 @@ public class TodoConfigurationJourneyService
         if(source.size()>MAX_BATCH_ROWS)
             throw new TodoException("TODO_CONFIGURATION_WORKBENCH_LIMIT_EXCEEDED",
                     "Workbench non-issue filters exceed the bounded evaluation limit");
+        Map<Long,TodoSimulationReadinessView> readinessByVersion=readiness==null?Map.of():
+                readiness.readinessBatch(source.stream().map(this::readinessRequest).toList());
         List<TemplateWorkbenchItem> evaluated=source.stream()
-                .map(this::workbenchItem).toList();
+                .map(row->workbenchItem(row,readinessByVersion.get(versionId(row)))).toList();
         int blockerTemplates=(int)evaluated.stream().filter(item->health(item).equals("BLOCKER")).count();
         int warningTemplates=(int)evaluated.stream().filter(item->health(item).equals("WARNING")).count();
         int readyTemplates=evaluated.size()-blockerTemplates-warningTemplates;
@@ -142,14 +157,15 @@ public class TodoConfigurationJourneyService
                         outcomes.resolve(detail.templateCode(),businessType,definition));
     }
 
-    private TemplateWorkbenchItem workbenchItem(Map<String,Object> row)
+    private TemplateWorkbenchItem workbenchItem(Map<String,Object> row,TodoSimulationReadinessView readiness)
     {
         String definitionJson=text(row,"definition_json","definitionJson");
         TodoDefinitionDocument definition=codec.read(definitionJson);
         TemplateConfigurationDetail detail=workbenchDetail(row,definitionJson);
-        TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluatePure(detail,definition);
+        TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluatePure(detail,definition,readiness);
         List<JourneyIssue> issues=mergeIssues(evaluation.issues(),
-                persistedIssues(text(row,"validation_report_json","validationReportJson")));
+                persistedIssues(text(row,"validation_report_json","validationReportJson")).stream()
+                        .filter(issue->!simulationIssue(issue.code())).toList());
         int blockers=(int)issues.stream().filter(issue->"BLOCKER".equals(issue.severity())).count();
         int warnings=(int)issues.stream().filter(issue->"WARNING".equals(issue.severity())).count();
         int completed=(int)evaluation.steps().stream().filter(this::completed).count();
@@ -229,6 +245,27 @@ public class TodoConfigurationJourneyService
             if(existing==null||severityRank(issue.severity())>severityRank(existing.severity()))merged.put(key,issue);
         }
         return List.copyOf(merged.values());
+    }
+
+    private boolean simulationIssue(String code)
+    {
+        return "TODO_JOURNEY_SIMULATION_REQUIRED".equals(code)
+                ||"TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE".equals(code)
+                ||"TODO_FULL_SIMULATION_REQUIRED".equals(code)
+                ||"TODO_FULL_SIMULATION_STALE".equals(code);
+    }
+
+    private TodoSimulationReadinessService.BatchRequest readinessRequest(Map<String,Object> row)
+    {
+        return new TodoSimulationReadinessService.BatchRequest(requiredId(row),versionId(row),
+                text(row,"definition_hash","definitionHash"),
+                text(row,"publish_status","publishStatus"));
+    }
+
+    private long versionId(Map<String,Object> row)
+    {
+        Long result=longNumber(value(row,"version_id","versionId"));
+        return result==null?requiredId(row):result;
     }
 
     private boolean completed(JourneyStep step)

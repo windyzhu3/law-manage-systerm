@@ -50,7 +50,7 @@ import com.law.todo.mapper.TodoMapper;
 class TodoDefinitionServiceTest
 {
     @Mock TodoMapper mapper;
-    @Mock TodoSimulationEvidenceService simulationEvidence;
+    @Mock TodoSimulationReadinessService simulationReadiness;
     private final Actor actor=new Actor(7L,"alice",3L);
 
     @BeforeEach void lockedVersionUsesTheExistingVersionStub()
@@ -351,12 +351,12 @@ class TodoDefinitionServiceTest
         verify(mapper).updateDefinitionCompilation(anyMap());
     }
 
-    @Test void preflightIncludesTheRequiredScenarioEvidenceGate()
+    @Test void preflightUsesTheUnifiedSimulationReadinessGate()
     {
         when(mapper.selectTemplateVersionById(9L)).thenReturn(draft(null,null));
         registeredEvent();
         when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
-        when(simulationEvidence.applyPreflightGate(
+        when(simulationReadiness.applyPreflightGate(
                 org.mockito.ArgumentMatchers.eq(9L),org.mockito.ArgumentMatchers.any()))
                 .thenAnswer(invocation->{
                     var report=invocation.<com.law.todo.definition.compiler.DefinitionValidationReport>getArgument(1);
@@ -366,7 +366,7 @@ class TodoDefinitionServiceTest
                                     "TD001_VALID")),report.warnings(),report.compiledJson(),report.definitionHash());
                 });
         TodoDefinitionService service=new TodoDefinitionService(mapper,compiler(),null,
-                (type,value)->true,simulationEvidence);
+                (type,value)->true,simulationReadiness);
 
         var result=service.preflight(9L);
 

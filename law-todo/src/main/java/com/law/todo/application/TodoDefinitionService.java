@@ -51,19 +51,19 @@ public class TodoDefinitionService
     private final TodoDefinitionCompiler compiler;
     private final TodoConfigurationMapper configurationMapper;
     private final TodoDictionaryValidationPort dictionaries;
-    private final TodoSimulationEvidenceService simulationEvidence;
+    private final TodoSimulationReadinessService simulationReadiness;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
     @Autowired
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
-            TodoSimulationEvidenceService simulationEvidence)
+            TodoSimulationReadinessService simulationReadiness)
     {
         this.mapper = mapper;
         this.compiler = compiler;
         this.configurationMapper=configurationMapper;this.dictionaries=dictionaries;
-        this.simulationEvidence=simulationEvidence;
+        this.simulationReadiness=simulationReadiness;
     }
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
@@ -595,7 +595,7 @@ public class TodoDefinitionService
         });
         DefinitionValidationReport report = applyPrdCatalogueGate(compiler.compile(definition, context), current,
                 prdBlocked);
-        if(simulationEvidence!=null)report=simulationEvidence.applyPreflightGate(versionId,report);
+        if(simulationReadiness!=null)report=simulationReadiness.applyPreflightGate(versionId,report);
         Map<String, Object> persisted = new HashMap<>();
         persisted.put("versionId", versionId);
         persisted.put("definitionSchemaVersion", definition.schemaVersion());
