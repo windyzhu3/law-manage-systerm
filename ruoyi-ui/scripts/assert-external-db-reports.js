@@ -21,7 +21,8 @@ const requiredClasses = [
   'LeadTodoProductionPortsExternalMysqlIT',
   'LeadTodoFlowEndToEndTest',
   'LeadTodoScheduleEndToEndTest',
-  'LeadTodoReadModelExternalMysqlIT'
+  'LeadTodoReadModelExternalMysqlIT',
+  'LeadTodoReleaseVersionLockExternalMysqlIT'
 ]
 const exactTestCounts = new Map([
   ['LeadTodoFlowEndToEndTest', 6],

@@ -23,7 +23,8 @@ const classes = [
   'LeadTodoProductionPortsExternalMysqlIT',
   'LeadTodoFlowEndToEndTest',
   'LeadTodoScheduleEndToEndTest',
-  'LeadTodoReadModelExternalMysqlIT'
+  'LeadTodoReadModelExternalMysqlIT',
+  'LeadTodoReleaseVersionLockExternalMysqlIT'
 ]
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-external-reports-'))
 
