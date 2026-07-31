@@ -165,7 +165,7 @@ class TodoSimulationScenarioServiceTest
         when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
         when(journeys.load(42L,actor())).thenReturn(journey());
         when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
-        when(simulations.simulate(any(),any())).thenReturn(result(null));
+        when(simulations.simulate(any(),any())).thenReturn(endedResult());
 
         var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
 
@@ -173,6 +173,22 @@ class TodoSimulationScenarioServiceTest
         assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.END);
         assertThat(result.actualNextTemplateCode()).isNull();
         assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    void doesNotTreatAnEmptyRouteTraceAsATerminalEffect()
+    {
+        SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
+                EffectKind.END,null,null);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(result(null));
+
+        var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
+
+        assertThat(result.actualEffect()).isNull();
+        assertThat(result.passed()).isFalse();
     }
 
     @Test
@@ -184,6 +200,22 @@ class TodoSimulationScenarioServiceTest
         when(journeys.load(42L,actor())).thenReturn(journey());
         when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
         when(simulations.simulate(any(),any())).thenReturn(waitingResult());
+
+        var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
+
+        assertThat(result.actualEffect()).isNull();
+        assertThat(result.passed()).isFalse();
+    }
+
+    @Test
+    void doesNotTreatAMixedWaitingAndEndedGraphAsATerminalEffect()
+    {
+        SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
+                EffectKind.END,null,null);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(mixedWaitingEndedResult());
 
         var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
 
@@ -333,6 +365,31 @@ class TodoSimulationScenarioServiceTest
                 new FormTrace(Map.of(),Map.of()),
                 List.of(new RouteTrace(1,"join","JOIN","WAITING","branch",0,null,null,List.of())),
                 List.of(),List.of(),List.of());
+        return new TodoJourneySimulationResult(
+                new TodoJourneySimulationResult.HydratedPayload(Map.of(),List.of(),100),engine,List.of(),
+                new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),
+                List.of(),false);
+    }
+
+    private TodoJourneySimulationResult endedResult()
+    {
+        return routeResult(List.of(new RouteTrace(1,"end","END","ENDED",null,0,null,null,List.of())));
+    }
+
+    private TodoJourneySimulationResult mixedWaitingEndedResult()
+    {
+        return routeResult(List.of(
+                new RouteTrace(1,"end","END","ENDED","first",0,null,null,List.of()),
+                new RouteTrace(2,"join","JOIN","WAITING","second",0,null,null,List.of())));
+    }
+
+    private TodoJourneySimulationResult routeResult(List<RouteTrace> routes)
+    {
+        TodoSimulationView engine=new TodoSimulationView(9L,"definition-hash",
+                new TriggerTrace("MATCHED","LEAD_ASSIGNED",1,List.of()),
+                new OwnerTrace("RESOLVED",7L,List.of(),List.of(),false,List.of()),
+                new SlaTrace("PLANNED","DEFAULT",null,null,null,null,null,List.of()),
+                new FormTrace(Map.of(),Map.of()),routes,List.of(),List.of(),List.of());
         return new TodoJourneySimulationResult(
                 new TodoJourneySimulationResult.HydratedPayload(Map.of(),List.of(),100),engine,List.of(),
                 new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),

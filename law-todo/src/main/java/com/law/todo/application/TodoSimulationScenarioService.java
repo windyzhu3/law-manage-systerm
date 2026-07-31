@@ -174,7 +174,7 @@ public class TodoSimulationScenarioService
     {
         if(!simulationSucceeded||result==null||result.engine()==null)return false;
         var routes=result.engine().routes();
-        if(routes.isEmpty())return true;
+        if(routes.isEmpty())return false;
         boolean waiting=routes.stream().anyMatch(route->"WAITING".equals(route.status())
                 ||"PENDING_COMPLETION".equals(route.status())
                 ||"UNKNOWN_BRANCH".equals(route.status()));
