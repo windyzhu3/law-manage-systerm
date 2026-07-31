@@ -110,6 +110,32 @@ public class LeadAssignmentPolicyService
         catch(RuntimeException invalid){throw error("Retry policy JSON is invalid");}
     }
 
+    /** Immutable assignment provenance reused by a TD-004 five-day schedule. */
+    public ProgressSchedulePolicy resolveProgressSchedule(BizLead lead)
+    {
+        if(lead==null||lead.getDeptId()==null)throw error("Lead owner department is required");
+        BizLeadAssignmentPolicy policy=mapper.selectActiveAssignmentPolicy(lead.getDeptId(),
+                lead.getSourceCode()==null||lead.getSourceCode().isBlank()?"*":lead.getSourceCode().trim());
+        if(policy==null)throw new ServiceException("No active assignment policy",
+                BusinessErrorCode.DATA_NOT_FOUND.name());
+        try
+        {
+            JSONObject json=JSON.parseObject(policy.getRetryRuleJson());
+            Long ruleVersionId=json.getLong("ruleVersionId");
+            String timezone=json.getString("timezone");
+            if(ruleVersionId==null||ruleVersionId<=0)
+                throw error("Assignment-policy rule version is invalid");
+            if(policy.getPolicyId()==null||policy.getRowVersion()==null)
+                throw error("Assignment-policy snapshot is incomplete");
+            if(timezone==null||timezone.isBlank())timezone="Asia/Shanghai";
+            ZoneId.of(timezone);
+            return new ProgressSchedulePolicy(policy.getPolicyId(),policy.getRowVersion(),
+                    ruleVersionId,timezone);
+        }
+        catch(ServiceException known){throw known;}
+        catch(RuntimeException invalid){throw error("Assignment-policy JSON is invalid");}
+    }
+
     public List<PolicyView> list()
     {
         requireApiDependencies();
@@ -314,6 +340,8 @@ public class LeadAssignmentPolicyService
     public record ResolvedPolicy(Long policyId, String retryRuleJson, List<Long> candidateUserIds) { }
     public record RetrySchedulePolicy(Long policyId,Integer policyVersion,Long templateVersionId,
             Long ruleVersionId,String timezone,List<ScheduleWindowRule> windows) { }
+    public record ProgressSchedulePolicy(Long policyId,Integer policyVersion,Long ruleVersionId,
+            String timezone) { }
     public record PolicyView(Long policyId,String policyCode,String policyName,Long salesDeptId,
             String sourceCode,String retryRuleJson,String status,Integer rowVersion,
             List<LeadAssignmentPolicyCandidateView> candidates) { }

@@ -46,6 +46,11 @@ public interface BizLeadMapper
     public List<BizLeadFollowup> selectFollowupList(BizLeadFollowup followup);
     public BizLeadFollowup selectFollowupById(Long followupId);
     public int insertFollowup(BizLeadFollowup followup);
+    public int insertProgressFollowupIfAbsent(BizLeadFollowup followup);
+    public BizLeadFollowup selectProgressFollowupByIdempotencyKey(String idempotencyKey);
+    public BizLeadFollowup selectProgressFollowupByIdempotencyKeyForUpdate(String idempotencyKey);
+    public int linkProgressFollowupSchedule(@Param("followupId") Long followupId,
+            @Param("schedulePlanId") Long schedulePlanId,@Param("operator") String operator);
     public int updateFollowup(BizLeadFollowup followup);
     public int deleteFollowup(@Param("followupId") Long followupId, @Param("leadId") Long leadId);
     public int touchLeadFollowTime(@Param("leadId") Long leadId,

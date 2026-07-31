@@ -117,7 +117,7 @@ class LeadTemplateConfigurationMySqlIT
 
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.75",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.76",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""

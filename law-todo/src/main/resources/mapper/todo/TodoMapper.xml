@@ -594,9 +594,11 @@
     where plan_id=#{planId} and status='ACTIVE'
   </update>
   <select id="selectSchedulePlanForUpdate" resultType="java.util.Map">
-    select plan_id planId,template_version_id templateVersionId,assignment_policy_id assignmentPolicyId,
-           assignment_policy_version assignmentPolicyVersion,
-           assignment_policy_snapshot_source assignmentPolicySnapshotSource,status,
+    select plan_id planId,previous_todo_id previousTodoId,template_version_id templateVersionId,
+           business_type businessType,business_id businessId,schedule_purpose schedulePurpose,
+           idempotency_key idempotencyKey,timezone,rule_version_id ruleVersionId,
+           assignment_policy_id assignmentPolicyId,assignment_policy_version assignmentPolicyVersion,
+           assignment_policy_snapshot_source assignmentPolicySnapshotSource,first_contact_at firstContactAt,status,
            completion_reason completionReason,version
     from todo_schedule_plan where plan_id=#{planId}
     for update

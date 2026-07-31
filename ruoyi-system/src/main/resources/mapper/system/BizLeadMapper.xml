@@ -359,6 +359,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         insert into biz_lead_followup(lead_id, follow_type, follow_result, content, next_follow_time, follow_user_id, task_status, create_by, create_time)
         values(#{leadId}, #{followType}, #{followResult}, #{content}, #{nextFollowTime}, #{followUserId}, '1', #{createBy}, sysdate())
     </insert>
+    <insert id="insertProgressFollowupIfAbsent" parameterType="BizLeadFollowup" useGeneratedKeys="true" keyProperty="followupId">
+        insert ignore into biz_lead_followup(
+          lead_id,follow_type,follow_result,progress_at,content,next_follow_time,follow_user_id,
+          source_todo_id,schedule_plan_id,idempotency_key,task_status,create_by,create_time)
+        values(#{leadId},#{followType},#{followResult},#{progressAt},#{content},#{nextFollowTime},
+          #{followUserId},#{sourceTodoId},null,#{idempotencyKey},#{taskStatus},#{createBy},sysdate())
+    </insert>
+    <select id="selectProgressFollowupByIdempotencyKey" resultType="BizLeadFollowup">
+        select * from biz_lead_followup where idempotency_key=#{idempotencyKey}
+    </select>
+    <select id="selectProgressFollowupByIdempotencyKeyForUpdate" resultType="BizLeadFollowup">
+        select * from biz_lead_followup where idempotency_key=#{idempotencyKey} for update
+    </select>
+    <update id="linkProgressFollowupSchedule">
+        update biz_lead_followup
+        set schedule_plan_id=#{schedulePlanId},update_by=#{operator},update_time=sysdate()
+        where followup_id=#{followupId} and schedule_plan_id is null
+    </update>
     <update id="updateFollowup" parameterType="BizLeadFollowup">
         update biz_lead_followup set follow_type=#{followType}, follow_result=#{followResult}, content=#{content},
         next_follow_time=#{nextFollowTime}, task_status=#{taskStatus}, update_by=#{updateBy}, update_time=sysdate()
