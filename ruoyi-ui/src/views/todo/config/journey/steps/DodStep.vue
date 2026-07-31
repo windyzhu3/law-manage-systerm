@@ -19,6 +19,7 @@
       <section class="dod-config-card">
         <header><i class="el-icon-edit-outline" /><div><h3>员工需要填写</h3><p>完成待办前必须补充的业务信息。</p></div></header>
         <el-select
+          ref="requiredFields"
           v-model="requiredFields"
           multiple
           filterable
@@ -38,6 +39,7 @@
       <section class="dod-config-card">
         <header><i class="el-icon-paperclip" /><div><h3>员工需要上传</h3><p>完成待办时必须提交的材料或凭证。</p></div></header>
         <el-select
+          ref="requiredAttachments"
           v-model="requiredAttachments"
           multiple
           filterable
@@ -53,10 +55,10 @@
       </section>
     </div>
 
-    <el-collapse class="dod-advanced">
+    <el-collapse v-model="activeAdvanced" class="dod-advanced">
       <el-collapse-item name="advanced">
         <template slot="title"><i class="el-icon-setting" />高级设置（可选）· 条件、说明与系统校验</template>
-    <section class="dod-condition-card">
+    <section ref="conditionalRules" class="dod-condition-card" tabindex="-1">
       <header>
         <div><h3>条件要求</h3><p>仅在特定业务结果下，额外要求员工填写信息。</p></div>
         <el-button v-if="!readonly" size="small" icon="el-icon-plus" @click="addCondition">添加条件要求</el-button>
@@ -81,6 +83,7 @@
       <h3>办理说明</h3>
       <p>这些提示会直接展示给员工，帮助其一次完成办理。</p>
       <el-select
+        ref="employeeInstructions"
         v-model="employeeInstructions"
         multiple
         filterable
@@ -95,6 +98,7 @@
         <div class="dod-validator-settings">
         <p>以下能力由管理员维护。业务人员通常只需使用推荐配方，无需理解技术编码与参数。</p>
         <el-select
+          ref="validatorRefs"
           v-model="validatorRefs"
           multiple
           filterable
@@ -148,7 +152,8 @@ export default {
       requiredAttachments: [],
       conditionalRules: [],
       validatorRefs: [],
-      employeeInstructions: []
+      employeeInstructions: [],
+      activeAdvanced: []
     }
   },
   computed: {
@@ -223,11 +228,31 @@ export default {
       const material = this.activeMaterials.find(item => item.code === code)
       return material ? material.name : code
     },
-    focusField() {
+    dodFocusTarget(fieldPath, resourceKey) {
+      const requested = String(fieldPath || '')
+      if (['recipeCard', 'requiredFields', 'requiredAttachments', 'conditionalRules',
+        'employeeInstructions', 'validatorRefs'].includes(requested)) return requested
+      const key = String(resourceKey || '').toUpperCase()
+      const path = requested.toLowerCase()
+      if (key === 'DOD_RECIPE' || path.includes('recipe')) return 'recipeCard'
+      if (key === 'MATERIAL' || path.includes('material') || path.includes('attachment')) return 'requiredAttachments'
+      if (key === 'VALIDATOR' || path.includes('validator')) return 'validatorRefs'
+      if (path.includes('conditional') || path.includes('condition')) return 'conditionalRules'
+      if (path.includes('instruction')) return 'employeeInstructions'
+      if (path.includes('requiredfield')) return 'requiredFields'
+      return 'recipeCard'
+    },
+    focusField(fieldPath, resourceKey) {
+      const target = this.dodFocusTarget(fieldPath, resourceKey)
+      if (['conditionalRules', 'employeeInstructions', 'validatorRefs'].includes(target)) {
+        this.activeAdvanced = ['advanced']
+      }
       this.$nextTick(() => {
-        const element = this.$refs.recipeCard
+        const reference = this.$refs[target]
+        const element = reference && (reference.$el || reference)
         if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        if (element && element.focus) element.focus()
+        if (reference && reference.focus) reference.focus()
+        else if (element && element.focus) element.focus()
       })
     }
   }

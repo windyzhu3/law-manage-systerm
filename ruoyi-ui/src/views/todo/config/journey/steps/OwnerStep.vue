@@ -45,28 +45,28 @@
         <h3>负责人来源</h3>
         <el-form label-position="top">
           <el-form-item v-if="strategy === 'EVENT_OWNER'" label="事件中的人员字段">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择负责人字段" @change="updateDraft">
+            <el-select ref="ownerSelection" v-model="selection" :disabled="readonly" filterable placeholder="选择负责人字段" @change="updateDraft">
               <el-option v-for="field in ownerFields" :key="field.code" :label="field.name" :value="field.code">
                 <span>{{ field.name }}</span><small class="owner-option-note">{{ field.description || '由当前事件提供' }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'ROLE'" label="指定角色">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择角色" @change="updateDraft">
+            <el-select ref="ownerSelection" v-model="selection" :disabled="readonly" filterable placeholder="选择角色" @change="updateDraft">
               <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value">
                 <span>{{ item.label }}</span><small class="owner-option-note">{{ item.secondaryLabel }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'USER'" label="指定人员">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择人员" @change="updateDraft">
+            <el-select ref="ownerSelection" v-model="selection" :disabled="readonly" filterable placeholder="选择人员" @change="updateDraft">
               <el-option v-for="item in userOptions" :key="item.value" :label="item.label" :value="item.value">
                 <span>{{ item.label }}</span><small class="owner-option-note">{{ item.secondaryLabel }}</small>
               </el-option>
             </el-select>
           </el-form-item>
           <el-form-item v-else-if="strategy === 'CANDIDATE_POOL'" label="候选池范围">
-            <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择候选角色" @change="updateDraft">
+            <el-select ref="ownerSelection" v-model="selection" :disabled="readonly" filterable placeholder="选择候选角色" @change="updateDraft">
               <el-option v-for="item in roleOptions" :key="item.value" :label="`${item.label}候选池`" :value="item.value" />
             </el-select>
           </el-form-item>
@@ -79,13 +79,14 @@
       <div class="owner-config__fallback">
         <h3>兜底负责人</h3>
         <p>主负责人无法解析或不可用时，系统按此规则继续分配。</p>
-        <el-select v-model="fallbackType" :disabled="readonly" placeholder="选择兜底方式" @change="fallbackChanged">
+        <el-select ref="ownerFallbackType" v-model="fallbackType" :disabled="readonly" placeholder="选择兜底方式" @change="fallbackChanged">
           <el-option label="不设置兜底" value="" />
           <el-option label="业务对象负责人" value="BUSINESS_OWNER" />
           <el-option label="指定角色" value="ROLE" />
           <el-option label="指定人员" value="USER" />
         </el-select>
         <el-select
+          ref="ownerFallbackSelection"
           v-if="fallbackType === 'ROLE'"
           v-model="fallbackSelection"
           :disabled="readonly"
@@ -96,6 +97,7 @@
           <el-option v-for="item in roleOptions" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
         <el-select
+          ref="ownerFallbackSelection"
           v-if="fallbackType === 'USER'"
           v-model="fallbackSelection"
           :disabled="readonly"
@@ -346,11 +348,29 @@ export default {
       const item = this.ownerFields.find(field => field.code === code)
       return item ? item.name : (code || '未选择')
     },
-    focusField() {
+    ownerFocusTarget(fieldPath, resourceKey) {
+      const requested = String(fieldPath || '')
+      if (['ownerSource', 'ownerSelection', 'ownerFallbackType', 'ownerFallbackSelection'].includes(requested)) {
+        return requested
+      }
+      const path = requested.toLowerCase()
+      if (path.includes('fallback')) {
+        return /(value|rolekey|selection|operand)$/.test(path)
+          ? 'ownerFallbackSelection'
+          : 'ownerFallbackType'
+      }
+      if (String(resourceKey || '').toUpperCase() === 'OWNER' &&
+          /(field|value|rolekey|selection|operand)$/.test(path)) return 'ownerSelection'
+      return path === 'owner.config' ? 'ownerSource' : 'ownerSelection'
+    },
+    focusField(fieldPath, resourceKey) {
+      const target = this.ownerFocusTarget(fieldPath, resourceKey)
       this.$nextTick(() => {
-        const element = this.$refs.ownerSource
+        const reference = this.$refs[target]
+        const element = reference && (reference.$el || reference)
         if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        if (element && element.focus) element.focus()
+        if (reference && reference.focus) reference.focus()
+        else if (element && element.focus) element.focus()
       })
     }
   }

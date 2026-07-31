@@ -848,7 +848,16 @@ export default {
       const location = fixLocation(issue)
       const stepCode = location.stepCode
       if (STEP_CODES.includes(stepCode)) this.activeStep = stepCode
-      if ((issue && [
+      if (location.openResourceDrawer && location.resourceType) {
+        this.openResourceRepair({
+          type: location.resourceType,
+          resourceId: issue && issue.resourceId,
+          item: issue && issue.resource,
+          businessType: this.journey.template.businessType,
+          returnStep: stepCode,
+          focusField: location.focusTarget
+        })
+      } else if ((issue && [
         'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
         'TODO_FULL_SIMULATION_REQUIRED',
         'TODO_FULL_SIMULATION_STALE',
@@ -890,7 +899,7 @@ export default {
         this.$nextTick(() => {
           const editor = this.$refs.activeEditor
           if (editor && editor.focusField) {
-            editor.focusField(location.fieldPath || location.focusTarget)
+            editor.focusField(location.focusTarget, location.resourceKey)
           }
         })
       }

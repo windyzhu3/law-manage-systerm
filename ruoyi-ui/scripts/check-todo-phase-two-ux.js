@@ -827,17 +827,47 @@ check('renders governed effects and returns repair issues to exact coordinates',
   'simulation publish must forward the complete readiness issue and its coordinates')
   assert(page.includes('fixLocation(issue)'),
     'the shell must resolve fieldPath/resourceKey coordinates before navigating')
+  assert(page.includes('editor.focusField(location.focusTarget, location.resourceKey)'),
+    'the shell must pass the resolved resource key and exact control to the target step')
+  assert(page.includes('location.openResourceDrawer') && page.includes('location.resourceType'),
+    'governed configuration resources must route to their maintenance drawer when required')
 })
 
 check('renders retry-window and five-day SLA presets without generic destructive editing', () => {
   const sla = read('src/views/todo/config/journey/steps/SlaStep.vue')
+  const model = read('src/views/todo/config/journey/journey-step-model.js')
   assert(sla.includes('retryWindowGroups') && sla.includes('config.schedule'),
     'TD-003 must render its governed schedule windows from the current draft')
+  assert(model.includes('slaSchedulePresentation') && sla.includes('schedulePresentation.mode'),
+    'SLA layout must classify the governed schedule before choosing retry or self-cycle presentation')
+  assert(sla.includes('selfCycleMode') && sla.includes('sla-self-cycle'),
+    'TD-004 windows must render a dedicated self-cycle presentation')
   for (const label of ['T0', 'T+1', 'T+2', '每 5 天循环']) {
     assert(sla.includes(label), `SLA preset explanation missing: ${label}`)
   }
   assert(sla.includes('v-if="!scheduleMode"'),
     'schedule-window drafts must not fall through to the generic duration editor')
+})
+
+check('focuses exact owner, DoD, and routing controls and opens advanced sections on demand', () => {
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  const dod = read('src/views/todo/config/journey/steps/DodStep.vue')
+  const routing = read('src/views/todo/config/journey/steps/RoutingStep.vue')
+  const businessRouting = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  for (const target of ['ownerSelection', 'ownerFallbackType', 'ownerFallbackSelection']) {
+    assert(owner.includes(`ref="${target}"`), `owner repair target missing precise ref: ${target}`)
+  }
+  assert(owner.includes('ownerFocusTarget(fieldPath, resourceKey)'),
+    'owner repair must map coordinates to an exact control')
+  for (const target of ['requiredFields', 'requiredAttachments', 'validatorRefs']) {
+    assert(dod.includes(`ref="${target}"`), `DoD repair target missing precise ref: ${target}`)
+  }
+  assert(dod.includes('activeAdvanced') && dod.includes("this.activeAdvanced = ['advanced']"),
+    'DoD repair must open advanced validation controls before focusing them')
+  assert(routing.includes('activeAdvanced') && routing.includes("this.activeAdvanced = ['graph']"),
+    'routing repair must open the topology section for node or edge coordinates')
+  assert(businessRouting.includes('routingFocusTarget(fieldPath, resourceKey)'),
+    'business routing repair must map result, effect, and target coordinates precisely')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

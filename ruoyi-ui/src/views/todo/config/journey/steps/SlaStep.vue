@@ -22,7 +22,7 @@
       <span>计算。</span>
     </section>
 
-    <section v-else class="sla-retry-timeline" aria-label="重试窗口时间轴">
+    <section v-else-if="retryScheduleMode" ref="schedulePanel" class="sla-retry-timeline" aria-label="重试窗口时间轴">
       <header>
         <div><h3>重试窗口时间轴</h3><p>系统已按 T0、T+1、T+2 预设开始时间、截止时间和最大尝试次数。</p></div>
         <el-tag size="small" type="info">系统预设</el-tag>
@@ -33,6 +33,23 @@
           <strong>{{ group.summary }}</strong>
           <small>{{ group.detail }}</small>
         </article>
+      </div>
+    </section>
+
+    <section v-else ref="schedulePanel" class="sla-self-cycle" aria-label="五天实质进展循环">
+      <header>
+        <div>
+          <h3>每 5 天循环</h3>
+          <p>员工记录本轮实质进展后，系统以完成时间为新锚点开启下一周期；这里的办理窗口不是“无法联系重试”。</p>
+        </div>
+        <el-tag size="small" type="success">自动开启下一轮</el-tag>
+      </header>
+      <div class="sla-self-cycle__flow">
+        <article><span>1</span><strong>完成本轮待办</strong><small>员工提交实质进展及规定材料</small></article>
+        <i class="el-icon-right" />
+        <article><span>2</span><strong>重置周期锚点</strong><small>以本轮完成时间作为下一轮起点</small></article>
+        <i class="el-icon-right" />
+        <article><span>3</span><strong>{{ schedulePresentation.cycleDays || 5 }} 天后到期</strong><small>按后续路由自动创建同模板下一轮待办</small></article>
       </div>
     </section>
 
@@ -86,7 +103,7 @@
 
 <script>
 import SlaTimelinePreview from '../components/SlaTimelinePreview'
-import { buildSlaPatch, buildSlaTimeline, slaRepairBlocker } from '../journey-step-model'
+import { buildSlaPatch, buildSlaTimeline, slaRepairBlocker, slaSchedulePresentation } from '../journey-step-model'
 import { previewTodoJourneySla } from '@/api/todo-config'
 
 export default {
@@ -95,6 +112,7 @@ export default {
   props: {
     value: { type: Object, default: () => ({}) },
     resources: { type: Object, default: () => ({}) },
+    template: { type: Object, default: () => ({}) },
     businessType: { type: String, default: '' },
     readonly: Boolean
   },
@@ -116,10 +134,10 @@ export default {
   computed: {
     config() { return this.value.config || {} },
     calendars() { return this.resources.calendars || [] },
-    scheduleMode() {
-      return Boolean(this.config.schedule && Array.isArray(this.config.schedule.windows) &&
-        this.config.schedule.windows.length)
-    },
+    schedulePresentation() { return slaSchedulePresentation(this.config, this.template) },
+    retryScheduleMode() { return this.schedulePresentation.mode === 'RETRY_WINDOWS' },
+    selfCycleMode() { return this.schedulePresentation.mode === 'SELF_CYCLE' },
+    scheduleMode() { return this.retryScheduleMode || this.selfCycleMode },
     retryWindowGroups() {
       const windows = (this.config.schedule && this.config.schedule.windows) || []
       const groups = new Map()
@@ -155,16 +173,18 @@ export default {
     },
     scheduleSummary() {
       const code = String(this.config.schedulePurpose || this.config.scheduleType || '').toUpperCase()
-      if (this.scheduleMode || code.includes('RETRY') || Array.isArray(this.config.retryWindows)) {
+      if (this.selfCycleMode) {
+        return {
+          title: `每 ${this.schedulePresentation.cycleDays || 5} 天循环`,
+          description: '记录实质进展后，以完成时间为锚点开启下一轮待办。'
+        }
+      }
+      if (this.retryScheduleMode || code.includes('RETRY') || Array.isArray(this.config.retryWindows)) {
         const windows = this.retryWindowGroups.map(item => item.label)
         return {
           title: '重试窗口时间轴',
           description: `${windows.join(' → ') || 'T0 → T+1 → T+2'}；系统按窗口开始、截止和最大尝试次数推进。`
         }
-      }
-      if (String(this.config.effectKind || '').toUpperCase() === 'SCHEDULE_SELF' ||
-          Number(this.config.minutes) === 7200) {
-        return { title: '每 5 天循环', description: '记录实质进展后，以进展时间为锚点开启下一轮待办。' }
       }
       return null
     }
@@ -399,9 +419,38 @@ export default {
   small { line-height: 18px; color: #66758A; }
 }
 
+.sla-self-cycle {
+  padding: 18px;
+  background: #F1F8F5;
+  border: 1px solid #B7DCCB;
+  border-radius: 8px;
+
+  > header { display: flex; justify-content: space-between; gap: 16px; }
+  h3 { margin: 0; color: #0B2A55; }
+  p { margin: 4px 0 0; font-size: 12px; line-height: 20px; color: #536C64; }
+}
+
+.sla-self-cycle__flow {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+
+  article { padding: 14px; background: #FFFFFF; border-radius: 8px; }
+  article span { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; color: #FFFFFF; background: #3E8E72; border-radius: 50%; }
+  strong,
+  small { display: block; }
+  strong { margin: 7px 0 4px; color: #0B2A55; }
+  small { line-height: 18px; color: #66758A; }
+  > i { color: #3E8E72; }
+}
+
 @media (max-width: 760px) {
   .sla-runtime-grid,
   .sla-action-grid,
-  .sla-retry-timeline__track { grid-template-columns: 1fr; }
+  .sla-retry-timeline__track,
+  .sla-self-cycle__flow { grid-template-columns: 1fr; }
+  .sla-self-cycle__flow > i { transform: rotate(90deg); justify-self: center; }
 }
 </style>

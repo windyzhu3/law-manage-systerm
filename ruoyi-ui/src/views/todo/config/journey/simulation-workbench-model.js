@@ -9,13 +9,15 @@ export function scenarioFormFields(scenario, completionFields) {
 export function scenarioGate(scenarios, results, definitionHash) {
   const required = (scenarios || []).filter(item => item.requiredForPublish)
   const byCode = results || {}
+  const currentHash = String(definitionHash || '').trim()
   const blockingScenarios = required.flatMap(item => {
     const result = byCode[item.scenarioCode]
+    const evidenceHash = String((result && result.evidence && result.evidence.definitionHash) || '').trim()
     let reason = null
     if (!result) reason = 'MISSING'
     else if (!result.passed) reason = 'LAST_RUN_FAILED'
     else if (!result.evidence) reason = 'MISSING'
-    else if (result.evidence.definitionHash !== definitionHash) reason = 'DEFINITION_CHANGED'
+    else if (!currentHash || !evidenceHash || evidenceHash !== currentHash) reason = 'DEFINITION_CHANGED'
     return reason ? [{
       scenarioCode: item.scenarioCode,
       scenarioName: item.scenarioName || item.scenarioCode,

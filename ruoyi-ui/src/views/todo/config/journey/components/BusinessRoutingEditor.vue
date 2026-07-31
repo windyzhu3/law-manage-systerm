@@ -54,7 +54,7 @@
     </div>
 
     <div v-if="draftRows.length" class="routing-outcomes">
-      <article v-for="(row, index) in draftRows" :key="row.id" class="routing-outcome">
+      <article v-for="(row, index) in draftRows" :key="row.id" :ref="`outcomeCard-${index}`" class="routing-outcome" tabindex="-1">
         <div class="routing-outcome__order">
           <span>{{ index + 1 }}</span>
           <el-button-group v-if="!readonly && !typedMode">
@@ -67,6 +67,7 @@
           <div class="routing-outcome__main">
             <el-select
               v-if="typedMode"
+              :ref="`businessOutcomes-${index}`"
               v-model="row.resultValue"
               :disabled="readonly"
               placeholder="选择业务结果"
@@ -81,6 +82,7 @@
             </el-select>
             <el-input
               v-else
+              :ref="`businessOutcomes-${index}`"
               v-model="row.label"
               :disabled="readonly"
               placeholder="填写业务结果，例如：审批通过"
@@ -102,6 +104,7 @@
             </div>
             <el-select
               v-else
+              :ref="`effectKind-${index}`"
               v-model="row.resultType"
               :disabled="readonly || mode === 'PARALLEL'"
               @change="resultTypeChanged(row)"
@@ -112,6 +115,7 @@
 
             <el-select
               v-if="effectFor(row).needsTarget"
+              :ref="`targetVersionId-${index}`"
               v-model="row.targetVersionId"
               :disabled="readonly"
               filterable
@@ -420,11 +424,30 @@ export default {
       const target = this.filteredRoutingTargets.find(item => this.versionId(item) === Number(versionId))
       return target ? this.templateName(target) : '尚未选择的后续待办'
     },
-    focusField() {
+    routingFocusTarget(fieldPath, resourceKey) {
+      const path = String(fieldPath || '')
+      const match = path.match(/businessOutcomes(?:\[|\.)(\d+)/i)
+      const index = match ? Number(match[1]) : 0
+      const lower = path.toLowerCase()
+      const key = String(resourceKey || '').toUpperCase()
+      let control = 'businessOutcomes'
+      if (key === 'ROUTING_TARGET' || lower.includes('target')) control = 'targetVersionId'
+      else if (lower.includes('effect') || lower.includes('resulttype')) control = 'effectKind'
+      else if (['businessOutcomes', 'effectKind', 'targetVersionId'].includes(path)) control = path
+      return { control, index }
+    },
+    focusField(fieldPath, resourceKey) {
+      const target = this.routingFocusTarget(fieldPath, resourceKey)
       this.$nextTick(() => {
-        const element = this.$refs.effectEditor
+        const named = this.$refs[`${target.control}-${target.index}`]
+        const reference = Array.isArray(named) ? named[0] : named
+        const fallbackNamed = this.$refs[`outcomeCard-${target.index}`]
+        const fallback = Array.isArray(fallbackNamed) ? fallbackNamed[0] : fallbackNamed
+        const resolved = reference || fallback || this.$refs.effectEditor
+        const element = resolved && (resolved.$el || resolved)
         if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        if (element && element.focus) element.focus()
+        if (resolved && resolved.focus) resolved.focus()
+        else if (element && element.focus) element.focus()
       })
     }
   }

@@ -39,18 +39,20 @@
       show-icon
     />
 
-    <el-collapse class="routing-advanced">
+    <el-collapse v-model="activeAdvanced" class="routing-advanced">
       <el-collapse-item name="graph">
         <template slot="title"><i class="el-icon-share" />高级设置：拓扑图</template>
         <p>仅供熟悉节点、连线和分支汇合的管理员使用。普通业务路由请在上方维护。</p>
-        <routing-graph-editor
-          :value="config"
-          :readonly="readonly"
-          :current-version-id="currentVersionId"
-          :routing-targets="resources.routingTargets || []"
-          :payload-schema-json="payloadSchemaJson"
-          @input="advancedChanged"
-        />
+        <div ref="routingGraph" tabindex="-1">
+          <routing-graph-editor
+            :value="config"
+            :readonly="readonly"
+            :current-version-id="currentVersionId"
+            :routing-targets="resources.routingTargets || []"
+            :payload-schema-json="payloadSchemaJson"
+            @input="advancedChanged"
+          />
+        </div>
       </el-collapse-item>
     </el-collapse>
   </section>
@@ -72,6 +74,7 @@ export default {
     businessType: String,
     readonly: Boolean
   },
+  data() { return { activeAdvanced: [] } },
   computed: {
     config() { return this.value.config || {} },
     outcomes() { return Array.isArray(this.config.businessOutcomes) ? this.config.businessOutcomes : [] },
@@ -96,9 +99,18 @@ export default {
       }, this.value) })
     },
     advancedChanged(config) { this.$emit('patch', { routing: { config } }) },
-    focusField(fieldPath) {
+    focusField(fieldPath, resourceKey) {
+      if (fieldPath === 'routingGraph') {
+        this.activeAdvanced = ['graph']
+        this.$nextTick(() => {
+          const element = this.$refs.routingGraph
+          if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (element && element.focus) element.focus()
+        })
+        return
+      }
       const editor = this.$refs.businessRouting
-      if (editor && editor.focusField) editor.focusField(fieldPath)
+      if (editor && editor.focusField) editor.focusField(fieldPath, resourceKey)
     }
   }
 }

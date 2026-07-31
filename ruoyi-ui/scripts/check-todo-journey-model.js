@@ -107,6 +107,44 @@ check('maps readiness coordinates to the exact journey control', () => {
   })
 })
 
+check('lets a governed resource key override a stale step and map to its exact control', () => {
+  assert.deepStrictEqual(steps.fixLocation({
+    stepKey: 'SIMULATION_PUBLISH',
+    stepCode: 'SIMULATION_PUBLISH',
+    resourceKey: 'DOD_RECIPE',
+    fieldPath: 'dod.recipeCode'
+  }), {
+    step: 4,
+    stepCode: 'DOD',
+    resourceKey: 'DOD_RECIPE',
+    resourceType: 'DOD_RECIPE',
+    openResourceDrawer: true,
+    fieldPath: 'dod.recipeCode',
+    focusTarget: 'recipeCard'
+  })
+  assert.strictEqual(steps.fixLocation({
+    stepCode: 'DOD',
+    resourceKey: 'VALIDATOR',
+    fieldPath: 'dod.validatorRefs'
+  }).focusTarget, 'validatorRefs')
+})
+
+check('classifies TD-004 schedule windows as a self-cycle instead of retries', () => {
+  assert.deepStrictEqual(steps.slaSchedulePresentation({
+    effectKind: 'SCHEDULE_SELF',
+    minutes: 7200,
+    schedule: { windows: [{ dayOffset: 0, startTime: '09:00', endTime: '18:00' }] }
+  }, { templateCode: 'TD-004' }), {
+    mode: 'SELF_CYCLE',
+    hasWindows: true,
+    cycleDays: 5
+  })
+  assert.strictEqual(steps.slaSchedulePresentation({
+    schedulePurpose: 'RETRY',
+    schedule: { windows: [{ dayOffset: 0 }, { dayOffset: 1 }] }
+  }, { templateCode: 'TD-003' }).mode, 'RETRY_WINDOWS')
+})
+
 check('keeps cached step drafts isolated by template version', () => {
   const first = model.createJourneyDraft(fixture())
   const secondFixture = fixture()
@@ -136,6 +174,20 @@ check('rejects readiness evidence from a different draft hash', () => {
   const unidentified = simulationWorkbench.journeySimulationReadiness(journey)
   assert.strictEqual(unidentified.publicationReady, false,
     'empty hashes must never count as current-draft evidence')
+})
+
+check('rejects scenario evidence when current and evidence hashes are both blank', () => {
+  const gate = simulationWorkbench.scenarioGate([
+    { scenarioCode: 'TD004_PROGRESS', scenarioName: '记录实质进展', requiredForPublish: true }
+  ], {
+    TD004_PROGRESS: {
+      passed: true,
+      evidence: { definitionHash: '' }
+    }
+  }, '')
+  assert.strictEqual(gate.publicationReady, false)
+  assert.deepStrictEqual(gate.blockingScenarioCodes, ['TD004_PROGRESS'])
+  assert.strictEqual(gate.blockingScenarios[0].reason, 'DEFINITION_CHANGED')
 })
 
 check('derives an exact least-privilege journey API read plan', () => {

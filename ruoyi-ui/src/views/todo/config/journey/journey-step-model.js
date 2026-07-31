@@ -493,30 +493,127 @@ const JOURNEY_STEP_NUMBERS = Object.freeze({
   SIMULATION_PUBLISH: 7
 })
 
+const RESOURCE_LOCATIONS = Object.freeze({
+  EVENT: { stepCode: 'EVENT' },
+  TRIGGER: { stepCode: 'TRIGGER' },
+  OWNER: { stepCode: 'OWNER' },
+  DOD: { stepCode: 'DOD' },
+  SLA: { stepCode: 'SLA' },
+  ROUTING: { stepCode: 'ROUTING' },
+  SIMULATION: { stepCode: 'SIMULATION_PUBLISH' },
+  FIELD: { resourceType: 'FIELD', openResourceDrawer: true },
+  MATERIAL: { stepCode: 'DOD', resourceType: 'MATERIAL', openResourceDrawer: true },
+  DOD_RECIPE: { stepCode: 'DOD', resourceType: 'DOD_RECIPE', openResourceDrawer: true },
+  VALIDATOR: { stepCode: 'DOD' },
+  CALENDAR: { stepCode: 'SLA', resourceType: 'CALENDAR' },
+  ROUTING_TARGET: { stepCode: 'ROUTING' }
+})
+
+function stepFromFieldPath(fieldPath) {
+  if (fieldPath.startsWith('event.condition')) return 'TRIGGER'
+  if (fieldPath.startsWith('event')) return 'EVENT'
+  if (fieldPath.startsWith('owner')) return 'OWNER'
+  if (fieldPath.startsWith('dod')) return 'DOD'
+  if (fieldPath.startsWith('sla')) return 'SLA'
+  if (fieldPath.startsWith('routing') || fieldPath.startsWith('taskCompletions')) return 'ROUTING'
+  if (fieldPath.startsWith('simulation')) return 'SIMULATION_PUBLISH'
+  return ''
+}
+
+function resourceFocusTarget(resourceKey, fieldPath, stepCode) {
+  const key = String(resourceKey || '').toUpperCase()
+  const path = String(fieldPath || '').toLowerCase()
+  if (key === 'DOD_RECIPE') return 'recipeCard'
+  if (key === 'MATERIAL') return 'requiredAttachments'
+  if (key === 'VALIDATOR') return 'validatorRefs'
+  if (key === 'CALENDAR') return 'calendarCode'
+  if (key === 'ROUTING_TARGET') return 'targetVersionId'
+  if (stepCode === 'OWNER') {
+    if (path.includes('fallback')) {
+      return /(value|rolekey|selection|operand)$/.test(path)
+        ? 'ownerFallbackSelection'
+        : 'ownerFallbackType'
+    }
+    if (/(field|value|rolekey|selection|operand)$/.test(path)) return 'ownerSelection'
+    return 'ownerSource'
+  }
+  if (stepCode === 'DOD') {
+    if (path.includes('recipe')) return 'recipeCard'
+    if (path.includes('material') || path.includes('attachment')) return 'requiredAttachments'
+    if (path.includes('validator')) return 'validatorRefs'
+    if (path.includes('conditional') || path.includes('condition')) return 'conditionalRules'
+    if (path.includes('instruction')) return 'employeeInstructions'
+    if (path.includes('requiredfield')) return 'requiredFields'
+    return 'recipeCard'
+  }
+  if (stepCode === 'ROUTING') {
+    if (path.includes('nodes') || path.includes('edges') || path.endsWith('routing.config')) return 'routingGraph'
+    if (path.includes('target')) return 'targetVersionId'
+    if (path.includes('effect') || path.includes('resulttype')) return 'effectKind'
+    return 'businessOutcomes'
+  }
+  if (stepCode === 'TRIGGER') return 'conditionBuilder'
+  if (stepCode === 'SLA') {
+    if (path.includes('calendar')) return 'calendarCode'
+    if (path.includes('schedule')) return 'schedulePanel'
+    return 'durationValue'
+  }
+  if (stepCode === 'EVENT') return repairFocusTarget(fieldPath)
+  if (stepCode === 'SIMULATION_PUBLISH') {
+    if (fieldPath === 'simulation.scenarios') return 'scenario-selector'
+    if (fieldPath === 'simulation.full') return 'full-simulation'
+  }
+  return fieldPath.split('.').filter(Boolean).pop() || ''
+}
+
 function fixLocation(issue) {
   const source = object(issue)
   const fieldPath = String(source.fieldPath || source.path || '')
-  const resourceKey = String(source.resourceKey || '')
-  let stepCode = String(source.stepKey || source.stepCode || resourceKey || '').toUpperCase()
+  const resourceKey = String(source.resourceKey || '').toUpperCase()
+  const resourceLocation = RESOURCE_LOCATIONS[resourceKey] || {}
+  let stepCode = resourceLocation.stepCode ||
+    (resourceKey === 'FIELD' ? stepFromFieldPath(fieldPath) : '') ||
+    String(source.stepKey || source.stepCode || '').toUpperCase()
   if (stepCode === 'SIMULATION') stepCode = 'SIMULATION_PUBLISH'
   if (!JOURNEY_STEP_NUMBERS[stepCode]) {
-    if (fieldPath.startsWith('event.condition')) stepCode = 'TRIGGER'
-    else if (fieldPath.startsWith('event')) stepCode = 'EVENT'
-    else if (fieldPath.startsWith('owner')) stepCode = 'OWNER'
-    else if (fieldPath.startsWith('dod')) stepCode = 'DOD'
-    else if (fieldPath.startsWith('sla')) stepCode = 'SLA'
-    else if (fieldPath.startsWith('routing')) stepCode = 'ROUTING'
-    else stepCode = 'SIMULATION_PUBLISH'
+    stepCode = stepFromFieldPath(fieldPath) || 'SIMULATION_PUBLISH'
   }
-  let focusTarget = fieldPath.split('.').filter(Boolean).pop() || ''
-  if (fieldPath === 'simulation.scenarios') focusTarget = 'scenario-selector'
-  if (fieldPath === 'simulation.full') focusTarget = 'full-simulation'
-  return {
+  const location = {
     step: JOURNEY_STEP_NUMBERS[stepCode],
     stepCode,
-    resourceKey: source.resourceKey || resourceKey,
+    resourceKey,
     fieldPath,
-    focusTarget
+    focusTarget: resourceFocusTarget(resourceKey, fieldPath, stepCode)
+  }
+  if (resourceLocation.resourceType) location.resourceType = resourceLocation.resourceType
+  if (resourceLocation.openResourceDrawer) location.openResourceDrawer = true
+  return location
+}
+
+function slaSchedulePresentation(value, template) {
+  const config = object(value)
+  const schedule = object(config.schedule)
+  const windows = list(schedule.windows)
+  const templateCode = String(object(template).templateCode || config.templateCode || '').toUpperCase()
+  const identifiers = [
+    config.effectKind,
+    config.schedulePurpose,
+    config.scheduleType,
+    schedule.effectKind,
+    schedule.kind,
+    schedule.type,
+    schedule.purpose
+  ].map(item => String(item || '').toUpperCase())
+  const explicitRetry = identifiers.some(item => item.includes('RETRY')) || templateCode === 'TD-003'
+  const explicitSelfCycle = identifiers.some(item => item === 'SCHEDULE_SELF' || item.includes('SELF') || item.includes('CYCLE')) ||
+    templateCode === 'TD-004'
+  const governedDays = Number(config.cycleDays || schedule.cycleDays) ||
+    (Number(config.minutes) > 0 ? Number(config.minutes) / 1440 : 0)
+  const selfCycle = explicitSelfCycle || (!explicitRetry && governedDays === 5)
+  return {
+    mode: selfCycle ? 'SELF_CYCLE' : (windows.length ? 'RETRY_WINDOWS' : 'DURATION'),
+    hasWindows: windows.length > 0,
+    cycleDays: selfCycle ? (governedDays > 0 ? governedDays : 5) : 0
   }
 }
 
@@ -1381,6 +1478,7 @@ module.exports = {
   buildSlaPatch,
   buildSlaTimeline,
   slaRepairBlocker,
+  slaSchedulePresentation,
   buildBusinessRoutingPatch,
   materializeOutcomeRouting,
   routingDraftBlocker,
