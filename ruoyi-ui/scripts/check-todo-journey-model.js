@@ -1210,11 +1210,20 @@ check('preserves and resolves referenced DoD resources without fabricating creat
   recipe.requiredFields.push('mutatedAfterRequest')
   assert.deepStrictEqual(normalized.item.requiredFields, ['progressSummary'])
 
+  const currentRecipe = {
+    resourceItemId: 71,
+    code: 'LEAD_PROGRESS_RECIPE',
+    name: '当前五天进展配方',
+    requiredFields: ['currentProgressSummary']
+  }
   const resolvedRecipe = steps.resolveRepairResourceItem({
     type: 'DOD_RECIPE',
-    resourceId: 71
-  }, { recipes: [normalized.item] })
-  assert.strictEqual(resolvedRecipe.code, 'LEAD_PROGRESS_RECIPE')
+    resourceId: 71,
+    item: normalized.item
+  }, { recipes: [currentRecipe] })
+  assert.deepStrictEqual(resolvedRecipe, currentRecipe)
+  assert.notStrictEqual(resolvedRecipe, currentRecipe)
+  assert.notDeepStrictEqual(resolvedRecipe, normalized.item)
 
   const material = { resourceItemId: 82, code: 'CONTACT_RECORD', name: '联系记录' }
   const resolvedMaterial = steps.resolveRepairResourceItem({
@@ -1228,6 +1237,17 @@ check('preserves and resolves referenced DoD resources without fabricating creat
     type: 'MATERIAL',
     itemKey: 'MISSING_MATERIAL'
   }, { materials: [material] }), null)
+
+  assert.strictEqual(steps.resolveRepairResourceItem({
+    type: 'DOD_RECIPE',
+    item: {
+      resourceItemId: 999,
+      code: 'DELETED_RECIPE',
+      name: '已删除但信息完整的旧配方',
+      requiredFields: ['staleField']
+    }
+  }, { recipes: [currentRecipe] }), null,
+  'a rich stale issue item must not become editable when the current catalog has no match')
 })
 
 check('retains independent owner strategy drafts until the user explicitly applies one', () => {

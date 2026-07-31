@@ -880,12 +880,16 @@ check('opens only resolved referenced resources and falls back to visible precis
     'context repair requests must preserve a safe deep-cloned resource item')
   assert(page.includes('resolveRepairResourceItem') && page.includes('resolvedItem'),
     'the journey shell must resolve resource identifiers before opening a drawer')
+  assert(page.includes('if (resolvedItem)') && page.includes('this.repairContext = {'),
+    'only a current catalog match may open the drawer; stale rich items must use repair context')
   assert(page.includes('repairContext') && page.includes('未找到需要修复的配置资源'),
     'missing referenced resources must leave visible repair context at the precise control')
   assert(page.includes('focusRepairControl(location)'),
     'missing referenced resources must focus the exact configured control')
   assert(drawer.includes('itemResource && request.item'),
     'the contextual drawer must never turn a missing referenced item into blank create state')
+  assert(!model.includes('? clone(direct)'),
+    'a rich issue item must never bypass the authoritative current resource catalog')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

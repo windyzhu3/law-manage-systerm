@@ -1310,12 +1310,7 @@ function resolveRepairResourceItem(request, resources) {
     return (Number.isFinite(id) && id > 0 && itemId === id) || (key && itemKey === key)
   })
   if (match) return clone(match)
-  const directId = Number(direct && (direct.resourceItemId || direct.resource_item_id))
-  const directCode = String(direct && (direct.code || direct.resourceCode || direct.resource_code) || '').trim()
-  const directName = String(direct && (direct.name || direct.resourceName || direct.resource_name) || '').trim()
-  return direct && Number.isFinite(directId) && directId > 0 && directCode && directName
-    ? clone(direct)
-    : null
+  return null
 }
 
 function resourceRepairAccess(permissions, request) {
