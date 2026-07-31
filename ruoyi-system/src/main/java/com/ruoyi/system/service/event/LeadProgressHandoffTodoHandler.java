@@ -10,6 +10,7 @@ import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
+import com.law.todo.spi.TodoCompletionHandler.SimulationResult;
 import com.ruoyi.system.service.lead.LeadProgressCycleService;
 import com.ruoyi.system.service.lead.LeadProgressCycleService.ProgressCycleOutcome;
 
@@ -26,6 +27,20 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
     {return todo!=null&&"TD-004".equals(todo.getTemplateCode());}
 
     @Override public String catalogCode(){return "TD-004_COMPLETE";}
+
+    @Override public boolean supportsSimulation(){return true;}
+
+    @Override public String simulationDescription()
+    {return "返回实质进展结果与五天自循环效果，不写入跟进记录或调度计划";}
+
+    @Override
+    public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
+    {
+        Map<String,Object> routing=new LinkedHashMap<>();
+        if(payload!=null)routing.putAll(payload);
+        routing.put("result","PROGRESS_RECORDED");
+        return SimulationResult.none(routing);
+    }
 
     @Override public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,
             String operatorName)

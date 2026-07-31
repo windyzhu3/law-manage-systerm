@@ -3,6 +3,7 @@ package com.law.todo.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -39,7 +40,6 @@ import com.law.todo.application.view.TodoSimulationView.RouteTrace;
 import com.law.todo.application.view.TodoSimulationView.SlaTrace;
 import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.domain.model.TodoInstance;
-import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoCompletionHandler;
 
@@ -271,18 +271,47 @@ class TodoSimulationScenarioServiceTest
     @Test
     void expectedValidationFailurePassesOnlyForTheConfiguredErrorCode()
     {
-        SimulationScenario scenario=effectScenario("TD004_PROOF_REQUIRED","progressType","PHONE",
-                EffectKind.EXPECTED_VALIDATION_FAILURE,null,"TODO_DOD_ATTACHMENT_MISSING");
+        SimulationScenario scenario=new SimulationScenario(12L,"TD004_PROOF_REQUIRED","TD-004",
+                "缺少进展凭证",1,Map.of("progressType","PHONE",
+                        "progressAt","2026-07-31T10:00:00"),
+                List.of("progressType","progressAt","remark"),List.of(),"td001",1,
+                new SimulationEffect(EffectKind.EXPECTED_VALIDATION_FAILURE,null,null),null,
+                "TODO_DOD_ATTACHMENT_MISSING",true,"ACTIVE",10);
         when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
         when(journeys.load(42L,actor())).thenReturn(journey());
-        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
-        when(simulations.simulate(any(),any())).thenThrow(new TodoException(
-                "TODO_DOD_ATTACHMENT_MISSING","Proof is required"));
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definitionWithProgressProof());
 
         var result=service().simulate(42L,"TD004_PROOF_REQUIRED",command(),actor());
 
         assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.EXPECTED_VALIDATION_FAILURE);
         assertThat(result.actualEffect().actionCode()).isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
+        assertThat(result.passed()).isTrue();
+        verifyNoInteractions(simulations);
+    }
+
+    @Test
+    void validatesProofThenResolvesThePureTd004ScheduleSelfSimulation()
+    {
+        SimulationScenario scenario=new SimulationScenario(13L,"TD004_PROGRESS_RECORDED","TD-004",
+                "记录实质进展",1,Map.of("progressType","PHONE",
+                        "progressAt","2026-07-31T10:00:00"),
+                List.of("progressType","progressAt","remark"),List.of("FOLLOWUP_PROOF"),
+                "td001",1,new SimulationEffect(EffectKind.SCHEDULE_SELF,"TD-004",null),
+                null,null,true,"ACTIVE",10);
+        BusinessOutcomeSet outcomeSet=new BusinessOutcomeSet("result","处理结果","五天循环",
+                List.of(new BusinessOutcomeOption("PROGRESS_RECORDED","已记录实质进展",
+                        "SCHEDULE_SELF","TD-004","5天实质进展",9L)),
+                "TD004_GOVERNED_OUTCOMES");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey(outcomeSet));
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definitionWithProgressProof());
+        when(simulations.simulate(any(),any())).thenReturn(endedResult("ENDED"));
+
+        var result=service(List.of(new ProgressSimulator()))
+                .simulate(42L,"TD004_PROGRESS_RECORDED",command(),actor());
+
+        assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.SCHEDULE_SELF);
+        assertThat(result.actualEffect().targetTemplateCode()).isEqualTo("TD-004");
         assertThat(result.passed()).isTrue();
     }
 
@@ -353,6 +382,13 @@ class TodoSimulationScenarioServiceTest
                 +"{\"key\":\"end\",\"type\":\"END\"}],\"edges\":["
                 +"{\"key\":\"done\",\"from\":\"td001\",\"to\":\"end\",\"priority\":0}]}},\"autoActions\":[],"
                 +"\"decisionRefs\":[],\"acceptanceRefs\":[]}";
+    }
+
+    private String definitionWithProgressProof()
+    {
+        return definition().replace("\"dod\":{\"config\":{}}",
+                "\"dod\":{\"config\":{\"requiredFields\":[\"progressType\",\"progressAt\"],"
+                        +"\"materials\":[{\"type\":\"FOLLOWUP_PROOF\",\"minCount\":1}]}}");
     }
 
     private TodoJourneySimulationResult result(Long routeVersion)
@@ -430,6 +466,21 @@ class TodoSimulationScenarioServiceTest
         @Override public boolean supportsSimulation(){return true;}
         @Override public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
         {return SimulationResult.produces(payload,List.of("TD-003"));}
+    }
+
+    private static final class ProgressSimulator implements TodoCompletionHandler
+    {
+        @Override public boolean supports(TodoInstance todo){return true;}
+        @Override public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,
+                String operatorName)
+        {throw new AssertionError("Read-only simulation must not execute the business handler");}
+        @Override public boolean supportsSimulation(){return true;}
+        @Override public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
+        {
+            Map<String,Object> result=new java.util.LinkedHashMap<>(payload);
+            result.put("result","PROGRESS_RECORDED");
+            return SimulationResult.none(result);
+        }
     }
 
     private Actor actor(){return new Actor(7L,"alice",2L);}

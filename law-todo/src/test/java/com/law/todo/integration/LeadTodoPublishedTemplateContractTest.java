@@ -98,7 +98,7 @@ class LeadTodoPublishedTemplateContractTest
         assertOwner("TD-001","PAYLOAD","ownerId");
         assertOwner("TD-002","PAYLOAD","reviewerId");
         assertOwner("TD-003","BUSINESS_OWNER",null);
-        assertOwner("TD-004","PAYLOAD","ownerId");
+        assertOwner("TD-004","BUSINESS_OWNER",null);
     }
 
     @Test void td003IsCreatedOnlyByScheduleAndNeverByOrdinaryGraphTransitions() throws Exception
@@ -205,6 +205,42 @@ class LeadTodoPublishedTemplateContractTest
                 outcome(outcomes,"CONTINUE_CURRENT_WINDOW").getString("effectKind"));
         assertEquals("SCHEDULE_NEXT",outcome(outcomes,"NEXT_WINDOW").getString("effectKind"));
         assertEquals("END",outcome(outcomes,"EXHAUSTED").getString("effectKind"));
+    }
+
+    @Test void td004RecordsProgressAndSchedulesItselfWithoutAGraphLoop() throws Exception
+    {
+        JSONObject packaged=definition("TD-004");
+        JSONObject td004=packaged.getJSONObject("definition");
+        assertEquals("LEAD_FIRST_CONTACT_VALID",
+                td004.getJSONObject("event").getString("eventType"));
+        JSONObject owner=td004.getJSONObject("owner").getJSONObject("config");
+        assertEquals("BUSINESS_OWNER",owner.getString("type"));
+        assertEquals("LEAD",owner.getString("businessType"));
+
+        JSONObject dod=td004.getJSONObject("dod").getJSONObject("config");
+        assertEquals(List.of("progressType","progressAt"),
+                dod.getJSONArray("requiredFields").toJavaList(String.class));
+        assertEquals(List.of("FOLLOWUP_PROOF"),dod.getJSONArray("materials").stream()
+                .map(JSONObject.class::cast).map(item->item.getString("type")).toList());
+        assertTrue(dod.getJSONArray("conditionalRequired").isEmpty());
+        assertTrue(dod.getJSONArray("validatorRefs").isEmpty());
+
+        JSONObject routing=td004.getJSONObject("routing").getJSONObject("config");
+        JSONArray outcomes=routing.getJSONArray("businessOutcomes");
+        assertNotNull(outcomes);
+        assertEquals(1,outcomes.size());
+        JSONObject progress=outcome(outcomes,"PROGRESS_RECORDED");
+        assertEquals("result",progress.getString("field"));
+        assertEquals("SCHEDULE_SELF",progress.getString("effectKind"));
+        assertEquals("TD-004",progress.getString("targetTemplateCode"));
+        assertEquals("REFRESH_FIVE_DAY_WINDOW",progress.getString("businessAction"));
+
+        assertEquals(List.of("td004","end"),routing.getJSONArray("nodes").stream()
+                .map(JSONObject.class::cast).map(node->node.getString("key")).toList());
+        assertEquals(List.of("td004-end"),routing.getJSONArray("edges").stream()
+                .map(JSONObject.class::cast).map(edge->edge.getString("key")).toList());
+        assertEquals("TD-004_COMPLETE",packaged.getJSONObject("handlerCapability")
+                .getString("requiredCode"));
     }
 
     @Test void migrationPublishesInDependencyOrderAndOwnsTheSingleAssignmentTrigger()

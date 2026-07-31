@@ -82,6 +82,14 @@ class LeadTemplateConfigurationMySqlIT
                     where t.template_code='TD-002' and v.status='PUBLISHED'
                     order by v.version_id
                     """);
+            String td004PublishedBefore=fingerprint(connection,"""
+                    select t.current_version,v.version_id,v.version_no,v.status,v.source_version_id,
+                           v.definition_hash,cast(v.definition_json as char)
+                    from todo_template t
+                    join todo_template_version v on v.template_id=t.template_id
+                    where t.template_code='TD-004' and v.status='PUBLISHED'
+                    order by v.version_id
+                    """);
             String td003PublishedBefore;
             String evidenceBefore=fingerprint(connection,"""
                     select evidence_id,template_id,version_id,definition_hash,scenario_code,
@@ -117,7 +125,7 @@ class LeadTemplateConfigurationMySqlIT
 
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.76",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.77",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""
@@ -150,6 +158,14 @@ class LeadTemplateConfigurationMySqlIT
                     where t.template_code='TD-003' and v.status='PUBLISHED'
                     order by v.version_id
                     """));
+            assertEquals(td004PublishedBefore,fingerprint(connection,"""
+                    select t.current_version,v.version_id,v.version_no,v.status,v.source_version_id,
+                           v.definition_hash,cast(v.definition_json as char)
+                    from todo_template t
+                    join todo_template_version v on v.template_id=t.template_id
+                    where t.template_code='TD-004' and v.status='PUBLISHED'
+                    order by v.version_id
+                    """));
             assertEquals(entryPointBefore,scalar(connection,"""
                     select concat(t.current_version,':',r.trigger_rule_id,':',r.template_version_id)
                     from todo_template t
@@ -166,6 +182,7 @@ class LeadTemplateConfigurationMySqlIT
             assertDraft(connection);
             assertTd002GuidedDraft(connection);
             assertTd003GuidedDraft(connection);
+            assertTd004GuidedDraft(connection);
             try(Statement statement=connection.createStatement())
             {
                 assertEquals(1,count(statement,
@@ -428,6 +445,125 @@ class LeadTemplateConfigurationMySqlIT
         assertEquals(List.of("CONTACT_PROOF"),value.get("requiredMaterials"));
         assertEquals(completionPayload,value.get("completionPayload"));
         assertEquals(expectedEffect,value.get("expectedEffect"));
+    }
+
+    private void assertTd004GuidedDraft(Connection connection) throws Exception
+    {
+        try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
+                select v.version_id,v.version_no,v.status,v.source_version_id,
+                       cast(v.definition_json as char),cast(v.compiled_json as char),v.definition_hash
+                from todo_template t
+                join todo_template_version v on v.template_id=t.template_id
+                where t.template_code='TD-004'
+                  and v.change_summary='V0.20.77 TD-004 guided configuration draft'
+                """))
+        {
+            assertTrue(rows.next(),"The governed TD-004 draft must exist");
+            long versionId=rows.getLong(1);
+            assertEquals("DRAFT",rows.getString(3));
+            assertTrue(rows.getLong(4)>0);
+            JSONObject definition=JSON.parseObject(rows.getString(5));
+            assertEquals(definition,JSON.parseObject(rows.getString(6)));
+            assertEquals(rows.getString(7),sha256(new TodoDefinitionCodec().canonicalJson(
+                    new TodoDefinitionCodec().read(rows.getString(6)))));
+            assertEquals("LEAD_FIRST_CONTACT_VALID",
+                    definition.getJSONObject("event").getString("eventType"));
+            JSONObject owner=definition.getJSONObject("owner").getJSONObject("config");
+            assertEquals("BUSINESS_OWNER",owner.getString("type"));
+            assertEquals("LEAD",owner.getString("businessType"));
+
+            JSONObject recipe=JSON.parseObject(scalar(connection,"""
+                    select cast(value_json as char)
+                    from todo_configuration_resource_item
+                    where resource_type='DOD_RECIPE' and business_type='LEAD'
+                      and resource_code='LEAD_PROGRESS_READY' and status='ACTIVE'
+                    """));
+            JSONObject dod=definition.getJSONObject("dod").getJSONObject("config");
+            assertEquals(recipe.getJSONArray("requiredFields"),dod.getJSONArray("requiredFields"));
+            assertEquals(recipe.getJSONArray("validatorRefs"),dod.getJSONArray("validatorRefs"));
+            assertEquals(recipe.getJSONArray("conditionalRules"),
+                    dod.getJSONArray("conditionalRequired"));
+            assertEquals(recipe.getJSONArray("requiredAttachments").toJavaList(String.class),
+                    dod.getJSONArray("materials").stream().map(JSONObject.class::cast)
+                            .map(item->item.getString("type")).toList());
+
+            JSONObject routing=definition.getJSONObject("routing").getJSONObject("config");
+            JSONArray outcomes=routing.getJSONArray("businessOutcomes");
+            assertEquals(1,outcomes.size());
+            JSONObject outcome=outcomes.getJSONObject(0);
+            assertEquals("result",outcome.getString("field"));
+            assertEquals("PROGRESS_RECORDED",outcome.getString("value"));
+            assertEquals("SCHEDULE_SELF",outcome.getString("effectKind"));
+            assertEquals("TD-004",outcome.getString("targetTemplateCode"));
+            assertEquals(versionId,outcome.getLongValue("targetVersionId"));
+            assertEquals("REFRESH_FIVE_DAY_WINDOW",outcome.getString("businessAction"));
+            assertEquals(List.of("td004","end"),routing.getJSONArray("nodes").stream()
+                    .map(JSONObject.class::cast).map(node->node.getString("key")).toList());
+            assertTrue(routing.getJSONArray("nodes").stream().map(JSONObject.class::cast)
+                    .anyMatch(node->"td004".equals(node.getString("key"))
+                            &&versionId==node.getLongValue("templateVersionId")));
+            assertEquals(List.of("td004-end"),routing.getJSONArray("edges").stream()
+                    .map(JSONObject.class::cast).map(edge->edge.getString("key")).toList());
+            assertFalse(rows.next(),"Migration must create exactly one governed TD-004 draft");
+        }
+
+        assertEquals(0,Long.parseLong(scalar(connection,"""
+                select count(*)
+                from todo_trigger_rule r
+                join todo_template t on t.template_id=r.template_id
+                where t.template_code='TD-004' and r.enabled='Y'
+                """)));
+        try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
+                select resource_code,status,cast(value_json as char)
+                from todo_configuration_resource_item
+                where resource_type='SIMULATION_SCENARIO' and business_type='LEAD'
+                  and resource_code in ('TD004_PROGRESS_RECORDED','TD004_IDEMPOTENT_REPLAY',
+                                        'TD004_PROOF_REQUIRED')
+                order by sort_order,resource_code
+                """))
+        {
+            ObjectMapper mapper=new ObjectMapper();
+            Map<String,ScenarioResource> scenarios=new LinkedHashMap<>();
+            while(rows.next())
+                scenarios.put(rows.getString(1),new ScenarioResource(rows.getString(2),
+                        mapper.readValue(rows.getString(3),new TypeReference<Map<String,Object>>(){})));
+            assertEquals(List.of("TD004_PROGRESS_RECORDED","TD004_IDEMPOTENT_REPLAY",
+                    "TD004_PROOF_REQUIRED"),List.copyOf(scenarios.keySet()));
+            assertTd004Scenario(scenarios.get("TD004_PROGRESS_RECORDED"),
+                    "TD004_PROGRESS_RECORDED",Map.of("kind","SCHEDULE_SELF",
+                            "targetTemplateCode","TD-004"),
+                    Map.of("progressType","PHONE","progressAt","2026-07-31T10:00:00",
+                            "remark","完成有效沟通"),List.of("FOLLOWUP_PROOF"),false,null);
+            assertTd004Scenario(scenarios.get("TD004_IDEMPOTENT_REPLAY"),
+                    "TD004_IDEMPOTENT_REPLAY",Map.of("kind","SCHEDULE_SELF",
+                            "targetTemplateCode","TD-004"),
+                    Map.of("progressType","WECHAT","progressAt","2026-07-31T11:00:00"),
+                    List.of("FOLLOWUP_PROOF"),true,null);
+            assertTd004Scenario(scenarios.get("TD004_PROOF_REQUIRED"),
+                    "TD004_PROOF_REQUIRED",Map.of("kind","EXPECTED_VALIDATION_FAILURE"),
+                    Map.of("progressType","PHONE","progressAt","2026-07-31T10:00:00"),
+                    List.of(),false,"TODO_DOD_ATTACHMENT_MISSING");
+        }
+    }
+
+    private void assertTd004Scenario(ScenarioResource resource,String scenarioCode,
+            Map<String,Object> expectedEffect,Map<String,Object> completionPayload,
+            List<String> requiredMaterials,boolean replay,String expectedErrorCode)
+    {
+        assertEquals("ACTIVE",resource.status());
+        Map<String,Object> value=resource.value();
+        assertEquals("TD-004",value.get("templateCode"));
+        assertEquals(scenarioCode,value.get("scenarioCode"));
+        assertEquals(1,value.get("scenarioVersion"));
+        assertEquals(Boolean.TRUE,value.get("requiredForPublish"));
+        assertEquals(List.of("progressType","progressAt","remark"),value.get("editableFields"));
+        assertEquals(requiredMaterials,value.get("requiredMaterials"));
+        assertEquals("td004",value.get("completionNodeKey"));
+        assertEquals(1,value.get("occurrence"));
+        assertEquals(completionPayload,value.get("completionPayload"));
+        assertEquals(expectedEffect,value.get("expectedEffect"));
+        assertEquals(replay,Boolean.TRUE.equals(value.get("replay")));
+        assertEquals(expectedErrorCode,value.get("expectedErrorCode"));
     }
 
     private void assertScenario(ScenarioResource resource,String scenarioCode,

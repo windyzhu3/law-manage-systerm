@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -15,6 +16,7 @@ import com.law.business.lead.dto.LeadProgressCompleteCommand;
 import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
+import com.law.todo.spi.TodoCompletionHandler.SimulationResult;
 import com.ruoyi.system.service.event.LeadProgressHandoffTodoHandler;
 import com.ruoyi.system.service.lead.LeadProgressCycleService;
 
@@ -50,5 +52,28 @@ class LeadProgressHandoffTodoHandlerTest
         assertEquals("PHONE",command.getValue().getProgressType());
         assertEquals(progressAt,command.getValue().getProgressAt());
         assertEquals("quoted",command.getValue().getRemark());
+    }
+
+    @Test
+    void simulatesTheRecurringEffectWithoutWritingProgressOrSchedules()
+    {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(7002L);
+        todo.setTemplateCode("TD-004");
+        todo.setBusinessType("LEAD");
+        todo.setBusinessId(92L);
+        LeadProgressCycleService cycles=org.mockito.Mockito.mock(LeadProgressCycleService.class);
+        LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(cycles);
+        Map<String,Object> payload=Map.of(
+                "progressType","WECHAT","progressAt","2026-07-31T11:00:00");
+
+        assertTrue(handler.supportsSimulation());
+        SimulationResult result=handler.simulate(todo,payload);
+
+        assertEquals(Map.of("progressType","WECHAT","progressAt","2026-07-31T11:00:00",
+                "result","PROGRESS_RECORDED"),result.routingPayload());
+        assertTrue(result.producedTemplateCodes().isEmpty(),
+                "SCHEDULE_SELF is an outcome effect, not an ordinary graph-produced task");
+        verifyNoInteractions(cycles);
     }
 }

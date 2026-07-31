@@ -144,6 +144,42 @@ class TodoSimulationScenarioCatalogTest
         assertThat(scenario.expectedErrorCode()).isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
     }
 
+    @Test
+    void returnsTheThreeRequiredTd004ProgressCycleScenarios()
+    {
+        when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
+                .thenReturn(List.of(
+                        td004Row(41L,"TD004_PROGRESS_RECORDED",310,"SCHEDULE_SELF",
+                                "PHONE","2026-07-31T10:00:00",true,false,null),
+                        td004Row(42L,"TD004_IDEMPOTENT_REPLAY",320,"SCHEDULE_SELF",
+                                "WECHAT","2026-07-31T11:00:00",true,true,null),
+                        td004Row(43L,"TD004_PROOF_REQUIRED",330,
+                                "EXPECTED_VALIDATION_FAILURE","PHONE",
+                                "2026-07-31T10:00:00",false,false,
+                                "TODO_DOD_ATTACHMENT_MISSING")));
+
+        var scenarios=new TodoSimulationScenarioCatalog(mapper).scenarios("TD-004","LEAD");
+
+        assertThat(scenarios).extracting(scenario->scenario.scenarioCode())
+                .containsExactly("TD004_PROGRESS_RECORDED","TD004_IDEMPOTENT_REPLAY",
+                        "TD004_PROOF_REQUIRED");
+        assertThat(scenarios).extracting(scenario->scenario.expectedEffect().kind())
+                .containsExactly(EffectKind.SCHEDULE_SELF,EffectKind.SCHEDULE_SELF,
+                        EffectKind.EXPECTED_VALIDATION_FAILURE);
+        assertThat(scenarios.subList(0,2))
+                .allMatch(scenario->"TD-004".equals(scenario.expectedEffect().targetTemplateCode())
+                        &&scenario.requiredMaterials().equals(List.of("FOLLOWUP_PROOF")));
+        assertThat(scenarios).allMatch(scenario->scenario.requiredForPublish()
+                &&"ACTIVE".equals(scenario.status())
+                &&scenario.editableFields().equals(
+                        List.of("progressType","progressAt","remark"))
+                &&scenario.completionPayload().containsKey("progressType")
+                &&scenario.completionPayload().containsKey("progressAt"));
+        assertThat(scenarios.get(2).requiredMaterials()).isEmpty();
+        assertThat(scenarios.get(2).expectedErrorCode())
+                .isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
+    }
+
     private Map<String,Object> row(long id,String code,String name,int sortOrder,String expected)
     {
         String payload="TD001_UNREACHABLE".equals(code)
@@ -224,5 +260,29 @@ class TodoSimulationScenarioCatalogTest
                         +"\"completionNodeKey\":\"td003\",\"occurrence\":1,"
                         +"\"expectedEffect\":{\"kind\":\""+kind+"\""+targetJson+"},"
                         +"\"requiredForPublish\":true}");
+    }
+
+    private Map<String,Object> td004Row(long id,String code,int sortOrder,String kind,
+            String progressType,String progressAt,boolean proof,boolean replay,String errorCode)
+    {
+        String target="SCHEDULE_SELF".equals(kind)
+                ?",\"targetTemplateCode\":\"TD-004\"":"";
+        String replayJson=replay?",\"replay\":true":"";
+        String errorJson=errorCode==null?"":",\"expectedErrorCode\":\""+errorCode+"\"";
+        String materials=proof?"[\"FOLLOWUP_PROOF\"]":"[]";
+        return Map.of(
+                "resource_item_id",id,
+                "resource_code",code,
+                "resource_name",code,
+                "business_type","LEAD",
+                "status","ACTIVE",
+                "sort_order",sortOrder,
+                "value_json","{\"templateCode\":\"TD-004\",\"scenarioVersion\":1,"
+                        +"\"completionPayload\":{\"progressType\":\""+progressType
+                        +"\",\"progressAt\":\""+progressAt+"\"},"
+                        +"\"editableFields\":[\"progressType\",\"progressAt\",\"remark\"],"
+                        +"\"requiredMaterials\":"+materials+",\"completionNodeKey\":\"td004\","
+                        +"\"occurrence\":1,\"expectedEffect\":{\"kind\":\""+kind+"\""
+                        +target+"}"+replayJson+errorJson+",\"requiredForPublish\":true}");
     }
 }

@@ -16,8 +16,8 @@
     },
     "owner": {
       "config": {
-        "type": "PAYLOAD",
-        "field": "ownerId",
+        "type": "BUSINESS_OWNER",
+        "businessType": "LEAD",
         "skipUnavailable": false,
         "useDelegation": false,
         "requireAvailable": true
@@ -84,6 +84,16 @@
       "config": {
         "identityBinding": "MIGRATION_DYNAMIC",
         "start": "td004",
+        "businessOutcomes": [
+          {
+            "field": "result",
+            "value": "PROGRESS_RECORDED",
+            "label": "已记录实质进展",
+            "effectKind": "SCHEDULE_SELF",
+            "targetTemplateCode": "TD-004",
+            "businessAction": "REFRESH_FIVE_DAY_WINDOW"
+          }
+        ],
         "nodes": [
           {
             "key": "td004",
@@ -134,15 +144,15 @@
     "start": "TD-004",
     "transitions": [
       {
-        "on": "COMPLETE",
+        "on": "PROGRESS_RECORDED",
         "to": [
           "END"
         ],
-        "businessAction": "RECORD_PROGRESS_HANDOFF"
+        "businessAction": "REFRESH_FIVE_DAY_WINDOW"
       }
     ],
     "notes": [
-      "TD-004 is the approved stage-3 handoff boundary; it does not route to TD-005 or CONTRACT_SIGN."
+      "TD-004 ordinary routing ends after completion; SCHEDULE_SELF materializes the next five-day task without a graph self-loop."
     ]
   },
   "handlerCapability": {
@@ -153,14 +163,14 @@
   },
   "businessDependencies": [
     {
-      "code": "LEAD_PROGRESS_HANDOFF_EVENT",
+      "code": "LEAD_PROGRESS_EVENT",
       "repositoryStatus": "PRESENT",
-      "reason": "LEAD_FIRST_CONTACT_VALID supplies the governed stage-3 handoff."
+      "reason": "LEAD_FIRST_CONTACT_VALID starts the governed five-day progress cycle."
     },
     {
-      "code": "LEAD_PROGRESS_HANDOFF_HANDLER",
+      "code": "LEAD_PROGRESS_CYCLE_HANDLER",
       "repositoryStatus": "PRESENT",
-      "reason": "TD-004 completion is implemented as the approved action-audit boundary."
+      "reason": "TD-004 completion writes progress provenance and schedules the next five-day task idempotently."
     }
   ],
   "blockers": [],

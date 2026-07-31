@@ -99,6 +99,7 @@ public class TodoSimulationScenarioService
         {
             TodoDefinitionDocument definition=codec.read(journeys.canonicalDefinition(templateId,actor));
             Map<String,Object> completion=resolve(scenario.completionPayload(),command);
+            validateCompletion(definition,completion,scenario.requiredMaterials());
             SimulationResult businessOutcome=simulateBusinessOutcome(journey,completion,command);
             completion.putAll(businessOutcome.routingPayload());
             VirtualTaskCompletionSample sample=new VirtualTaskCompletionSample(completionNodeKey(definition,
@@ -208,6 +209,50 @@ public class TodoSimulationScenarioService
         return handlers.stream().filter(handler->handler.supportsSimulation()&&handler.supports(todo))
                 .findFirst().map(handler->handler.simulate(todo,completion))
                 .orElseGet(()->SimulationResult.none(completion));
+    }
+
+    private void validateCompletion(TodoDefinitionDocument definition,Map<String,Object> completion,
+            List<String> availableMaterials)
+    {
+        Map<String,Object> dod=definition==null||definition.dod()==null
+                ?Map.of():definition.dod().config();
+        for(Object raw:values(dod.get("requiredFields")))requireCompletionField(completion,raw);
+        for(Object raw:values(dod.get("conditionalRequired")))
+        {
+            if(!(raw instanceof Map<?,?> rule)||!(rule.get("when") instanceof Map<?,?> when))continue;
+            Object controlling=completion.get(String.valueOf(when.get("field")));
+            if(java.util.Objects.equals(String.valueOf(controlling),String.valueOf(when.get("equals"))))
+                requireCompletionField(completion,rule.get("field"));
+        }
+        List<String> supplied=availableMaterials==null?List.of():availableMaterials;
+        for(Object raw:values(dod.get("materials")))
+        {
+            if(!(raw instanceof Map<?,?> material))continue;
+            String type=String.valueOf(material.get("type"));
+            int minCount=positiveInteger(material.get("minCount"),1);
+            long count=supplied.stream().filter(type::equals).count();
+            if(count<minCount)throw new TodoException("TODO_DOD_ATTACHMENT_MISSING",
+                    "TODO_DOD_ATTACHMENT_MISSING: Missing completion material "+type);
+        }
+    }
+
+    private void requireCompletionField(Map<String,Object> completion,Object rawField)
+    {
+        String field=rawField==null?null:String.valueOf(rawField);
+        Object value=field==null?null:completion.get(field);
+        if(field==null||field.isBlank()||value==null||String.valueOf(value).isBlank())
+            throw new TodoException("TODO_DOD_FIELD_MISSING",
+                    "TODO_DOD_FIELD_MISSING: Missing completion field "+field);
+    }
+
+    private List<?> values(Object value)
+    {return value instanceof List<?> list?list:List.of();}
+
+    private int positiveInteger(Object value,int fallback)
+    {
+        if(value instanceof Number number)return Math.max(1,number.intValue());
+        try{return value==null?fallback:Math.max(1,Integer.parseInt(String.valueOf(value)));}
+        catch(NumberFormatException ignored){return fallback;}
     }
 
     private String completionNodeKey(TodoDefinitionDocument definition,String reference)
