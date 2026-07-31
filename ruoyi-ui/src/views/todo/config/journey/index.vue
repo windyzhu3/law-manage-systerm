@@ -83,6 +83,7 @@
             :business-stage="journey.template.businessStage"
             :current-version-id="journey.template.versionId"
             :event="journey.definition.event || {}"
+            :definition="journey.definition || {}"
             :preview="journey.employeePreview || {}"
             :permissions="clientPermissions"
             :resource-revision="resourceRevision"

@@ -54,6 +54,9 @@ import com.law.todo.application.TodoDefinitionService;
 import com.law.todo.application.TodoDodRuleManagementService;
 import com.law.todo.application.TodoEventResourceService;
 import com.law.todo.application.TodoJourneySimulationService;
+import com.law.todo.application.LeadTodoReleaseService;
+import com.law.todo.application.LeadTodoReleaseService.LeadReleaseView;
+import com.law.todo.application.LeadTodoReleaseService.LeadReleaseReadinessView;
 import com.law.todo.application.TodoPublishedSimulationDiagnosticService;
 import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
@@ -87,9 +90,43 @@ class TodoConfigurationControllerJourneyTest
     @jakarta.annotation.Resource TodoSlaRuleManagementService sla;
     @jakarta.annotation.Resource TodoConfigurationResourceManagementService resources;
     @jakarta.annotation.Resource TodoDefinitionService definitions;
+    @jakarta.annotation.Resource LeadTodoReleaseService leadReleases;
     @jakarta.annotation.Resource RequestMappingHandlerMapping handlerMapping;
 
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
+
+    @Test
+    void activatesCoordinatedLeadReleaseWithPublishPermissionAndAuthenticatedActor() throws Exception
+    {
+        authenticate("todo:definition:publish");
+        when(leadReleases.activate(any(),any())).thenReturn(new LeadReleaseView(
+                "LEAD_FIRST_CONTACT_ENTRY",52L,88L,Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L),
+                LocalDateTime.of(2026,7,31,12,0),"server-user"));
+
+        mvc().perform(post("/todo/config/lead-release/activate").contentType("application/json").content("""
+                {"actionId":"lead-release-1","td001VersionId":88,"td001DefinitionHash":"hash-88",
+                 "td002VersionId":80,"td003VersionId":89,"td004VersionId":79,"triggerExpectedVersion":3}
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.entrySlotCode").value("LEAD_FIRST_CONTACT_ENTRY"))
+                .andExpect(jsonPath("$.data.activeTd001VersionId").value(88))
+                .andExpect(jsonPath("$.data.downstreamVersions.TD-004").value(79));
+
+        ArgumentCaptor<Actor> actor=ArgumentCaptor.forClass(Actor.class);
+        verify(leadReleases).activate(any(),actor.capture());assertActor(actor.getValue());
+    }
+
+    @Test void returnsServerAuthoritativeLeadReleaseReadiness() throws Exception
+    {
+        authenticate("todo:definition:publish");
+        when(leadReleases.readiness(any())).thenReturn(new LeadReleaseReadinessView(true,
+                Map.of("TD-001",true,"TD-002",true,"TD-003",true,"TD-004",true),null,3,List.of()));
+        mvc().perform(get("/todo/config/lead-release/readiness")
+                        .param("td001VersionId","88").param("td001DefinitionHash","hash-88")
+                        .param("td002VersionId","80").param("td003VersionId","89").param("td004VersionId","79"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.activationReady").value(true))
+                .andExpect(jsonPath("$.data.triggerExpectedVersion").value(3));
+    }
 
     @Test
     void returnsJourneyAggregateAndPropagatesAuthenticatedActor() throws Exception
@@ -408,10 +445,12 @@ class TodoConfigurationControllerJourneyTest
         {return org.mockito.Mockito.mock(TodoSlaRuleManagementService.class);}
         @Bean TodoDefinitionService definitions()
         {return org.mockito.Mockito.mock(TodoDefinitionService.class);}
+        @Bean LeadTodoReleaseService leadReleases()
+        {return org.mockito.Mockito.mock(LeadTodoReleaseService.class);}
         @Bean TodoConfigurationController controller(TodoConfigurationJourneyService journeys,
                 TodoBusinessPayloadHydrationService payloads,TodoJourneySimulationService journeySimulation,
                 TodoConfigurationResourceManagementService resourceManagement,TodoSlaRuleManagementService sla,
-                TodoDefinitionService definitions)
+                TodoDefinitionService definitions,LeadTodoReleaseService leadReleases)
         {
             return new TodoConfigurationController(mock(TodoConfigurationQueryService.class),
                     sla,mock(TodoDodRuleManagementService.class),
@@ -420,7 +459,7 @@ class TodoConfigurationControllerJourneyTest
                     mock(TodoDefinitionCatalogService.class),mock(TodoAutoActionCapabilityCatalogService.class),
                     mock(TodoEventResourceService.class),mock(TodoConfigurationResourceCatalogService.class),
                     mock(TodoPublishedSimulationDiagnosticService.class),journeys,payloads,journeySimulation,
-                    resourceManagement);
+                    resourceManagement,null,null,null,leadReleases);
         }
         private static <T> T mock(Class<T> type){return org.mockito.Mockito.mock(type);}
     }

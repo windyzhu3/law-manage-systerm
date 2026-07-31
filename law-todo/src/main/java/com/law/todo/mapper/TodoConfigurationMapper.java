@@ -62,4 +62,16 @@ public interface TodoConfigurationMapper
     Map<String,Object> selectLatestSimulationEvidence(Map<String,Object> query);
     List<Map<String,Object>> selectSimulationReadinessBatch(
             @Param("versionIds") List<Long> versionIds);
+    List<Map<String,Object>> selectLeadEntrySlotBindingsForUpdate(String entrySlotCode);
+    List<Map<String,Object>> selectLeadEntrySlotBindings(String entrySlotCode);
+    List<Map<String,Object>> selectLeadReleaseVersions(@Param("versionIds") List<Long> versionIds);
+    Map<String,Object> selectLeadReleaseTriggerForUpdate(@Param("entrySlotCode") String entrySlotCode,
+            @Param("templateVersionId") Long templateVersionId);
+    Map<String,Object> selectLeadReleaseTrigger(@Param("entrySlotCode") String entrySlotCode,
+            @Param("templateVersionId") Long templateVersionId);
+    int insertLeadReleaseDisabledTrigger(Map<String,Object> row);
+    int insertLeadReleaseActionClaim(Map<String,Object> action);
+    Map<String,Object> selectLeadReleaseActionForUpdate(String actionId);
+    int completeLeadReleaseAction(@Param("actionId") String actionId,
+            @Param("requestFingerprint") String requestFingerprint,@Param("entityId") Long entityId);
 }

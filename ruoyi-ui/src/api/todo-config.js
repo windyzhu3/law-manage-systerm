@@ -2,6 +2,8 @@ import request from '@/utils/request'
 
 export function getTodoConfigDashboard() { return request({ url: '/todo/config/dashboard', method: 'get' }) }
 export function listTodoFieldOptions(params) { return request({ url: '/todo/config/resources/field-options', method: 'get', params }) }
+export function getLeadReleaseReadiness(params) { return request({ url: '/todo/config/lead-release/readiness', method: 'get', params }) }
+export function activateLeadRelease(data) { return request({ url: '/todo/config/lead-release/activate', method: 'post', data }) }
 
 export function listSlaRules(params) { return request({ url: '/todo/config/sla-rules', method: 'get', params }) }
 export function getSlaRule(id) { return request({ url: `/todo/config/sla-rules/${id}`, method: 'get' }) }

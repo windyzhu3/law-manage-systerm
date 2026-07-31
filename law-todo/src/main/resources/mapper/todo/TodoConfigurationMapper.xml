@@ -495,4 +495,70 @@
     </foreach>
     group by v.version_id,v.definition_hash,v.template_id
   </select>
+  <!-- Release-only locking/read path. It never enables a trigger; the governed entry-slot switch owns that mutation. -->
+  <select id="selectLeadEntrySlotBindingsForUpdate" resultType="java.util.Map">
+    select r.entry_slot_code,r.trigger_rule_id,r.template_version_id,r.enabled,r.version trigger_version,
+      t.template_code,t.business_type,v.status version_status,cast(v.compiled_json as char) compiled_json
+    from todo_trigger_rule r
+    join todo_template t on t.template_id=r.template_id
+    join todo_template_version v on v.version_id=r.template_version_id
+    where r.entry_slot_code=#{entrySlotCode}
+    order by r.trigger_rule_id for update
+  </select>
+  <select id="selectLeadEntrySlotBindings" resultType="java.util.Map">
+    select r.entry_slot_code,r.trigger_rule_id,r.template_version_id,r.enabled,r.version trigger_version,
+      t.template_code,t.business_type,v.status version_status,cast(v.compiled_json as char) compiled_json
+    from todo_trigger_rule r
+    join todo_template t on t.template_id=r.template_id
+    join todo_template_version v on v.version_id=r.template_version_id
+    where r.entry_slot_code=#{entrySlotCode}
+    order by r.trigger_rule_id
+  </select>
+  <select id="selectLeadReleaseVersions" resultType="java.util.Map">
+    select v.version_id,v.version_no,v.template_id,v.status version_status,v.definition_hash,
+      cast(v.compiled_json as char) compiled_json,v.event_type,v.payload_version,
+      t.template_code,t.template_name,t.business_type,t.status template_status
+    from todo_template_version v join todo_template t on t.template_id=v.template_id
+    where v.version_id in
+    <foreach collection="versionIds" item="versionId" open="(" separator="," close=")">
+      #{versionId}
+    </foreach>
+    order by field(v.version_id,
+    <foreach collection="versionIds" item="versionId" separator=",">#{versionId}</foreach>)
+  </select>
+  <select id="selectLeadReleaseTriggerForUpdate" resultType="java.util.Map">
+    select r.trigger_rule_id,r.version trigger_version,r.enabled,r.entry_slot_code,r.template_version_id,
+      r.rule_code,r.event_type,r.business_type,t.template_code
+    from todo_trigger_rule r join todo_template t on t.template_id=r.template_id
+    where r.entry_slot_code=#{entrySlotCode} and r.template_version_id=#{templateVersionId}
+    order by case when r.enabled='N' then 0 else 1 end,r.trigger_rule_id limit 1 for update
+  </select>
+  <select id="selectLeadReleaseTrigger" resultType="java.util.Map">
+    select r.trigger_rule_id,r.version trigger_version,r.enabled,r.entry_slot_code,r.template_version_id,
+      r.rule_code,r.event_type,r.business_type,t.template_code
+    from todo_trigger_rule r join todo_template t on t.template_id=r.template_id
+    where r.entry_slot_code=#{entrySlotCode} and r.template_version_id=#{templateVersionId}
+    order by case when r.enabled='N' then 0 else 1 end,r.trigger_rule_id limit 1
+  </select>
+  <insert id="insertLeadReleaseDisabledTrigger" useGeneratedKeys="true" keyProperty="triggerRuleId">
+    insert into todo_trigger_rule(rule_code,rule_name,event_type,payload_version,template_id,
+      template_version_id,business_type,entry_slot_code,enabled,condition_json,create_by,update_by,update_time)
+    values(#{ruleCode},#{ruleName},#{eventType},#{payloadVersion},#{templateId},#{templateVersionId},
+      #{businessType},#{entrySlotCode},'N',#{conditionJson},#{createBy},#{updateBy},sysdate())
+  </insert>
+  <insert id="insertLeadReleaseActionClaim">
+    insert ignore into todo_definition_action(action_id,action_type,action_status,request_fingerprint,
+      entity_type,entity_id,source_entity_id,operator_id,operator_name,operator_dept_id,payload_json)
+    values(#{actionId},'ACTIVATE_LEAD_RELEASE','CLAIMED',#{requestFingerprint},'LEAD_RELEASE',null,
+      #{sourceEntityId},#{operatorId},#{operatorName},#{operatorDeptId},cast(#{payloadJson} as json))
+  </insert>
+  <select id="selectLeadReleaseActionForUpdate" resultType="java.util.Map">
+    select * from todo_definition_action where action_id=#{actionId} for update
+  </select>
+  <update id="completeLeadReleaseAction">
+    update todo_definition_action set action_status='APPLIED',entity_id=#{entityId}
+    where action_id=#{actionId} and request_fingerprint=#{requestFingerprint}
+      and action_type='ACTIVATE_LEAD_RELEASE' and entity_type='LEAD_RELEASE'
+      and action_status='CLAIMED' and entity_id is null
+  </update>
 </mapper>

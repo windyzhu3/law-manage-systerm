@@ -36,6 +36,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService;
 import com.law.todo.application.TodoPublishedSimulationDiagnosticService;
 import com.law.todo.application.TodoSlaRuleManagementService;
 import com.law.todo.application.TodoTemplateService;
+import com.law.todo.application.LeadTodoReleaseService;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationSimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.ConfigurationResourceCommand;
@@ -46,6 +47,8 @@ import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimula
 import com.law.todo.application.command.TodoConfigurationCommands.DodRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaRuleCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.SlaJourneyPreviewCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.LeadReleaseCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.LeadReleaseReadinessQuery;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyTemplateCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CopyVersionCommand;
 import com.law.todo.application.command.TodoDefinitionCommands.CreateTemplateCommand;
@@ -100,6 +103,7 @@ public class TodoConfigurationController extends BaseController
     private final TodoJourneyPayloadPreparationService payloadPreparation;
     private final TodoFieldDisplayResolutionService fieldDisplays;
     private final TodoSimulationScenarioService scenarioSimulation;
+    private final LeadTodoReleaseService leadReleases;
 
     @Autowired
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
@@ -111,8 +115,8 @@ public class TodoConfigurationController extends BaseController
             TodoBusinessPayloadHydrationService payloads,TodoJourneySimulationService journeySimulation,
             TodoConfigurationResourceManagementService resourceManagement,
             TodoJourneyPayloadPreparationService payloadPreparation,TodoFieldDisplayResolutionService fieldDisplays,
-            TodoSimulationScenarioService scenarioSimulation)
-    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;this.resourceCatalog=resourceCatalog;this.publishedDiagnostics=publishedDiagnostics;this.journeys=journeys;this.payloads=payloads;this.journeySimulation=journeySimulation;this.resourceManagement=resourceManagement;this.payloadPreparation=payloadPreparation;this.fieldDisplays=fieldDisplays;this.scenarioSimulation=scenarioSimulation;}
+            TodoSimulationScenarioService scenarioSimulation,LeadTodoReleaseService leadReleases)
+    {this.query=query;this.sla=sla;this.dod=dod;this.templates=templates;this.definitions=definitions;this.diff=diff;this.simulation=simulation;this.catalogs=catalogs;this.autoActions=autoActions;this.eventResources=eventResources;this.resourceCatalog=resourceCatalog;this.publishedDiagnostics=publishedDiagnostics;this.journeys=journeys;this.payloads=payloads;this.journeySimulation=journeySimulation;this.resourceManagement=resourceManagement;this.payloadPreparation=payloadPreparation;this.fieldDisplays=fieldDisplays;this.scenarioSimulation=scenarioSimulation;this.leadReleases=leadReleases;}
 
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
@@ -125,7 +129,7 @@ public class TodoConfigurationController extends BaseController
             TodoJourneyPayloadPreparationService payloadPreparation,TodoFieldDisplayResolutionService fieldDisplays)
     {this(query,sla,dod,templates,definitions,diff,simulation,catalogs,autoActions,eventResources,resourceCatalog,
             publishedDiagnostics,journeys,payloads,journeySimulation,resourceManagement,payloadPreparation,
-            fieldDisplays,null);}
+            fieldDisplays,null,null);}
 
     public TodoConfigurationController(TodoConfigurationQueryService query,TodoSlaRuleManagementService sla,
             TodoDodRuleManagementService dod,TodoTemplateService templates,TodoDefinitionService definitions,
@@ -162,6 +166,16 @@ public class TodoConfigurationController extends BaseController
 
     @PreAuthorize("@ss.hasPermi('todo:template:list')")
     @GetMapping("/dashboard") public AjaxResult dashboard(){return success(query.dashboard());}
+
+    @PreAuthorize("@ss.hasPermi('todo:definition:publish')")
+    @PostMapping("/lead-release/activate")
+    public AjaxResult activateLeadRelease(@Valid @RequestBody LeadReleaseCommand command)
+    {return success(leadReleases.activate(command,actor()));}
+
+    @PreAuthorize("@ss.hasPermi('todo:definition:publish')")
+    @GetMapping("/lead-release/readiness")
+    public AjaxResult leadReleaseReadiness(@Valid @ModelAttribute LeadReleaseReadinessQuery query)
+    {return success(leadReleases.readiness(query));}
 
     @PreAuthorize("@ss.hasAnyPermi('todo:template:list,todo:template:edit,todo:simulation:simulate,todo:release:publish')")
     @GetMapping("/templates/{id}/journey")

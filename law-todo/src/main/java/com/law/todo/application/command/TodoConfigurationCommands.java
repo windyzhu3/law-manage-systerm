@@ -155,6 +155,16 @@ public final class TodoConfigurationCommands
         public boolean isBusinessIdValid(){return businessId!=null&&businessId.longValue()!=0L;}
     }
 
+    public record LeadReleaseCommand(@NotBlank String actionId,
+            @NotNull @Positive Long td001VersionId,@NotBlank String td001DefinitionHash,
+            @NotNull @Positive Long td002VersionId,@NotNull @Positive Long td003VersionId,
+            @NotNull @Positive Long td004VersionId,
+            @NotNull @PositiveOrZero Integer triggerExpectedVersion) { }
+
+    public record LeadReleaseReadinessQuery(@NotNull @Positive Long td001VersionId,
+            @NotBlank String td001DefinitionHash,@NotNull @Positive Long td002VersionId,
+            @NotNull @Positive Long td003VersionId,@NotNull @Positive Long td004VersionId) { }
+
     public record ConfigurationSimulationCommand(@NotBlank String requestId,@NotNull @Positive Long versionId,
             @NotBlank String eventType,@NotNull @Positive Integer payloadVersion,
             @NotBlank String businessType,@NotNull @Positive Long businessId,

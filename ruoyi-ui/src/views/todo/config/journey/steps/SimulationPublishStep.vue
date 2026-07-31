@@ -132,6 +132,52 @@
         发布当前版本
       </el-button>
     </div>
+
+    <section v-if="leadReleaseApplicable" class="lead-release-panel" data-testid="lead-release-panel">
+      <div class="lead-release-panel__title">
+        <div>
+          <span>线索待办整体启用</span>
+          <h3>一次启用首联入口和三个下游待办</h3>
+        </div>
+        <el-tag :type="releaseAlreadyActive ? 'success' : 'info'">
+          {{ releaseAlreadyActive ? '当前组合已启用' : '等待整体启用' }}
+        </el-tag>
+      </div>
+      <el-alert v-if="releaseError" :title="releaseError" type="warning" :closable="false" show-icon />
+      <dl class="lead-release-panel__versions">
+        <div>
+          <dt>当前入口</dt>
+          <dd>线索已分配 → 首联待办（TD-001，版本ID {{ activeRelease.activeTd001VersionId || '-' }}）</dd>
+        </div>
+        <div>
+          <dt>当前下游版本</dt>
+          <dd>{{ activeDownstreamText }}</dd>
+        </div>
+        <div>
+          <dt>本次下游版本</dt>
+          <dd>疑似无效主管复核（TD-002，版本ID {{ releaseVersions['TD-002'] || '-' }}） /
+            无法联系重试（TD-003，版本ID {{ releaseVersions['TD-003'] || '-' }}） /
+            5天实质进展（TD-004，版本ID {{ releaseVersions['TD-004'] || '-' }}）</dd>
+        </div>
+      </dl>
+      <div class="lead-release-panel__evidence">
+        <span v-for="code in ['TD-001','TD-002','TD-003','TD-004']" :key="code">
+          <i :class="releaseEvidence(code) ? 'el-icon-circle-check' : 'el-icon-circle-close'" />
+          {{ releaseTemplateLabel(code) }}：{{ releaseEvidence(code) ? '当前版本验证通过' : '验证未完成' }}
+        </span>
+      </div>
+      <div class="lead-release-panel__actions">
+        <small>启用按钮只依据服务端返回的四版本证据和当前入口绑定状态，不在页面中推测验证结果。</small>
+        <el-button
+          v-if="canActivateLeadRelease"
+          type="primary"
+          :loading="releaseActivating || releaseLoading"
+          :disabled="!releaseReadiness || !releaseReadiness.activationReady || releaseAlreadyActive"
+          data-testid="activate-lead-release"
+          @click="activateCoordinatedLeadRelease"
+        >整体启用线索待办</el-button>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -152,7 +198,9 @@ import {
   publishReleaseRecord,
   listJourneyScenarios,
   simulateJourneyScenario,
-  batchSimulateJourneyScenarios
+  batchSimulateJourneyScenarios,
+  getLeadReleaseReadiness,
+  activateLeadRelease
 } from '@/api/todo-config'
 import {
   updateManualOverrides,
@@ -182,6 +230,7 @@ export default {
     template: { type: Object, required: true },
     value: { type: Object, default: () => ({}) },
     event: { type: Object, default: () => ({}) },
+    definition: { type: Object, default: () => ({}) },
     businessType: { type: String, default: '' },
     currentVersionId: { type: [Number, String], required: true },
     permissions: { type: Array, default: () => [] },
@@ -217,7 +266,11 @@ export default {
       scenarioResults: {},
       simulatingScenario: false,
       batchSimulating: false,
-      serverScenarioGate: null
+      serverScenarioGate: null,
+      releaseReadiness: null,
+      releaseLoading: false,
+      releaseActivating: false,
+      releaseError: ''
     }
   },
   computed: {
@@ -246,6 +299,46 @@ export default {
     scenarioGateState() {
       if (this.serverScenarioGate && this.serverScenarioGate.publicationReady) return this.serverScenarioGate
       return scenarioGate(this.scenarios, this.scenarioResults, this.draftHash)
+    },
+    leadReleaseApplicable() {
+      return String(this.template.templateCode || '') === 'TD-001' &&
+        String(this.template.publishStatus || '') === 'PUBLISHED'
+    },
+    canActivateLeadRelease() {
+      return this.permissions.includes('todo:definition:publish')
+    },
+    releaseVersions() {
+      const versions = { 'TD-001': Number(this.currentVersionId) }
+      const routing = (((this.definition || {}).routing || {}).config || {})
+      for (const outcome of routing.businessOutcomes || []) {
+        if (['TD-002', 'TD-003', 'TD-004'].includes(outcome.targetTemplateCode)) {
+          versions[outcome.targetTemplateCode] = Number(outcome.targetVersionId)
+        }
+      }
+      return versions
+    },
+    releaseQuery() {
+      const values = this.releaseVersions
+      if (!this.draftHash || !values['TD-001'] || !values['TD-002'] || !values['TD-003'] || !values['TD-004']) return null
+      return {
+        td001VersionId: values['TD-001'], td001DefinitionHash: this.draftHash,
+        td002VersionId: values['TD-002'], td003VersionId: values['TD-003'], td004VersionId: values['TD-004']
+      }
+    },
+    activeRelease() {
+      return (this.releaseReadiness && this.releaseReadiness.activeRelease) || {}
+    },
+    activeDownstreamText() {
+      const versions = this.activeRelease.downstreamVersions || {}
+      return `疑似无效主管复核（TD-002，版本ID ${versions['TD-002'] || '-'}） / ` +
+        `无法联系重试（TD-003，版本ID ${versions['TD-003'] || '-'}） / ` +
+        `5天实质进展（TD-004，版本ID ${versions['TD-004'] || '-'}）`
+    },
+    releaseAlreadyActive() {
+      if (!this.activeRelease.activeTd001VersionId) return false
+      const active = this.activeRelease.downstreamVersions || {}
+      return Number(this.activeRelease.activeTd001VersionId) === Number(this.releaseVersions['TD-001']) &&
+        ['TD-002', 'TD-003', 'TD-004'].every(code => Number(active[code]) === Number(this.releaseVersions[code]))
     }
   },
   watch: {
@@ -263,6 +356,7 @@ export default {
     },
     'template.publishStatus'() {
       this.resetExecutionState()
+      this.loadLeadReleaseReadiness()
     },
     initialReadiness: {
       deep: true,
@@ -277,8 +371,55 @@ export default {
       this.loadScenarios()
       if (this.capabilities.canPublish) this.runPreflight({ quiet: true })
     }
+    this.loadLeadReleaseReadiness()
   },
   methods: {
+    releaseTemplateLabel(code) {
+      return { 'TD-001': '首联待办', 'TD-002': '疑似无效主管复核', 'TD-003': '无法联系重试', 'TD-004': '5天实质进展' }[code] || code
+    },
+    releaseEvidence(code) {
+      return Boolean(this.releaseReadiness && this.releaseReadiness.evidenceReady && this.releaseReadiness.evidenceReady[code])
+    },
+    async loadLeadReleaseReadiness() {
+      if (!this.leadReleaseApplicable || !this.canActivateLeadRelease || !this.releaseQuery) {
+        this.releaseReadiness = null
+        return
+      }
+      this.releaseLoading = true
+      this.releaseError = ''
+      try {
+        const response = await getLeadReleaseReadiness(this.releaseQuery)
+        this.releaseReadiness = response.data || null
+      } catch (error) {
+        this.releaseReadiness = null
+        this.releaseError = (error && (error.msg || error.message)) || '线索待办整体启用检查失败'
+      } finally {
+        this.releaseLoading = false
+      }
+    },
+    async activateCoordinatedLeadRelease() {
+      if (!this.releaseReadiness || !this.releaseReadiness.activationReady || !this.releaseQuery) return
+      try {
+        await this.$confirm('将同时启用首联入口和三个下游版本，且只保留一个线索已分配入口。确认继续？', '确认整体启用', {
+          confirmButtonText: '确认启用', cancelButtonText: '继续检查', type: 'warning'
+        })
+      } catch (_) { return }
+      this.releaseActivating = true
+      try {
+        const response = await activateLeadRelease({
+          actionId: this.actionId('lead-release'), ...this.releaseQuery,
+          triggerExpectedVersion: Number(this.releaseReadiness.triggerExpectedVersion || 0)
+        })
+        this.$modal.msgSuccess('线索待办整体启用成功')
+        await this.loadLeadReleaseReadiness()
+        this.$emit('release-activated', response.data || {})
+        this.$emit('published', this.template.templateId)
+      } catch (error) {
+        this.$modal.msgError((error && (error.msg || error.message)) || '线索待办整体启用失败')
+      } finally {
+        this.releaseActivating = false
+      }
+    },
     actionId(action) {
       return `journey-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}`
     },
@@ -652,10 +793,25 @@ export default {
 .simulation-publish-step__full-simulation { display: grid; gap: 12px; padding: 14px; border: 1px solid transparent; border-radius: 8px; transition: border-color .2s ease, box-shadow .2s ease; }
 .simulation-publish-step__actions { display: flex; justify-content: flex-end; gap: 12px; }
 .simulation-publish-step__publish { display: flex; justify-content: space-between; align-items: center; gap: 20px; border: 1px solid #C89A3D; border-radius: 8px; padding: 18px 20px; background: #FFFCF5; }
+.lead-release-panel { display: grid; gap: 14px; padding: 20px; border: 1px solid #B8C7D9; border-radius: 8px; background: #F8FAFD; }
+.lead-release-panel__title, .lead-release-panel__actions { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.lead-release-panel__title span { color: #C89A3D; font-size: 12px; font-weight: 700; }
+.lead-release-panel__title h3 { margin: 4px 0 0; color: #0B2A55; }
+.lead-release-panel__versions { display: grid; gap: 10px; margin: 0; }
+.lead-release-panel__versions div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; }
+.lead-release-panel__versions dt { color: #66758A; }
+.lead-release-panel__versions dd { margin: 0; color: #243B5A; }
+.lead-release-panel__evidence { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lead-release-panel__evidence .el-icon-circle-check { color: #2E7D57; }
+.lead-release-panel__evidence .el-icon-circle-close { color: #B63C3C; }
+.lead-release-panel__actions small { max-width: 620px; color: #66758A; line-height: 20px; }
 .simulation-publish-step__full-simulation.is-repair-target,
 .simulation-publish-step ::v-deep .scenario-selector.is-repair-target { border-color: #C89A3D; box-shadow: 0 0 0 3px rgba(200, 154, 61, 0.18); }
 @media (max-width: 720px) {
   .simulation-publish-step__header, .simulation-publish-step__publish { flex-direction: column; }
   .simulation-publish-step__actions { flex-direction: column; }
+  .lead-release-panel__title, .lead-release-panel__actions { flex-direction: column; }
+  .lead-release-panel__versions div { grid-template-columns: 1fr; gap: 4px; }
+  .lead-release-panel__evidence { grid-template-columns: 1fr; }
 }
 </style>

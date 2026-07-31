@@ -774,6 +774,28 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   }
 })
 
+check('activates the four lead templates as one server-governed release', () => {
+  const step = read('src/views/todo/config/journey/steps/SimulationPublishStep.vue')
+  const health = read('src/views/todo/config/journey/components/ConfigurationHealthPanel.vue')
+  const api = read('src/api/todo-config.js')
+  for (const apiName of ['getLeadReleaseReadiness', 'activateLeadRelease']) {
+    assert(api.includes(`function ${apiName}`), `missing coordinated lead release API: ${apiName}`)
+  }
+  for (const label of ['当前入口', '线索已分配', '下游版本', '疑似无效主管复核', '无法联系重试', '5天实质进展']) {
+    assert(step.includes(label), `lead release panel missing Chinese label: ${label}`)
+  }
+  assert(step.includes('releaseReadiness.activationReady'),
+    'activation must be disabled by backend release readiness rather than client hash comparisons')
+  assert(step.includes('getLeadReleaseReadiness'),
+    'active binding and exact four-version evidence must come from the server')
+  assert(step.includes("this.$confirm('将同时启用首联入口和三个下游版本"),
+    'coordinated activation must require an explicit confirmation')
+  assert(step.includes("this.$emit('published'"),
+    'successful activation must refresh the journey and its template workbench')
+  assert(health.includes('TODO_LEAD_RELEASE_EVIDENCE_INCOMPLETE'),
+    'release evidence blockers must have a localized health-panel explanation')
+})
+
 check('shows authoritative cross-step impact and keeps the active narrow-screen step visible', () => {
   const page = read('src/views/todo/config/journey/index.vue')
   const nav = read('src/views/todo/config/journey/components/JourneyStepNav.vue')

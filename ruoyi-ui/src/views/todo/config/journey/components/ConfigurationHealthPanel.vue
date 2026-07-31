@@ -50,7 +50,10 @@ export default {
         TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE: '还有必测场景未通过',
         TODO_FULL_SIMULATION_REQUIRED: '完整试运行尚未通过',
         TODO_FULL_SIMULATION_STALE: '完整试运行已失效，请使用当前草稿重新运行',
-        TODO_JOURNEY_SIMULATION_REQUIRED: '完整试运行尚未通过'
+        TODO_JOURNEY_SIMULATION_REQUIRED: '完整试运行尚未通过',
+        TODO_LEAD_RELEASE_EVIDENCE_INCOMPLETE: '四个线索待办版本尚未全部通过当前版本的场景验证和完整试运行',
+        TODO_LEAD_RELEASE_ROUTING_MISMATCH: '首联待办的后续路由与本次启用版本不一致',
+        TODO_LEAD_RELEASE_DEFINITION_STALE: '首联待办已发生变化，请刷新后重新检查'
       }
       const code = String((issue && issue.code) || '')
       return messages[code] || (issue && (issue.message || issue.title)) || '此处配置需要检查'
