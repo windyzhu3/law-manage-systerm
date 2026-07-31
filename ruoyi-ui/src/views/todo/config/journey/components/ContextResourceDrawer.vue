@@ -10,7 +10,7 @@
       @version-created="versionCreated"
     />
     <resource-item-drawer
-      v-else-if="visible && access.allowed && itemResource"
+      v-else-if="visible && access.allowed && itemResource && request.item"
       :visible="visible"
       :resource-type="resourceType"
       :business-type="request.businessType || businessType"
@@ -36,7 +36,13 @@
       :append-to-body="true"
       @close="updateVisible(false)"
     >
-      <div class="context-resource-denied">
+      <div v-if="missingItem" class="context-resource-denied">
+        <i class="el-icon-warning-outline" />
+        <h3>未找到需要修复的配置资源</h3>
+        <p>资源引用已失效，本页面不会创建空白资源。请返回模板中的对应控件重新选择，或联系管理员恢复原资源。</p>
+        <el-button @click="updateVisible(false)">返回模板配置</el-button>
+      </div>
+      <div v-else class="context-resource-denied">
         <i class="el-icon-lock" />
         <h3>当前账号不能维护该资源</h3>
         <p>{{ access.message }}。模板草稿未发生变化，你可以联系具有资源维护权限的管理员处理。</p>
@@ -69,6 +75,7 @@ export default {
   computed: {
     resourceType() { return String(this.request.type || '').toUpperCase() },
     itemResource() { return ['FIELD', 'MATERIAL', 'DOD_RECIPE'].includes(this.resourceType) },
+    missingItem() { return this.itemResource && !this.request.item },
     access() { return resourceRepairAccess(this.permissions, this.request) }
   },
   watch: {

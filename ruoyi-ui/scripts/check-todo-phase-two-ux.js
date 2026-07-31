@@ -827,7 +827,7 @@ check('renders governed effects and returns repair issues to exact coordinates',
   'simulation publish must forward the complete readiness issue and its coordinates')
   assert(page.includes('fixLocation(issue)'),
     'the shell must resolve fieldPath/resourceKey coordinates before navigating')
-  assert(page.includes('editor.focusField(location.focusTarget, location.resourceKey)'),
+  assert(page.includes('editor.focusField(target.focusTarget, target.resourceKey)'),
     'the shell must pass the resolved resource key and exact control to the target step')
   assert(page.includes('location.openResourceDrawer') && page.includes('location.resourceType'),
     'governed configuration resources must route to their maintenance drawer when required')
@@ -868,6 +868,24 @@ check('focuses exact owner, DoD, and routing controls and opens advanced section
     'routing repair must open the topology section for node or edge coordinates')
   assert(businessRouting.includes('routingFocusTarget(fieldPath, resourceKey)'),
     'business routing repair must map result, effect, and target coordinates precisely')
+})
+
+check('opens only resolved referenced resources and falls back to visible precise repair context', () => {
+  const page = read('src/views/todo/config/journey/index.vue')
+  const model = read('src/views/todo/config/journey/journey-step-model.js')
+  const drawer = read('src/views/todo/config/journey/components/ContextResourceDrawer.vue')
+  assert(model.includes('resolveRepairResourceItem'),
+    'referenced recipe and material identifiers must resolve from the journey resource catalog')
+  assert(model.includes('request.item = item') && model.includes('clone(source.item)'),
+    'context repair requests must preserve a safe deep-cloned resource item')
+  assert(page.includes('resolveRepairResourceItem') && page.includes('resolvedItem'),
+    'the journey shell must resolve resource identifiers before opening a drawer')
+  assert(page.includes('repairContext') && page.includes('未找到需要修复的配置资源'),
+    'missing referenced resources must leave visible repair context at the precise control')
+  assert(page.includes('focusRepairControl(location)'),
+    'missing referenced resources must focus the exact configured control')
+  assert(drawer.includes('itemResource && request.item'),
+    'the contextual drawer must never turn a missing referenced item into blank create state')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

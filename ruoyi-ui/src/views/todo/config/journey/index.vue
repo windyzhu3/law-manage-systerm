@@ -53,6 +53,21 @@
         <el-button type="text" @click="repair(activeIssues[0])">立即处理</el-button>
       </div>
 
+      <el-alert
+        v-if="repairContext"
+        class="journey-repair-context"
+        title="未找到需要修复的配置资源"
+        type="warning"
+        :closable="true"
+        show-icon
+        @close="repairContext = null"
+      >
+        <div slot="description">
+          <span>{{ repairContext.message }}</span>
+          <el-button type="text" @click="focusRepairContext">定位当前配置</el-button>
+        </div>
+      </el-alert>
+
       <main class="journey-body">
         <section class="journey-editor">
           <keep-alive>
@@ -178,6 +193,7 @@ import {
   scopeOwnerFields,
   projectEmployeePreview,
   createRepairRequest,
+  resolveRepairResourceItem,
   completeResourceRepair as completeRepair,
   fixLocation
 } from './journey-step-model'
@@ -282,6 +298,7 @@ export default {
       pendingCopyTransition: null,
       resourceRevision: 0,
       resourceRepair: { open: false, request: {} },
+      repairContext: null,
       editorIssues: {}
     }
   },
@@ -845,18 +862,36 @@ export default {
       }
     },
     repair(issue) {
+      this.repairContext = null
       const location = fixLocation(issue)
       const stepCode = location.stepCode
       if (STEP_CODES.includes(stepCode)) this.activeStep = stepCode
       if (location.openResourceDrawer && location.resourceType) {
-        this.openResourceRepair({
+        const request = {
           type: location.resourceType,
-          resourceId: issue && issue.resourceId,
-          item: issue && issue.resource,
+          resourceId: issue && (issue.resourceItemId || issue.resourceId),
+          item: issue && (issue.item || issue.resource),
+          itemKey: issue && (issue.itemKey || issue.resourceItemKey || issue.resourceCode ||
+            issue.referenceKey || issue.referencedResourceKey || issue.resourceRef),
           businessType: this.journey.template.businessType,
           returnStep: stepCode,
           focusField: location.focusTarget
-        })
+        }
+        const resolvedItem = resolveRepairResourceItem(request, this.journey.resources || {})
+        if (resolvedItem) {
+          this.openResourceRepair({
+            ...request,
+            resourceId: resolvedItem.resourceItemId || resolvedItem.resource_item_id || request.resourceId,
+            item: resolvedItem
+          })
+        } else {
+          const reference = request.itemKey || request.resourceId || '当前引用'
+          this.repairContext = {
+            location,
+            message: `${issue && issue.message ? `${issue.message}；` : ''}${location.resourceType} 资源“${reference}”不在当前资源目录中。已定位到模板控件，请重新选择现有资源或联系管理员恢复该资源。`
+          }
+          this.focusRepairControl(location)
+        }
       } else if ((issue && [
         'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
         'TODO_FULL_SIMULATION_REQUIRED',
@@ -896,15 +931,22 @@ export default {
           if (editor && editor.focusField) editor.focusField('durationValue')
         })
       } else {
-        this.$nextTick(() => {
-          const editor = this.$refs.activeEditor
-          if (editor && editor.focusField) {
-            editor.focusField(location.focusTarget, location.resourceKey)
-          }
-        })
+        this.focusRepairControl(location)
       }
     },
+    focusRepairControl(location) {
+      const target = location || {}
+      if (STEP_CODES.includes(target.stepCode)) this.activeStep = target.stepCode
+      this.$nextTick(() => {
+        const editor = this.$refs.activeEditor
+        if (editor && editor.focusField) editor.focusField(target.focusTarget, target.resourceKey)
+      })
+    },
+    focusRepairContext() {
+      if (this.repairContext) this.focusRepairControl(this.repairContext.location)
+    },
     openResourceRepair(request) {
+      this.repairContext = null
       this.resourceRepair = { open: true, request: createRepairRequest(request) }
     },
     async completeResourceRepair(payload) {

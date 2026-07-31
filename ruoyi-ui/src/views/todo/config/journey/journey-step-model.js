@@ -1266,15 +1266,56 @@ function routingDraftBlocker(rows, options) {
 
 function createRepairRequest(value) {
   const source = value || {}
-  return {
+  const item = source.item && typeof source.item === 'object' && !Array.isArray(source.item)
+    ? clone(source.item)
+    : null
+  const rawResourceId = source.resourceId == null
+    ? (item && (item.resourceItemId || item.resource_item_id))
+    : source.resourceId
+  const resourceId = Number(rawResourceId)
+  const request = {
     type: String(source.type || '').toUpperCase(),
     eventType: source.eventType ? String(source.eventType) : null,
     payloadVersion: source.payloadVersion == null ? null : Number(source.payloadVersion),
-    resourceId: source.resourceId == null ? null : Number(source.resourceId),
+    resourceId: Number.isFinite(resourceId) && resourceId > 0 ? resourceId : null,
     businessType: source.businessType ? String(source.businessType) : null,
     returnStep: String(source.returnStep || 'EVENT').toUpperCase(),
     focusField: source.focusField ? String(source.focusField) : null
   }
+  const itemKey = source.itemKey || source.resourceItemKey || source.resourceCode ||
+    source.referenceKey || source.referencedResourceKey || source.resourceRef || null
+  if (item) request.item = item
+  if (itemKey) request.itemKey = String(itemKey)
+  return request
+}
+
+function resolveRepairResourceItem(request, resources) {
+  const source = request || {}
+  const type = String(source.type || '').toUpperCase()
+  const catalogKey = ({ FIELD: 'fields', MATERIAL: 'materials', DOD_RECIPE: 'recipes' })[type]
+  if (!catalogKey) return null
+  const catalogs = resources || {}
+  const catalog = Array.isArray(catalogs[catalogKey]) ? catalogs[catalogKey] : []
+  const direct = source.item && typeof source.item === 'object' && !Array.isArray(source.item)
+    ? source.item
+    : null
+  const idValue = source.resourceId || (direct && (direct.resourceItemId || direct.resource_item_id))
+  const id = Number(idValue)
+  const key = String(source.itemKey || source.resourceItemKey || source.resourceCode ||
+    source.referenceKey || source.referencedResourceKey || source.resourceRef ||
+    (direct && (direct.code || direct.resourceCode || direct.resource_code)) || '').trim()
+  const match = catalog.find(item => {
+    const itemId = Number(item && (item.resourceItemId || item.resource_item_id))
+    const itemKey = String(item && (item.code || item.resourceCode || item.resource_code) || '')
+    return (Number.isFinite(id) && id > 0 && itemId === id) || (key && itemKey === key)
+  })
+  if (match) return clone(match)
+  const directId = Number(direct && (direct.resourceItemId || direct.resource_item_id))
+  const directCode = String(direct && (direct.code || direct.resourceCode || direct.resource_code) || '').trim()
+  const directName = String(direct && (direct.name || direct.resourceName || direct.resource_name) || '').trim()
+  return direct && Number.isFinite(directId) && directId > 0 && directCode && directName
+    ? clone(direct)
+    : null
 }
 
 function resourceRepairAccess(permissions, request) {
@@ -1483,6 +1524,7 @@ module.exports = {
   materializeOutcomeRouting,
   routingDraftBlocker,
   createRepairRequest,
+  resolveRepairResourceItem,
   resourceRepairAccess,
   completeResourceRepair,
   buildHydratedPayloadRows,

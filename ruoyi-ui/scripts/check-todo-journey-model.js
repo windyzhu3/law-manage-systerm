@@ -1192,6 +1192,44 @@ check('models schema health, owner blockers, and contextual resource return sema
   assert.strictEqual(steps.repairFocusTarget('eventType'), 'eventSearch')
 })
 
+check('preserves and resolves referenced DoD resources without fabricating create state', () => {
+  const recipe = {
+    resourceItemId: 71,
+    code: 'LEAD_PROGRESS_RECIPE',
+    name: '五天实质进展配方',
+    requiredFields: ['progressSummary']
+  }
+  const normalized = steps.createRepairRequest({
+    type: 'DOD_RECIPE',
+    item: recipe,
+    businessType: 'LEAD',
+    returnStep: 'DOD'
+  })
+  assert.deepStrictEqual(normalized.item, recipe)
+  assert.notStrictEqual(normalized.item, recipe)
+  recipe.requiredFields.push('mutatedAfterRequest')
+  assert.deepStrictEqual(normalized.item.requiredFields, ['progressSummary'])
+
+  const resolvedRecipe = steps.resolveRepairResourceItem({
+    type: 'DOD_RECIPE',
+    resourceId: 71
+  }, { recipes: [normalized.item] })
+  assert.strictEqual(resolvedRecipe.code, 'LEAD_PROGRESS_RECIPE')
+
+  const material = { resourceItemId: 82, code: 'CONTACT_RECORD', name: '联系记录' }
+  const resolvedMaterial = steps.resolveRepairResourceItem({
+    type: 'MATERIAL',
+    itemKey: 'CONTACT_RECORD'
+  }, { materials: [material] })
+  assert.deepStrictEqual(resolvedMaterial, material)
+  assert.notStrictEqual(resolvedMaterial, material)
+
+  assert.strictEqual(steps.resolveRepairResourceItem({
+    type: 'MATERIAL',
+    itemKey: 'MISSING_MATERIAL'
+  }, { materials: [material] }), null)
+})
+
 check('retains independent owner strategy drafts until the user explicitly applies one', () => {
   const canonical = {
     type: 'PAYLOAD',
