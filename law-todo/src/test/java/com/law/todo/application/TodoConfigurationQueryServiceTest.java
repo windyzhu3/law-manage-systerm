@@ -1,12 +1,14 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +59,24 @@ class TodoConfigurationQueryServiceTest
         assertEquals(7L,detail.templateId());
         assertEquals(9L,detail.draftVersionId());
         assertEquals(List.of("DOD","SLA","DOD"),detail.ruleReferences().stream().map(ref->ref.type()).toList());
+    }
+
+    @Test void draftNeverBorrowsThePublishedDefinitionHashOrValidationReport()
+    {
+        Map<String,Object> row=new HashMap<>();
+        row.put("template_id",7L);row.put("template_code","T-7");row.put("template_name","Template 7");
+        row.put("business_type","LEAD");row.put("draft_version_id",35L);row.put("draft_status","DRAFT");
+        row.put("detail_version_id",35L);row.put("detail_version_no",5);row.put("detail_version_status","DRAFT");
+        row.put("detail_definition_json","{}");row.put("detail_definition_hash",null);
+        row.put("detail_validation_report_json",null);row.put("published_definition_hash","published-hash");
+        row.put("published_validation_report_json","{\"errors\":[]}");
+        when(mapper.selectTemplateConfiguration(7L)).thenReturn(row);
+
+        TemplateConfigurationDetail detail=service().template(7L);
+
+        assertEquals(35L,detail.editableVersion().versionId());
+        assertNull(detail.editableVersion().definitionHash());
+        assertNull(detail.editableVersion().validationReportJson());
     }
 
     @Test void templatePageUsesDatabasePaginationAndPreservesOnlySupportedFilters()

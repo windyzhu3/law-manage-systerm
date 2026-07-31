@@ -53,6 +53,7 @@ public interface TodoConfigurationMapper
     int insertConfigurationResourceItem(Map<String,Object> row);
     int updateConfigurationResourceItemConditionally(Map<String,Object> row);
     List<Map<String,Object>> selectPublishedSimulationCandidates();
+    List<Map<String,Object>> selectPublishedRoutingTargetCatalog(@Param("businessType") String businessType);
     Long selectTemplateIdByCode(String templateCode);
     String selectTemplateCodeByVersionId(Long versionId);
     Map<String,Object> selectTemplateIdentityByVersionId(Long versionId);

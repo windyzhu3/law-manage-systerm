@@ -27,6 +27,7 @@ import com.law.todo.application.view.TodoConfigurationJourneyView.TemplateWorkbe
 import com.law.todo.application.view.TodoConfigurationViews.TemplateConfigurationDetail;
 import com.law.todo.application.view.TodoConfigurationViews.TemplateVersionDetail;
 import com.law.todo.application.view.TodoConfigurationViews.JourneyImpact;
+import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 import com.law.todo.application.view.TodoSimulationReadinessView;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 import com.law.todo.definition.model.TodoDefinitionDocument;
@@ -152,9 +153,24 @@ public class TodoConfigurationJourneyService
         var events=eventResources.list(Map.of("businessObjectType",businessType,"offset",0,"limit",500)).rows();
         return new CurrentResources(events,fields,query.ownerCatalog(),
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
-                templates.listTemplateCalendarCatalog(),templates.listRoutingTargetCatalog(),
+                templates.listTemplateCalendarCatalog(),routingTargets(businessType),
                 outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
                         outcomes.resolve(detail.templateCode(),businessType,definition));
+    }
+
+    private List<RoutingTargetCatalogEntry> routingTargets(String businessType)
+    {
+        List<Map<String,Object>> rows=mapper.selectPublishedRoutingTargetCatalog(businessType);
+        if(rows==null)return List.of();
+        return rows.stream()
+                .filter(row->businessType.equals(text(row,"business_type","businessType")))
+                .filter(row->"PUBLISHED".equals(text(row,"status","status")))
+                .map(row->new RoutingTargetCatalogEntry(
+                        longNumber(value(row,"template_id","templateId")),text(row,"template_code","templateCode"),
+                        text(row,"template_name","templateName"),text(row,"business_type","businessType"),
+                        longNumber(value(row,"version_id","versionId")),
+                        integer(value(row,"version_no","versionNo"),0),text(row,"status","status")))
+                .toList();
     }
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row,TodoSimulationReadinessView readiness)

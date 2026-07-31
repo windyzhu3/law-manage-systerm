@@ -141,6 +141,31 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(batch.contains("order by coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) desc"));
     }
 
+    @Test void editableVersionHashesAndReportsNeverFallBackAcrossVersions() throws Exception
+    {
+        String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
+        String detail=statement(xml,"select","selectTemplateConfiguration");
+        String batch=statement(xml,"select","selectTemplateJourneySummaries");
+
+        assertTrue(detail.contains("case when draft.version_id is not null then draft.definition_hash else published.definition_hash end detail_definition_hash"));
+        assertTrue(detail.contains("case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end detail_validation_report_json"));
+        assertFalse(detail.contains("coalesce(draft.definition_hash,published.definition_hash)"));
+        assertFalse(detail.contains("coalesce(draft.validation_report_json,published.validation_report_json)"));
+        assertTrue(batch.contains("case when draft.version_id is not null then draft.definition_hash else published.definition_hash end definition_hash"));
+        assertTrue(batch.contains("case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end validation_report_json"));
+    }
+
+    @Test void routingTargetsAreActivePublishedAndBoundToTheRequestedBusinessType() throws Exception
+    {
+        String routing=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select",
+                "selectPublishedRoutingTargetCatalog");
+
+        assertTrue(routing.contains("t.business_type=#{businessType}"));
+        assertTrue(routing.contains("t.status='0'"));
+        assertTrue(routing.contains("v.status='PUBLISHED'"));
+        assertTrue(routing.contains("v.version_no=t.current_version"));
+    }
+
     @Test void draftEditMetadataMigrationIsAppendOnlyAndSupportsRecentEditOrdering() throws Exception
     {
         java.nio.file.Path migration=java.nio.file.Path.of("..","ruoyi-admin","src","main","resources","db",

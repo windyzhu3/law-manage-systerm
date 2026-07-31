@@ -72,9 +72,10 @@ class TodoConfigurationJourneyServiceTest
                         "线索中心","INCOMPLETE","DRAFT",3,2L,LocalDateTime.of(2026,7,24,9,0))),1));
         when(templates.listTemplateCalendarCatalog()).thenReturn(List.of(
                 Map.of("calendarCode","DEFAULT","calendarName","默认工作日历","timezone","Asia/Shanghai")));
-        when(templates.listRoutingTargetCatalog()).thenReturn(List.of(
-                new com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry(
-                        9L,"TODO-NEXT","下一步办理","LEAD",91L,2,"PUBLISHED")));
+        when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(Map.ofEntries(
+                Map.entry("template_id",9L),Map.entry("template_code","TODO-NEXT"),
+                Map.entry("template_name","下一步办理"),Map.entry("business_type","LEAD"),
+                Map.entry("version_id",91L),Map.entry("version_no",2),Map.entry("status","PUBLISHED"))));
 
         TodoConfigurationJourneyView view=service.load(42L,actor);
 
@@ -112,6 +113,22 @@ class TodoConfigurationJourneyServiceTest
                 .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateName)
                 .containsExactly("下一步办理");
         verify(readiness).readiness(42L,101L,"hash-42","TODO-42","LEAD");
+        verify(mapper).selectPublishedRoutingTargetCatalog("LEAD");
+    }
+
+    @Test void leadJourneyDoesNotExposeCrossBusinessOrInactiveRoutingTargets()
+    {
+        when(query.template(42L)).thenReturn(fixtureTemplate());
+        when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(
+                routingTarget(4L,"TD-004","5天实质进展","LEAD",104L,"PUBLISHED"),
+                routingTarget(8L,"CASE_ACCEPT","律师接案确认","CASE",108L,"PUBLISHED"),
+                routingTarget(2L,"TD-002","疑似无效复核","LEAD",102L,"RETIRED")));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().routingTargets())
+                .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateCode)
+                .containsExactly("TD-004");
     }
 
     @Test void returnsTruthfulProgressHealthStateAndTemplateCodeWithoutPerRowQueries()
@@ -150,7 +167,7 @@ class TodoConfigurationJourneyServiceTest
                 .thenReturn(new TodoBusinessOutcomeCatalogService.BusinessOutcomeSet(
                         "contactResult","首联结果","首联后的联系结论",
                         List.of(new TodoBusinessOutcomeCatalogService.BusinessOutcomeOption(
-                                "VALID","有效","TD-004","5天实质进展",104L)),
+                                "VALID","有效","NEXT_TEMPLATE","TD-004","5天实质进展",104L)),
                         "TD001_STANDARD_ROUTE"));
 
         TodoConfigurationJourneyView view=service.load(42L,actor);
@@ -263,6 +280,14 @@ class TodoConfigurationJourneyServiceTest
                 Map.entry("version_no",4),Map.entry("definition_hash",hash),Map.entry("definition_json",definition),
                 Map.entry("validation_report_json",validation),Map.entry("last_editor","Alice"),
                 Map.entry("update_time",LocalDateTime.of(2026,7,23,9,0)));
+    }
+
+    private Map<String,Object> routingTarget(long templateId,String code,String name,String businessType,
+            long versionId,String status)
+    {
+        return Map.ofEntries(Map.entry("template_id",templateId),Map.entry("template_code",code),
+                Map.entry("template_name",name),Map.entry("business_type",businessType),
+                Map.entry("version_id",versionId),Map.entry("version_no",1),Map.entry("status",status));
     }
 
     private String definition(String hash,boolean blockedOwner,boolean warningTrigger,boolean configuredDod,boolean simulated)

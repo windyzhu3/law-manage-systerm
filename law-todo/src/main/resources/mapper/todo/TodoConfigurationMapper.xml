@@ -137,6 +137,16 @@
     order by t.template_code,t.template_id
   </select>
 
+  <select id="selectPublishedRoutingTargetCatalog" resultType="java.util.Map">
+    select t.template_id,t.template_code,t.template_name,t.business_type,
+      v.version_id,v.version_no,v.status
+    from todo_template t
+    join todo_template_version v
+      on v.template_id=t.template_id and v.version_no=t.current_version and v.status='PUBLISHED'
+    where t.business_type=#{businessType} and t.status='0'
+    order by t.template_code,t.template_id
+  </select>
+
   <select id="selectTemplateConfiguration" resultType="java.util.Map">
     select t.*,draft.version_id draft_version_id,draft.status draft_status,draft.version_no draft_version_no,
       published.version_id published_version_id,published.version_no published_version_no,published.published_time,
@@ -151,8 +161,8 @@
       coalesce(draft.sla_rule_json,published.sla_rule_json) detail_sla_rule_json,
       coalesce(draft.next_rule_json,published.next_rule_json) detail_next_rule_json,
       coalesce(draft.ui_schema_json,published.ui_schema_json) detail_ui_schema_json,
-      coalesce(draft.definition_hash,published.definition_hash) detail_definition_hash,
-      coalesce(draft.validation_report_json,published.validation_report_json) detail_validation_report_json,
+      case when draft.version_id is not null then draft.definition_hash else published.definition_hash end detail_definition_hash,
+      case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end detail_validation_report_json,
       coalesce(draft.change_summary,published.change_summary) detail_change_summary,
       coalesce(draft.impact_scope,published.impact_scope) detail_impact_scope,
       coalesce(draft.rollback_source_version_id,published.rollback_source_version_id) detail_rollback_source_version_id,
@@ -233,8 +243,8 @@
       coalesce(draft.version_no,published.version_no) version_no,
       coalesce(draft.status,published.status) version_status,
       coalesce(draft.definition_json,published.definition_json) definition_json,
-      coalesce(draft.definition_hash,published.definition_hash) definition_hash,
-      coalesce(draft.validation_report_json,published.validation_report_json) validation_report_json,
+      case when draft.version_id is not null then draft.definition_hash else published.definition_hash end definition_hash,
+      case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end validation_report_json,
       coalesce(draft.update_by,t.update_by,published.published_by,t.create_by) last_editor,
       coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) update_time
     <include refid="templateJourneySummaryFrom"/><include refid="templateJourneySummaryWhere"/>
