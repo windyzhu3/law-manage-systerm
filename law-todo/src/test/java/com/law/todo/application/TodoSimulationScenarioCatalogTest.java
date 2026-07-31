@@ -67,6 +67,31 @@ class TodoSimulationScenarioCatalogTest
     }
 
     @Test
+    void returnsAllGovernedTd002EffectsAndCompletionPayloads()
+    {
+        when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
+                .thenReturn(List.of(
+                        td002Row(21L,"TD002_TRUE_INVALID",10,"END",null,
+                                "TRUE_INVALID","确认无效",false),
+                        td002Row(22L,"TD002_MISJUDGED_VALID",20,"NEXT_TEMPLATE","TD-001",
+                                "MISJUDGED_VALID","复核为误判",false),
+                        td002Row(23L,"TD002_OVERDUE_DEFAULT",30,"END",null,
+                                "TRUE_INVALID","系统超时默认确认",true)));
+
+        var scenarios=new TodoSimulationScenarioCatalog(mapper).scenarios("TD-002","LEAD");
+
+        assertThat(scenarios).extracting(scenario->scenario.scenarioCode())
+                .containsExactly("TD002_TRUE_INVALID","TD002_MISJUDGED_VALID",
+                        "TD002_OVERDUE_DEFAULT");
+        assertThat(scenarios).extracting(scenario->scenario.expectedEffect().kind())
+                .containsExactly(EffectKind.END,EffectKind.NEXT_TEMPLATE,EffectKind.END);
+        assertThat(scenarios.get(1).expectedEffect().targetTemplateCode()).isEqualTo("TD-001");
+        assertThat(scenarios).extracting(scenario->scenario.completionPayload().get("reviewResult"))
+                .containsExactly("TRUE_INVALID","MISJUDGED_VALID","TRUE_INVALID");
+        assertThat(scenarios).allMatch(scenario->scenario.requiredForPublish());
+    }
+
+    @Test
     void parsesExpectedValidationFailureWithItsStableErrorCode()
     {
         when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
@@ -113,6 +138,26 @@ class TodoSimulationScenarioCatalogTest
                         +"\",\"scenarioVersion\":1,\"completionPayload\":{},\"editableFields\":[],"
                         +"\"requiredMaterials\":[],\"completionNodeKey\":\"task\",\"occurrence\":1,"
                         +"\"expectedEffect\":{\"kind\":\""+kind+"\""+targetJson+"}" +errorJson
+                        +",\"requiredForPublish\":true}");
+    }
+
+    private Map<String,Object> td002Row(long id,String code,int sortOrder,String kind,String target,
+            String result,String opinion,boolean automatic)
+    {
+        String targetJson=target==null?"":" ,\"targetTemplateCode\":\""+target+"\"";
+        return Map.of(
+                "resource_item_id",id,
+                "resource_code",code,
+                "resource_name",code,
+                "business_type","LEAD",
+                "status","ACTIVE",
+                "sort_order",sortOrder,
+                "value_json","{\"templateCode\":\"TD-002\",\"scenarioVersion\":1,"
+                        +"\"completionPayload\":{\"reviewResult\":\""+result
+                        +"\",\"reviewOpinion\":\""+opinion+"\"},\"editableFields\":[],"
+                        +"\"requiredMaterials\":[],\"completionNodeKey\":\"td002\","
+                        +"\"occurrence\":1,\"expectedEffect\":{\"kind\":\""+kind+"\""
+                        +targetJson+"},\"automatic\":"+automatic
                         +",\"requiredForPublish\":true}");
     }
 }

@@ -72,6 +72,14 @@ class LeadTemplateConfigurationMySqlIT
                     where t.template_code='TD-001' and v.status='PUBLISHED'
                     order by v.version_id
                     """);
+            String td002PublishedBefore=fingerprint(connection,"""
+                    select t.current_version,v.version_id,v.version_no,v.status,v.source_version_id,
+                           v.definition_hash,cast(v.definition_json as char)
+                    from todo_template t
+                    join todo_template_version v on v.template_id=t.template_id
+                    where t.template_code='TD-002' and v.status='PUBLISHED'
+                    order by v.version_id
+                    """);
             String evidenceBefore=fingerprint(connection,"""
                     select evidence_id,template_id,version_id,definition_hash,scenario_code,
                            scenario_version,result_status,input_hash,cast(trace_summary_json as char),
@@ -98,7 +106,7 @@ class LeadTemplateConfigurationMySqlIT
 
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.71",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.73",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""
@@ -115,6 +123,14 @@ class LeadTemplateConfigurationMySqlIT
                            executed_by,executed_time,expire_time
                     from todo_simulation_evidence order by evidence_id
                     """));
+            assertEquals(td002PublishedBefore,fingerprint(connection,"""
+                    select t.current_version,v.version_id,v.version_no,v.status,v.source_version_id,
+                           v.definition_hash,cast(v.definition_json as char)
+                    from todo_template t
+                    join todo_template_version v on v.template_id=t.template_id
+                    where t.template_code='TD-002' and v.status='PUBLISHED'
+                    order by v.version_id
+                    """));
             assertEquals(entryPointBefore,scalar(connection,"""
                     select concat(t.current_version,':',r.trigger_rule_id,':',r.template_version_id)
                     from todo_template t
@@ -129,6 +145,7 @@ class LeadTemplateConfigurationMySqlIT
 
             assertEventSemantics(connection);
             assertDraft(connection);
+            assertTd002GuidedDraft(connection);
             try(Statement statement=connection.createStatement())
             {
                 assertEquals(1,count(statement,
@@ -146,6 +163,109 @@ class LeadTemplateConfigurationMySqlIT
                           and (r.entry_slot_code!='LEAD_FIRST_CONTACT_ENTRY' or t.template_code!='TD-001')
                         """));
             }
+        }
+    }
+
+    private void assertTd002GuidedDraft(Connection connection) throws Exception
+    {
+        try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
+                select v.version_id,v.version_no,v.status,v.source_version_id,
+                       cast(v.definition_json as char),cast(v.compiled_json as char),v.definition_hash
+                from todo_template t
+                join todo_template_version v on v.template_id=t.template_id
+                where t.template_code='TD-002'
+                  and v.change_summary='V0.20.73 TD-002 guided configuration draft'
+                """))
+        {
+            assertTrue(rows.next(),"The governed TD-002 draft must exist");
+            long versionId=rows.getLong(1);
+            assertEquals("DRAFT",rows.getString(3));
+            assertTrue(rows.getLong(4)>0);
+            JSONObject definition=JSON.parseObject(rows.getString(5));
+            assertEquals(definition,JSON.parseObject(rows.getString(6)));
+            assertEquals(rows.getString(7),sha256(new TodoDefinitionCodec().canonicalJson(
+                    new TodoDefinitionCodec().read(rows.getString(6)))));
+            assertEquals("LEAD_SUSPECT_INVALID_MARKED",
+                    definition.getJSONObject("event").getString("eventType"));
+            JSONObject owner=definition.getJSONObject("owner").getJSONObject("config");
+            assertEquals("PAYLOAD",owner.getString("type"));
+            assertEquals("reviewerId",owner.getString("field"));
+            JSONObject dod=definition.getJSONObject("dod").getJSONObject("config");
+            JSONObject recipe=JSON.parseObject(scalar(connection,"""
+                    select cast(value_json as char)
+                    from todo_configuration_resource_item
+                    where resource_type='DOD_RECIPE' and business_type='LEAD'
+                      and resource_code='LEAD_INVALID_REVIEW_READY' and status='ACTIVE'
+                    """));
+            assertEquals(recipe.getJSONArray("requiredFields"),dod.getJSONArray("requiredFields"));
+            assertEquals(recipe.getJSONArray("requiredAttachments"),dod.getJSONArray("materials"));
+            assertEquals(recipe.getJSONArray("validatorRefs"),dod.getJSONArray("validatorRefs"));
+            assertEquals(recipe.getJSONArray("conditionalRules"),
+                    dod.getJSONArray("conditionalRequired"));
+            JSONObject sla=definition.getJSONObject("sla").getJSONObject("config");
+            assertEquals(1440,sla.getIntValue("minutes"));
+            assertEquals("COMPLETE_DEFAULT",sla.getString("onDue"));
+
+            JSONObject routing=definition.getJSONObject("routing").getJSONObject("config");
+            JSONArray outcomes=routing.getJSONArray("businessOutcomes");
+            assertEquals(2,outcomes.size());
+            JSONObject terminal=outcomes.stream().map(JSONObject.class::cast)
+                    .filter(item->"TRUE_INVALID".equals(item.getString("value")))
+                    .findFirst().orElseThrow();
+            assertEquals("END",terminal.getString("effectKind"));
+            JSONObject reopened=outcomes.stream().map(JSONObject.class::cast)
+                    .filter(item->"MISJUDGED_VALID".equals(item.getString("value")))
+                    .findFirst().orElseThrow();
+            assertEquals("NEXT_TEMPLATE",reopened.getString("effectKind"));
+            assertEquals("TD-001",reopened.getString("targetTemplateCode"));
+            long targetVersionId=reopened.getLongValue("targetVersionId");
+            assertEquals(String.valueOf(targetVersionId),scalar(connection,"""
+                    select cast(v.version_id as char)
+                    from todo_template t
+                    join todo_template_version v
+                      on v.template_id=t.template_id and v.version_no=t.current_version
+                    where t.template_code='TD-001' and v.status='PUBLISHED'
+                    """));
+            assertTrue(routing.getJSONArray("nodes").stream().map(JSONObject.class::cast)
+                    .anyMatch(node->"td002".equals(node.getString("key"))
+                            &&versionId==node.getLongValue("templateVersionId")));
+            assertTrue(routing.getJSONArray("nodes").stream().map(JSONObject.class::cast)
+                    .anyMatch(node->"reopenedTd001".equals(node.getString("key"))
+                            &&targetVersionId==node.getLongValue("templateVersionId")));
+            assertFalse(rows.next(),"Migration must create exactly one governed TD-002 draft");
+        }
+
+        assertEquals(0,Long.parseLong(scalar(connection,"""
+                select count(*)
+                from todo_trigger_rule r
+                join todo_template t on t.template_id=r.template_id
+                where t.template_code='TD-002' and r.enabled='Y'
+                """)));
+        try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
+                select resource_code,status,cast(value_json as char)
+                from todo_configuration_resource_item
+                where resource_type='SIMULATION_SCENARIO' and business_type='LEAD'
+                  and resource_code in ('TD002_TRUE_INVALID','TD002_MISJUDGED_VALID',
+                                        'TD002_OVERDUE_DEFAULT')
+                order by sort_order,resource_code
+                """))
+        {
+            Map<String,JSONObject> scenarios=new LinkedHashMap<>();
+            while(rows.next())
+            {
+                assertEquals("ACTIVE",rows.getString(2));
+                scenarios.put(rows.getString(1),JSON.parseObject(rows.getString(3)));
+            }
+            assertEquals(List.of("TD002_TRUE_INVALID","TD002_MISJUDGED_VALID",
+                    "TD002_OVERDUE_DEFAULT"),List.copyOf(scenarios.keySet()));
+            scenarios.values().forEach(value->assertEquals(Boolean.TRUE,
+                    value.getBoolean("requiredForPublish")));
+            assertEquals("END",scenarios.get("TD002_TRUE_INVALID")
+                    .getJSONObject("expectedEffect").getString("kind"));
+            assertEquals("TD-001",scenarios.get("TD002_MISJUDGED_VALID")
+                    .getJSONObject("expectedEffect").getString("targetTemplateCode"));
+            assertEquals(Boolean.TRUE,scenarios.get("TD002_OVERDUE_DEFAULT")
+                    .getBoolean("automatic"));
         }
     }
 

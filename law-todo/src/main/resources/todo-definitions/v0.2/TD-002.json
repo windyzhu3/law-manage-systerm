@@ -64,6 +64,23 @@
       "config": {
         "identityBinding": "MIGRATION_DYNAMIC",
         "start": "td002",
+        "businessOutcomes": [
+          {
+            "field": "reviewResult",
+            "value": "TRUE_INVALID",
+            "label": "确认无效",
+            "effectKind": "END",
+            "businessAction": "MOVE_DEAD_POOL"
+          },
+          {
+            "field": "reviewResult",
+            "value": "MISJUDGED_VALID",
+            "label": "误判有效",
+            "effectKind": "NEXT_TEMPLATE",
+            "targetTemplateCode": "TD-001",
+            "businessAction": "REOPEN_FIRST_CONTACT"
+          }
+        ],
         "nodes": [
           {
             "key": "td002",

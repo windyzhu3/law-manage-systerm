@@ -150,6 +150,36 @@ class LeadTodoPublishedTemplateContractTest
         assertFalse(escalations.contains("SLA_100"));
     }
 
+    @Test void td002ExposesTheGovernedReviewEffectsUsedByGuidedConfiguration() throws Exception
+    {
+        JSONObject td002=definition("TD-002").getJSONObject("definition");
+        assertEquals("LEAD_SUSPECT_INVALID_MARKED",
+                td002.getJSONObject("event").getString("eventType"));
+        JSONObject owner=td002.getJSONObject("owner").getJSONObject("config");
+        assertEquals("PAYLOAD",owner.getString("type"));
+        assertEquals("reviewerId",owner.getString("field"));
+        JSONObject dod=td002.getJSONObject("dod").getJSONObject("config");
+        assertEquals(List.of("reviewResult","reviewOpinion"),
+                dod.getJSONArray("requiredFields").toJavaList(String.class));
+        JSONObject sla=td002.getJSONObject("sla").getJSONObject("config");
+        assertEquals(1440,sla.getIntValue("minutes"));
+        assertEquals("COMPLETE_DEFAULT",sla.getString("onDue"));
+
+        JSONArray outcomes=td002.getJSONObject("routing").getJSONObject("config")
+                .getJSONArray("businessOutcomes");
+        assertNotNull(outcomes);
+        assertEquals(2,outcomes.size());
+        JSONObject trueInvalid=outcome(outcomes,"TRUE_INVALID");
+        assertEquals("reviewResult",trueInvalid.getString("field"));
+        assertEquals("END",trueInvalid.getString("effectKind"));
+        assertEquals("MOVE_DEAD_POOL",trueInvalid.getString("businessAction"));
+        JSONObject misjudged=outcome(outcomes,"MISJUDGED_VALID");
+        assertEquals("reviewResult",misjudged.getString("field"));
+        assertEquals("NEXT_TEMPLATE",misjudged.getString("effectKind"));
+        assertEquals("TD-001",misjudged.getString("targetTemplateCode"));
+        assertEquals("REOPEN_FIRST_CONTACT",misjudged.getString("businessAction"));
+    }
+
     @Test void migrationPublishesInDependencyOrderAndOwnsTheSingleAssignmentTrigger()
             throws Exception
     {
@@ -202,6 +232,13 @@ class LeadTodoPublishedTemplateContractTest
         assertEquals(Boolean.FALSE,owner.getBoolean("useDelegation"),code);
         assertEquals(Boolean.TRUE,owner.getBoolean("requireAvailable"),code);
         assertFalse(owner.containsKey("fallback"),code);
+    }
+
+    private static JSONObject outcome(JSONArray outcomes,String value)
+    {
+        return outcomes.stream().map(JSONObject.class::cast)
+                .filter(item->value.equals(item.getString("value")))
+                .findFirst().orElseThrow();
     }
 
     private static JSONObject definition(String code) throws Exception
