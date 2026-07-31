@@ -579,6 +579,35 @@ class TodoTemplateServiceTest
         verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
     }
 
+    @Test void genericSaveCannotDisableAnExistingEntrySlotBinding()
+    {
+        ledger(true);Map<String,Object> locked=binding("0",1L,"PUBLISHED",null,3);
+        locked.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");locked.put("enabled","Y");
+        when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(locked);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .saveTrigger(command(41L,"LEAD","entry-slot-generic-disable",3),actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionClaim(anyMap());
+        verify(mapper,never()).updateTriggerRule(anyMap());
+    }
+
+    @Test void directToggleCannotDisableAnEntrySlotBinding()
+    {
+        ledger(true);Map<String,Object> locked=binding("0",1L,"PUBLISHED",null,3);
+        locked.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");locked.put("template_code","TD-001");
+        when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(locked);
+        when(mapper.updateTriggerRuleEnabledConditionally(anyMap())).thenReturn(1);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("entry-slot-direct-disable",3,"N"),actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionClaim(anyMap());
+        verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
     @Test void replacedTemplateCannotBeReactivated()
     {
         ledger(true);Map<String,Object> locked=new HashMap<>(Map.of("template_id",5L,"business_type","LEAD",
@@ -629,6 +658,8 @@ class TodoTemplateServiceTest
             "LEAD_ASSIGNED_RULE","Lead assigned rule");}
     private com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand toggle(String actionId,int version)
     {return new com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand("Y",actionId,version);}
+    private com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand toggle(String actionId,int version,String enabled)
+    {return new com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand(enabled,actionId,version);}
     private Map<String,Object> binding(String templateStatus,Long versionTemplateId,String versionStatus,String condition,int version)
     {
         Map<String,Object> row=new HashMap<>();row.put("trigger_rule_id",41L);row.put("event_type","LEAD_ASSIGNED");row.put("payload_version",1);
