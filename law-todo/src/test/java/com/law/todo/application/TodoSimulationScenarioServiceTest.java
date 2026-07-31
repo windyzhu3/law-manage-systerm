@@ -11,6 +11,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -157,15 +160,16 @@ class TodoSimulationScenarioServiceTest
         assertThat(result.passed()).isTrue();
     }
 
-    @Test
-    void passesATerminalScenarioWhenTheGraphEndsNormally()
+    @ParameterizedTest
+    @ValueSource(strings={"ENDED"," ended ","ended"})
+    void passesATerminalScenarioWhenTheGraphEndsNormally(String terminalStatus)
     {
         SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
                 EffectKind.END,null,null);
         when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
         when(journeys.load(42L,actor())).thenReturn(journey());
         when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
-        when(simulations.simulate(any(),any())).thenReturn(endedResult());
+        when(simulations.simulate(any(),any())).thenReturn(endedResult(terminalStatus));
 
         var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
 
@@ -207,15 +211,36 @@ class TodoSimulationScenarioServiceTest
         assertThat(result.passed()).isFalse();
     }
 
-    @Test
-    void doesNotTreatAMixedWaitingAndEndedGraphAsATerminalEffect()
+    @ParameterizedTest
+    @ValueSource(strings={"WAITING","WAITING_JOIN"," waiting ","PENDING","PENDING_ROUTING",
+            "PENDING_COMPLETION"," pending_completion ","UNKNOWN","UNKNOWN_STATE","UNKNOWN_BRANCH",
+            " unknown_branch "})
+    void doesNotTreatAMixedBlockedAndEndedGraphAsATerminalEffect(String blockedStatus)
     {
         SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
                 EffectKind.END,null,null);
         when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
         when(journeys.load(42L,actor())).thenReturn(journey());
         when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
-        when(simulations.simulate(any(),any())).thenReturn(mixedWaitingEndedResult());
+        when(simulations.simulate(any(),any())).thenReturn(mixedStatusEndedResult(blockedStatus));
+
+        var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
+
+        assertThat(result.actualEffect()).isNull();
+        assertThat(result.passed()).isFalse();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings={" ","\t"})
+    void doesNotTreatAMixedMissingStatusAndEndedGraphAsATerminalEffect(String missingStatus)
+    {
+        SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
+                EffectKind.END,null,null);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(mixedStatusEndedResult(missingStatus));
 
         var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
 
@@ -371,16 +396,16 @@ class TodoSimulationScenarioServiceTest
                 List.of(),false);
     }
 
-    private TodoJourneySimulationResult endedResult()
+    private TodoJourneySimulationResult endedResult(String status)
     {
-        return routeResult(List.of(new RouteTrace(1,"end","END","ENDED",null,0,null,null,List.of())));
+        return routeResult(List.of(new RouteTrace(1,"end","END",status,null,0,null,null,List.of())));
     }
 
-    private TodoJourneySimulationResult mixedWaitingEndedResult()
+    private TodoJourneySimulationResult mixedStatusEndedResult(String status)
     {
         return routeResult(List.of(
                 new RouteTrace(1,"end","END","ENDED","first",0,null,null,List.of()),
-                new RouteTrace(2,"join","JOIN","WAITING","second",0,null,null,List.of())));
+                new RouteTrace(2,"join","JOIN",status,"second",0,null,null,List.of())));
     }
 
     private TodoJourneySimulationResult routeResult(List<RouteTrace> routes)

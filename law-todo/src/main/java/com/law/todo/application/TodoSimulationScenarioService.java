@@ -3,7 +3,9 @@ package com.law.todo.application;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +33,9 @@ import com.law.todo.spi.TodoCompletionHandler.SimulationResult;
 @Service
 public class TodoSimulationScenarioService
 {
+    private static final Set<String> TERMINAL_OR_NONBLOCKING_ROUTE_STATUSES=Set.of(
+            "ENDED","VISITED","ADVANCED","ALREADY_ADVANCED","VIRTUAL_COMPLETED");
+
     private final TodoSimulationScenarioCatalog catalog;
     private final TodoConfigurationJourneyService journeys;
     private final TodoJourneySimulationService simulations;
@@ -175,12 +180,21 @@ public class TodoSimulationScenarioService
         if(!simulationSucceeded||result==null||result.engine()==null)return false;
         var routes=result.engine().routes();
         if(routes.isEmpty())return false;
-        boolean waiting=routes.stream().anyMatch(route->"WAITING".equals(route.status())
-                ||"PENDING_COMPLETION".equals(route.status())
-                ||"UNKNOWN_BRANCH".equals(route.status()));
-        return !waiting&&routes.stream().anyMatch(route->"END".equals(route.nodeType())
-                &&"ENDED".equals(route.status()));
+        boolean allTerminalOrNonblocking=routes.stream()
+                .allMatch(route->terminalOrNonblocking(route.status()));
+        return allTerminalOrNonblocking&&routes.stream().anyMatch(route->"END".equals(route.nodeType())
+                &&"ENDED".equals(normalizeStatus(route.status())));
     }
+
+    private boolean terminalOrNonblocking(String status)
+    {
+        String normalized=normalizeStatus(status);
+        return normalized!=null&&!normalized.isEmpty()
+                &&TERMINAL_OR_NONBLOCKING_ROUTE_STATUSES.contains(normalized);
+    }
+
+    private String normalizeStatus(String status)
+    {return status==null?null:status.trim().toUpperCase(Locale.ROOT);}
 
     private SimulationResult simulateBusinessOutcome(TodoConfigurationJourneyView journey,
             Map<String,Object> completion,ScenarioSimulationCommand command)
