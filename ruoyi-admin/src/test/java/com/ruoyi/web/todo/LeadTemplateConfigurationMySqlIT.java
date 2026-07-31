@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.law.todo.definition.codec.TodoDefinitionCodec;
 
 class LeadTemplateConfigurationMySqlIT
@@ -250,22 +252,47 @@ class LeadTemplateConfigurationMySqlIT
                 order by sort_order,resource_code
                 """))
         {
-            Map<String,JSONObject> scenarios=new LinkedHashMap<>();
+            ObjectMapper mapper=new ObjectMapper();
+            Map<String,ScenarioResource> scenarios=new LinkedHashMap<>();
             while(rows.next())
             {
-                assertEquals("ACTIVE",rows.getString(2));
-                scenarios.put(rows.getString(1),JSON.parseObject(rows.getString(3)));
+                scenarios.put(rows.getString(1),new ScenarioResource(rows.getString(2),
+                        mapper.readValue(rows.getString(3),new TypeReference<Map<String,Object>>(){})));
             }
             assertEquals(List.of("TD002_TRUE_INVALID","TD002_MISJUDGED_VALID",
                     "TD002_OVERDUE_DEFAULT"),List.copyOf(scenarios.keySet()));
-            scenarios.values().forEach(value->assertEquals(Boolean.TRUE,
-                    value.getBoolean("requiredForPublish")));
-            assertEquals("END",scenarios.get("TD002_TRUE_INVALID")
-                    .getJSONObject("expectedEffect").getString("kind"));
-            assertEquals("TD-001",scenarios.get("TD002_MISJUDGED_VALID")
-                    .getJSONObject("expectedEffect").getString("targetTemplateCode"));
-            assertEquals(Boolean.TRUE,scenarios.get("TD002_OVERDUE_DEFAULT")
-                    .getBoolean("automatic"));
+            assertScenario(scenarios.get("TD002_TRUE_INVALID"),"TD002_TRUE_INVALID",
+                    Map.of("reviewResult","TRUE_INVALID","reviewOpinion","确认无效"),
+                    Map.of("kind","END"),false);
+            assertScenario(scenarios.get("TD002_MISJUDGED_VALID"),"TD002_MISJUDGED_VALID",
+                    Map.of("reviewResult","MISJUDGED_VALID","reviewOpinion","复核为误判"),
+                    Map.of("kind","NEXT_TEMPLATE","targetTemplateCode","TD-001"),false);
+            assertScenario(scenarios.get("TD002_OVERDUE_DEFAULT"),"TD002_OVERDUE_DEFAULT",
+                    Map.of("reviewResult","TRUE_INVALID","reviewOpinion","系统超时默认确认"),
+                    Map.of("kind","END"),true);
+        }
+    }
+
+    private void assertScenario(ScenarioResource resource,String scenarioCode,
+            Map<String,Object> completionPayload,Map<String,Object> expectedEffect,
+            boolean automatic)
+    {
+        assertEquals("ACTIVE",resource.status());
+        Map<String,Object> value=resource.value();
+        assertEquals("TD-002",value.get("templateCode"));
+        assertEquals(scenarioCode,value.get("scenarioCode"));
+        assertEquals(1,value.get("scenarioVersion"));
+        assertEquals(Boolean.TRUE,value.get("requiredForPublish"));
+        assertEquals(completionPayload,value.get("completionPayload"));
+        assertEquals(expectedEffect,value.get("expectedEffect"));
+        if(automatic)
+        {
+            assertEquals(Boolean.TRUE,value.get("automatic"));
+        }
+        else
+        {
+            assertTrue(!value.containsKey("automatic")||Boolean.FALSE.equals(value.get("automatic")),
+                    scenarioCode+" must remain a manual scenario");
         }
     }
 
@@ -436,4 +463,6 @@ class LeadTemplateConfigurationMySqlIT
         assumeTrue(value!=null&&!value.isBlank(),name+" is required");
         return value;
     }
+
+    private record ScenarioResource(String status,Map<String,Object> value) { }
 }
