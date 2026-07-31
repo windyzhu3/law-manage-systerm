@@ -73,7 +73,7 @@ public class TodoSimulationReadinessService
                     "SIMULATION_PUBLISH",
                     "simulation.scenarios",
                     "还有必测场景未通过："+scenarioNames,
-                    "验证未通过场景"));
+                    "验证未通过场景","SIMULATION"));
         }
         if(!fullReady)
         {
@@ -83,7 +83,7 @@ public class TodoSimulationReadinessService
                     "SIMULATION_PUBLISH",
                     "simulation.full",
                     "完整试运行尚未通过",
-                    "运行完整试运行"));
+                    "运行完整试运行","SIMULATION"));
         }
 
         int passed=Math.max(0,required.size()-scenarioGate.blockers().size());
@@ -173,12 +173,12 @@ public class TodoSimulationReadinessService
                     String.join("、",blockerNames);
             issues.add(new JourneyIssue("TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE",
                     "BLOCKER","SIMULATION_PUBLISH","simulation.scenarios",
-                    "还有必测场景未通过："+names,"验证未通过场景"));
+                    "还有必测场景未通过："+names,"验证未通过场景","SIMULATION"));
         }
         if(!fullReady)
             issues.add(new JourneyIssue("TODO_FULL_SIMULATION_REQUIRED","BLOCKER",
                     "SIMULATION_PUBLISH","simulation.full",
-                    "完整试运行尚未通过","运行完整试运行"));
+                    "完整试运行尚未通过","运行完整试运行","SIMULATION"));
         boolean ready=required==passed&&blockers.isEmpty()&&fullReady;
         return new TodoSimulationReadinessView(request.templateId(),request.versionId(),
                 request.definitionHash(),required,passed,blockers,fullReady,ready,issues);

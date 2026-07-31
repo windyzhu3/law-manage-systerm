@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
@@ -46,7 +47,18 @@ class TodoSimulationEvidenceServiceTest
         assertThat(serialized).doesNotContain("客户甲","13800138000","completionPayload");
         assertThat(row.getValue().get("resultStatus")).isEqualTo("PASSED");
         assertThat(row.getValue().get("inputHash")).asString().hasSize(64);
-        assertThat(row.getValue().get("traceSummaryJson")).asString().contains("TD-004").doesNotContain("phone");
+        String traceSummary=String.valueOf(row.getValue().get("traceSummaryJson"));
+        assertThat(traceSummary).contains("TD-004").doesNotContain("phone");
+        var summary=JSON.parseObject(traceSummary);
+        assertThat(summary).containsEntry("definitionHash","definition-hash")
+                .containsEntry("scenarioCode","TD001_VALID")
+                .containsEntry("scenarioVersion",1);
+        assertThat(summary.getJSONObject("expectedEffect"))
+                .containsEntry("kind","NEXT_TEMPLATE")
+                .containsEntry("targetTemplateCode","TD-004");
+        assertThat(summary.getJSONObject("actualEffect"))
+                .containsEntry("kind","NEXT_TEMPLATE")
+                .containsEntry("targetTemplateCode","TD-004");
     }
 
     @Test

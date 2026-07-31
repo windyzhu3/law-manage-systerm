@@ -169,6 +169,44 @@ class TodoConfigurationResourceManagementServiceTest
         assertEquals(51L,resources.save(command,actor));
     }
 
+    @Test
+    void acceptsTerminalScenarioWithoutALegacyNextTemplate()
+    {
+        claim("resource-terminal-scenario",true);
+        when(mapper.insertConfigurationResourceItem(anyMap())).thenAnswer(invocation->{
+            invocation.<Map<String,Object>>getArgument(0).put("resourceItemId",52L);
+            return 1;
+        });
+        when(mapper.selectTemplateIdByCode("TD-002")).thenReturn(2L);
+        String value="{\"templateCode\":\"TD-002\",\"scenarioVersion\":1,"
+                +"\"completionPayload\":{\"reviewResult\":\"TRUE_INVALID\"},"
+                +"\"editableFields\":[],\"requiredMaterials\":[],\"completionNodeKey\":\"TD-002\","
+                +"\"occurrence\":1,\"expectedEffect\":{\"kind\":\"END\"},"
+                +"\"requiredForPublish\":true}";
+        ConfigurationResourceCommand command=new ConfigurationResourceCommand(null,"SIMULATION_SCENARIO",
+                "TD002_TRUE_INVALID","确认无效","验证终止效果","LEAD",value,"ACTIVE",10,
+                "resource-terminal-scenario",0);
+
+        assertEquals(52L,resources.save(command,actor));
+    }
+
+    @Test
+    void requiresExpectedErrorCodeOnlyForExpectedValidationFailure()
+    {
+        String value="{\"templateCode\":\"TD-004\",\"scenarioVersion\":1,"
+                +"\"completionPayload\":{},\"editableFields\":[],\"requiredMaterials\":[],"
+                +"\"completionNodeKey\":\"TD-004\",\"occurrence\":1,"
+                +"\"expectedEffect\":{\"kind\":\"EXPECTED_VALIDATION_FAILURE\"},"
+                +"\"requiredForPublish\":true}";
+        ConfigurationResourceCommand command=new ConfigurationResourceCommand(null,"SIMULATION_SCENARIO",
+                "TD004_PROOF_REQUIRED","凭证必填","验证缺少凭证","LEAD",value,"ACTIVE",10,
+                "resource-validation-scenario",0);
+
+        assertThatThrownBy(()->resources.save(command,actor))
+                .isInstanceOf(TodoException.class)
+                .hasMessageContaining("TODO_SIMULATION_EXPECTED_ERROR_CODE_REQUIRED");
+    }
+
     private ConfigurationResourceCommand field(Long id,String valueJson,int version)
     {
         return new ConfigurationResourceCommand(id,"FIELD","contactedAt","联系时间","实际联系时间","LEAD",

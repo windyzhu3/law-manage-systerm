@@ -29,10 +29,11 @@ public class TodoConfigurationResourceManagementService
             "requiredFields","requiredAttachments","validatorRefs","conditionalRules","employeeInstructions");
     private static final Set<String> SCENARIO_KEYS=Set.of("templateCode","scenarioVersion","completionPayload",
             "editableFields","requiredMaterials","completionNodeKey","occurrence",
-            "expectedNextTemplateCode","requiredForPublish");
+            "requiredForPublish");
     private final TodoConfigurationMapper mapper;
     private final TodoMapper todoMapper;
     private final TodoConfigurationResourceCatalogService catalog;
+    private final TodoSimulationEffectResolver effects=new TodoSimulationEffectResolver();
 
     public TodoConfigurationResourceManagementService(TodoConfigurationMapper mapper,TodoMapper todoMapper,
             TodoConfigurationResourceCatalogService catalog)
@@ -94,13 +95,21 @@ public class TodoConfigurationResourceManagementService
                 ||!(value.get("completionPayload") instanceof JSONObject)
                 ||!stringArray(value,"editableFields")||!stringArray(value,"requiredMaterials")
                 ||blank(value.getString("completionNodeKey"))||!positiveInteger(value.get("occurrence"))
-                ||blank(value.getString("expectedNextTemplateCode"))
                 ||!(value.get("requiredForPublish") instanceof Boolean))
             throw invalid("Simulation scenario metadata is incomplete or invalid");
+        var expected=effects.expected(value);
+        if(expected==null)
+            throw new TodoException("TODO_SIMULATION_EXPECTED_EFFECT_REQUIRED",
+                    "TODO_SIMULATION_EXPECTED_EFFECT_REQUIRED: Simulation scenario requires an expected effect");
+        if(expected.kind()==TodoSimulationEffectResolver.EffectKind.EXPECTED_VALIDATION_FAILURE
+                &&blank(value.getString("expectedErrorCode")))
+            throw new TodoException("TODO_SIMULATION_EXPECTED_ERROR_CODE_REQUIRED",
+                    "TODO_SIMULATION_EXPECTED_ERROR_CODE_REQUIRED: Expected validation failure requires an error code");
         if(mapper.selectTemplateIdByCode(value.getString("templateCode"))==null)
             throw unknown("template",value.getString("templateCode"));
-        if(mapper.selectTemplateIdByCode(value.getString("expectedNextTemplateCode"))==null)
-            throw unknown("template",value.getString("expectedNextTemplateCode"));
+        if(expected.targetTemplateCode()!=null
+                &&mapper.selectTemplateIdByCode(expected.targetTemplateCode())==null)
+            throw unknown("template",expected.targetTemplateCode());
         for(String field:strings(value.getJSONArray("editableFields")))
             if(!catalog.isKnownField(field,businessType))throw unknown("field",field);
         for(String material:strings(value.getJSONArray("requiredMaterials")))

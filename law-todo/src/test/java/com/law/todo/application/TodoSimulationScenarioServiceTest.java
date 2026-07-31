@@ -16,6 +16,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeOption;
+import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeSet;
+import com.law.todo.application.TodoSimulationEffectResolver.EffectKind;
+import com.law.todo.application.TodoSimulationEffectResolver.SimulationEffect;
 import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimulationCommand;
 import com.law.todo.application.view.TodoConfigurationJourneyView;
@@ -32,6 +36,7 @@ import com.law.todo.application.view.TodoSimulationView.RouteTrace;
 import com.law.todo.application.view.TodoSimulationView.SlaTrace;
 import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoCompletionHandler;
 
@@ -152,6 +157,94 @@ class TodoSimulationScenarioServiceTest
         assertThat(result.passed()).isTrue();
     }
 
+    @Test
+    void passesATerminalScenarioWhenTheGraphEndsNormally()
+    {
+        SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
+                EffectKind.END,null,null);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(result(null));
+
+        var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
+
+        assertThat(result.expectedEffect().kind()).isEqualTo(EffectKind.END);
+        assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.END);
+        assertThat(result.actualNextTemplateCode()).isNull();
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    void doesNotTreatAWaitingGraphAsATerminalEffect()
+    {
+        SimulationScenario scenario=effectScenario("TD002_TRUE_INVALID","reviewResult","TRUE_INVALID",
+                EffectKind.END,null,null);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(waitingResult());
+
+        var result=service().simulate(42L,"TD002_TRUE_INVALID",command(),actor());
+
+        assertThat(result.actualEffect()).isNull();
+        assertThat(result.passed()).isFalse();
+    }
+
+    @Test
+    void resolvesScheduledEffectsFromTheGovernedOutcomeCatalog()
+    {
+        SimulationScenario scenario=effectScenario("TD003_NEXT_WINDOW","contactResult","NEXT_WINDOW",
+                EffectKind.SCHEDULE_NEXT,null,null);
+        BusinessOutcomeSet outcomeSet=new BusinessOutcomeSet("contactResult","联系结果","重试动作",
+                List.of(new BusinessOutcomeOption("NEXT_WINDOW","进入下一窗口","SCHEDULE_NEXT",
+                        null,null,null)),"TD003_GOVERNED_OUTCOMES");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey(outcomeSet));
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(result(null));
+
+        var result=service().simulate(42L,"TD003_NEXT_WINDOW",command(),actor());
+
+        assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.SCHEDULE_NEXT);
+        assertThat(result.actualEffect().actionCode()).isEqualTo("NEXT_WINDOW");
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    void expectedValidationFailurePassesOnlyForTheConfiguredErrorCode()
+    {
+        SimulationScenario scenario=effectScenario("TD004_PROOF_REQUIRED","progressType","PHONE",
+                EffectKind.EXPECTED_VALIDATION_FAILURE,null,"TODO_DOD_ATTACHMENT_MISSING");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenThrow(new TodoException(
+                "TODO_DOD_ATTACHMENT_MISSING","Proof is required"));
+
+        var result=service().simulate(42L,"TD004_PROOF_REQUIRED",command(),actor());
+
+        assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.EXPECTED_VALIDATION_FAILURE);
+        assertThat(result.actualEffect().actionCode()).isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
+        assertThat(result.passed()).isTrue();
+    }
+
+    @Test
+    void rejectsAnOtherwiseMatchingEffectFromAnotherDefinitionHash()
+    {
+        SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition());
+        when(simulations.simulate(any(),any())).thenReturn(result(104L,"published-hash"));
+        when(mapper.selectTemplateCodeByVersionId(104L)).thenReturn("TD-004");
+
+        var result=service().simulate(42L,"TD001_VALID",command(),actor());
+
+        assertThat(result.actualEffect().targetTemplateCode()).isEqualTo("TD-004");
+        assertThat(result.passed()).isFalse();
+    }
+
     private TodoSimulationScenarioService service()
     {return service(List.of());}
 
@@ -171,11 +264,24 @@ class TodoSimulationScenarioServiceTest
                 List.of("contactResult","contactedAt"),List.of(),"TD-001",1,expected,true,"ACTIVE",10);
     }
 
+    private SimulationScenario effectScenario(String code,String field,String value,EffectKind kind,
+            String target,String expectedErrorCode)
+    {
+        SimulationEffect effect=new SimulationEffect(kind,target,null);
+        return new SimulationScenario(12L,code,"TD-001",code,1,Map.of(field,value),List.of(field),
+                List.of(),"TD-001",1,effect,
+                kind==EffectKind.NEXT_TEMPLATE?target:null,expectedErrorCode,true,"ACTIVE",10);
+    }
+
     private TodoConfigurationJourneyView journey()
+    {return journey(BusinessOutcomeSet.empty());}
+
+    private TodoConfigurationJourneyView journey(BusinessOutcomeSet outcomeSet)
     {
         return new TodoConfigurationJourneyView(new TemplateSummary(42L,9L,1,0,"TD-001","首联","LEAD",
                 "LEAD","DRAFT","definition-hash"),List.of(),
-                new CurrentResources(List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of()),
+                new CurrentResources(List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),List.of(),
+                        outcomeSet),
                 new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),
                 List.of(),new JourneyPermissions(true,true,true,true,true,true));
     }
@@ -196,8 +302,14 @@ class TodoSimulationScenarioServiceTest
     {return result(routeVersion,true);}
 
     private TodoJourneySimulationResult result(Long routeVersion,boolean publishEligible)
+    {return result(routeVersion,publishEligible,"definition-hash");}
+
+    private TodoJourneySimulationResult result(Long routeVersion,String definitionHash)
+    {return result(routeVersion,true,definitionHash);}
+
+    private TodoJourneySimulationResult result(Long routeVersion,boolean publishEligible,String definitionHash)
     {
-        TodoSimulationView engine=new TodoSimulationView(9L,"definition-hash",
+        TodoSimulationView engine=new TodoSimulationView(9L,definitionHash,
                 new TriggerTrace("MATCHED","LEAD_ASSIGNED",1,List.of()),
                 new OwnerTrace("RESOLVED",7L,List.of(),List.of(),false,List.of()),
                 new SlaTrace("PLANNED","DEFAULT",null,null,null,null,null,List.of()),
@@ -210,6 +322,21 @@ class TodoSimulationScenarioServiceTest
                 new TodoJourneySimulationResult.HydratedPayload(Map.of(),List.of(),100),engine,List.of(),
                 new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),
                 List.of(),publishEligible);
+    }
+
+    private TodoJourneySimulationResult waitingResult()
+    {
+        TodoSimulationView engine=new TodoSimulationView(9L,"definition-hash",
+                new TriggerTrace("MATCHED","LEAD_ASSIGNED",1,List.of()),
+                new OwnerTrace("RESOLVED",7L,List.of(),List.of(),false,List.of()),
+                new SlaTrace("PLANNED","DEFAULT",null,null,null,null,null,List.of()),
+                new FormTrace(Map.of(),Map.of()),
+                List.of(new RouteTrace(1,"join","JOIN","WAITING","branch",0,null,null,List.of())),
+                List.of(),List.of(),List.of());
+        return new TodoJourneySimulationResult(
+                new TodoJourneySimulationResult.HydratedPayload(Map.of(),List.of(),100),engine,List.of(),
+                new EmployeeTodoPreview("首联","负责人",List.of(),List.of(),List.of(),"1小时"),
+                List.of(),false);
     }
 
     private static final class DeferredRetrySimulator implements TodoCompletionHandler

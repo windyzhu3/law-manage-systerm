@@ -19,6 +19,8 @@ import com.law.todo.application.command.TodoConfigurationCommands.ScenarioSimula
 import com.law.todo.application.command.TodoConfigurationCommands.JourneySimulationCommand;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationEvidenceSummary;
 import com.law.todo.application.view.TodoSimulationScenarioViews.SimulationScenario;
+import com.law.todo.application.TodoSimulationEffectResolver.EffectKind;
+import com.law.todo.application.TodoSimulationEffectResolver.SimulationEffect;
 import com.law.todo.definition.compiler.DefinitionValidationReport;
 import com.law.todo.definition.compiler.DefinitionValidationReport.ValidationIssue;
 import com.law.todo.mapper.TodoConfigurationMapper;
@@ -38,15 +40,19 @@ public class TodoSimulationEvidenceService
 
     @Transactional
     public SimulationEvidenceSummary record(long templateId,SimulationScenario scenario,
-            ScenarioSimulationCommand command,String actualNextTemplateCode,boolean passed,
+            ScenarioSimulationCommand command,SimulationEffect actualEffect,boolean passed,
             List<String> traceCodes,Actor actor)
     {
         String inputHash=inputHash(templateId,scenario,command);
         LocalDateTime executed=LocalDateTime.now();
         Map<String,Object> summary=new TreeMap<>();
-        summary.put("actualNextTemplateCode",actualNextTemplateCode);
+        summary.put("actualEffect",actualEffect);
+        summary.put("definitionHash",command.definitionHash());
+        summary.put("expectedEffect",scenario.expectedEffect());
         summary.put("expectedNextTemplateCode",scenario.expectedNextTemplateCode());
-        summary.put("passed",passed);summary.put("traceCodes",traceCodes==null?List.of():traceCodes);
+        summary.put("passed",passed);summary.put("scenarioCode",scenario.scenarioCode());
+        summary.put("scenarioVersion",scenario.scenarioVersion());
+        summary.put("traceCodes",traceCodes==null?List.of():traceCodes);
         Map<String,Object> row=new HashMap<>();
         row.put("templateId",templateId);row.put("versionId",command.versionId());
         row.put("definitionHash",command.definitionHash());row.put("scenarioCode",scenario.scenarioCode());
@@ -57,6 +63,16 @@ public class TodoSimulationEvidenceService
         row.put("expireTime",null);mapper.insertSimulationEvidence(row);
         return new SimulationEvidenceSummary(scenario.scenarioCode(),scenario.scenarioVersion(),
                 command.definitionHash(),passed?"PASSED":"FAILED",inputHash,executed,null);
+    }
+
+    /** Compatibility overload retained for callers that still report only the next template. */
+    public SimulationEvidenceSummary record(long templateId,SimulationScenario scenario,
+            ScenarioSimulationCommand command,String actualNextTemplateCode,boolean passed,
+            List<String> traceCodes,Actor actor)
+    {
+        SimulationEffect actual=actualNextTemplateCode==null?null:
+                new SimulationEffect(EffectKind.NEXT_TEMPLATE,actualNextTemplateCode,null);
+        return record(templateId,scenario,command,actual,passed,traceCodes,actor);
     }
 
     @Transactional(propagation=Propagation.REQUIRES_NEW)

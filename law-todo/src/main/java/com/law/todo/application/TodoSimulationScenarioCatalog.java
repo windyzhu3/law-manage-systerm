@@ -19,6 +19,7 @@ import com.law.todo.mapper.TodoConfigurationMapper;
 public class TodoSimulationScenarioCatalog
 {
     private final TodoConfigurationMapper mapper;
+    private final TodoSimulationEffectResolver effects=new TodoSimulationEffectResolver();
 
     public TodoSimulationScenarioCatalog(TodoConfigurationMapper mapper){this.mapper=mapper;}
 
@@ -40,12 +41,16 @@ public class TodoSimulationScenarioCatalog
                 throw new TodoException("TODO_SIMULATION_SCENARIO_DUPLICATE",
                         "TODO_SIMULATION_SCENARIO_DUPLICATE: Duplicate active scenario "+code);
             rejectUnsupportedPlaceholder(value);
+            var expected=effects.expected(value);
+            if(expected==null)
+                throw new TodoException("TODO_SIMULATION_EXPECTED_EFFECT_REQUIRED",
+                        "TODO_SIMULATION_EXPECTED_EFFECT_REQUIRED: Scenario requires an expected effect");
             result.add(new SimulationScenario(number(row,"resource_item_id","resourceItemId"),code,
                     value.getString("templateCode"),text(row,"resource_name","resourceName"),
                     integer(value.get("scenarioVersion")),map(value.get("completionPayload")),
                     strings(value,"editableFields"),strings(value,"requiredMaterials"),
                     value.getString("completionNodeKey"),integer(value.get("occurrence")),
-                    value.getString("expectedNextTemplateCode"),
+                    expected,value.getString("expectedNextTemplateCode"),value.getString("expectedErrorCode"),
                     Boolean.TRUE.equals(value.getBoolean("requiredForPublish")),
                     text(row,"status","status"),integer(value(row,"sort_order","sortOrder"))));
         }

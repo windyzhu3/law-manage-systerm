@@ -46,7 +46,23 @@ public record TodoConfigurationJourneyView(
     public record PreviewField(String code,String label,String type,boolean required) { }
     public record PreviewMaterial(String code,String label,boolean required) { }
     public record JourneyIssue(String code,String severity,String stepCode,String fieldPath,
-            String message,String repairAction) { }
+            String message,String repairAction,String resourceKey)
+    {
+        public JourneyIssue(String code,String severity,String stepCode,String fieldPath,
+                String message,String repairAction)
+        {this(code,severity,stepCode,fieldPath,message,repairAction,resourceKey(stepCode,fieldPath));}
+
+        private static String resourceKey(String stepCode,String fieldPath)
+        {
+            if(stepCode==null)return null;
+            if(stepCode.startsWith("SIMULATION"))return "SIMULATION";
+            if(stepCode.startsWith("ROUTING"))return "ROUTING";
+            if(stepCode.startsWith("SLA"))return "SLA";
+            if(stepCode.startsWith("TRIGGER")||fieldPath!=null&&fieldPath.startsWith("event.condition"))
+                return "TRIGGER";
+            return stepCode;
+        }
+    }
     public record JourneyPermissions(boolean canView,boolean canEdit,boolean canMaintainResources,
             boolean canSimulate,boolean canPublish,boolean canAudit) { }
     public record TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,

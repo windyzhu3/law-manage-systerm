@@ -81,7 +81,19 @@ class TodoSimulationReadinessServiceTest
         assertThat(value.issues()).singleElement().satisfies(issue->{
             assertThat(issue.code()).isEqualTo("TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE");
             assertThat(issue.message()).contains("无法联系");
+            assertThat(issue.resourceKey()).isEqualTo("SIMULATION");
         });
+    }
+
+    @Test
+    void assignsActionableResourceCoordinatesWithoutBreakingSixArgumentCallers()
+    {
+        assertThat(new JourneyIssue("ROUTE","BLOCKER","ROUTING","routing.businessOutcomes",
+                "路由未完成","修复路由").resourceKey()).isEqualTo("ROUTING");
+        assertThat(new JourneyIssue("SLA","BLOCKER","SLA","sla.duration",
+                "时限未完成","修复时限").resourceKey()).isEqualTo("SLA");
+        assertThat(new JourneyIssue("CONDITION","BLOCKER","TRIGGER","event.condition.left",
+                "条件未完成","修复条件").resourceKey()).isEqualTo("TRIGGER");
     }
 
     @Test

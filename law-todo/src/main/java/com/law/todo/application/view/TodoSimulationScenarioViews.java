@@ -5,7 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.law.todo.application.view.TodoJourneySimulationResult;
+import com.law.todo.application.TodoSimulationEffectResolver.EffectKind;
+import com.law.todo.application.TodoSimulationEffectResolver.SimulationEffect;
 
 public final class TodoSimulationScenarioViews
 {
@@ -16,7 +17,8 @@ public final class TodoSimulationScenarioViews
             String scenarioName,int scenarioVersion,
             Map<String,Object> completionPayload,List<String> editableFields,
             List<String> requiredMaterials,String completionNodeKey,
-            int occurrence,String expectedNextTemplateCode,
+            int occurrence,SimulationEffect expectedEffect,String expectedNextTemplateCode,
+            String expectedErrorCode,
             boolean requiredForPublish,String status,int sortOrder)
     {
         public SimulationScenario
@@ -25,6 +27,24 @@ public final class TodoSimulationScenarioViews
                     Collections.unmodifiableMap(new LinkedHashMap<>(completionPayload));
             editableFields=editableFields==null?List.of():List.copyOf(editableFields);
             requiredMaterials=requiredMaterials==null?List.of():List.copyOf(requiredMaterials);
+            if(expectedEffect==null&&expectedNextTemplateCode!=null&&!expectedNextTemplateCode.isBlank())
+                expectedEffect=new SimulationEffect(EffectKind.NEXT_TEMPLATE,expectedNextTemplateCode,null);
+            if(expectedEffect!=null)
+                expectedNextTemplateCode=expectedEffect.kind()==EffectKind.NEXT_TEMPLATE
+                        ?expectedEffect.targetTemplateCode():null;
+        }
+
+        public SimulationScenario(long resourceItemId,String scenarioCode,String templateCode,
+                String scenarioName,int scenarioVersion,Map<String,Object> completionPayload,
+                List<String> editableFields,List<String> requiredMaterials,String completionNodeKey,
+                int occurrence,String expectedNextTemplateCode,boolean requiredForPublish,
+                String status,int sortOrder)
+        {
+            this(resourceItemId,scenarioCode,templateCode,scenarioName,scenarioVersion,
+                    completionPayload,editableFields,requiredMaterials,completionNodeKey,occurrence,
+                    expectedNextTemplateCode==null?null:
+                            new SimulationEffect(EffectKind.NEXT_TEMPLATE,expectedNextTemplateCode,null),
+                    expectedNextTemplateCode,null,requiredForPublish,status,sortOrder);
         }
     }
 
@@ -33,7 +53,8 @@ public final class TodoSimulationScenarioViews
             java.time.LocalDateTime expireTime) { }
 
     public record ScenarioSimulationResult(String scenarioCode,String scenarioName,
-            String expectedNextTemplateCode,String actualNextTemplateCode,boolean passed,String message,
+            String expectedNextTemplateCode,String actualNextTemplateCode,
+            SimulationEffect expectedEffect,SimulationEffect actualEffect,boolean passed,String message,
             TodoJourneySimulationResult simulation,SimulationEvidenceSummary evidence) { }
 
     public record BatchScenarioResult(List<ScenarioSimulationResult> results,boolean publicationReady,

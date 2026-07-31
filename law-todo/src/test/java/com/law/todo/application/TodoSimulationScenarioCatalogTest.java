@@ -14,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.application.TodoSimulationEffectResolver.EffectKind;
 
 @ExtendWith(MockitoExtension.class)
 class TodoSimulationScenarioCatalogTest
@@ -53,6 +54,31 @@ class TodoSimulationScenarioCatalogTest
                 .hasMessageContaining("TODO_SIMULATION_SCENARIO_DUPLICATE");
     }
 
+    @Test
+    void parsesTerminalEffectWithoutRequiringALegacyNextTemplate()
+    {
+        when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
+                .thenReturn(List.of(effectRow("TD002_TRUE_INVALID","END",null,null)));
+
+        var scenario=new TodoSimulationScenarioCatalog(mapper).scenarios("TD-002","LEAD").get(0);
+
+        assertThat(scenario.expectedEffect().kind()).isEqualTo(EffectKind.END);
+        assertThat(scenario.expectedNextTemplateCode()).isNull();
+    }
+
+    @Test
+    void parsesExpectedValidationFailureWithItsStableErrorCode()
+    {
+        when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
+                .thenReturn(List.of(effectRow("TD004_PROOF_REQUIRED","EXPECTED_VALIDATION_FAILURE",null,
+                        "TODO_DOD_ATTACHMENT_MISSING")));
+
+        var scenario=new TodoSimulationScenarioCatalog(mapper).scenarios("TD-004","LEAD").get(0);
+
+        assertThat(scenario.expectedEffect().kind()).isEqualTo(EffectKind.EXPECTED_VALIDATION_FAILURE);
+        assertThat(scenario.expectedErrorCode()).isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
+    }
+
     private Map<String,Object> row(long id,String code,String name,int sortOrder,String expected)
     {
         String payload="TD001_UNREACHABLE".equals(code)
@@ -70,5 +96,23 @@ class TodoSimulationScenarioCatalogTest
                     +"\"completionPayload\":"+payload+",\"editableFields\":[\"contactResult\",\"contactedAt\"],"
                     +"\"requiredMaterials\":[],\"completionNodeKey\":\"TD-001\",\"occurrence\":1,"
                     +"\"expectedNextTemplateCode\":\""+expected+"\",\"requiredForPublish\":true}");
+    }
+
+    private Map<String,Object> effectRow(String code,String kind,String target,String errorCode)
+    {
+        String targetJson=target==null?"":" ,\"targetTemplateCode\":\""+target+"\"";
+        String errorJson=errorCode==null?"":" ,\"expectedErrorCode\":\""+errorCode+"\"";
+        return Map.of(
+                "resource_item_id",21L,
+                "resource_code",code,
+                "resource_name",code,
+                "business_type","LEAD",
+                "status","ACTIVE",
+                "sort_order",10,
+                "value_json","{\"templateCode\":\""+(code.startsWith("TD002")?"TD-002":"TD-004")
+                        +"\",\"scenarioVersion\":1,\"completionPayload\":{},\"editableFields\":[],"
+                        +"\"requiredMaterials\":[],\"completionNodeKey\":\"task\",\"occurrence\":1,"
+                        +"\"expectedEffect\":{\"kind\":\""+kind+"\""+targetJson+"}" +errorJson
+                        +",\"requiredForPublish\":true}");
     }
 }
