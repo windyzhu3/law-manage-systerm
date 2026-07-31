@@ -42,6 +42,8 @@ import com.law.todo.application.view.TodoSimulationView.TriggerTrace;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoConfigurationMapper;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.business.lead.support.LeadProgressPayloadParser;
+import com.law.business.lead.support.LeadProgressPayloadParser.PayloadValidationException;
 
 @ExtendWith(MockitoExtension.class)
 class TodoSimulationScenarioServiceTest
@@ -316,6 +318,50 @@ class TodoSimulationScenarioServiceTest
     }
 
     @Test
+    void malformedTd004ManualOverrideCannotPassThePositiveScheduleSelfScenario()
+    {
+        SimulationScenario scenario=new SimulationScenario(13L,"TD004_PROGRESS_RECORDED","TD-004",
+                "记录实质进展",1,Map.of("progressType","PHONE",
+                        "progressAt","2026-07-31T10:00:00"),
+                List.of("progressType","progressAt","remark"),List.of("FOLLOWUP_PROOF"),
+                "td001",1,new SimulationEffect(EffectKind.SCHEDULE_SELF,"TD-004",null),
+                null,null,true,"ACTIVE",10);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definitionWithProgressProof());
+
+        var result=service(List.of(new ProgressSimulator())).simulate(42L,
+                "TD004_PROGRESS_RECORDED",command(Map.of("progressAt","invalid")),actor());
+
+        assertThat(result.passed()).isFalse();
+        assertThat(result.actualEffect().kind()).isEqualTo(EffectKind.EXPECTED_VALIDATION_FAILURE);
+        assertThat(result.actualEffect().actionCode()).isEqualTo("TODO_HANDLER_PAYLOAD_INVALID");
+        verifyNoInteractions(simulations);
+    }
+
+    @Test
+    void manualOverrideCannotForgeGovernedScenarioMaterials()
+    {
+        SimulationScenario scenario=new SimulationScenario(12L,"TD004_PROOF_REQUIRED","TD-004",
+                "缺少进展凭证",1,Map.of("progressType","PHONE",
+                        "progressAt","2026-07-31T10:00:00"),
+                List.of("progressType","progressAt","remark"),List.of(),"td001",1,
+                new SimulationEffect(EffectKind.EXPECTED_VALIDATION_FAILURE,null,null),null,
+                "TODO_DOD_ATTACHMENT_MISSING",true,"ACTIVE",10);
+        when(catalog.scenarios("TD-001","LEAD")).thenReturn(List.of(scenario));
+        when(journeys.load(42L,actor())).thenReturn(journey());
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definitionWithProgressProof());
+
+        var result=service(List.of(new ProgressSimulator())).simulate(42L,
+                "TD004_PROOF_REQUIRED",command(Map.of(
+                        "requiredMaterials",List.of("FOLLOWUP_PROOF"))),actor());
+
+        assertThat(result.passed()).isTrue();
+        assertThat(result.actualEffect().actionCode()).isEqualTo("TODO_DOD_ATTACHMENT_MISSING");
+        verifyNoInteractions(simulations);
+    }
+
+    @Test
     void rejectsAnOtherwiseMatchingEffectFromAnotherDefinitionHash()
     {
         SimulationScenario scenario=scenario("TD001_VALID","VALID","TD-004");
@@ -339,7 +385,12 @@ class TodoSimulationScenarioServiceTest
 
     private ScenarioSimulationCommand command()
     {
-        return new ScenarioSimulationCommand(9L,"definition-hash","LEAD",3L,Map.of(),
+        return command(Map.of());
+    }
+
+    private ScenarioSimulationCommand command(Map<String,Object> overrides)
+    {
+        return new ScenarioSimulationCommand(9L,"definition-hash","LEAD",3L,overrides,
                 LocalDateTime.of(2026,7,28,9,0),"run-1");
     }
 
@@ -477,6 +528,15 @@ class TodoSimulationScenarioServiceTest
         @Override public boolean supportsSimulation(){return true;}
         @Override public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
         {
+            try
+            {
+                LeadProgressPayloadParser.parse(payload,todo.getBusinessId(),todo.getTodoId());
+            }
+            catch(PayloadValidationException invalid)
+            {
+                throw new com.law.todo.domain.TodoException(
+                        invalid.getBusinessCode(),invalid.getMessage());
+            }
             Map<String,Object> result=new java.util.LinkedHashMap<>(payload);
             result.put("result","PROGRESS_RECORDED");
             return SimulationResult.none(result);

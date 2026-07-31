@@ -3,6 +3,7 @@ package com.law.business.lead.dto;
 import java.time.LocalDateTime;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public class LeadProgressCompleteCommand
 {
@@ -10,7 +11,7 @@ public class LeadProgressCompleteCommand
     @NotNull private Long todoId;
     @NotBlank private String progressType;
     @NotNull private LocalDateTime progressAt;
-    private String remark;
+    @Size(max=1000,message="remark must not exceed 1000 characters") private String remark;
 
     public Long getLeadId() { return leadId; }
     public void setLeadId(Long value) { leadId=value; }

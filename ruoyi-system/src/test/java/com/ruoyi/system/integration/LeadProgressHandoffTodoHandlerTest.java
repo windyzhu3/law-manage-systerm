@@ -1,6 +1,7 @@
 package com.ruoyi.system.integration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.same;
@@ -15,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import com.law.business.lead.dto.LeadProgressCompleteCommand;
 import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.model.TodoInstance;
+import com.law.todo.domain.TodoException;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 import com.law.todo.spi.TodoCompletionHandler.SimulationResult;
 import com.ruoyi.system.service.event.LeadProgressHandoffTodoHandler;
@@ -37,7 +39,8 @@ class LeadProgressHandoffTodoHandlerTest
         assertTrue(handler.supports(todo));
         assertEquals("TD-004_COMPLETE",handler.catalogCode());
         CompletionResult result=handler.handle(CompletionContext.human(todo,Map.of(
-                "progressType","PHONE","progressAt",progressAt.toString(),"remark","quoted"),
+                "leadId","91","todoId",7001,"progressType"," PHONE ",
+                "progressAt","2026-07-31T10:00:00.987654321","remark"," quoted "),
                 8L,"alice"));
 
         assertTrue(result.completeTodo());
@@ -74,6 +77,28 @@ class LeadProgressHandoffTodoHandlerTest
                 "result","PROGRESS_RECORDED"),result.routingPayload());
         assertTrue(result.producedTemplateCodes().isEmpty(),
                 "SCHEDULE_SELF is an outcome effect, not an ordinary graph-produced task");
+        verifyNoInteractions(cycles);
+    }
+
+    @Test
+    void simulationAndLiveCompletionRejectTheSameMalformedProgressPayloadWithoutWrites()
+    {
+        TodoInstance todo=new TodoInstance();
+        todo.setTodoId(7002L);todo.setTemplateCode("TD-004");
+        todo.setBusinessType("LEAD");todo.setBusinessId(92L);
+        LeadProgressCycleService cycles=org.mockito.Mockito.mock(LeadProgressCycleService.class);
+        LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(cycles);
+        Map<String,Object> malformed=Map.of("progressType","PHONE","progressAt","invalid");
+
+        TodoException simulation=assertThrows(TodoException.class,
+                ()->handler.simulate(todo,malformed));
+        TodoException live=assertThrows(TodoException.class,
+                ()->handler.handle(CompletionContext.human(todo,malformed,8L,"alice")));
+
+        assertEquals("TODO_HANDLER_PAYLOAD_INVALID",simulation.getBusinessCode());
+        assertEquals("progressAt must be an ISO local date-time",simulation.getMessage());
+        assertEquals(simulation.getBusinessCode(),live.getBusinessCode());
+        assertEquals(simulation.getMessage(),live.getMessage());
         verifyNoInteractions(cycles);
     }
 }

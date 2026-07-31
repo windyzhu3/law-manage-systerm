@@ -1,10 +1,11 @@
 package com.ruoyi.system.service.event;
 
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import com.law.business.lead.dto.LeadProgressCompleteCommand;
+import com.law.business.lead.support.LeadProgressPayloadParser;
+import com.law.business.lead.support.LeadProgressPayloadParser.PayloadValidationException;
 import com.law.todo.application.CompletionContext;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
@@ -36,6 +37,7 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
     @Override
     public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
     {
+        parse(todo,payload);
         Map<String,Object> routing=new LinkedHashMap<>();
         if(payload!=null)routing.putAll(payload);
         routing.put("result","PROGRESS_RECORDED");
@@ -61,22 +63,17 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
 
     private ProgressCycleOutcome execute(TodoInstance todo,Map<String,Object> payload)
     {
-        Map<String,Object> values=LeadTodoPayloadMapper.values(payload);
-        LeadProgressCompleteCommand command=new LeadProgressCompleteCommand();
-        command.setLeadId(todo.getBusinessId());
-        command.setTodoId(todo.getTodoId());
-        command.setProgressType(LeadTodoPayloadMapper.text(values,"progressType"));
-        command.setProgressAt(dateTime(values.get("progressAt")));
-        command.setRemark(LeadTodoPayloadMapper.text(values,"remark"));
-        return cycles.complete(command,todo);
+        return cycles.complete(parse(todo,payload),todo);
     }
 
-    private LocalDateTime dateTime(Object value)
+    private LeadProgressCompleteCommand parse(TodoInstance todo,Map<String,Object> payload)
     {
-        if(value instanceof LocalDateTime supplied)return supplied;
-        if(value==null||String.valueOf(value).isBlank())return null;
-        try{return LocalDateTime.parse(String.valueOf(value).trim().replace(' ','T'));}
-        catch(RuntimeException invalid)
-        {throw new TodoException("TODO_HANDLER_PAYLOAD_INVALID","progressAt must be an ISO local date-time");}
+        try
+        {
+            return LeadProgressPayloadParser.parse(payload,
+                    todo==null?null:todo.getBusinessId(),todo==null?null:todo.getTodoId());
+        }
+        catch(PayloadValidationException invalid)
+        {throw new TodoException(invalid.getBusinessCode(),invalid.getMessage());}
     }
 }

@@ -449,6 +449,7 @@ class LeadTemplateConfigurationMySqlIT
 
     private void assertTd004GuidedDraft(Connection connection) throws Exception
     {
+        List<String> governedMaterials=List.of();
         try(Statement statement=connection.createStatement();ResultSet rows=statement.executeQuery("""
                 select v.version_id,v.version_no,v.status,v.source_version_id,
                        cast(v.definition_json as char),cast(v.compiled_json as char),v.definition_hash
@@ -483,9 +484,10 @@ class LeadTemplateConfigurationMySqlIT
             assertEquals(recipe.getJSONArray("validatorRefs"),dod.getJSONArray("validatorRefs"));
             assertEquals(recipe.getJSONArray("conditionalRules"),
                     dod.getJSONArray("conditionalRequired"));
+            governedMaterials=dod.getJSONArray("materials").stream().map(JSONObject.class::cast)
+                    .map(item->item.getString("type")).toList();
             assertEquals(recipe.getJSONArray("requiredAttachments").toJavaList(String.class),
-                    dod.getJSONArray("materials").stream().map(JSONObject.class::cast)
-                            .map(item->item.getString("type")).toList());
+                    governedMaterials);
 
             JSONObject routing=definition.getJSONObject("routing").getJSONObject("config");
             JSONArray outcomes=routing.getJSONArray("businessOutcomes");
@@ -533,12 +535,12 @@ class LeadTemplateConfigurationMySqlIT
                     "TD004_PROGRESS_RECORDED",Map.of("kind","SCHEDULE_SELF",
                             "targetTemplateCode","TD-004"),
                     Map.of("progressType","PHONE","progressAt","2026-07-31T10:00:00",
-                            "remark","完成有效沟通"),List.of("FOLLOWUP_PROOF"),false,null);
+                            "remark","完成有效沟通"),governedMaterials,false,null);
             assertTd004Scenario(scenarios.get("TD004_IDEMPOTENT_REPLAY"),
                     "TD004_IDEMPOTENT_REPLAY",Map.of("kind","SCHEDULE_SELF",
                             "targetTemplateCode","TD-004"),
                     Map.of("progressType","WECHAT","progressAt","2026-07-31T11:00:00"),
-                    List.of("FOLLOWUP_PROOF"),true,null);
+                    governedMaterials,true,null);
             assertTd004Scenario(scenarios.get("TD004_PROOF_REQUIRED"),
                     "TD004_PROOF_REQUIRED",Map.of("kind","EXPECTED_VALIDATION_FAILURE"),
                     Map.of("progressType","PHONE","progressAt","2026-07-31T10:00:00"),

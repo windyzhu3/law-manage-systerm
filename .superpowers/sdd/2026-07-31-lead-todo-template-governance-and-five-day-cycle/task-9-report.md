@@ -57,3 +57,19 @@ Final combined command:
 - Task 9 required small production changes outside the original file list: pure TD-004 simulation in the existing handler and governed DoD validation in the scenario service. These are necessary for the three required scenarios to execute against real behavior rather than mocked exceptions.
 - No Task 10 coordinated-release work was performed.
 - User-owned `.superpowers/sdd/task-7-report.md`, `ruoyi-ui/vue.config.js`, browser/runtime artifacts and test-result output were preserved and excluded from the commit.
+
+## Review Round 1: Simulation and Live Payload Parity
+
+- Root cause: the read-only TD-004 simulation handler stamped `PROGRESS_RECORDED` without parsing the semantic completion payload, while live completion parsed `progressAt`. A malformed manual override could therefore produce passing `SCHEDULE_SELF` evidence and later fail live completion.
+- Added pure `LeadProgressPayloadParser` to `law-business`, which is already a dependency of both `law-todo` and `ruoyi-system`; no reverse or cyclic dependency was introduced.
+- Both live completion and read-only simulation now call the same parser. The handler translates its stable `TODO_HANDLER_PAYLOAD_INVALID` code/message to `TodoException` and simulation still performs no progress or schedule writes.
+- The shared parser normalizes positive optional payload identities, enforces their match with authoritative Todo identity, trims `progressType`, parses an ISO `LocalDateTime` to second precision and accepts only an optional string remark of at most 1,000 characters.
+- A malformed positive scenario now records an actual validation failure and cannot pass `SCHEDULE_SELF`. Expected validation failures continue to match by exact error code.
+- Manual overrides cannot add or replace `requiredMaterials`; scenario material availability remains the governed resource value. The MySQL contract now directly asserts that both positive TD-004 scenarios use the material set from the canonical DoD recipe.
+
+Review TDD evidence:
+
+- RED: `LeadProgressPayloadParserTest` failed compilation because no shared parser existed.
+- GREEN: 6 parser tests cover normalized command identity, absent simulation Todo ID, invalid date, non-string/blank progress type, malformed/mismatched IDs and non-string/oversized remarks.
+- Focused parity gate: parser 6 + scenario service 31 + handler 3 = 40 tests passed, 0 failed/error/skipped.
+- Real MySQL gate: a fresh isolated MySQL 8 schema migrated normally through `0.20.77`; `LeadTemplateConfigurationMySqlIT` passed and verified scenario materials against the canonical draft DoD.
