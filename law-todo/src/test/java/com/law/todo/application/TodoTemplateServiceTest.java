@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.InOrder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -485,6 +487,69 @@ class TodoTemplateServiceTest
         assertEquals("TODO_TRIGGER_VERSION_CONFLICT",error.getBusinessCode());verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
     }
 
+    @Test void switchEntrySlotDisablesTheOldRuleBeforeEnablingTheNewRule()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(entrySlotBinding(41L,"Y",7,"PUBLISHED"),entrySlotBinding(52L,"N",3,"PUBLISHED")));
+        when(mapper.enableEntrySlotBinding(52L,3,"alice")).thenReturn(1);
+
+        TodoTemplateService.EntrySlotBinding result = new TodoTemplateService(mapper).switchEntrySlot(
+                "LEAD_FIRST_CONTACT_ENTRY",52L,3,actor());
+
+        InOrder order=inOrder(mapper);
+        order.verify(mapper).disableEntrySlotBindings("LEAD_FIRST_CONTACT_ENTRY",52L,"alice");
+        order.verify(mapper).enableEntrySlotBinding(52L,3,"alice");
+        assertEquals(52L,result.triggerRuleId());
+    }
+
+    @Test void switchEntrySlotRejectsUnknownSlot()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("UNKNOWN_ENTRY"))
+                .thenReturn(List.of());
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .switchEntrySlot("UNKNOWN_ENTRY",52L,3,actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_NOT_FOUND",error.getBusinessCode());
+        verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
+    }
+
+    @Test void switchEntrySlotRejectsTriggerOutsideTheRequestedSlot()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(entrySlotBinding(41L,"Y",7,"PUBLISHED")));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_TARGET_INVALID",error.getBusinessCode());
+        verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
+    }
+
+    @Test void switchEntrySlotRejectsStaleTargetVersion()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(entrySlotBinding(41L,"Y",7,"PUBLISHED"),entrySlotBinding(52L,"N",4,"PUBLISHED")));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,actor()));
+
+        assertEquals("TODO_TRIGGER_VERSION_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
+    }
+
+    @Test void switchEntrySlotRejectsNonPublishedTargetVersion()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(entrySlotBinding(41L,"Y",7,"PUBLISHED"),entrySlotBinding(52L,"N",3,"DRAFT")));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,actor()));
+
+        assertEquals("TODO_TRIGGER_VERSION_INVALID",error.getBusinessCode());
+        verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
+    }
+
     private Map<String,Object> trigger(String conditionJson)
     {
         Map<String,Object> trigger=new HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,
@@ -509,6 +574,12 @@ class TodoTemplateServiceTest
         Map<String,Object> row=new HashMap<>();row.put("trigger_rule_id",41L);row.put("event_type","LEAD_ASSIGNED");row.put("payload_version",1);
         row.put("template_id",1L);row.put("template_version_id",2L);row.put("business_type","LEAD");row.put("condition_json",condition);
         row.put("trigger_version",version);row.put("template_status",templateStatus);row.put("version_template_id",versionTemplateId);row.put("version_status",versionStatus);return row;
+    }
+    private Map<String,Object> entrySlotBinding(long triggerRuleId,String enabled,int version,String versionStatus)
+    {
+        Map<String,Object> row=new HashMap<>();row.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");row.put("trigger_rule_id",triggerRuleId);
+        row.put("template_version_id",2L);row.put("template_code",triggerRuleId==52L?"TD-001":"LEAD_FIRST_CONTACT");
+        row.put("enabled",enabled);row.put("trigger_version",version);row.put("template_status","0");row.put("version_status",versionStatus);return row;
     }
     private Map<String,Object> templateBinding(Long templateId,String versionStatus,String templateStatus)
     {return Map.of("version_template_id",templateId,"version_status",versionStatus,"template_status",templateStatus);}

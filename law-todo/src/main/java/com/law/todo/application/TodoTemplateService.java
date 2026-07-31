@@ -30,6 +30,9 @@ import com.alibaba.fastjson2.JSON;
 @Service
 public class TodoTemplateService
 {
+    public record EntrySlotBinding(String entrySlotCode,long triggerRuleId,
+            long templateVersionId,String templateCode) { }
+
     private final TodoMapper mapper;
     private final TodoEventCatalogService eventCatalog;
     private final ConditionValidator conditionValidator;
@@ -112,7 +115,7 @@ public class TodoTemplateService
     public List<Map<String,Object>> listTriggers(){return listTriggers(null);}
     public List<Map<String,Object>> listTriggers(String keyword){return mapper.selectAllTriggerRules(keyword);}
     @Transactional public int saveTrigger(TriggerCommand command){return saveTrigger(command,new Actor(0L,"system",0L));}
-    @Transactional public int saveTrigger(TriggerCommand command,Actor actor){validateBusinessType(command.businessType());requireExpectedVersion(command.triggerRuleId(),command.expectedVersion());String type=command.triggerRuleId()==null?"CREATE_TRIGGER":"UPDATE_TRIGGER";String fingerprint=fingerprint(type,command.triggerRuleId(),command.expectedVersion(),command,actor);Long replay=claim(command.actionId(),type,command.triggerRuleId(),fingerprint,actor,command);if(replay!=null)return 1;Map<String,Object> value=new HashMap<>();value.put("triggerRuleId",command.triggerRuleId());value.put("ruleCode",command.ruleCode());value.put("ruleName",command.ruleName());value.put("eventType",command.eventType());value.put("templateId",command.templateId());value.put("templateVersionId",command.templateVersionId());value.put("businessType",command.businessType());value.put("enabled",command.enabled()==null?"Y":command.enabled());value.put("conditionJson",command.conditionJson());value.put("payloadVersion",command.payloadVersion()==null?1:command.payloadVersion());value.put("expectedVersion",command.expectedVersion()==null?0:command.expectedVersion());value.put("createBy",actor.userName());value.put("updateBy",actor.userName());int saved=saveTrigger(value);Long id=command.triggerRuleId()==null?Long.valueOf(String.valueOf(value.get("triggerRuleId"))):command.triggerRuleId();complete(command.actionId(),fingerprint,id,"TODO_TRIGGER_ACTION_CONFLICT");return saved;}
+    @Transactional public int saveTrigger(TriggerCommand command,Actor actor){validateBusinessType(command.businessType());requireExpectedVersion(command.triggerRuleId(),command.expectedVersion());String type=command.triggerRuleId()==null?"CREATE_TRIGGER":"UPDATE_TRIGGER";String fingerprint=fingerprint(type,command.triggerRuleId(),command.expectedVersion(),command,actor);Long replay=claim(command.actionId(),type,command.triggerRuleId(),fingerprint,actor,command);if(replay!=null)return 1;Map<String,Object> value=new HashMap<>();value.put("triggerRuleId",command.triggerRuleId());value.put("ruleCode",command.ruleCode());value.put("ruleName",command.ruleName());value.put("eventType",command.eventType());value.put("templateId",command.templateId());value.put("templateVersionId",command.templateVersionId());value.put("businessType",command.businessType());value.put("entrySlotCode",command.entrySlotCode());value.put("enabled",command.enabled()==null?"Y":command.enabled());value.put("conditionJson",command.conditionJson());value.put("payloadVersion",command.payloadVersion()==null?1:command.payloadVersion());value.put("expectedVersion",command.expectedVersion()==null?0:command.expectedVersion());value.put("createBy",actor.userName());value.put("updateBy",actor.userName());int saved=saveTrigger(value);Long id=command.triggerRuleId()==null?Long.valueOf(String.valueOf(value.get("triggerRuleId"))):command.triggerRuleId();complete(command.actionId(),fingerprint,id,"TODO_TRIGGER_ACTION_CONFLICT");return saved;}
     @Transactional public void sortTriggers(TriggerSortCommand command,Actor actor)
     {
         validateSort(command);
@@ -126,6 +129,24 @@ public class TodoTemplateService
     }
     @Transactional public void toggleTrigger(long triggerRuleId,TriggerToggleCommand command,Actor actor)
     {String fingerprint=fingerprint("TOGGLE_TRIGGER",triggerRuleId,command.expectedVersion(),command,actor);if(claim(command.actionId(),"TOGGLE_TRIGGER",triggerRuleId,fingerprint,actor,command)!=null)return;if("Y".equals(command.enabled()))validateTriggerEnable(triggerRuleId,command.expectedVersion());Map<String,Object> row=new HashMap<>();row.put("triggerRuleId",triggerRuleId);row.put("enabled",command.enabled());row.put("expectedVersion",command.expectedVersion());row.put("updateBy",actor.userName());if(mapper.updateTriggerRuleEnabledConditionally(row)<=0)throw new TodoException("TODO_TRIGGER_VERSION_CONFLICT","Trigger changed; refresh before retrying");complete(command.actionId(),fingerprint,triggerRuleId,"TODO_TRIGGER_ACTION_CONFLICT");}
+    @Transactional public EntrySlotBinding switchEntrySlot(String entrySlotCode,long triggerRuleId,int expectedVersion,Actor actor)
+    {
+        List<Map<String,Object>> bindings=mapper.selectEntrySlotBindingsForUpdate(entrySlotCode);
+        if(bindings==null||bindings.isEmpty())throw new TodoException("TODO_TRIGGER_ENTRY_SLOT_NOT_FOUND","Entry slot was not found");
+        Map<String,Object> target=bindings.stream().filter(row->Objects.equals(triggerRuleId,number(value(row,"trigger_rule_id","triggerRuleId")))).findFirst().orElse(null);
+        if(target==null)throw new TodoException("TODO_TRIGGER_ENTRY_SLOT_TARGET_INVALID","Trigger does not belong to the entry slot");
+        if(!Objects.equals(expectedVersion,integer(value(target,"trigger_version","triggerVersion"))))
+            throw new TodoException("TODO_TRIGGER_VERSION_CONFLICT","Trigger changed; refresh before retrying");
+        if(!"PUBLISHED".equals(text(value(target,"version_status","versionStatus"))))
+            throw new TodoException("TODO_TRIGGER_VERSION_INVALID","Trigger template version must be published");
+        if(!"0".equals(text(value(target,"template_status","templateStatus"))))
+            throw new TodoException("TODO_TRIGGER_TEMPLATE_INACTIVE","Trigger template must be active before enabling");
+        mapper.disableEntrySlotBindings(entrySlotCode,triggerRuleId,actor.userName());
+        if(mapper.enableEntrySlotBinding(triggerRuleId,expectedVersion,actor.userName())<=0)
+            throw new TodoException("TODO_TRIGGER_VERSION_CONFLICT","Trigger changed; refresh before retrying");
+        return new EntrySlotBinding(text(value(target,"entry_slot_code","entrySlotCode")),triggerRuleId,
+                number(value(target,"template_version_id","templateVersionId")),text(value(target,"template_code","templateCode")));
+    }
     private void validateSort(TriggerSortCommand command)
     {java.util.Set<Long> ids=new java.util.HashSet<>();java.util.Set<Integer> orders=new java.util.HashSet<>();for(var item:command.items())if(!ids.add(item.triggerRuleId())||!orders.add(item.sortOrder()))throw new TodoException("TODO_TRIGGER_SORT_INVALID","Trigger sort items must be unique");}
     @Transactional int saveTrigger(Map<String,Object> value){required(value,"eventType");required(value,"templateId");required(value,"templateVersionId");required(value,"businessType");populateCompatibilityIdentity(value);validateTriggerIdentity(value);if(mapper.countTriggerRulesByCode(text(value.get("ruleCode")),number(value.get("triggerRuleId")))>0)throw new TodoException("TODO_TRIGGER_CODE_DUPLICATE","Trigger rule code already exists");value.putIfAbsent("expectedVersion",0);validateTriggerBinding(value);validateTriggerCondition(value);int saved;try{saved=value.get("triggerRuleId")==null?mapper.insertTriggerRule(value):mapper.updateTriggerRule(value);}catch(DuplicateKeyException duplicate){if(isRuleCodeDuplicate(duplicate))throw new TodoException("TODO_TRIGGER_CODE_DUPLICATE","Trigger rule code already exists");throw duplicate;}if(saved<=0&&value.get("triggerRuleId")!=null)throw new TodoException("TODO_TRIGGER_VERSION_CONFLICT","Trigger changed; refresh before retrying");return saved;}

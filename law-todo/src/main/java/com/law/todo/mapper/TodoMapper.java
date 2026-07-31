@@ -122,6 +122,11 @@ public interface TodoMapper
     int updateTriggerRuleSortConditionally(Map<String,Object> value);
     int updateTriggerRuleEnabledConditionally(Map<String,Object> value);
     Map<String,Object> selectTriggerBindingForUpdate(Long triggerRuleId);
+    List<Map<String,Object>> selectEntrySlotBindingsForUpdate(String entrySlotCode);
+    int disableEntrySlotBindings(@Param("entrySlotCode") String entrySlotCode,
+            @Param("exceptTriggerRuleId") Long exceptTriggerRuleId,@Param("operator") String operator);
+    int enableEntrySlotBinding(@Param("triggerRuleId") Long triggerRuleId,
+            @Param("expectedVersion") int expectedVersion,@Param("operator") String operator);
     List<Map<String,Object>> selectActionTimeline(Long todoId);
     List<Map<String,Object>> selectAttachments(Long todoId);
     List<Map<String,Object>> selectCc(Long todoId);

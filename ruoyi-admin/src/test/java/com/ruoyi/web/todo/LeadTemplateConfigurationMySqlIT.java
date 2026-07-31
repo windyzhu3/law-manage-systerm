@@ -87,7 +87,7 @@ class LeadTemplateConfigurationMySqlIT
 
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.69",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.70",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""
@@ -118,6 +118,16 @@ class LeadTemplateConfigurationMySqlIT
 
             assertEventSemantics(connection);
             assertDraft(connection);
+            try(Statement statement=connection.createStatement())
+            {
+                assertEquals(1,count(statement,
+                        "select count(*) from todo_trigger_rule where entry_slot_code='LEAD_FIRST_CONTACT_ENTRY' and enabled='Y'"));
+                assertEquals("TD-001",scalar(statement,
+                        "select t.template_code from todo_trigger_rule r join todo_template t on t.template_id=r.template_id " +
+                        "where r.entry_slot_code='LEAD_FIRST_CONTACT_ENTRY' and r.enabled='Y'"));
+                assertEquals("1",scalar(statement,
+                        "select status from todo_template where template_code='LEAD_FIRST_CONTACT'"));
+            }
         }
     }
 
@@ -247,6 +257,26 @@ class LeadTemplateConfigurationMySqlIT
             String value=rows.getString(1);
             assertFalse(rows.next(),sql+" must return one row");
             return value;
+        }
+    }
+
+    private String scalar(Statement statement,String sql) throws Exception
+    {
+        try(ResultSet rows=statement.executeQuery(sql))
+        {
+            assertTrue(rows.next(),sql);
+            String value=rows.getString(1);
+            assertFalse(rows.next(),sql+" must return one row");
+            return value;
+        }
+    }
+
+    private long count(Statement statement,String sql) throws Exception
+    {
+        try(ResultSet rows=statement.executeQuery(sql))
+        {
+            assertTrue(rows.next(),sql);
+            return rows.getLong(1);
         }
     }
 
