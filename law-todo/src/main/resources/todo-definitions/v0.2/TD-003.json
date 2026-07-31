@@ -202,6 +202,33 @@
       "config": {
         "identityBinding": "MIGRATION_DYNAMIC",
         "start": "td003",
+        "businessOutcomes": [
+          {
+            "field": "contactResult",
+            "value": "CONNECTED",
+            "label": "联系成功",
+            "effectKind": "NEXT_TEMPLATE",
+            "targetTemplateCode": "TD-004"
+          },
+          {
+            "field": "contactResult",
+            "value": "CONTINUE_CURRENT_WINDOW",
+            "label": "本窗口继续",
+            "effectKind": "RETAIN_CURRENT"
+          },
+          {
+            "field": "contactResult",
+            "value": "NEXT_WINDOW",
+            "label": "进入下一窗口",
+            "effectKind": "SCHEDULE_NEXT"
+          },
+          {
+            "field": "contactResult",
+            "value": "EXHAUSTED",
+            "label": "全部重试耗尽",
+            "effectKind": "END"
+          }
+        ],
         "nodes": [
           {
             "key": "td003",

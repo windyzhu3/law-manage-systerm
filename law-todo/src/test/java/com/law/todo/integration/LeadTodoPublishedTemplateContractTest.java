@@ -180,6 +180,33 @@ class LeadTodoPublishedTemplateContractTest
         assertEquals("REOPEN_FIRST_CONTACT",misjudged.getString("businessAction"));
     }
 
+    @Test void td003ExposesOnlyEditableContactResultAndFourGovernedRetryEffects()
+            throws Exception
+    {
+        JSONObject td003=definition("TD-003").getJSONObject("definition");
+        assertEquals("LEAD_RETRY_WINDOW_DUE",
+                td003.getJSONObject("event").getString("eventType"));
+        JSONObject owner=td003.getJSONObject("owner").getJSONObject("config");
+        assertEquals("BUSINESS_OWNER",owner.getString("type"));
+        assertEquals("LEAD",owner.getString("businessType"));
+        JSONObject dod=td003.getJSONObject("dod").getJSONObject("config");
+        assertEquals(List.of("contactResult"),
+                dod.getJSONArray("requiredFields").toJavaList(String.class));
+        assertEquals(Boolean.TRUE,uiField(td003,"attemptStage").getBoolean("readOnly"));
+        assertEquals(Boolean.TRUE,uiField(td003,"attemptCount").getBoolean("readOnly"));
+
+        JSONArray outcomes=td003.getJSONObject("routing").getJSONObject("config")
+                .getJSONArray("businessOutcomes");
+        assertNotNull(outcomes);
+        assertEquals(4,outcomes.size());
+        assertEquals("NEXT_TEMPLATE",outcome(outcomes,"CONNECTED").getString("effectKind"));
+        assertEquals("TD-004",outcome(outcomes,"CONNECTED").getString("targetTemplateCode"));
+        assertEquals("RETAIN_CURRENT",
+                outcome(outcomes,"CONTINUE_CURRENT_WINDOW").getString("effectKind"));
+        assertEquals("SCHEDULE_NEXT",outcome(outcomes,"NEXT_WINDOW").getString("effectKind"));
+        assertEquals("END",outcome(outcomes,"EXHAUSTED").getString("effectKind"));
+    }
+
     @Test void migrationPublishesInDependencyOrderAndOwnsTheSingleAssignmentTrigger()
             throws Exception
     {
@@ -239,6 +266,13 @@ class LeadTodoPublishedTemplateContractTest
         return outcomes.stream().map(JSONObject.class::cast)
                 .filter(item->value.equals(item.getString("value")))
                 .findFirst().orElseThrow();
+    }
+
+    private static JSONObject uiField(JSONObject definition,String key)
+    {
+        return definition.getJSONObject("ui").getJSONObject("config")
+                .getJSONArray("fields").stream().map(JSONObject.class::cast)
+                .filter(item->key.equals(item.getString("key"))).findFirst().orElseThrow();
     }
 
     private static JSONObject definition(String code) throws Exception

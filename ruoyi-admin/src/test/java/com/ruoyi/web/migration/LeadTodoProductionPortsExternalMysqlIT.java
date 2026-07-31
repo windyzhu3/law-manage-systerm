@@ -477,6 +477,7 @@ class LeadTodoProductionPortsExternalMysqlIT
     {
         Map<String,Object> fields=new LinkedHashMap<>();
         fields.put("contactResult","NEXT_WINDOW");
+        fields.put("contactedAt",LocalDateTime.now().withNano(0).toString());
         fields.put("attemptCount",attempt);
         fields.put("callRecord",call(key,"NEXT_WINDOW",attempt));
         return new ActionCommand(action(key),"production-port retry",fields,List.of(proofId));

@@ -92,6 +92,46 @@ class TodoSimulationScenarioCatalogTest
     }
 
     @Test
+    void returnsTheFourRequiredTd003EffectsWithProofAndAuthoritativeRetryContext()
+    {
+        when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
+                .thenReturn(List.of(
+                        td003Row(31L,"TD003_CONNECTED",110,"NEXT_TEMPLATE","TD-004",
+                                "CONNECTED","T0",1,true),
+                        td003Row(32L,"TD003_CONTINUE_WINDOW",120,"RETAIN_CURRENT",null,
+                                "CONTINUE_CURRENT_WINDOW","T0",2,false),
+                        td003Row(33L,"TD003_NEXT_WINDOW",130,"SCHEDULE_NEXT",null,
+                                "NEXT_WINDOW","T1_AM",1,false),
+                        td003Row(34L,"TD003_EXHAUSTED",140,"END",null,
+                                "EXHAUSTED","T2_PM",1,false)));
+
+        var scenarios=new TodoSimulationScenarioCatalog(mapper).scenarios("TD-003","LEAD");
+
+        assertThat(scenarios).extracting(scenario->scenario.scenarioCode())
+                .containsExactly("TD003_CONNECTED","TD003_CONTINUE_WINDOW",
+                        "TD003_NEXT_WINDOW","TD003_EXHAUSTED");
+        assertThat(scenarios).extracting(scenario->scenario.expectedEffect().kind())
+                .containsExactly(EffectKind.NEXT_TEMPLATE,EffectKind.RETAIN_CURRENT,
+                        EffectKind.SCHEDULE_NEXT,EffectKind.END);
+        assertThat(scenarios.get(0).expectedEffect().targetTemplateCode()).isEqualTo("TD-004");
+        assertThat(scenarios).allMatch(scenario->scenario.requiredForPublish()
+                &&scenario.editableFields().equals(List.of("contactResult"))
+                &&scenario.requiredMaterials().equals(List.of("CONTACT_PROOF"))
+                &&scenario.completionPayload().containsKey("attemptStage")
+                &&scenario.completionPayload().containsKey("attemptCount"));
+        assertThat(scenarios.get(0).completionPayload())
+                .containsEntry("name","张女士")
+                .containsEntry("city","上海")
+                .containsEntry("demand","劳动争议咨询")
+                .containsEntry("visited","NO");
+        assertThat(scenarios.subList(1,scenarios.size()))
+                .allMatch(scenario->!scenario.completionPayload().containsKey("name")
+                        &&!scenario.completionPayload().containsKey("city")
+                        &&!scenario.completionPayload().containsKey("demand")
+                        &&!scenario.completionPayload().containsKey("visited"));
+    }
+
+    @Test
     void parsesExpectedValidationFailureWithItsStableErrorCode()
     {
         when(mapper.selectConfigurationResourceItems("SIMULATION_SCENARIO","LEAD"))
@@ -159,5 +199,30 @@ class TodoSimulationScenarioCatalogTest
                         +"\"occurrence\":1,\"expectedEffect\":{\"kind\":\""+kind+"\""
                         +targetJson+"},\"automatic\":"+automatic
                         +",\"requiredForPublish\":true}");
+    }
+
+    private Map<String,Object> td003Row(long id,String code,int sortOrder,String kind,String target,
+            String result,String stage,int attemptCount,boolean connected)
+    {
+        String targetJson=target==null?"":" ,\"targetTemplateCode\":\""+target+"\"";
+        String connectedJson=connected
+                ?",\"name\":\"张女士\",\"city\":\"上海\","
+                        +"\"demand\":\"劳动争议咨询\",\"visited\":\"NO\""
+                :"";
+        return Map.of(
+                "resource_item_id",id,
+                "resource_code",code,
+                "resource_name",code,
+                "business_type","LEAD",
+                "status","ACTIVE",
+                "sort_order",sortOrder,
+                "value_json","{\"templateCode\":\"TD-003\",\"scenarioVersion\":1,"
+                        +"\"completionPayload\":{\"contactResult\":\""+result
+                        +"\",\"attemptStage\":\""+stage+"\",\"attemptCount\":"
+                        +attemptCount+connectedJson+"},\"editableFields\":[\"contactResult\"],"
+                        +"\"requiredMaterials\":[\"CONTACT_PROOF\"],"
+                        +"\"completionNodeKey\":\"td003\",\"occurrence\":1,"
+                        +"\"expectedEffect\":{\"kind\":\""+kind+"\""+targetJson+"},"
+                        +"\"requiredForPublish\":true}");
     }
 }
