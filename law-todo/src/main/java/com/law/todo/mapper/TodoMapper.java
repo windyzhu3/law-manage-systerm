@@ -190,6 +190,8 @@ public interface TodoMapper
     int completeAutoActionExecution(Map<String,Object> outcome);
     int insertAutoActionAudit(Map<String,Object> audit);
     int returnToPoolConditionally(@Param("todoId") Long todoId,@Param("fromStatus") String fromStatus,@Param("operator") String operator);
+    Map<String,Object> selectSchedulePlanByIdempotencyKey(String idempotencyKey);
+    List<Map<String,Object>> selectScheduleWindowsByPlanId(Long planId);
     int insertSchedulePlan(Map<String,Object> plan);
     int insertScheduleWindow(Map<String,Object> window);
     List<Map<String,Object>> selectDueScheduleWindows(@Param("now") LocalDateTime now,@Param("staleBefore") LocalDateTime staleBefore,@Param("limit") int limit);

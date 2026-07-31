@@ -1,11 +1,13 @@
 package com.law.todo.schedule;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,11 +23,14 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.DuplicateKeyException;
 import com.law.todo.application.TodoRoutingService;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService.CreateSchedulePlanCommand;
+import com.law.todo.schedule.TodoScheduleService.SchedulePurpose;
 
 class TodoScheduleServiceTest
 {
@@ -76,8 +81,141 @@ class TodoScheduleServiceTest
         verify(mapper).insertSchedulePlan(org.mockito.ArgumentMatchers.argThat(
                 row->"Asia/Shanghai".equals(row.get("timezone"))
                         &&"ACTIVE".equals(row.get("status"))
+                        &&"LEAD_RETRY".equals(row.get("schedulePurpose"))
+                        &&"LEAD_RETRY:91:7".equals(row.get("idempotencyKey"))
                         &&TodoScheduleService.RESOLVED_POLICY.equals(
                                 row.get("assignmentPolicySnapshotSource"))));
+    }
+
+    @Test
+    void progressPlanCanTargetPublishedTd004AndReplayByIdempotencyKey()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
+                .thenReturn(null,existingPlan(command,81L));
+        when(mapper.selectScheduleWindowsByPlanId(81L)).thenReturn(progressWindowRows());
+        doAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("planId",81L);return 1;})
+                .when(mapper).insertSchedulePlan(anyMap());
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertEquals(81L,service.createPlan(command));
+        assertEquals(81L,service.createPlan(command));
+
+        verify(mapper,times(1)).insertSchedulePlan(org.mockito.ArgumentMatchers.argThat(row->
+                "LEAD_PROGRESS_5D".equals(row.get("schedulePurpose"))
+                        &&command.idempotencyKey().equals(row.get("idempotencyKey"))));
+        verify(mapper,times(1)).insertScheduleWindow(anyMap());
+    }
+
+    @Test
+    void duplicateKeyRaceRereadsAndReturnsTheMatchingPersistedPlan()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
+                .thenReturn(null,existingPlan(command,81L));
+        when(mapper.selectScheduleWindowsByPlanId(81L)).thenReturn(progressWindowRows());
+        doThrow(new DuplicateKeyException("concurrent schedule plan"))
+                .when(mapper).insertSchedulePlan(anyMap());
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertEquals(81L,service.createPlan(command));
+
+        verify(mapper,never()).insertScheduleWindow(anyMap());
+    }
+
+    @Test
+    void sameIdempotencyKeyWithDifferentImmutableSemanticsIsRejected()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        Map<String,Object> conflicting=new HashMap<>(existingPlan(command,81L));
+        conflicting.put("ruleVersionId",999L);
+        when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
+                .thenReturn(conflicting);
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        TodoException error=assertThrows(TodoException.class,()->service.createPlan(command));
+
+        assertEquals("TODO_SCHEDULE_IDEMPOTENCY_CONFLICT",error.getBusinessCode());
+        verify(mapper,never()).insertSchedulePlan(anyMap());
+    }
+
+    @Test
+    void duplicateKeyWithoutMatchingIdempotencyRowIsNotSwallowed()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        DuplicateKeyException failure=new DuplicateKeyException("another unique key");
+        doThrow(failure).when(mapper).insertSchedulePlan(anyMap());
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertSame(failure,assertThrows(DuplicateKeyException.class,()->service.createPlan(command)));
+    }
+
+    @Test
+    void nonDuplicateDatabaseFailureIsNotSwallowed()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        DataAccessResourceFailureException failure=
+                new DataAccessResourceFailureException("database unavailable");
+        doThrow(failure).when(mapper).insertSchedulePlan(anyMap());
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertSame(failure,
+                assertThrows(DataAccessResourceFailureException.class,()->service.createPlan(command)));
+    }
+
+    @Test
+    void nonDuplicateDatabaseFailureDuringReplayIsNotSwallowed()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        CreateSchedulePlanCommand command=progressCommand("LEAD_PROGRESS_5D:91:7001");
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
+                "businessType","LEAD"));
+        when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
+                .thenReturn(existingPlan(command,81L));
+        DataAccessResourceFailureException failure=
+                new DataAccessResourceFailureException("database unavailable");
+        when(mapper.selectScheduleWindowsByPlanId(81L)).thenThrow(failure);
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        assertSame(failure,
+                assertThrows(DataAccessResourceFailureException.class,()->service.createPlan(command)));
+    }
+
+    @Test
+    void progressPurposeRejectsAPlanTargetingPublishedTd003()
+    {
+        TodoMapper mapper=mock(TodoMapper.class);
+        when(mapper.selectTemplateVersionById(33L)).thenReturn(Map.of(
+                "versionId",33L,"status","PUBLISHED","templateCode","TD-003",
+                "businessType","LEAD"));
+        TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
+
+        TodoException error=assertThrows(TodoException.class,()->
+                service.createPlan(progressCommand("LEAD_PROGRESS_5D:91:7001")));
+
+        assertEquals("TODO_SCHEDULE_TEMPLATE_INVALID",error.getBusinessCode());
+        verify(mapper,never()).insertSchedulePlan(anyMap());
     }
 
     @Test
@@ -473,6 +611,42 @@ class TodoScheduleServiceTest
         row.put("occurrenceNo",1);row.put("previousTodoId",7L);row.put("templateVersionId",22L);
         row.put("dueAt",LocalDateTime.of(2026,7,26,11,0));row.put("version",0);
         return row;
+    }
+
+    private CreateSchedulePlanCommand progressCommand(String idempotencyKey)
+    {
+        return new CreateSchedulePlanCommand(7001L,33L,"LEAD",91L,NOW,"Asia/Shanghai",4L,
+                11L,2,List.of(new TodoScheduleService.ScheduleWindowRule(
+                        "P5D",0,0,null,null,0,7200,1,1)),
+                SchedulePurpose.LEAD_PROGRESS_5D,idempotencyKey);
+    }
+
+    private Map<String,Object> existingPlan(CreateSchedulePlanCommand command,Long planId)
+    {
+        Map<String,Object> row=new HashMap<>();
+        row.put("planId",planId);
+        row.put("previousTodoId",command.previousTodoId());
+        row.put("templateVersionId",command.templateVersionId());
+        row.put("businessType",command.businessType());
+        row.put("businessId",command.businessId());
+        row.put("schedulePurpose",command.purpose().name());
+        row.put("idempotencyKey",command.idempotencyKey());
+        row.put("timezone",command.timezone());
+        row.put("ruleVersionId",command.ruleVersionId());
+        row.put("assignmentPolicyId",command.assignmentPolicyId());
+        row.put("assignmentPolicyVersion",command.assignmentPolicyVersion());
+        row.put("assignmentPolicySnapshotSource",TodoScheduleService.RESOLVED_POLICY);
+        row.put("firstContactAt",command.firstContactCompletedAt());
+        return row;
+    }
+
+    private List<Map<String,Object>> progressWindowRows()
+    {
+        return List.of(Map.of(
+                "windowCode","P5D","windowOrder",0,"dayOffset",0,
+                "startTime",NOW.toLocalTime(),"endTime",NOW.plusDays(5).toLocalTime(),
+                "materializeAt",NOW,"dueAt",NOW.plusDays(5),"maxAttempts",1,
+                "occurrenceNo",1));
     }
 
     private Map<String,Object> contextRow(String status,String result,String planStatus)

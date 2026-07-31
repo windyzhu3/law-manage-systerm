@@ -9,7 +9,9 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -75,15 +77,20 @@ public class TodoScheduleService
         {
             throw new TodoException("TODO_SCHEDULE_TIMEZONE_INVALID","Unknown schedule timezone");
         }
-        validateTemplate(command.templateVersionId(),command.businessType());
+        validateTemplate(command.templateVersionId(),command.businessType(),command.purpose());
         List<TodoScheduleWindow> windows=command.windows()==null||command.windows().isEmpty()
                 ?defaultWindows(command.firstContactCompletedAt())
                 :configuredWindows(command.firstContactCompletedAt(),command.windows());
+        Map<String,Object> existing=mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey().trim());
+        if(existing!=null&&!existing.isEmpty())
+            return requireMatchingPlan(command,timezone,windows,existing);
         Map<String,Object> plan=new HashMap<>();
         plan.put("previousTodoId",command.previousTodoId());
         plan.put("templateVersionId",command.templateVersionId());
         plan.put("businessType",command.businessType().trim());
         plan.put("businessId",command.businessId());
+        plan.put("schedulePurpose",command.purpose().name());
+        plan.put("idempotencyKey",command.idempotencyKey().trim());
         plan.put("timezone",timezone);
         plan.put("ruleVersionId",command.ruleVersionId());
         plan.put("assignmentPolicyId",command.assignmentPolicyId());
@@ -91,7 +98,18 @@ public class TodoScheduleService
         plan.put("assignmentPolicySnapshotSource",RESOLVED_POLICY);
         plan.put("firstContactAt",command.firstContactCompletedAt());
         plan.put("status","ACTIVE");
-        mapper.insertSchedulePlan(plan);
+        try
+        {
+            mapper.insertSchedulePlan(plan);
+        }
+        catch(DuplicateKeyException duplicate)
+        {
+            Map<String,Object> concurrent=mapper.selectSchedulePlanByIdempotencyKey(
+                    command.idempotencyKey().trim());
+            if(concurrent!=null&&!concurrent.isEmpty())
+                return requireMatchingPlan(command,timezone,windows,concurrent);
+            throw duplicate;
+        }
         Long planId=longValue(plan,"planId","plan_id");
         if(planId==null)
             throw new TodoException("TODO_SCHEDULE_PLAN_PERSIST_FAILED","Schedule plan identity was not generated");
@@ -406,18 +424,81 @@ public class TodoScheduleService
                 ||command.ruleVersionId()==null||command.ruleVersionId()<=0
                 ||command.assignmentPolicyId()==null||command.assignmentPolicyId()<=0
                 ||command.assignmentPolicyVersion()==null||command.assignmentPolicyVersion()<0
-                ||command.firstContactCompletedAt()==null)
+                ||command.firstContactCompletedAt()==null||command.purpose()==null
+                ||command.idempotencyKey()==null||command.idempotencyKey().isBlank()
+                ||command.idempotencyKey().trim().length()>192)
             throw new TodoException("TODO_SCHEDULE_PLAN_INVALID","Schedule plan identity is incomplete");
     }
 
-    private void validateTemplate(Long templateVersionId,String businessType)
+    private void validateTemplate(Long templateVersionId,String businessType,SchedulePurpose purpose)
     {
         Map<String,Object> template=mapper.selectTemplateVersionById(templateVersionId);
         if(template==null||!"PUBLISHED".equals(text(template,"status","status"))
-                ||!"TD-003".equals(text(template,"templateCode","template_code"))
+                ||!purpose.requiredTemplateCode().equals(
+                        text(template,"templateCode","template_code"))
                 ||!businessType.trim().equals(text(template,"businessType","business_type")))
             throw new TodoException("TODO_SCHEDULE_TEMPLATE_INVALID",
-                    "Retry schedule requires a published TD-003 version for the same business type");
+                    "Schedule purpose requires its published template version for the same business type");
+    }
+
+    private long requireMatchingPlan(CreateSchedulePlanCommand command,String timezone,
+            List<TodoScheduleWindow> windows,Map<String,Object> persisted)
+    {
+        try
+        {
+            Long planId=longValue(persisted,"planId","plan_id");
+            boolean matches=planId!=null
+                    &&Objects.equals(command.previousTodoId(),longValue(persisted,
+                            "previousTodoId","previous_todo_id"))
+                    &&Objects.equals(command.templateVersionId(),longValue(persisted,
+                            "templateVersionId","template_version_id"))
+                    &&command.businessType().trim().equals(text(persisted,
+                            "businessType","business_type"))
+                    &&Objects.equals(command.businessId(),longValue(persisted,
+                            "businessId","business_id"))
+                    &&command.purpose().name().equals(text(persisted,
+                            "schedulePurpose","schedule_purpose"))
+                    &&command.idempotencyKey().trim().equals(text(persisted,
+                            "idempotencyKey","idempotency_key"))
+                    &&timezone.equals(text(persisted,"timezone","timezone"))
+                    &&Objects.equals(command.ruleVersionId(),longValue(persisted,
+                            "ruleVersionId","rule_version_id"))
+                    &&Objects.equals(command.assignmentPolicyId(),longValue(persisted,
+                            "assignmentPolicyId","assignment_policy_id"))
+                    &&Objects.equals(command.assignmentPolicyVersion(),integerValue(persisted,
+                            "assignmentPolicyVersion","assignment_policy_version"))
+                    &&RESOLVED_POLICY.equals(text(persisted,
+                            "assignmentPolicySnapshotSource","assignment_policy_snapshot_source"))
+                    &&Objects.equals(command.firstContactCompletedAt(),dateTimeValue(persisted,
+                            "firstContactAt","first_contact_at"))
+                    &&matchingWindows(windows,mapper.selectScheduleWindowsByPlanId(planId));
+            if(matches)return planId;
+        }
+        catch(NumberFormatException|java.time.DateTimeException malformed) { }
+        throw new TodoException("TODO_SCHEDULE_IDEMPOTENCY_CONFLICT",
+                "Schedule idempotency key belongs to another immutable plan");
+    }
+
+    private boolean matchingWindows(List<TodoScheduleWindow> expected,List<Map<String,Object>> persisted)
+    {
+        if(persisted==null||expected.size()!=persisted.size())return false;
+        for(int index=0;index<expected.size();index++)
+        {
+            TodoScheduleWindow window=expected.get(index);
+            Map<String,Object> row=persisted.get(index);
+            if(!window.windowCode().equals(text(row,"windowCode","window_code"))
+                    ||window.windowOrder()!=intValue(row,"windowOrder","window_order")
+                    ||window.dayOffset()!=intValue(row,"dayOffset","day_offset")
+                    ||!Objects.equals(window.startTime(),timeValue(row,"startTime","start_time"))
+                    ||!Objects.equals(window.endTime(),timeValue(row,"endTime","end_time"))
+                    ||!Objects.equals(window.startAt(),dateTimeValue(row,
+                            "materializeAt","materialize_at"))
+                    ||!Objects.equals(window.dueAt(),dateTimeValue(row,"dueAt","due_at"))
+                    ||window.maxAttempts()!=intValue(row,"maxAttempts","max_attempts")
+                    ||window.occurrenceNo()!=intValue(row,"occurrenceNo","occurrence_no"))
+                return false;
+        }
+        return true;
     }
 
     private ScheduleOccurrenceContext context(Map<String,Object> value)
@@ -494,6 +575,24 @@ public class TodoScheduleService
         throw new TodoException("TODO_SCHEDULE_ROW_INVALID","Schedule row is missing "+camel);
     }
 
+    private LocalDateTime dateTimeValue(Map<String,Object> row,String camel,String snake)
+    {
+        Object value=row.containsKey(camel)?row.get(camel):row.get(snake);
+        if(value==null)return null;
+        if(value instanceof LocalDateTime dateTime)return dateTime;
+        if(value instanceof java.sql.Timestamp timestamp)return timestamp.toLocalDateTime();
+        return LocalDateTime.parse(String.valueOf(value).replace(' ','T'));
+    }
+
+    private LocalTime timeValue(Map<String,Object> row,String camel,String snake)
+    {
+        Object value=row.containsKey(camel)?row.get(camel):row.get(snake);
+        if(value==null)return null;
+        if(value instanceof LocalTime time)return time;
+        if(value instanceof java.sql.Time time)return time.toLocalTime();
+        return LocalTime.parse(String.valueOf(value));
+    }
+
     public record ScheduleOccurrenceContext(Long occurrenceId,Long planId,Long windowId,String windowCode,
             int occurrenceNo,Long todoId,String businessType,Long businessId,String timezone,
             Long templateVersionId,Long ruleVersionId,Long assignmentPolicyId,
@@ -558,6 +657,24 @@ public class TodoScheduleService
             LocalTime startTime,LocalTime endTime,Integer startOffsetMinutes,Integer durationMinutes,
             int maxAttempts,int occurrenceNo) { }
 
+    public enum SchedulePurpose
+    {
+        LEAD_RETRY("TD-003"),
+        LEAD_PROGRESS_5D("TD-004");
+
+        private final String requiredTemplateCode;
+
+        SchedulePurpose(String requiredTemplateCode)
+        {
+            this.requiredTemplateCode=requiredTemplateCode;
+        }
+
+        public String requiredTemplateCode()
+        {
+            return requiredTemplateCode;
+        }
+    }
+
     public record CreateSchedulePlanCommand(
             Long previousTodoId,
             Long templateVersionId,
@@ -568,8 +685,20 @@ public class TodoScheduleService
             Long ruleVersionId,
             Long assignmentPolicyId,
             Integer assignmentPolicyVersion,
-            List<ScheduleWindowRule> windows)
+            List<ScheduleWindowRule> windows,
+            SchedulePurpose purpose,
+            String idempotencyKey)
     {
+        public CreateSchedulePlanCommand(Long previousTodoId,Long templateVersionId,String businessType,
+                Long businessId,LocalDateTime firstContactCompletedAt,String timezone,Long ruleVersionId,
+                Long assignmentPolicyId,Integer assignmentPolicyVersion,List<ScheduleWindowRule> windows)
+        {
+            this(previousTodoId,templateVersionId,businessType,businessId,firstContactCompletedAt,
+                    timezone,ruleVersionId,assignmentPolicyId,assignmentPolicyVersion,windows,
+                    SchedulePurpose.LEAD_RETRY,
+                    "LEAD_RETRY:"+businessId+":"+previousTodoId);
+        }
+
         public CreateSchedulePlanCommand(Long previousTodoId,Long templateVersionId,String businessType,
                 Long businessId,LocalDateTime firstContactCompletedAt,String timezone,Long ruleVersionId,
                 Long assignmentPolicyId,Integer assignmentPolicyVersion)
