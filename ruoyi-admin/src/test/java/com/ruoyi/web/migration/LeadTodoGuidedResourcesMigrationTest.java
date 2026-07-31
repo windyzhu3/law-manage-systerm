@@ -110,7 +110,96 @@ class LeadTodoGuidedResourcesMigrationTest
     }
 
     private static void execute(Connection connection,String sql) throws Exception
-    {try(Statement statement=connection.createStatement()){statement.execute(sql);}}
+    {
+        List<String> statements=sqlStatements(sql);
+        assertThat(statements).isNotEmpty().allSatisfy(statement -> assertThat(statement).isNotBlank());
+        int executed=0;
+        try(Statement statement=connection.createStatement())
+        {
+            for(String command:statements)
+            {
+                statement.execute(command);
+                executed++;
+            }
+        }
+        assertThat(executed).isEqualTo(statements.size());
+    }
+
+    private static List<String> sqlStatements(String sql)
+    {
+        List<String> statements=new ArrayList<>();
+        StringBuilder current=new StringBuilder();
+        boolean singleQuoted=false;
+        boolean doubleQuoted=false;
+        boolean backtickQuoted=false;
+        boolean lineComment=false;
+        boolean blockComment=false;
+        boolean escaped=false;
+        for(int index=0;index<sql.length();index++)
+        {
+            char character=sql.charAt(index);
+            char next=index+1<sql.length()?sql.charAt(index+1):'\0';
+            if(lineComment)
+            {
+                if(character=='\n'||character=='\r')
+                {
+                    lineComment=false;
+                    current.append(' ');
+                }
+                continue;
+            }
+            if(blockComment)
+            {
+                if(character=='*'&&next=='/')
+                {
+                    blockComment=false;
+                    index++;
+                    current.append(' ');
+                }
+                continue;
+            }
+            if(!singleQuoted&&!doubleQuoted&&!backtickQuoted&&character=='-'&&next=='-')
+            {
+                lineComment=true;
+                index++;
+                continue;
+            }
+            if(!singleQuoted&&!doubleQuoted&&!backtickQuoted&&character=='/'&&next=='*')
+            {
+                blockComment=true;
+                index++;
+                continue;
+            }
+            if(!escaped)
+            {
+                if(character=='\''&&!doubleQuoted&&!backtickQuoted)
+                    singleQuoted=!singleQuoted;
+                else if(character=='"'&&!singleQuoted&&!backtickQuoted)
+                    doubleQuoted=!doubleQuoted;
+                else if(character=='`'&&!singleQuoted&&!doubleQuoted)
+                    backtickQuoted=!backtickQuoted;
+            }
+            if(character==';'&&!singleQuoted&&!doubleQuoted&&!backtickQuoted)
+            {
+                addStatement(statements,current);
+                continue;
+            }
+            current.append(character);
+            escaped=character=='\\'&&!escaped;
+            if(character!='\\')
+                escaped=false;
+        }
+        addStatement(statements,current);
+        return List.copyOf(statements);
+    }
+
+    private static void addStatement(List<String> statements,StringBuilder current)
+    {
+        String statement=current.toString().trim();
+        current.setLength(0);
+        if(!statement.isEmpty())
+            statements.add(statement);
+    }
 
     private static GovernedSnapshot snapshot(Connection connection) throws Exception
     {
