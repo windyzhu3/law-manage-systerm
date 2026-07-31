@@ -593,6 +593,24 @@ class TodoTemplateServiceTest
         verify(mapper,never()).updateTriggerRule(anyMap());
     }
 
+    @Test void genericSaveCannotChangeAnExistingEntrySlotBindingIdentity()
+    {
+        ledger(true);Map<String,Object> locked=binding("0",1L,"PUBLISHED",null,3);
+        locked.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");locked.put("enabled","Y");
+        when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(locked);
+        when(mapper.selectEventCatalog("LEAD_UPDATED",1)).thenReturn(catalog());
+        when(mapper.updateTriggerRule(anyMap())).thenReturn(1);
+        TriggerCommand identityChange=new TriggerCommand(41L,"LEAD_UPDATED",1L,2L,"LEAD","Y",null,1,
+                "entry-slot-identity-change",3,"LEAD_UPDATED_RULE","Lead updated rule");
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .saveTrigger(identityChange,actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionClaim(anyMap());
+        verify(mapper,never()).updateTriggerRule(anyMap());
+    }
+
     @Test void directToggleCannotDisableAnEntrySlotBinding()
     {
         ledger(true);Map<String,Object> locked=binding("0",1L,"PUBLISHED",null,3);

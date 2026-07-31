@@ -119,7 +119,7 @@ public class TodoTemplateService
     public List<Map<String,Object>> listTriggers(){return listTriggers(null);}
     public List<Map<String,Object>> listTriggers(String keyword){return mapper.selectAllTriggerRules(keyword);}
     @Transactional public int saveTrigger(TriggerCommand command){return saveTrigger(command,new Actor(0L,"system",0L));}
-    @Transactional public int saveTrigger(TriggerCommand command,Actor actor){validateBusinessType(command.businessType());requireExpectedVersion(command.triggerRuleId(),command.expectedVersion());validateLeadIngressCommand(command);validateExistingEntrySlotSave(command.triggerRuleId(),command.enabled());String type=command.triggerRuleId()==null?"CREATE_TRIGGER":"UPDATE_TRIGGER";String fingerprint=fingerprint(type,command.triggerRuleId(),command.expectedVersion(),command,actor);Long replay=claim(command.actionId(),type,command.triggerRuleId(),fingerprint,actor,command);if(replay!=null)return 1;Map<String,Object> value=new HashMap<>();value.put("triggerRuleId",command.triggerRuleId());value.put("ruleCode",command.ruleCode());value.put("ruleName",command.ruleName());value.put("eventType",command.eventType());value.put("templateId",command.templateId());value.put("templateVersionId",command.templateVersionId());value.put("businessType",command.businessType());value.put("entrySlotCode",command.entrySlotCode());value.put("enabled",command.enabled()==null?"Y":command.enabled());value.put("conditionJson",command.conditionJson());value.put("payloadVersion",command.payloadVersion()==null?1:command.payloadVersion());value.put("expectedVersion",command.expectedVersion()==null?0:command.expectedVersion());value.put("createBy",actor.userName());value.put("updateBy",actor.userName());int saved=saveTrigger(value);Long id=command.triggerRuleId()==null?Long.valueOf(String.valueOf(value.get("triggerRuleId"))):command.triggerRuleId();complete(command.actionId(),fingerprint,id,"TODO_TRIGGER_ACTION_CONFLICT");return saved;}
+    @Transactional public int saveTrigger(TriggerCommand command,Actor actor){validateBusinessType(command.businessType());requireExpectedVersion(command.triggerRuleId(),command.expectedVersion());validateLeadIngressCommand(command);validateExistingEntrySlotSave(command.triggerRuleId());String type=command.triggerRuleId()==null?"CREATE_TRIGGER":"UPDATE_TRIGGER";String fingerprint=fingerprint(type,command.triggerRuleId(),command.expectedVersion(),command,actor);Long replay=claim(command.actionId(),type,command.triggerRuleId(),fingerprint,actor,command);if(replay!=null)return 1;Map<String,Object> value=new HashMap<>();value.put("triggerRuleId",command.triggerRuleId());value.put("ruleCode",command.ruleCode());value.put("ruleName",command.ruleName());value.put("eventType",command.eventType());value.put("templateId",command.templateId());value.put("templateVersionId",command.templateVersionId());value.put("businessType",command.businessType());value.put("entrySlotCode",command.entrySlotCode());value.put("enabled",command.enabled()==null?"Y":command.enabled());value.put("conditionJson",command.conditionJson());value.put("payloadVersion",command.payloadVersion()==null?1:command.payloadVersion());value.put("expectedVersion",command.expectedVersion()==null?0:command.expectedVersion());value.put("createBy",actor.userName());value.put("updateBy",actor.userName());int saved=saveTrigger(value);Long id=command.triggerRuleId()==null?Long.valueOf(String.valueOf(value.get("triggerRuleId"))):command.triggerRuleId();complete(command.actionId(),fingerprint,id,"TODO_TRIGGER_ACTION_CONFLICT");return saved;}
     @Transactional public void sortTriggers(TriggerSortCommand command,Actor actor)
     {
         validateSort(command);
@@ -224,13 +224,12 @@ public class TodoTemplateService
                 &&(!LEAD_ENTRY_SLOT.equals(command.entrySlotCode())||!"N".equals(command.enabled())))
             throw new TodoException("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED","Lead entry activation must use the entry-slot switch");
     }
-    private void validateExistingEntrySlotSave(Long triggerRuleId,String requestedEnabled)
+    private void validateExistingEntrySlotSave(Long triggerRuleId)
     {
         if(triggerRuleId==null)return;
         Map<String,Object> binding=mapper.selectTriggerBindingForUpdate(triggerRuleId);
-        if(binding!=null&&LEAD_ENTRY_SLOT.equals(text(value(binding,"entry_slot_code","entrySlotCode")))
-                &&!Objects.equals(text(value(binding,"enabled","enabled")),requestedEnabled==null?"Y":requestedEnabled))
-            throw new TodoException("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED","Entry-slot state changes must use the entry-slot switch");
+        if(binding!=null&&LEAD_ENTRY_SLOT.equals(text(value(binding,"entry_slot_code","entrySlotCode"))))
+            throw new TodoException("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED","Existing entry-slot bindings must use the entry-slot switch");
     }
     private void validateEntrySlotToggle(long triggerRuleId)
     {
