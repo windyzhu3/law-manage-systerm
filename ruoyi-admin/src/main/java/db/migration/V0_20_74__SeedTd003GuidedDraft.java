@@ -6,7 +6,9 @@ import java.security.MessageDigest;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.Set;
 
 import org.flywaydb.core.api.migration.BaseJavaMigration;
 import org.flywaydb.core.api.migration.Context;
@@ -81,12 +83,58 @@ public class V0_20_74__SeedTd003GuidedDraft extends BaseJavaMigration
             {
                 if(!rows.next())throw new IllegalStateException(
                         "The active "+DOD_RECIPE+" recipe is unavailable");
-                JSONObject recipe=JSON.parseObject(rows.getString(1));
+                JSONObject recipe;
+                try
+                {
+                    recipe=JSON.parseObject(rows.getString(1));
+                }
+                catch(RuntimeException exception)
+                {
+                    throw invalidRecipe();
+                }
                 if(rows.next())throw new IllegalStateException(
                         "More than one active "+DOD_RECIPE+" recipe was found");
+                validateRecipeContract(recipe);
                 return recipe;
             }
         }
+    }
+
+    private void validateRecipeContract(JSONObject recipe)
+    {
+        if(recipe==null||recipe.size()!=4
+                ||!exactStrings(recipe.getJSONArray("requiredFields"),Set.of("contactResult"))
+                ||!exactStrings(recipe.getJSONArray("requiredAttachments"),Set.of("CONTACT_PROOF"))
+                ||!exactStrings(recipe.getJSONArray("validatorRefs"),
+                        Set.of("LeadFirstContactValidator")))throw invalidRecipe();
+
+        JSONArray rules=recipe.getJSONArray("conditionalRules");
+        if(rules==null||rules.size()!=1||!(rules.get(0) instanceof JSONObject rule)
+                ||rule.size()!=2)throw invalidRecipe();
+        JSONObject when=rule.getJSONObject("when");
+        if(when==null||when.size()!=3
+                ||!(when.get("field") instanceof String field)||!"contactResult".equals(field)
+                ||!(when.get("operator") instanceof String operator)||!"EQ".equals(operator)
+                ||!(when.get("value") instanceof String value)||!"CONNECTED".equals(value)
+                ||!exactStrings(rule.getJSONArray("requiredFields"),
+                        Set.of("name","city","demand","visited")))throw invalidRecipe();
+    }
+
+    private boolean exactStrings(JSONArray values,Set<String> expected)
+    {
+        if(values==null||values.size()!=expected.size())return false;
+        Set<String> actual=new HashSet<>();
+        for(Object raw:values)
+        {
+            if(!(raw instanceof String value)||value.isBlank()||!actual.add(value))return false;
+        }
+        return actual.equals(expected);
+    }
+
+    private IllegalStateException invalidRecipe()
+    {
+        return new IllegalStateException(
+                DOD_RECIPE+" does not match the governed retry completion contract");
     }
 
     private void requireNoIndependentTrigger(Context context) throws Exception

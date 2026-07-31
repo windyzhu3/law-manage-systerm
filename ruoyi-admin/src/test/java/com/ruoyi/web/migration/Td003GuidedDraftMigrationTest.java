@@ -113,7 +113,9 @@ class Td003GuidedDraftMigrationTest
         when(recipeRows.getString(1)).thenReturn("{\"requiredFields\":[\"contactResult\"],"
                 +"\"requiredAttachments\":[\"CONTACT_PROOF\"],"
                 +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
-                +"\"conditionalRules\":[]}");
+                +"\"conditionalRules\":[{\"when\":{\"field\":\"contactResult\","
+                +"\"operator\":\"EQ\",\"value\":\"CONNECTED\"},"
+                +"\"requiredFields\":[\"name\",\"city\",\"demand\",\"visited\"]}]}");
         when(triggerSelect.executeQuery()).thenReturn(triggerRows);
         when(triggerRows.next()).thenReturn(true);
         when(triggerRows.getLong(1)).thenReturn(1L);
@@ -121,6 +123,100 @@ class Td003GuidedDraftMigrationTest
         assertThatThrownBy(()->new V0_20_74__SeedTd003GuidedDraft().migrate(context))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("TD-003 must not have an enabled independent trigger");
+    }
+
+    @Test
+    void failsClosedWhenRetryRecipeHasNoConnectedConditionalRule() throws Exception
+    {
+        assertMalformedRecipe("{\"requiredFields\":[\"contactResult\"],"
+                +"\"requiredAttachments\":[\"CONTACT_PROOF\"],"
+                +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
+                +"\"conditionalRules\":[]}");
+    }
+
+    @Test
+    void failsClosedWhenRetryRecipeUsesTheWrongOperatorOrOutcome() throws Exception
+    {
+        assertMalformedRecipe(recipe("NE","CONNECTED","name","city","demand","visited"));
+        assertMalformedRecipe(recipe("EQ","UNREACHABLE","name","city","demand","visited"));
+    }
+
+    @Test
+    void failsClosedWhenConnectedFieldsAreMissingOrExtended() throws Exception
+    {
+        assertMalformedRecipe(recipe("EQ","CONNECTED","name","city","demand"));
+        assertMalformedRecipe(recipe("EQ","CONNECTED","name","city","demand","visited","mobile"));
+    }
+
+    @Test
+    void failsClosedWhenContactProofIsNotRequired() throws Exception
+    {
+        assertMalformedRecipe("{\"requiredFields\":[\"contactResult\"],"
+                +"\"requiredAttachments\":[],"
+                +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
+                +"\"conditionalRules\":[{\"when\":{\"field\":\"contactResult\","
+                +"\"operator\":\"EQ\",\"value\":\"CONNECTED\"},"
+                +"\"requiredFields\":[\"name\",\"city\",\"demand\",\"visited\"]}]} ");
+    }
+
+    @Test
+    void failsClosedWhenBaseContactResultIsMissingOrDuplicated() throws Exception
+    {
+        assertMalformedRecipe(governedRecipeWithBaseFields(""));
+        assertMalformedRecipe(governedRecipeWithBaseFields("\"contactResult\",\"contactResult\""));
+    }
+
+    @Test
+    void failsClosedWhenTheConditionalRuleStructureIsMalformed() throws Exception
+    {
+        assertMalformedRecipe("{\"requiredFields\":[\"contactResult\"],"
+                +"\"requiredAttachments\":[\"CONTACT_PROOF\"],"
+                +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
+                +"\"conditionalRules\":[\"CONNECTED\"]}");
+    }
+
+    private void assertMalformedRecipe(String recipe) throws Exception
+    {
+        Context context=mock(Context.class);
+        Connection connection=mock(Connection.class);
+        PreparedStatement td003Select=mock(PreparedStatement.class);
+        PreparedStatement td004Select=mock(PreparedStatement.class);
+        PreparedStatement recipeSelect=mock(PreparedStatement.class);
+        ResultSet td003Rows=publishedRows(2003L,2203L);
+        ResultSet td004Rows=publishedRows(2004L,2204L);
+        ResultSet recipeRows=mock(ResultSet.class);
+        when(context.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString()))
+                .thenReturn(td003Select,td004Select,recipeSelect);
+        when(td003Select.executeQuery()).thenReturn(td003Rows);
+        when(td004Select.executeQuery()).thenReturn(td004Rows);
+        when(recipeSelect.executeQuery()).thenReturn(recipeRows);
+        when(recipeRows.next()).thenReturn(true,false);
+        when(recipeRows.getString(1)).thenReturn(recipe);
+
+        assertThatThrownBy(()->new V0_20_74__SeedTd003GuidedDraft().migrate(context))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("LEAD_RETRY_READY does not match the governed retry completion contract");
+    }
+
+    private String recipe(String operator,String value,String... requiredFields)
+    {
+        return "{\"requiredFields\":[\"contactResult\"],"
+                +"\"requiredAttachments\":[\"CONTACT_PROOF\"],"
+                +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
+                +"\"conditionalRules\":[{\"when\":{\"field\":\"contactResult\","
+                +"\"operator\":\""+operator+"\",\"value\":\""+value+"\"},"
+                +"\"requiredFields\":[\""+String.join("\",\"",requiredFields)+"\"]}]}";
+    }
+
+    private String governedRecipeWithBaseFields(String fields)
+    {
+        return "{\"requiredFields\":["+fields+"],"
+                +"\"requiredAttachments\":[\"CONTACT_PROOF\"],"
+                +"\"validatorRefs\":[\"LeadFirstContactValidator\"],"
+                +"\"conditionalRules\":[{\"when\":{\"field\":\"contactResult\","
+                +"\"operator\":\"EQ\",\"value\":\"CONNECTED\"},"
+                +"\"requiredFields\":[\"name\",\"city\",\"demand\",\"visited\"]}]}";
     }
 
     private ResultSet publishedRows(long templateId,long versionId) throws Exception
