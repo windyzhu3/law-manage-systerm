@@ -206,6 +206,17 @@ class TodoConfigurationMapperXmlContractTest
                 "Business objects must only be exposed by the actor-scoped system directory adapter");
     }
 
+    @Test void coordinatedReleaseLocksFourVersionRowsInDeterministicPrimaryKeyOrder() throws Exception
+    {
+        String locking=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select",
+                "selectTemplateVersionsForUpdate").toLowerCase().replaceAll("\\s+"," ");
+
+        assertTrue(locking.contains("where v.version_id in"));
+        assertTrue(locking.contains("order by v.version_id"));
+        assertTrue(locking.contains("for update"));
+        assertFalse(locking.contains("order by field("),"lock order must not depend on request order");
+    }
+
     private String statement(String xml,String tag,String id)
     {
         int start=xml.indexOf("<"+tag+" id=\""+id+"\"");

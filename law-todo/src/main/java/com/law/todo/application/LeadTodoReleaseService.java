@@ -97,7 +97,11 @@ public class LeadTodoReleaseService
 
         List<Long> ids=List.of(command.td001VersionId(),command.td002VersionId(),
                 command.td003VersionId(),command.td004VersionId());
-        Map<String,Map<String,Object>> versions=validateVersions(command,mapper.selectLeadReleaseVersions(ids));
+        if(new LinkedHashSet<>(ids).size()!=CODES.size())
+            throw new TodoException("TODO_LEAD_RELEASE_VERSION_INVALID",
+                    "Lead release requires four unique template versions");
+        Map<String,Map<String,Object>> versions=validateVersions(command,
+                mapper.selectTemplateVersionsForUpdate(ids));
         validateEvidence(versions,mapper.selectSimulationReadinessBatch(ids));
         validateRouting(command,text(value(versions.get("TD-001"),"compiled_json","compiledJson")));
 

@@ -65,6 +65,7 @@ public interface TodoConfigurationMapper
     List<Map<String,Object>> selectLeadEntrySlotBindingsForUpdate(String entrySlotCode);
     List<Map<String,Object>> selectLeadEntrySlotBindings(String entrySlotCode);
     List<Map<String,Object>> selectLeadReleaseVersions(@Param("versionIds") List<Long> versionIds);
+    List<Map<String,Object>> selectTemplateVersionsForUpdate(@Param("versionIds") List<Long> versionIds);
     Map<String,Object> selectLeadReleaseTriggerForUpdate(@Param("entrySlotCode") String entrySlotCode,
             @Param("templateVersionId") Long templateVersionId);
     Map<String,Object> selectLeadReleaseTrigger(@Param("entrySlotCode") String entrySlotCode,

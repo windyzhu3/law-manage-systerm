@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -55,6 +56,46 @@ class LeadTodoReleaseServiceTest
         assertThat(view.downstreamVersions()).containsExactlyInAnyOrderEntriesOf(
                 Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L));
         verify(templates).switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR);
+    }
+
+    @Test void locksAllRequestedVersionsAfterEntryAndActionSerializationBeforeEvidenceAndSwitch()
+    {
+        arrangeReadyRelease();
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(versions());
+        when(mapper.selectLeadReleaseTriggerForUpdate("LEAD_FIRST_CONTACT_ENTRY",88L))
+                .thenReturn(trigger(52L,3,"N"));
+        when(templates.switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR))
+                .thenReturn(new EntrySlotBinding("LEAD_FIRST_CONTACT_ENTRY",52L,88L,"TD-001"));
+        when(mapper.completeLeadReleaseAction("release-20260731",fingerprint(),52L)).thenReturn(1);
+
+        service.activate(command(),ACTOR);
+
+        InOrder order=org.mockito.Mockito.inOrder(mapper,templates);
+        order.verify(mapper).selectLeadEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY");
+        order.verify(mapper).insertLeadReleaseActionClaim(any());
+        order.verify(mapper).selectLeadReleaseActionForUpdate("release-20260731");
+        order.verify(mapper).selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L));
+        order.verify(mapper).selectSimulationReadinessBatch(List.of(88L,80L,89L,79L));
+        order.verify(templates).switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR);
+        verify(mapper,never()).selectLeadReleaseVersions(any());
+    }
+
+    @Test void rejectsDuplicateRequestedVersionIdsBeforeTakingAnyVersionRowLock()
+    {
+        LeadReleaseCommand duplicate=new LeadReleaseCommand(
+                "release-duplicate",88L,"hash-88",80L,89L,89L,3);
+        when(mapper.selectLeadEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(activeBinding()));
+        when(mapper.insertLeadReleaseActionClaim(any())).thenReturn(1);
+        when(mapper.selectLeadReleaseActionForUpdate("release-duplicate"))
+                .thenReturn(claimedAction(duplicate,"release-duplicate"));
+
+        assertThatThrownBy(()->service.activate(duplicate,ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_VERSION_INVALID"));
+        verify(mapper,never()).selectTemplateVersionsForUpdate(any());
+        verify(mapper,never()).selectLeadReleaseVersions(any());
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
     @Test void releaseReadinessComesFromServerEvidenceAndCurrentEntryBinding()
@@ -108,7 +149,7 @@ class LeadTodoReleaseServiceTest
         arrangeReadyRelease();
         List<Map<String,Object>> rows=versions();
         rows.set(1,version(80L,"TD-002","LEAD","DRAFT","hash-80",null,4));
-        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
 
         assertThatThrownBy(()->service.activate(command(),ACTOR))
                 .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
@@ -122,7 +163,7 @@ class LeadTodoReleaseServiceTest
         List<Map<String,Object>> rows=versions();
         rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",
                 compiled(Map.of("TD-002",80L,"TD-003",89L,"LEAD_FIRST_CONTACT",79L)),5));
-        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
 
         assertThatThrownBy(()->service.activate(command(),ACTOR))
                 .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
@@ -172,6 +213,7 @@ class LeadTodoReleaseServiceTest
         assertThat(view.activeTriggerRuleId()).isEqualTo(52L);
         assertThat(view.activeTd001VersionId()).isEqualTo(88L);
         verify(mapper,never()).selectLeadReleaseVersions(any());
+        verify(mapper,never()).selectTemplateVersionsForUpdate(any());
         verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
@@ -215,7 +257,7 @@ class LeadTodoReleaseServiceTest
     {
         when(mapper.selectLeadEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
                 .thenReturn(List.of(activeBinding()));
-        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(versions());
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(versions());
         org.mockito.Mockito.lenient().when(mapper.selectSimulationReadinessBatch(List.of(88L,80L,89L,79L)))
                 .thenReturn(readyReadiness());
         when(mapper.insertLeadReleaseActionClaim(any())).thenReturn(1);
@@ -231,7 +273,9 @@ class LeadTodoReleaseServiceTest
     private Map<String,Object> claimedAction()
     {return claimedAction(command());}
     private Map<String,Object> claimedAction(LeadReleaseCommand command)
-    {return new HashMap<>(Map.of("action_id","release-20260731","action_type","ACTIVATE_LEAD_RELEASE",
+    {return claimedAction(command,"release-20260731");}
+    private Map<String,Object> claimedAction(LeadReleaseCommand command,String actionId)
+    {return new HashMap<>(Map.of("action_id",actionId,"action_type","ACTIVATE_LEAD_RELEASE",
             "action_status","CLAIMED","request_fingerprint",fingerprint(command),"entity_type","LEAD_RELEASE",
             "operator_id",7L,"operator_name","release-owner","operator_dept_id",2L));}
     private Map<String,Object> activeBinding()

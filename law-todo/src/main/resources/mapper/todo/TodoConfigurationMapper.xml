@@ -526,6 +526,18 @@
     order by field(v.version_id,
     <foreach collection="versionIds" item="versionId" separator=",">#{versionId}</foreach>)
   </select>
+  <select id="selectTemplateVersionsForUpdate" resultType="java.util.Map">
+    select v.version_id,v.version_no,v.template_id,v.status version_status,v.definition_hash,
+      cast(v.compiled_json as char) compiled_json,v.event_type,v.payload_version,
+      t.template_code,t.template_name,t.business_type,t.status template_status
+    from todo_template_version v join todo_template t on t.template_id=v.template_id
+    where v.version_id in
+    <foreach collection="versionIds" item="versionId" open="(" separator="," close=")">
+      #{versionId}
+    </foreach>
+    order by v.version_id
+    for update
+  </select>
   <select id="selectLeadReleaseTriggerForUpdate" resultType="java.util.Map">
     select r.trigger_rule_id,r.version trigger_version,r.enabled,r.entry_slot_code,r.template_version_id,
       r.rule_code,r.event_type,r.business_type,t.template_code
