@@ -83,7 +83,7 @@ public class TodoScheduleService
                 :configuredWindows(command.firstContactCompletedAt(),command.windows());
         Map<String,Object> existing=mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey().trim());
         if(existing!=null&&!existing.isEmpty())
-            return requireMatchingPlan(command,timezone,windows,existing);
+            return requireMatchingPlanForUpdate(command,timezone,windows);
         Map<String,Object> plan=new HashMap<>();
         plan.put("previousTodoId",command.previousTodoId());
         plan.put("templateVersionId",command.templateVersionId());
@@ -104,7 +104,7 @@ public class TodoScheduleService
         }
         catch(DuplicateKeyException duplicate)
         {
-            Map<String,Object> concurrent=mapper.selectSchedulePlanByIdempotencyKey(
+            Map<String,Object> concurrent=mapper.selectSchedulePlanByIdempotencyKeyForUpdate(
                     command.idempotencyKey().trim());
             if(concurrent!=null&&!concurrent.isEmpty())
                 return requireMatchingPlan(command,timezone,windows,concurrent);
@@ -471,12 +471,23 @@ public class TodoScheduleService
                             "assignmentPolicySnapshotSource","assignment_policy_snapshot_source"))
                     &&Objects.equals(command.firstContactCompletedAt(),dateTimeValue(persisted,
                             "firstContactAt","first_contact_at"))
-                    &&matchingWindows(windows,mapper.selectScheduleWindowsByPlanId(planId));
+                    &&matchingWindows(windows,mapper.selectScheduleWindowsByPlanIdForUpdate(planId));
             if(matches)return planId;
         }
         catch(NumberFormatException|java.time.DateTimeException malformed) { }
         throw new TodoException("TODO_SCHEDULE_IDEMPOTENCY_CONFLICT",
                 "Schedule idempotency key belongs to another immutable plan");
+    }
+
+    private long requireMatchingPlanForUpdate(CreateSchedulePlanCommand command,String timezone,
+            List<TodoScheduleWindow> windows)
+    {
+        Map<String,Object> persisted=mapper.selectSchedulePlanByIdempotencyKeyForUpdate(
+                command.idempotencyKey().trim());
+        if(persisted==null||persisted.isEmpty())
+            throw new TodoException("TODO_SCHEDULE_IDEMPOTENCY_CONFLICT",
+                    "Schedule idempotency plan disappeared during replay verification");
+        return requireMatchingPlan(command,timezone,windows,persisted);
     }
 
     private boolean matchingWindows(List<TodoScheduleWindow> expected,List<Map<String,Object>> persisted)

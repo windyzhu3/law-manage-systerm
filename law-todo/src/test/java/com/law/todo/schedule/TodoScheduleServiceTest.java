@@ -97,7 +97,9 @@ class TodoScheduleServiceTest
                 "businessType","LEAD"));
         when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
                 .thenReturn(null,existingPlan(command,81L));
-        when(mapper.selectScheduleWindowsByPlanId(81L)).thenReturn(progressWindowRows());
+        when(mapper.selectSchedulePlanByIdempotencyKeyForUpdate(command.idempotencyKey()))
+                .thenReturn(existingPlan(command,81L));
+        when(mapper.selectScheduleWindowsByPlanIdForUpdate(81L)).thenReturn(progressWindowRows());
         doAnswer(invocation->{invocation.<Map<String,Object>>getArgument(0).put("planId",81L);return 1;})
                 .when(mapper).insertSchedulePlan(anyMap());
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
@@ -120,8 +122,10 @@ class TodoScheduleServiceTest
                 "versionId",33L,"status","PUBLISHED","templateCode","TD-004",
                 "businessType","LEAD"));
         when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
-                .thenReturn(null,existingPlan(command,81L));
-        when(mapper.selectScheduleWindowsByPlanId(81L)).thenReturn(progressWindowRows());
+                .thenReturn(null);
+        when(mapper.selectSchedulePlanByIdempotencyKeyForUpdate(command.idempotencyKey()))
+                .thenReturn(existingPlan(command,81L));
+        when(mapper.selectScheduleWindowsByPlanIdForUpdate(81L)).thenReturn(progressWindowRows());
         doThrow(new DuplicateKeyException("concurrent schedule plan"))
                 .when(mapper).insertSchedulePlan(anyMap());
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
@@ -142,6 +146,8 @@ class TodoScheduleServiceTest
         Map<String,Object> conflicting=new HashMap<>(existingPlan(command,81L));
         conflicting.put("ruleVersionId",999L);
         when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
+                .thenReturn(conflicting);
+        when(mapper.selectSchedulePlanByIdempotencyKeyForUpdate(command.idempotencyKey()))
                 .thenReturn(conflicting);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
@@ -193,9 +199,11 @@ class TodoScheduleServiceTest
                 "businessType","LEAD"));
         when(mapper.selectSchedulePlanByIdempotencyKey(command.idempotencyKey()))
                 .thenReturn(existingPlan(command,81L));
+        when(mapper.selectSchedulePlanByIdempotencyKeyForUpdate(command.idempotencyKey()))
+                .thenReturn(existingPlan(command,81L));
         DataAccessResourceFailureException failure=
                 new DataAccessResourceFailureException("database unavailable");
-        when(mapper.selectScheduleWindowsByPlanId(81L)).thenThrow(failure);
+        when(mapper.selectScheduleWindowsByPlanIdForUpdate(81L)).thenThrow(failure);
         TodoScheduleService service=new TodoScheduleService(mapper,mock(TodoRoutingService.class));
 
         assertSame(failure,

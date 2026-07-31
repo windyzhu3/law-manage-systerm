@@ -435,11 +435,27 @@
            first_contact_at firstContactAt,status
     from todo_schedule_plan where idempotency_key=#{idempotencyKey}
   </select>
+  <select id="selectSchedulePlanByIdempotencyKeyForUpdate" resultType="java.util.Map">
+    select plan_id planId,previous_todo_id previousTodoId,template_version_id templateVersionId,
+           business_type businessType,business_id businessId,schedule_purpose schedulePurpose,
+           idempotency_key idempotencyKey,timezone,rule_version_id ruleVersionId,
+           assignment_policy_id assignmentPolicyId,
+           assignment_policy_version assignmentPolicyVersion,
+           assignment_policy_snapshot_source assignmentPolicySnapshotSource,
+           first_contact_at firstContactAt,status
+    from todo_schedule_plan where idempotency_key=#{idempotencyKey} for update
+  </select>
   <select id="selectScheduleWindowsByPlanId" resultType="java.util.Map">
     select window_code windowCode,window_order windowOrder,day_offset dayOffset,
            start_time startTime,end_time endTime,materialize_at materializeAt,due_at dueAt,
            max_attempts maxAttempts,occurrence_no occurrenceNo
     from todo_schedule_window where plan_id=#{planId} order by window_order,window_id
+  </select>
+  <select id="selectScheduleWindowsByPlanIdForUpdate" resultType="java.util.Map">
+    select window_code windowCode,window_order windowOrder,day_offset dayOffset,
+           start_time startTime,end_time endTime,materialize_at materializeAt,due_at dueAt,
+           max_attempts maxAttempts,occurrence_no occurrenceNo
+    from todo_schedule_window where plan_id=#{planId} order by window_order,window_id for update
   </select>
   <insert id="insertSchedulePlan" useGeneratedKeys="true" keyProperty="planId">
     insert into todo_schedule_plan(previous_todo_id,template_version_id,business_type,business_id,
