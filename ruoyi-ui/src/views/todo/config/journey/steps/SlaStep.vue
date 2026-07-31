@@ -6,7 +6,7 @@
       <p>用业务语言设置时长与工作日历，服务端会按真实工作时间自动计算 80% / 100% / 150% 管理节点。</p>
     </header>
 
-    <section class="sla-sentence">
+    <section v-if="!scheduleMode" class="sla-sentence">
       <strong>办理时长</strong>
       <span>这张待办应在</span>
       <el-input-number ref="durationInput" v-model="form.durationValue" :disabled="readonly" :min="1" :max="999" controls-position="right" @change="commitDuration" />
@@ -22,6 +22,30 @@
       <span>计算。</span>
     </section>
 
+    <section v-else class="sla-retry-timeline" aria-label="重试窗口时间轴">
+      <header>
+        <div><h3>重试窗口时间轴</h3><p>系统已按 T0、T+1、T+2 预设开始时间、截止时间和最大尝试次数。</p></div>
+        <el-tag size="small" type="info">系统预设</el-tag>
+      </header>
+      <div class="sla-retry-timeline__track">
+        <article v-for="group in retryWindowGroups" :key="group.dayOffset">
+          <span>{{ group.label }}</span>
+          <strong>{{ group.summary }}</strong>
+          <small>{{ group.detail }}</small>
+        </article>
+      </div>
+    </section>
+
+    <el-alert
+      v-if="scheduleSummary && !scheduleMode"
+      class="sla-schedule-summary"
+      :title="scheduleSummary.title"
+      :description="scheduleSummary.description"
+      type="info"
+      :closable="false"
+      show-icon
+    />
+
     <div class="sla-runtime-grid">
       <section>
         <i class="el-icon-video-play" />
@@ -33,7 +57,7 @@
       </section>
     </div>
 
-    <section class="sla-action-card">
+    <section v-if="!scheduleMode" class="sla-action-card">
       <header><div><h3>固定提醒与升级动作</h3><p>这些动作与当前运行时一致，避免配置出无法执行的策略。</p></div></header>
       <div class="sla-action-grid">
         <div><strong>80% 提醒</strong><span>提醒当前负责人尽快办理</span></div>
@@ -42,7 +66,7 @@
       </div>
     </section>
 
-    <sla-timeline-preview v-loading="calculating" :points="timeline" />
+    <sla-timeline-preview v-if="!scheduleMode" v-loading="calculating" :points="timeline" />
 
     <el-alert
       v-if="blocker"
@@ -92,9 +116,58 @@ export default {
   computed: {
     config() { return this.value.config || {} },
     calendars() { return this.resources.calendars || [] },
+    scheduleMode() {
+      return Boolean(this.config.schedule && Array.isArray(this.config.schedule.windows) &&
+        this.config.schedule.windows.length)
+    },
+    retryWindowGroups() {
+      const windows = (this.config.schedule && this.config.schedule.windows) || []
+      const groups = new Map()
+      windows.forEach(window => {
+        const dayOffset = Number(window.dayOffset) || 0
+        if (!groups.has(dayOffset)) groups.set(dayOffset, [])
+        groups.get(dayOffset).push(window)
+      })
+      return Array.from(groups.entries()).sort((left, right) => left[0] - right[0]).map(([dayOffset, rows]) => {
+        const attempts = rows.reduce((total, row) => total + (Number(row.maxAttempts) || 0), 0)
+        return {
+          dayOffset,
+          label: dayOffset === 0 ? 'T0' : `T+${dayOffset}`,
+          summary: `${rows.length} 个办理窗口 · 最多 ${attempts} 次尝试`,
+          detail: rows.map(row => this.retryWindowLabel(row)).join('；')
+        }
+      })
+    },
     currentPatch() { return buildSlaPatch(this.form, this.value) },
     timeline() { return buildSlaTimeline(this.currentPatch.config, this.calculation) },
-    blocker() { return slaRepairBlocker(this.currentPatch.config, this.calendars, this.timeline) }
+    blocker() {
+      if (this.scheduleMode) {
+        const calendarReady = this.calendars.some(calendar =>
+          this.calendarCode(calendar) === String(this.config.calendarCode || '')
+        )
+        return calendarReady ? null : {
+          code: 'TODO_JOURNEY_SLA_CALENDAR_REQUIRED',
+          severity: 'BLOCKER',
+          message: '重试窗口使用的工作日历不存在或已停用'
+        }
+      }
+      return slaRepairBlocker(this.currentPatch.config, this.calendars, this.timeline)
+    },
+    scheduleSummary() {
+      const code = String(this.config.schedulePurpose || this.config.scheduleType || '').toUpperCase()
+      if (this.scheduleMode || code.includes('RETRY') || Array.isArray(this.config.retryWindows)) {
+        const windows = this.retryWindowGroups.map(item => item.label)
+        return {
+          title: '重试窗口时间轴',
+          description: `${windows.join(' → ') || 'T0 → T+1 → T+2'}；系统按窗口开始、截止和最大尝试次数推进。`
+        }
+      }
+      if (String(this.config.effectKind || '').toUpperCase() === 'SCHEDULE_SELF' ||
+          Number(this.config.minutes) === 7200) {
+        return { title: '每 5 天循环', description: '记录实质进展后，以进展时间为锚点开启下一轮待办。' }
+      }
+      return null
+    }
   },
   watch: {
     value: {
@@ -104,7 +177,7 @@ export default {
     },
     resources: {
       deep: true,
-      handler() { this.refreshCalculation({ commitOnSuccess: false }) }
+      handler() { if (!this.scheduleMode) this.refreshCalculation({ commitOnSuccess: false }) }
     },
     blocker: {
       immediate: true,
@@ -132,11 +205,16 @@ export default {
         calendarCode: config.calendarCode || '',
         governedMinutes: Number(config.minutes) || null
       }
+      if (this.scheduleMode) {
+        this.calculation = {}
+        this.calculating = false
+        return
+      }
       this.refreshCalculation({ commitOnSuccess: false })
     },
     emitPatch() {
       this.syncing = true
-      this.$emit('change', buildSlaPatch(this.form, this.value))
+      this.$emit('patch', { sla: buildSlaPatch(this.form, this.value) })
       this.$nextTick(() => { this.syncing = false })
     },
     commitDuration() {
@@ -152,6 +230,7 @@ export default {
       return String(this.form.durationUnit || '').toUpperCase() === 'DAY'
     },
     async refreshCalculation({ commitOnSuccess = false } = {}) {
+      if (this.scheduleMode) return
       const patch = buildSlaPatch(this.form, this.value)
       const durationValue = Number(patch.config.durationValue)
       const durationUnit = patch.config.durationUnit
@@ -185,6 +264,12 @@ export default {
     },
     calendarCode(calendar) { return calendar.calendarCode || calendar.calendar_code || '' },
     calendarName(calendar) { return calendar.calendarName || calendar.calendar_name || this.calendarCode(calendar) },
+    retryWindowLabel(window) {
+      if (window.startTime || window.endTime) {
+        return `${window.startTime || '当日开始'}-${window.endTime || '当日结束'}（${Number(window.maxAttempts) || 0}次）`
+      }
+      return `开始后 ${Number(window.durationMinutes) || 0} 分钟（${Number(window.maxAttempts) || 0}次）`
+    },
     localNow() {
       const now = new Date()
       return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19)
@@ -288,8 +373,35 @@ export default {
 
 .sla-step__blocker { margin-top: 14px; }
 
+.sla-retry-timeline {
+  padding: 18px;
+  background: #F7F9FC;
+  border: 1px solid #D9E1EA;
+  border-radius: 8px;
+
+  > header { display: flex; justify-content: space-between; gap: 16px; }
+  h3 { margin: 0; color: #0B2A55; }
+  p { margin: 4px 0 0; font-size: 12px; color: #65758A; }
+}
+
+.sla-retry-timeline__track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+
+  article { padding: 14px; background: #FFFFFF; border-left: 3px solid #C89A3D; border-radius: 8px; }
+  span,
+  strong,
+  small { display: block; }
+  span { font-size: 12px; color: #C27D14; }
+  strong { margin: 5px 0; color: #0B2A55; }
+  small { line-height: 18px; color: #66758A; }
+}
+
 @media (max-width: 760px) {
   .sla-runtime-grid,
-  .sla-action-grid { grid-template-columns: 1fr; }
+  .sla-action-grid,
+  .sla-retry-timeline__track { grid-template-columns: 1fr; }
 }
 </style>

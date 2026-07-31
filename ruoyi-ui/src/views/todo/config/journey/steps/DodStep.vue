@@ -6,12 +6,14 @@
       <p>先采用推荐业务配方，再按实际办理要求选择需要填写的信息、上传的材料和条件要求。</p>
     </header>
 
+    <div ref="recipeCard" tabindex="-1">
     <dod-recipe-picker
       :recipes="rankedRecipes"
       :selected-code="config.recipeCode || ''"
       :readonly="readonly"
       @select="applyRecipe"
     />
+    </div>
 
     <div class="dod-step__sections">
       <section class="dod-config-card">
@@ -211,7 +213,7 @@ export default {
       this.emitPatch({ config: { ...normalizeDodConfig(this.config), validatorRefs: clone(this.validatorRefs) } })
     },
     emitPatch(patch) {
-      this.$emit('change', patch)
+      this.$emit('patch', { dod: patch })
     },
     fieldName(code) {
       const field = this.activeFields.find(item => item.code === code)
@@ -221,7 +223,13 @@ export default {
       const material = this.activeMaterials.find(item => item.code === code)
       return material ? material.name : code
     },
-    focusField() {}
+    focusField() {
+      this.$nextTick(() => {
+        const element = this.$refs.recipeCard
+        if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (element && element.focus) element.focus()
+      })
+    }
   }
 }
 </script>

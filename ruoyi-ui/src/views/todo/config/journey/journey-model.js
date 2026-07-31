@@ -4,6 +4,18 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value))
 }
 
+function journeyDraftKey(journey) {
+  const template = (journey && journey.template) || {}
+  return `${Number(template.templateId) || 0}:${Number(template.versionId) || 0}`
+}
+
+function createJourneyDraft(journey) {
+  return {
+    key: journeyDraftKey(journey),
+    value: clone(journey)
+  }
+}
+
 function object(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? clone(value) : {}
 }
@@ -682,6 +694,8 @@ function hasUnresolvedFieldConflicts(journey) {
 }
 
 module.exports = {
+  journeyDraftKey,
+  createJourneyDraft,
   hydrateJourney,
   applyAuthoritativeHealth,
   applyStepPatch,

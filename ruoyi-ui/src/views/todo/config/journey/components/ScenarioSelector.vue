@@ -19,9 +19,13 @@
         <el-tag v-if="result(scenario).passed" size="mini" type="success">已通过</el-tag>
         <el-tag v-else-if="failed(scenario)" size="mini" type="danger">未通过</el-tag>
         <el-tag v-else size="mini" type="info">待验证</el-tag>
-        <small>预期下一待办：{{ targetLabel(scenario.expectedNextTemplateCode) }}</small>
-        <small v-if="result(scenario).actualNextTemplateCode">
+        <small>预期系统动作：{{ expectedEffectLabel(scenario) }}</small>
+        <small v-if="needsExpectedTarget(scenario)">预期下一待办：{{ targetLabel(scenario.expectedNextTemplateCode || expectedEffect(scenario).targetTemplateCode) }}</small>
+        <small v-if="needsActualTarget(scenario) && result(scenario).actualNextTemplateCode">
           实际下一待办：{{ targetLabel(result(scenario).actualNextTemplateCode) }}
+        </small>
+        <small v-else-if="result(scenario).actualEffect">
+          实际系统动作：{{ effectLabel(actualEffect(scenario)) }}
         </small>
         <small v-if="failed(scenario)" class="scenario-card__failure">
           失败原因：{{ failureMessage(scenario) }}
@@ -34,6 +38,7 @@
 
 <script>
 import { scenarioFailureMessage, scenarioTargetLabel } from '../simulation-workbench-model'
+import { effectPresentation } from '../business-effect-model'
 
 export default {
   name: 'ScenarioSelector',
@@ -50,7 +55,24 @@ export default {
       return result.passed === false && Boolean(result.businessCode || result.message)
     },
     failureMessage(scenario) { return scenarioFailureMessage(this.result(scenario)) },
-    targetLabel(code) { return scenarioTargetLabel(code, this.routingTargets) }
+    targetLabel(code) { return scenarioTargetLabel(code, this.routingTargets) },
+    expectedEffect(scenario) {
+      return scenario.expectedEffect || {
+        kind: scenario.expectedNextTemplateCode ? 'NEXT_TEMPLATE' : 'END',
+        targetTemplateCode: scenario.expectedNextTemplateCode || ''
+      }
+    },
+    expectedEffectLabel(scenario) { return this.effectLabel(this.expectedEffect(scenario)) },
+    actualEffect(scenario) {
+      const value = this.result(scenario)
+      return value.actualEffect || {
+        kind: value.actualNextTemplateCode ? 'NEXT_TEMPLATE' : 'END',
+        targetTemplateCode: value.actualNextTemplateCode || ''
+      }
+    },
+    effectLabel(effect) { return effectPresentation(effect).label },
+    needsExpectedTarget(scenario) { return effectPresentation(this.expectedEffect(scenario)).needsTarget },
+    needsActualTarget(scenario) { return effectPresentation(this.actualEffect(scenario)).needsTarget }
   }
 }
 </script>

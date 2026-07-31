@@ -174,7 +174,7 @@ check('projects and merges server simulation readiness without losing journey co
   const readiness = {
     templateId: 17,
     versionId: 88,
-    definitionHash: 'authoritative-hash-88',
+    definitionHash: 'hash-88',
     blockingScenarios: [],
     fullSimulationPassed: true,
     publicationReady: true,
@@ -788,6 +788,56 @@ check('shows authoritative cross-step impact and keeps the active narrow-screen 
     'the active narrow-screen step must be scrolled into view')
   assert(nav.includes('scroll-snap-type'),
     'the narrow-screen step rail must remain horizontally scrollable')
+})
+
+check('preserves pending owner choices until an explicit replacement is confirmed', () => {
+  const page = read('src/views/todo/config/journey/index.vue')
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  assert(page.includes('journeyDraft'),
+    'the seven-step shell must keep one deep-cloned draft keyed by template and version')
+  assert(page.includes('@patch="onStepPatch"'),
+    'journey child editors must send non-destructive patches')
+  assert(owner.includes('confirmOwnerReplacement'),
+    'owner source changes need an explicit confirmation boundary')
+  assert(owner.includes("this.$emit('patch'"),
+    'confirmed owner replacement must emit a patch instead of a destructive full value')
+  assert(!owner.includes("this.$emit('patch', { owner: { config: {} } })"),
+    'switching owner source must never emit an empty owner configuration')
+})
+
+check('renders governed effects and returns repair issues to exact coordinates', () => {
+  const effects = read('src/views/todo/config/journey/business-effect-model.js')
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  const health = read('src/views/todo/config/journey/components/ConfigurationHealthPanel.vue')
+  const simulation = read('src/views/todo/config/journey/steps/SimulationPublishStep.vue')
+  const page = read('src/views/todo/config/journey/index.vue')
+  for (const label of [
+    '生成下一待办', '结束当前路径', '保留当前待办',
+    '等待系统计划下一窗口', '完成后开启下一周期'
+  ]) assert(effects.includes(label), `missing governed effect label: ${label}`)
+  assert(routing.includes('effectPresentation'),
+    'business routing must render the shared governed effect cards')
+  assert(routing.includes('filteredRoutingTargets'),
+    'business routing target choices must be business-domain filtered')
+  assert(health.includes("$emit('repair', { ...issue })"),
+    'configuration health must forward the complete readiness issue')
+  assert(simulation.includes('...(issue || {})') &&
+    simulation.includes("$emit('navigate-repair'") &&
+    simulation.includes('resourceKey:') && simulation.includes('fieldPath:'),
+  'simulation publish must forward the complete readiness issue and its coordinates')
+  assert(page.includes('fixLocation(issue)'),
+    'the shell must resolve fieldPath/resourceKey coordinates before navigating')
+})
+
+check('renders retry-window and five-day SLA presets without generic destructive editing', () => {
+  const sla = read('src/views/todo/config/journey/steps/SlaStep.vue')
+  assert(sla.includes('retryWindowGroups') && sla.includes('config.schedule'),
+    'TD-003 must render its governed schedule windows from the current draft')
+  for (const label of ['T0', 'T+1', 'T+2', '每 5 天循环']) {
+    assert(sla.includes(label), `SLA preset explanation missing: ${label}`)
+  }
+  assert(sla.includes('v-if="!scheduleMode"'),
+    'schedule-window drafts must not fall through to the generic duration editor')
 })
 
 console.log(`todo phase two ux contract passed (${checks} checks)`)

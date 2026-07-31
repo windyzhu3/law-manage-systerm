@@ -1,4 +1,5 @@
 const MAX_CONDITION_GROUP_DEPTH = 2
+const { effectKind, routeTargetsFor } = require('./business-effect-model')
 const RUNTIME_OPERATORS = new Set([
   'EQ', 'NE', 'IN', 'NOT_IN', 'GT', 'GTE', 'LT', 'LTE',
   'EXISTS', 'NOT_EXISTS', 'EMPTY', 'NOT_EMPTY'
@@ -482,6 +483,43 @@ function repairFocusTarget(fieldPath) {
     : 'eventSearch'
 }
 
+const JOURNEY_STEP_NUMBERS = Object.freeze({
+  EVENT: 1,
+  TRIGGER: 2,
+  OWNER: 3,
+  DOD: 4,
+  SLA: 5,
+  ROUTING: 6,
+  SIMULATION_PUBLISH: 7
+})
+
+function fixLocation(issue) {
+  const source = object(issue)
+  const fieldPath = String(source.fieldPath || source.path || '')
+  const resourceKey = String(source.resourceKey || '')
+  let stepCode = String(source.stepKey || source.stepCode || resourceKey || '').toUpperCase()
+  if (stepCode === 'SIMULATION') stepCode = 'SIMULATION_PUBLISH'
+  if (!JOURNEY_STEP_NUMBERS[stepCode]) {
+    if (fieldPath.startsWith('event.condition')) stepCode = 'TRIGGER'
+    else if (fieldPath.startsWith('event')) stepCode = 'EVENT'
+    else if (fieldPath.startsWith('owner')) stepCode = 'OWNER'
+    else if (fieldPath.startsWith('dod')) stepCode = 'DOD'
+    else if (fieldPath.startsWith('sla')) stepCode = 'SLA'
+    else if (fieldPath.startsWith('routing')) stepCode = 'ROUTING'
+    else stepCode = 'SIMULATION_PUBLISH'
+  }
+  let focusTarget = fieldPath.split('.').filter(Boolean).pop() || ''
+  if (fieldPath === 'simulation.scenarios') focusTarget = 'scenario-selector'
+  if (fieldPath === 'simulation.full') focusTarget = 'full-simulation'
+  return {
+    step: JOURNEY_STEP_NUMBERS[stepCode],
+    stepCode,
+    resourceKey: source.resourceKey || resourceKey,
+    fieldPath,
+    focusTarget
+  }
+}
+
 function buildOwnerConfig(strategy, selection, fallback) {
   const selected = selection || {}
   let config
@@ -902,6 +940,7 @@ function routeKey(value, index) {
 
 function normalizedOutcome(row, index) {
   const value = object(row)
+  const kind = effectKind(value)
   return {
     ...clone(value),
     id: routeKey(value.id, index),
@@ -909,7 +948,8 @@ function normalizedOutcome(row, index) {
     resultField: value.resultField ? String(value.resultField) : null,
     resultValue: value.resultValue === null || value.resultValue === undefined ? null : String(value.resultValue),
     resultLabel: value.resultLabel ? String(value.resultLabel) : null,
-    resultType: String(value.resultType || 'NEXT').toUpperCase(),
+    effectKind: kind,
+    resultType: kind === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
     targetVersionId: Number(value.targetVersionId) || null,
     default: value.default === true
   }
@@ -943,15 +983,19 @@ function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, curren
       ? Number(target.versionId || target.version_id)
       : Number(option.targetVersionId) || null
     const resultLabel = String(option.label || value)
+    const kind = effectKind(option)
     return {
       id: routeKey(`${resultField}_${value}`, index),
       label: `当${resultFieldName}为${resultLabel}时`,
       resultField,
       resultValue: value,
       resultLabel,
-      resultType: 'NEXT',
-      targetVersionId,
-      targetTemplateCode: option.targetTemplateCode || (target && (target.templateCode || target.template_code)) || null,
+      effectKind: kind,
+      resultType: kind === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
+      targetVersionId: kind === 'NEXT_TEMPLATE' ? targetVersionId : null,
+      targetTemplateCode: kind === 'NEXT_TEMPLATE'
+        ? option.targetTemplateCode || (target && (target.templateCode || target.template_code)) || null
+        : option.targetTemplateCode || null,
       default: index === options.length - 1,
       condition: literalCondition(resultField, value)
     }
@@ -1062,7 +1106,7 @@ function routingDraftBlocker(rows, options) {
   const outcomes = list(rows).map(normalizedOutcome)
   const settings = object(options)
   const mode = String(settings.mode || 'SEQUENTIAL').toUpperCase()
-  if (outcomes.some(row => row.resultType === 'NEXT' && !row.targetVersionId)) {
+  if (outcomes.some(row => row.effectKind === 'NEXT_TEMPLATE' && !row.targetVersionId)) {
     return {
       code: 'TODO_JOURNEY_ROUTING_TARGET_REQUIRED',
       severity: 'BLOCKER',
@@ -1102,10 +1146,10 @@ function routingDraftBlocker(rows, options) {
         message: '还有业务结果尚未设置后续待办'
       }
     }
-    const targets = list(settings.routingTargets)
+    const targets = routeTargetsFor(settings.businessType, list(settings.routingTargets))
     const businessType = String(settings.businessType || '')
     const invalidTarget = outcomes.find(row => {
-      if (row.resultType !== 'NEXT') return false
+      if (row.effectKind !== 'NEXT_TEMPLATE') return false
       const target = targets.find(item =>
         Number(item.versionId || item.version_id) === Number(row.targetVersionId)
       )
@@ -1322,6 +1366,7 @@ module.exports = {
   scopeOwnerFields,
   ownerSelectionStillValid,
   repairFocusTarget,
+  fixLocation,
   buildOwnerConfig,
   createOwnerStrategyDrafts,
   updateOwnerStrategyDraft,

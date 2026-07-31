@@ -1,5 +1,5 @@
 <template>
-  <section class="business-routing" aria-label="完成后下一步">
+  <section ref="effectEditor" class="business-routing" aria-label="完成后下一步" tabindex="-1">
     <header>
       <div>
         <h3>完成后下一步</h3>
@@ -89,9 +89,17 @@
               <template slot="prepend">业务结果</template>
             </el-input>
 
-            <template v-if="typedMode">
-              <div class="routing-outcome__next-label">进入下一张待办</div>
-            </template>
+            <div
+              v-if="typedMode"
+              class="routing-effect-card"
+              :class="`is-${effectFor(row).tone}`"
+            >
+              <i :class="effectIcon(row)" />
+              <div>
+                <strong>{{ effectFor(row).label }}</strong>
+                <span>{{ effectExplanation(row) }}</span>
+              </div>
+            </div>
             <el-select
               v-else
               v-model="row.resultType"
@@ -103,7 +111,7 @@
             </el-select>
 
             <el-select
-              v-if="row.resultType === 'NEXT'"
+              v-if="effectFor(row).needsTarget"
               v-model="row.targetVersionId"
               :disabled="readonly"
               filterable
@@ -111,7 +119,7 @@
               @change="targetChanged(row)"
             >
               <el-option
-                v-for="target in routingTargets"
+                v-for="target in filteredRoutingTargets"
                 :key="versionId(target)"
                 :label="templateName(target)"
                 :value="versionId(target)"
@@ -120,7 +128,7 @@
                 <small>{{ target.templateCode || target.template_code }} · 已发布 v{{ target.versionNo || target.version_no }}</small>
               </el-option>
             </el-select>
-            <div v-else class="routing-outcome__end">
+            <div v-else-if="!typedMode" class="routing-outcome__end">
               <i class="el-icon-circle-close" />流程在此结束，不再创建后续待办
             </div>
           </div>
@@ -189,6 +197,7 @@ import {
   materializeOutcomeRouting,
   routingDraftBlocker
 } from '../journey-step-model'
+import { effectKind, effectPresentation, routeTargetsFor } from '../business-effect-model'
 
 const clone = value => JSON.parse(JSON.stringify(value == null ? [] : value))
 
@@ -220,12 +229,15 @@ export default {
     typedMode() {
       return Boolean(this.outcomeSet.resultField && this.outcomeOptions.length)
     },
+    filteredRoutingTargets() {
+      return routeTargetsFor(this.businessType, this.routingTargets)
+    },
     blocker() {
       return routingDraftBlocker(this.draftRows, {
         mode: this.mode,
         joinMode: this.joinMode,
         outcomeSet: this.outcomeSet,
-        routingTargets: this.routingTargets,
+        routingTargets: this.filteredRoutingTargets,
         businessType: this.businessType
       })
     }
@@ -254,7 +266,8 @@ export default {
           resultField: row.resultField || (option && this.outcomeSet.resultField) || null,
           resultValue: resultValue == null ? null : String(resultValue),
           resultLabel: row.resultLabel || (option && option.label) || null,
-          resultType: row.resultType || 'NEXT',
+          effectKind: effectKind(row.effectKind ? row : (option || row)),
+          resultType: effectKind(row.effectKind ? row : (option || row)) === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
           targetVersionId: Number(row.targetVersionId) || null,
           targetTemplateCode: row.targetTemplateCode || (option && option.targetTemplateCode) || null,
           default: row.default === true,
@@ -274,7 +287,7 @@ export default {
     applyRecommendation() {
       const patch = materializeOutcomeRouting(
         this.outcomeSet,
-        this.routingTargets,
+        this.filteredRoutingTargets,
         this.currentVersionId,
         { config: {} }
       )
@@ -293,10 +306,11 @@ export default {
     },
     addOutcome() {
       const id = `result_${Date.now()}`
-      const target = this.routingTargets[0]
+      const target = this.filteredRoutingTargets[0]
       this.draftRows.push({
         id,
         label: '',
+        effectKind: 'NEXT_TEMPLATE',
         resultType: 'NEXT',
         targetVersionId: target ? this.versionId(target) : null,
         default: this.mode === 'SEQUENTIAL' && this.draftRows.length === 0,
@@ -307,7 +321,7 @@ export default {
     outcomeChanged(row, index) {
       const recommended = materializeOutcomeRouting(
         { ...this.outcomeSet, options: this.outcomeOptions.filter(option => String(option.value) === String(row.resultValue)) },
-        this.routingTargets,
+        this.filteredRoutingTargets,
         this.currentVersionId,
         { config: {} }
       ).config.businessOutcomes[0]
@@ -320,16 +334,32 @@ export default {
       this.commit()
     },
     targetChanged(row) {
-      const target = this.routingTargets.find(item => this.versionId(item) === Number(row.targetVersionId))
+      const target = this.filteredRoutingTargets.find(item => this.versionId(item) === Number(row.targetVersionId))
       row.targetTemplateCode = target ? (target.templateCode || target.template_code) : null
       this.commit()
     },
     resultSentence(row) {
       const result = row.resultLabel || row.resultValue || '未选择结果'
-      const target = row.resultType === 'END'
-        ? '结束当前流程'
-        : `创建“${this.templateNameByVersion(row.targetVersionId)}”待办`
+      const presentation = this.effectFor(row)
+      const target = presentation.needsTarget
+        ? `创建“${this.templateNameByVersion(row.targetVersionId)}”待办`
+        : presentation.label
       return `当“${this.outcomeSet.resultFieldName || row.resultField || '业务结果'}”为“${result}”时，${target}`
+    },
+    effectFor(row) { return effectPresentation(row) },
+    effectIcon(row) {
+      return {
+        NEXT_TEMPLATE: 'el-icon-right',
+        END: 'el-icon-circle-close',
+        RETAIN_CURRENT: 'el-icon-refresh-left',
+        SCHEDULE_NEXT: 'el-icon-time',
+        SCHEDULE_SELF: 'el-icon-refresh',
+        EXPECTED_VALIDATION_FAILURE: 'el-icon-warning-outline'
+      }[effectKind(row)] || 'el-icon-setting'
+    },
+    effectExplanation(row) {
+      if (this.effectFor(row).needsTarget) return '选择同一业务域的已发布待办'
+      return '由系统按已治理的业务结果自动执行，无需选择虚假的下游模板'
     },
     removeOutcome(index) {
       this.draftRows.splice(index, 1)
@@ -349,6 +379,7 @@ export default {
       if (this.mode === 'PARALLEL') {
         this.draftRows.forEach(row => {
           row.resultType = 'NEXT'
+          row.effectKind = 'NEXT_TEMPLATE'
           row.default = false
         })
       } else if (this.draftRows.length) {
@@ -364,7 +395,8 @@ export default {
     },
     resultTypeChanged(row) {
       if (row.resultType === 'END') row.targetVersionId = null
-      else if (!row.targetVersionId && this.routingTargets.length) row.targetVersionId = this.versionId(this.routingTargets[0])
+      else if (!row.targetVersionId && this.filteredRoutingTargets.length) row.targetVersionId = this.versionId(this.filteredRoutingTargets[0])
+      row.effectKind = row.resultType === 'NEXT' ? 'NEXT_TEMPLATE' : 'END'
       this.commit()
     },
     conditionChanged(row, condition) {
@@ -377,7 +409,7 @@ export default {
         mode: this.mode,
         joinMode: this.joinMode,
         outcomeSet: clone(this.outcomeSet),
-        routingTargets: clone(this.routingTargets),
+        routingTargets: clone(this.filteredRoutingTargets),
         businessType: this.businessType
       })
       this.$nextTick(() => { this.syncing = false })
@@ -385,8 +417,15 @@ export default {
     versionId(target) { return Number(target.versionId || target.version_id) },
     templateName(target) { return target.templateName || target.template_name || '未命名待办' },
     templateNameByVersion(versionId) {
-      const target = this.routingTargets.find(item => this.versionId(item) === Number(versionId))
+      const target = this.filteredRoutingTargets.find(item => this.versionId(item) === Number(versionId))
       return target ? this.templateName(target) : '尚未选择的后续待办'
+    },
+    focusField() {
+      this.$nextTick(() => {
+        const element = this.$refs.effectEditor
+        if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (element && element.focus) element.focus()
+      })
     }
   }
 }
@@ -409,6 +448,28 @@ export default {
 
 .business-routing__actions { flex: 0 0 auto; }
 .business-routing__governed { margin-bottom: 14px; }
+
+.routing-effect-card {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-width: 220px;
+  padding: 10px 12px;
+  color: #0B2A55;
+  background: #F5F8FC;
+  border: 1px solid #D9E1EA;
+  border-radius: 8px;
+
+  i { font-size: 18px; }
+  strong,
+  span { display: block; }
+  span { margin-top: 2px; font-size: 11px; line-height: 17px; color: #66758A; }
+
+  &.is-primary { color: #1D4E89; background: #EFF6FF; border-color: #B8D4F0; }
+  &.is-success { color: #256B4A; background: #F0F8F4; border-color: #B7D7C8; }
+  &.is-warning { color: #8A5A0A; background: #FFF9EC; border-color: #E7CD98; }
+  &.is-danger { color: #9F2F2F; background: #FFF1F1; border-color: #E8B8B8; }
+}
 
 .business-routing__mode {
   display: flex;

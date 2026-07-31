@@ -1,8 +1,20 @@
 const assert = require('assert')
+const fs = require('fs')
+const path = require('path')
 const model = require('../src/views/todo/config/journey/journey-model')
 const steps = require('../src/views/todo/config/journey/journey-step-model')
 const runtime = require('../src/views/todo/config/journey/journey-runtime')
 const simulationWorkbench = require('../src/views/todo/config/journey/simulation-workbench-model')
+
+const effectModelPath = path.resolve(__dirname,
+  '../src/views/todo/config/journey/business-effect-model.js')
+
+function effectModel() {
+  assert(fs.existsSync(effectModelPath),
+    'the journey needs a shared governed business-effect presentation model')
+  delete require.cache[effectModelPath]
+  return require(effectModelPath)
+}
 
 const STEP_CODES = ['EVENT', 'TRIGGER', 'OWNER', 'DOD', 'SLA', 'ROUTING', 'SIMULATION_PUBLISH']
 let checks = 0
@@ -43,6 +55,88 @@ function fixture() {
     payload: { manualOverrides: { contactResult: '已接通' } }
   }
 }
+
+check('renders governed semantic identities before technical values', () => {
+  const effects = effectModel()
+  assert.strictEqual(effects.renderSemantic({
+    semanticType: 'USER_ID',
+    displayValue: '张三',
+    departmentName: '销售一部',
+    rawValue: 17
+  }), '张三 / 销售一部')
+  assert.strictEqual(effects.renderSemantic({
+    semanticType: 'DICT',
+    dictLabel: '有效',
+    rawValue: 'VALID'
+  }), '有效')
+})
+
+check('presents scheduling effects without fake template targets', () => {
+  const effects = effectModel()
+  assert.deepStrictEqual(effects.effectPresentation({
+    kind: 'SCHEDULE_SELF',
+    targetTemplateCode: 'TD-004'
+  }), {
+    label: '完成后开启下一轮5天待办',
+    needsTarget: false,
+    tone: 'primary'
+  })
+})
+
+check('filters route targets to the current business domain', () => {
+  const effects = effectModel()
+  const targets = effects.routeTargetsFor('LEAD', [
+    { templateCode: 'TD-004', businessType: 'LEAD' },
+    { templateCode: 'CASE_ACCEPT', businessType: 'CASE' }
+  ])
+  assert.strictEqual(targets.length, 1)
+  assert.strictEqual(targets[0].templateCode, 'TD-004')
+})
+
+check('maps readiness coordinates to the exact journey control', () => {
+  assert.deepStrictEqual(steps.fixLocation({
+    stepKey: 'ROUTING',
+    resourceKey: 'ROUTING',
+    fieldPath: 'routing.businessOutcomes'
+  }), {
+    step: 6,
+    stepCode: 'ROUTING',
+    resourceKey: 'ROUTING',
+    fieldPath: 'routing.businessOutcomes',
+    focusTarget: 'businessOutcomes'
+  })
+})
+
+check('keeps cached step drafts isolated by template version', () => {
+  const first = model.createJourneyDraft(fixture())
+  const secondFixture = fixture()
+  secondFixture.template.versionId = 102
+  const second = model.createJourneyDraft(secondFixture)
+  assert.strictEqual(first.key, '42:101')
+  assert.strictEqual(second.key, '42:102')
+  first.value.steps.find(step => step.code === 'OWNER').value.config.type = 'BUSINESS_OWNER'
+  assert.deepStrictEqual(second.value.steps.find(step => step.code === 'OWNER').value.config, {})
+})
+
+check('rejects readiness evidence from a different draft hash', () => {
+  const journey = fixture()
+  journey.simulationReadiness = {
+    definitionHash: 'stale-hash',
+    fullSimulationPassed: true,
+    publicationReady: true,
+    issues: []
+  }
+  const readiness = simulationWorkbench.journeySimulationReadiness(journey)
+  assert.strictEqual(readiness.publicationReady, false)
+  assert.strictEqual(readiness.fullSimulationPassed, false)
+  assert(readiness.issues.some(issue => issue.code === 'TODO_FULL_SIMULATION_STALE'))
+
+  journey.template.definitionHash = ''
+  journey.simulationReadiness.definitionHash = ''
+  const unidentified = simulationWorkbench.journeySimulationReadiness(journey)
+  assert.strictEqual(unidentified.publicationReady, false,
+    'empty hashes must never count as current-draft evidence')
+})
 
 check('derives an exact least-privilege journey API read plan', () => {
   const listOnly = runtime.resolveJourneyCapabilities(['todo:template:list'])

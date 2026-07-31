@@ -19,8 +19,12 @@
         <div>
           <strong>{{ issueMessage(issue) }}</strong>
           <small>{{ severity(issue) === 'BLOCKER' ? '阻塞发布' : '建议修复' }}</small>
+          <details class="configuration-health__technical">
+            <summary>技术详情</summary>
+            <small>错误码：{{ issue.code || '无' }}<template v-if="issue.fieldPath"> · 位置：{{ issue.fieldPath }}</template></small>
+          </details>
         </div>
-        <el-button type="text" @click="$emit('repair', issue)">去修复</el-button>
+        <el-button type="text" @click="$emit('repair', { ...issue })">去修复</el-button>
       </article>
     </div>
     <div v-else class="configuration-health__empty">
@@ -172,5 +176,12 @@ export default {
   font-size: 12px;
   line-height: 18px;
   color: #7B8898;
+}
+
+.configuration-health__technical {
+  margin-top: 5px;
+  opacity: .78;
+
+  summary { font-size: 11px; cursor: pointer; }
 }
 </style>

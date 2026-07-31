@@ -206,8 +206,31 @@ function isSimulationReadinessIssue(issue) {
 
 export function journeySimulationReadiness(journey) {
   if (!journey) return null
-  if (journey.simulationReadiness) return journey.simulationReadiness
   const template = journey.template || {}
+  if (journey.simulationReadiness) {
+    const readiness = journey.simulationReadiness
+    const currentHash = String(template.definitionHash || '')
+    if (!currentHash || String(readiness.definitionHash || '') !== currentHash) {
+      const otherIssues = (readiness.issues || []).filter(issue =>
+        String((issue && issue.code) || '') !== 'TODO_FULL_SIMULATION_STALE'
+      )
+      return {
+        ...readiness,
+        definitionHash: currentHash,
+        fullSimulationPassed: false,
+        publicationReady: false,
+        issues: otherIssues.concat({
+          code: 'TODO_FULL_SIMULATION_STALE',
+          severity: 'BLOCKER',
+          stepCode: 'SIMULATION_PUBLISH',
+          resourceKey: 'SIMULATION',
+          fieldPath: 'simulation.full',
+          message: '完整试运行已失效，请使用当前草稿重新运行'
+        })
+      }
+    }
+    return readiness
+  }
   const step = (journey.steps || []).find(item => item.code === 'SIMULATION_PUBLISH') || {}
   const issues = (journey.issues || []).filter(isSimulationReadinessIssue)
   const fullBlocked = issues.some(issue => [

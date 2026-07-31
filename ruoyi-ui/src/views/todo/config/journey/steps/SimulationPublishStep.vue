@@ -565,7 +565,13 @@ export default {
         blockingScenarioCodes: this.scenarioGateState.blockingScenarioCodes || []
       }, this.scenarios)
       if (target.stepCode !== 'SIMULATION_PUBLISH') {
-        this.$emit('navigate-repair', target.stepCode)
+        this.$emit('navigate-repair', {
+          ...(issue || {}),
+          stepKey: target.stepCode,
+          stepCode: target.stepCode,
+          resourceKey: (issue && issue.resourceKey) || target.stepCode,
+          fieldPath: (issue && issue.fieldPath) || target.focusTarget
+        })
         return
       }
       if (target.scenarioCode) this.selectScenario(target.scenarioCode)

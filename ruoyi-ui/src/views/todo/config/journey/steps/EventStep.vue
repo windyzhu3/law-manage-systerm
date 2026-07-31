@@ -42,7 +42,7 @@
           >
             <span class="event-option__marker"><i :class="eventKey(event) === selectedKey ? 'el-icon-check' : 'el-icon-bell'" /></span>
             <span class="event-option__content">
-              <strong>{{ event.eventName || event.eventType }}</strong>
+              <strong>{{ event.eventName || '未命名业务事件' }}</strong>
               <small>{{ timingLabel(event) }} · {{ event.sourceModule || '业务系统' }}</small>
             </span>
             <span class="event-option__meta">
@@ -60,7 +60,7 @@
           <div class="event-detail__heading">
             <div>
               <span>已选择事件</span>
-              <h3>{{ selected.eventName || selected.eventType }}</h3>
+              <h3>{{ selected.eventName || '未命名业务事件' }}</h3>
             </div>
             <el-tag :type="schemaHealth.ready ? 'success' : 'danger'" size="small">
               {{ schemaHealth.ready ? '字段完整' : '字段不完整' }}
@@ -69,7 +69,7 @@
           <dl class="event-detail__facts">
             <div><dt>发生时机</dt><dd>{{ timingLabel(selected) }}</dd></div>
             <div><dt>来源业务</dt><dd>{{ businessLabel(selected.businessObjectType) }} · {{ selected.sourceModule || '业务系统' }}</dd></div>
-            <div><dt>Payload 版本</dt><dd>v{{ selected.payloadVersion }}</dd></div>
+            <div><dt>事件版本</dt><dd>v{{ selected.payloadVersion }}</dd></div>
             <div><dt>版本状态</dt><dd>{{ statusLabel(selected.status) }}</dd></div>
           </dl>
           <div class="event-detail__description">
@@ -89,7 +89,7 @@
             <strong>可用于后续配置的字段</strong>
             <div v-if="selectedFields.length" class="event-detail__field-list">
               <span v-for="field in selectedFields.slice(0, 8)" :key="field.code">
-                {{ field.name }}<small>{{ field.type }}</small>
+                {{ field.name || '未命名业务字段' }}<small>{{ fieldTypeLabel(field) }}</small>
               </span>
             </div>
             <p v-else>尚未形成可用字段目录。</p>
@@ -108,6 +108,10 @@
               @click="repairSchema"
             >维护事件字段</el-button>
           </div>
+          <details class="event-detail__technical">
+            <summary>技术详情</summary>
+            <p>事件编码：{{ selected.eventType }} · Payload v{{ selected.payloadVersion }}</p>
+          </details>
         </template>
         <el-empty v-else description="请从左侧选择业务事件" :image-size="72" />
       </article>
@@ -181,7 +185,7 @@ export default {
       try {
         const parsed = typeof value === 'string' ? JSON.parse(value) : value
         const keys = Object.keys(parsed || {})
-        return keys.length ? `示例包含 ${keys.slice(0, 6).join('、')} 等 ${keys.length} 个字段。` : '示例对象暂未填写业务字段。'
+        return keys.length ? `示例已包含 ${keys.length} 个受治理业务字段。` : '示例对象暂未填写业务字段。'
       } catch (_) {
         return '示例对象暂不可用，请在事件资源中修复。'
       }
@@ -247,7 +251,7 @@ export default {
         return
       }
       this.detail = event
-      this.$emit('change', buildEventPatch(event))
+      this.$emit('patch', { event: buildEventPatch(event) })
       await this.loadSelectedResource(event)
     },
     async loadSelectedResource(event) {
@@ -277,6 +281,16 @@ export default {
     },
     statusLabel(value) {
       return ({ ACTIVE: '已启用', DRAFT: '草稿', DISABLED: '已停用' })[value] || value
+    },
+    fieldTypeLabel(field) {
+      const semantic = String((field && field.semanticType) || '').toUpperCase()
+      if (semantic === 'USER_ID') return '人员'
+      if (semantic === 'DEPARTMENT_ID') return '部门'
+      if (semantic === 'DICT') return '业务选项'
+      if (semantic === 'BUSINESS_OBJECT_ID') return '业务对象'
+      return ({ string: '文本', integer: '整数', number: '数字', boolean: '是/否', object: '业务对象' })[
+        String((field && field.type) || '').toLowerCase()
+      ] || '业务信息'
     },
     focusField(fieldPath) {
       const target = repairFocusTarget(fieldPath)
@@ -328,6 +342,15 @@ export default {
   grid-template-columns: minmax(220px, 1fr) 150px 130px;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.event-detail__technical {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #7B8898;
+
+  summary { cursor: pointer; }
+  p { margin: 6px 0 0; }
 }
 
 .is-focus-restored {

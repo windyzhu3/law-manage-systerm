@@ -25,15 +25,30 @@
       <el-button v-if="!readonly" slot="default" type="text" @click="repairFields">维护事件字段</el-button>
     </el-alert>
 
-    <typed-condition-builder
-      v-if="event.eventType"
-      ref="builder"
-      :value="condition"
-      :fields="fields"
-      :readonly="readonly || !fields.length"
-      @input="change"
-      @issue-change="$emit('issue-change', $event)"
+    <el-alert
+      v-else-if="governedWithoutCondition"
+      class="trigger-step__preset"
+      title="系统预设，无需附加条件"
+      :description="`该业务事件“${eventName}”发生即触发，无需附加条件。`"
+      type="success"
+      :closable="false"
+      show-icon
     />
+
+    <el-collapse v-if="event.eventType && fields.length" class="trigger-step__advanced">
+      <el-collapse-item name="conditions">
+        <template slot="title"><i class="el-icon-setting" />高级设置：附加业务条件</template>
+        <p>仅当同一业务事件还需要二次筛选时使用；系统预设事件通常不需要添加。</p>
+        <typed-condition-builder
+          ref="builder"
+          :value="condition"
+          :fields="fields"
+          :readonly="readonly"
+          @input="change"
+          @issue-change="$emit('issue-change', $event)"
+        />
+      </el-collapse-item>
+    </el-collapse>
   </section>
 </template>
 
@@ -65,10 +80,15 @@ export default {
         Number(item.payloadVersion) === Number(this.event.payloadVersion)
       ) || {}
     },
-    eventName() { return this.selectedEvent.eventName || this.event.eventType || '所选事件' }
+    eventName() { return this.selectedEvent.eventName || this.event.eventType || '所选事件' },
+    governedWithoutCondition() {
+      const root = this.condition && this.condition.$expression && this.condition.$expression.root
+      const conditions = root && Array.isArray(root.conditions) ? root.conditions : []
+      return Boolean(this.event.eventType) && (!Object.keys(this.condition).length || !conditions.length)
+    }
   },
   methods: {
-    change(document) { this.$emit('change', buildTriggerPatch(document)) },
+    change(document) { this.$emit('patch', { trigger: buildTriggerPatch(document) }) },
     repairFields() {
       this.$emit('repair-resource', {
         type: 'EVENT',
@@ -114,5 +134,19 @@ export default {
 
 .trigger-step > .el-alert {
   margin-bottom: 16px;
+}
+
+.trigger-step__advanced {
+  margin-top: 14px;
+
+  ::v-deep .el-collapse-item__header {
+    padding: 0 14px;
+    color: #0B2A55;
+    background: #F7F9FC;
+  }
+
+  ::v-deep .el-collapse-item__content { padding: 14px; }
+  .el-icon-setting { margin-right: 7px; color: #C89A3D; }
+  p { margin: 0 0 12px; color: #65758A; }
 }
 </style>

@@ -55,10 +55,11 @@
 
       <main class="journey-body">
         <section class="journey-editor">
+          <keep-alive>
           <component
             :is="activeComponent"
             ref="activeEditor"
-            :key="activeStep"
+            :key="`${journeyDraft.key}:${activeStep}`"
             :step="activeStepItem"
             :value="activeValue"
             :template="journey.template"
@@ -75,12 +76,14 @@
             :saving="saving"
             :initial-readiness="simulationReadiness"
             @change="onStepChange"
+            @patch="onStepPatch"
             @issue-change="onEditorIssue"
             @repair-resource="openResourceRepair"
             @published="handlePublished"
             @navigate-repair="navigateRepair"
             @readiness-change="applySimulationReadiness"
           />
+          </keep-alive>
         </section>
         <aside class="journey-aside">
           <configuration-health-panel :issues="activeIssues" @repair="repair" />
@@ -159,6 +162,7 @@ import {
 } from '@/api/todo-resources'
 import {
   hydrateJourney,
+  createJourneyDraft,
   applyStepPatch,
   derivePrimaryAction,
   mergeSaveResult,
@@ -174,7 +178,8 @@ import {
   scopeOwnerFields,
   projectEmployeePreview,
   createRepairRequest,
-  completeResourceRepair as completeRepair
+  completeResourceRepair as completeRepair,
+  fixLocation
 } from './journey-step-model'
 import {
   resolveJourneyCapabilities,
@@ -261,7 +266,7 @@ export default {
   },
   data() {
     return {
-      journey: null,
+      journeyDraft: { key: '', value: null },
       draftContext: null,
       activeStep: 'EVENT',
       loading: false,
@@ -281,6 +286,12 @@ export default {
     }
   },
   computed: {
+    journey: {
+      get() { return this.journeyDraft.value },
+      set(value) {
+        this.journeyDraft = value ? createJourneyDraft(value) : { key: '', value: null }
+      }
+    },
     templateId() {
       return Number(this.$route.query.templateId)
     },
@@ -606,6 +617,25 @@ export default {
       this.editRevision += 1
       this.scheduleAutosave()
     },
+    onStepPatch(patch) {
+      if (this.publishedReadOnly || !this.journey || !patch) return
+      const definitions = {
+        event: 'EVENT',
+        trigger: 'TRIGGER',
+        owner: 'OWNER',
+        dod: 'DOD',
+        sla: 'SLA',
+        routing: 'ROUTING',
+        simulationPublish: 'SIMULATION_PUBLISH'
+      }
+      const entry = Object.keys(definitions).find(key =>
+        Object.prototype.hasOwnProperty.call(patch, key)
+      )
+      if (!entry) return
+      this.journey = applyStepPatch(this.journey, definitions[entry], patch[entry])
+      this.editRevision += 1
+      this.scheduleAutosave()
+    },
     onEditorIssue(issue) {
       this.$set(this.editorIssues, this.activeStep, issue
         ? {
@@ -815,14 +845,15 @@ export default {
       }
     },
     repair(issue) {
-      const stepCode = issue && issue.stepCode
+      const location = fixLocation(issue)
+      const stepCode = location.stepCode
       if (STEP_CODES.includes(stepCode)) this.activeStep = stepCode
-      if (issue && [
+      if ((issue && [
         'TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE',
         'TODO_FULL_SIMULATION_REQUIRED',
         'TODO_FULL_SIMULATION_STALE',
         'TODO_JOURNEY_SIMULATION_REQUIRED'
-      ].includes(issue.code)) {
+      ].includes(issue.code)) || location.resourceKey === 'SIMULATION') {
         this.activeStep = 'SIMULATION_PUBLISH'
         this.$nextTick(() => {
           const editor = this.$refs.activeEditor
@@ -854,6 +885,13 @@ export default {
         this.$nextTick(() => {
           const editor = this.$refs.activeEditor
           if (editor && editor.focusField) editor.focusField('durationValue')
+        })
+      } else {
+        this.$nextTick(() => {
+          const editor = this.$refs.activeEditor
+          if (editor && editor.focusField) {
+            editor.focusField(location.fieldPath || location.focusTarget)
+          }
         })
       }
     },
@@ -948,13 +986,17 @@ export default {
       }
       this.$modal.msgInfo('模拟与发布操作将在当前步骤的专用面板中完成')
     },
-    navigateRepair(stepCode) {
-      const code = String(stepCode || '').toUpperCase()
-      if (STEP_CODES.includes(code)) this.activeStep = code
+    navigateRepair(issue) {
+      if (typeof issue === 'string') {
+        this.repair({ stepKey: issue, stepCode: issue })
+        return
+      }
+      this.repair(issue || {})
     },
     applySimulationReadiness(readiness) {
       if (!this.journey || !readiness) return
-      this.journey = mergeJourneySimulationReadiness(this.journey, readiness)
+      const exact = journeySimulationReadiness({ ...this.journey, simulationReadiness: readiness })
+      this.journey = mergeJourneySimulationReadiness(this.journey, exact)
     },
     async handlePublished() {
       await this.loadJourney()

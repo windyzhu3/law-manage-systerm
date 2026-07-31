@@ -16,6 +16,7 @@
     />
 
     <business-routing-editor
+      ref="businessRouting"
       :rows="outcomes"
       :options="routingOptions"
       :routing-targets="resources.routingTargets || []"
@@ -89,13 +90,16 @@ export default {
   },
   methods: {
     businessChanged(rows, options) {
-      this.$emit('change', buildBusinessRoutingPatch(rows, {
+      this.$emit('patch', { routing: buildBusinessRoutingPatch(rows, {
         ...options,
         currentVersionId: this.currentVersionId
-      }, this.value))
+      }, this.value) })
     },
-    advancedChanged(config) { this.$emit('change', { config }) },
-    focusField() {}
+    advancedChanged(config) { this.$emit('patch', { routing: { config } }) },
+    focusField(fieldPath) {
+      const editor = this.$refs.businessRouting
+      if (editor && editor.focusField) editor.focusField(fieldPath)
+    }
   }
 }
 </script>

@@ -15,7 +15,7 @@
       show-icon
     />
 
-    <div class="owner-strategies" role="radiogroup" aria-label="负责人策略">
+    <div ref="ownerSource" class="owner-strategies" role="radiogroup" aria-label="负责人策略" tabindex="-1">
       <button
         v-for="item in strategies"
         :key="item.value"
@@ -47,7 +47,7 @@
           <el-form-item v-if="strategy === 'EVENT_OWNER'" label="事件中的人员字段">
             <el-select v-model="selection" :disabled="readonly" filterable placeholder="选择负责人字段" @change="updateDraft">
               <el-option v-for="field in ownerFields" :key="field.code" :label="field.name" :value="field.code">
-                <span>{{ field.name }}</span><small class="owner-option-note">{{ field.code }}</small>
+                <span>{{ field.name }}</span><small class="owner-option-note">{{ field.description || '由当前事件提供' }}</small>
               </el-option>
             </el-select>
           </el-form-item>
@@ -111,7 +111,12 @@
     <div v-if="strategy && !readonly" class="owner-apply">
       <span v-if="draftDirty"><i class="el-icon-edit-outline" /> 未应用修改</span>
       <span v-else><i class="el-icon-circle-check" /> 当前规则已应用</span>
-      <el-button type="primary" :disabled="Boolean(blocker) || !draftDirty" @click="applyStrategy">应用此规则</el-button>
+      <el-button
+        type="primary"
+        aria-label="应用此规则：确认更换负责人来源"
+        :disabled="Boolean(blocker) || !draftDirty"
+        @click="applyStrategy"
+      >确认更换负责人来源</el-button>
     </div>
 
     <section class="owner-explanation">
@@ -139,7 +144,6 @@
 
 <script>
 import {
-  buildOwnerPatch,
   ownerStrategy,
   ownerBlocker,
   scopeOwnerFields,
@@ -150,6 +154,7 @@ import {
 } from '../journey-step-model'
 
 const KNOWN_STRATEGIES = ['EVENT_OWNER', 'BUSINESS_OWNER', 'ROLE', 'USER', 'CANDIDATE_POOL']
+const clone = value => JSON.parse(JSON.stringify(value == null ? {} : value))
 
 export default {
   name: 'OwnerStep',
@@ -324,8 +329,12 @@ export default {
     },
     applyStrategy() {
       if (this.readonly || this.blocker) return
+      this.confirmOwnerReplacement(this.composeConfig())
+    },
+    confirmOwnerReplacement(nextOwner) {
+      if (!nextOwner || !Object.keys(nextOwner).length) return
       this.syncing = true
-      this.$emit('change', buildOwnerPatch(this.composeConfig()))
+      this.$emit('patch', { owner: { config: clone(nextOwner) } })
       this.draftDirty = false
       this.$nextTick(() => { this.syncing = false })
     },
@@ -337,7 +346,13 @@ export default {
       const item = this.ownerFields.find(field => field.code === code)
       return item ? item.name : (code || '未选择')
     },
-    focusField() {}
+    focusField() {
+      this.$nextTick(() => {
+        const element = this.$refs.ownerSource
+        if (element && element.scrollIntoView) element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (element && element.focus) element.focus()
+      })
+    }
   }
 }
 </script>
