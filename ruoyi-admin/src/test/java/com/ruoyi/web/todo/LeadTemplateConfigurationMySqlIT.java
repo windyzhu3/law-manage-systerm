@@ -85,9 +85,20 @@ class LeadTemplateConfigurationMySqlIT
                     where t.template_code='TD-001' and r.event_type='LEAD_ASSIGNED' and r.enabled='Y'
                     """);
 
+            var entrySlotResult=flyway(url,user,password).target("0.20.70").load().migrate();
+            assertTrue(entrySlotResult.success);
+            try(Statement statement=connection.createStatement())
+            {
+                assertEquals(1,statement.executeUpdate("""
+                        update todo_trigger_rule
+                        set enabled='N'
+                        where entry_slot_code='LEAD_FIRST_CONTACT_ENTRY' and enabled='Y'
+                        """));
+            }
+
             var result=flyway(url,user,password).load().migrate();
             assertTrue(result.success);
-            assertEquals("0.20.70",flyway(url,user,password).load().info().current()
+            assertEquals("0.20.71",flyway(url,user,password).load().info().current()
                     .getVersion().getVersion());
 
             assertEquals(publishedBefore,fingerprint(connection,"""
@@ -127,6 +138,13 @@ class LeadTemplateConfigurationMySqlIT
                         "where r.entry_slot_code='LEAD_FIRST_CONTACT_ENTRY' and r.enabled='Y'"));
                 assertEquals("1",scalar(statement,
                         "select status from todo_template where template_code='LEAD_FIRST_CONTACT'"));
+                assertEquals(0,count(statement,"""
+                        select count(*)
+                        from todo_trigger_rule r
+                        join todo_template t on t.template_id=r.template_id
+                        where r.event_type='LEAD_ASSIGNED' and r.business_type='LEAD' and r.enabled='Y'
+                          and (r.entry_slot_code!='LEAD_FIRST_CONTACT_ENTRY' or t.template_code!='TD-001')
+                        """));
             }
         }
     }

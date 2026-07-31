@@ -18,6 +18,15 @@ class TodoTriggerEntrySlotMigrationContractTest
         assertThat(sql).contains("replacement_template_code", "TD-001");
     }
 
+    @Test
+    void followUpMigrationRepairsAndGuardsTheLeadIngressSlot()
+    {
+        String sql=migration("V0_20_71__todo_lead_ingress_hardening.sql");
+        assertThat(sql).contains("LEAD_FIRST_CONTACT_ENTRY", "TD-001",
+                "ck_todo_trigger_lead_ingress_slot", "enabled='Y'",
+                "coalesce(@lead_entry_target,0)", "trigger_rule_id>0");
+    }
+
     private String migration(String name)
     {
         try (InputStream resource = getClass().getResourceAsStream("/db/migration/" + name))

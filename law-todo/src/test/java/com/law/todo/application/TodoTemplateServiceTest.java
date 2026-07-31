@@ -64,7 +64,7 @@ class TodoTemplateServiceTest
                 !row.containsKey("templateCode")&&!row.containsKey("businessType")&&!row.containsKey("status")
                 &&"Template 5".equals(row.get("templateName"))));
     }
-    @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(new java.util.HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,"templateVersionId",2L,"businessType","LEAD")));verify(mapper).insertTriggerRule(anyMap());}
+    @Test void savesTriggerRule(){when(mapper.insertTriggerRule(anyMap())).thenReturn(1);new TodoTemplateService(mapper).saveTrigger(trigger(null));verify(mapper).insertTriggerRule(anyMap());}
     @Test void rejectsInvalidTemplateJson(){TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).publish(1L,1,"OWNER","{}","{}",null,"{}","admin"));assertEquals("TODO_TEMPLATE_JSON_INVALID",error.getBusinessCode());}
     @Test void publishesUiSchemaInImmutableVersion(){when(mapper.selectTemplateVersion(1L,1)).thenReturn(null);doAnswer(invocation->{Map<String,Object> value=invocation.getArgument(0);value.put("versionId",8L);return 1;}).when(mapper).insertTemplateVersion(anyMap());new TodoTemplateService(mapper).publish(1L,1,"\"OWNER\"","{}","{}",null,"{\"type\":\"form\"}","admin");verify(mapper).insertTemplateVersion(org.mockito.ArgumentMatchers.argThat(value->"{\"type\":\"form\"}".equals(value.get("uiSchemaJson"))));}
 
@@ -192,7 +192,8 @@ class TodoTemplateServiceTest
         String condition="{\"$expression\":{\"version\":1,\"root\":{\"field\":\"amount\",\"operator\":\"GT\",\"value\":true}}}";
         TodoException error=assertThrows(TodoException.class,
                 ()->new TodoTemplateService(mapper).saveTrigger(new TriggerCommand(null,
-                        "LEAD_ASSIGNED",1L,2L,"LEAD","Y",condition,1,"trigger-invalid",0),actor()));
+                        "LEAD_ASSIGNED",1L,2L,"LEAD","LEAD_FIRST_CONTACT_ENTRY","N",condition,1,
+                        "trigger-invalid",0,"LEAD_ASSIGNED_RULE","Lead assigned rule"),actor()));
         assertEquals("TODO_CONDITION_VALUE_TYPE_INVALID",error.getBusinessCode());
     }
 
@@ -276,7 +277,7 @@ class TodoTemplateServiceTest
     {
         ledger(true);
         when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(1);
-        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","LEAD_FIRST_CONTACT_ENTRY","N",null,1,
                 "trigger-duplicate",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
 
         TodoException error=assertThrows(TodoException.class,
@@ -291,7 +292,7 @@ class TodoTemplateServiceTest
         ledger(true);
         when(mapper.countTriggerRulesByCode("LEAD_ASSIGNED_RULE",null)).thenReturn(0);
         when(mapper.insertTriggerRule(anyMap())).thenThrow(new org.springframework.dao.DuplicateKeyException("Duplicate entry for key 'uk_todo_trigger_rule_code'"));
-        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+        TriggerCommand duplicate=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","LEAD_FIRST_CONTACT_ENTRY","N",null,1,
                 "trigger-race",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
 
         TodoException error=assertThrows(TodoException.class,
@@ -307,7 +308,7 @@ class TodoTemplateServiceTest
         org.springframework.dao.DuplicateKeyException binding=
                 new org.springframework.dao.DuplicateKeyException("Duplicate entry for key 'uk_todo_trigger_rule_binding'");
         when(mapper.insertTriggerRule(anyMap())).thenThrow(binding);
-        TriggerCommand command=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+        TriggerCommand command=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","LEAD_FIRST_CONTACT_ENTRY","N",null,1,
                 "trigger-binding-race",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
 
         assertThrows(org.springframework.dao.DuplicateKeyException.class,
@@ -376,7 +377,8 @@ class TodoTemplateServiceTest
     @Test void enabledTriggerCreateRejectsInactiveTemplate()
     {
         when(mapper.selectTriggerTemplateBinding(2L)).thenReturn(templateBinding(1L,"PUBLISHED","1"));
-        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).saveTrigger(trigger(null)));
+        Map<String,Object> value=trigger(null);value.put("enabled","Y");
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).saveTrigger(value));
         assertEquals("TODO_TRIGGER_TEMPLATE_INACTIVE",error.getBusinessCode());verify(mapper,never()).insertTriggerRule(anyMap());
     }
 
@@ -471,7 +473,9 @@ class TodoTemplateServiceTest
 
     @Test void enablingEligibleTriggerUsesStatusOnlyConditionalMutation()
     {
-        ledger(true);when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(binding("0",1L,"PUBLISHED","{\"stage\":\"READY\"}",3));
+        ledger(true);Map<String,Object> eligible=binding("0",1L,"PUBLISHED","{\"stage\":\"READY\"}",3);
+        eligible.put("business_type","CONTRACT");when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(eligible);
+        when(mapper.selectEventCatalog("LEAD_ASSIGNED",1)).thenReturn(catalog("CONTRACT"));
         when(mapper.updateTriggerRuleEnabledConditionally(anyMap())).thenReturn(1);
         new TodoTemplateService(mapper).toggleTrigger(41L,toggle("enable-valid",3),actor());
         verify(mapper).updateTriggerRuleEnabledConditionally(org.mockito.ArgumentMatchers.argThat(row ->
@@ -550,10 +554,63 @@ class TodoTemplateServiceTest
         verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
     }
 
+    @Test void genericTriggerSaveCannotActivateLeadIngressOutsideSlotSwitch()
+    {
+        TriggerCommand generic=new TriggerCommand(null,"LEAD_ASSIGNED",1L,2L,"LEAD","Y",null,1,
+                "lead-generic-enable",0,"LEAD_ASSIGNED_RULE","Lead assigned rule");
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .saveTrigger(generic,actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).insertDefinitionActionClaim(anyMap());
+        verify(mapper,never()).insertTriggerRule(anyMap());
+    }
+
+    @Test void directToggleCannotEnableAnEntrySlotBinding()
+    {
+        ledger(true);Map<String,Object> locked=binding("0",1L,"PUBLISHED",null,3);
+        locked.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");locked.put("template_code","TD-001");
+        when(mapper.selectTriggerBindingForUpdate(41L)).thenReturn(locked);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .toggleTrigger(41L,toggle("entry-slot-direct-enable",3),actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_SWITCH_REQUIRED",error.getBusinessCode());
+        verify(mapper,never()).updateTriggerRuleEnabledConditionally(anyMap());
+    }
+
+    @Test void replacedTemplateCannotBeReactivated()
+    {
+        ledger(true);Map<String,Object> locked=new HashMap<>(Map.of("template_id",5L,"business_type","LEAD",
+                "status","1","version",3,"replacement_template_code","TD-001"));
+        when(mapper.selectTemplateForUpdate(5L)).thenReturn(locked);
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper).toggleTemplate(5L,
+                new TemplateToggleCommand("0","template-reactivate-replaced",3),actor()));
+
+        assertEquals("TODO_TEMPLATE_REPLACED",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateStatusConditionally(anyMap());
+    }
+
+    @Test void switchEntrySlotRejectsNonTd001Target()
+    {
+        when(mapper.selectEntrySlotBindingsForUpdate("LEAD_FIRST_CONTACT_ENTRY"))
+                .thenReturn(List.of(entrySlotBinding(41L,"Y",7,"PUBLISHED"),
+                        entrySlotBinding(52L,"N",3,"PUBLISHED","TD-002")));
+
+        TodoException error=assertThrows(TodoException.class,()->new TodoTemplateService(mapper)
+                .switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,actor()));
+
+        assertEquals("TODO_TRIGGER_ENTRY_SLOT_TARGET_INVALID",error.getBusinessCode());
+        verify(mapper,never()).disableEntrySlotBindings(anyString(),anyLong(),anyString());
+    }
+
     private Map<String,Object> trigger(String conditionJson)
     {
         Map<String,Object> trigger=new HashMap<>(Map.of("eventType","LEAD_ASSIGNED","templateId",1L,
                 "templateVersionId",2L,"businessType","LEAD"));
+        trigger.put("entrySlotCode","LEAD_FIRST_CONTACT_ENTRY");
+        trigger.put("enabled","N");
         trigger.put("conditionJson",conditionJson);
         return trigger;
     }
@@ -566,7 +623,10 @@ class TodoTemplateServiceTest
     {return Map.of("status","ACTIVE","business_object_type",businessType,"payload_schema_json","{\"type\":\"object\",\"properties\":{\"stage\":{\"type\":\"string\"},\"amount\":{\"type\":\"number\"}}}");}
 
     private TriggerCommand command(Long id,String businessType,String actionId,int version)
-    {return new TriggerCommand(id,"LEAD_ASSIGNED",1L,2L,businessType,"Y",null,1,actionId,version);}
+    {return new TriggerCommand(id,"LEAD_ASSIGNED",1L,2L,businessType,
+            "LEAD".equals(businessType)?"LEAD_FIRST_CONTACT_ENTRY":null,
+            "LEAD".equals(businessType)?"N":"Y",null,1,actionId,version,
+            "LEAD_ASSIGNED_RULE","Lead assigned rule");}
     private com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand toggle(String actionId,int version)
     {return new com.law.todo.application.command.TodoManagementCommands.TriggerToggleCommand("Y",actionId,version);}
     private Map<String,Object> binding(String templateStatus,Long versionTemplateId,String versionStatus,String condition,int version)
@@ -576,9 +636,11 @@ class TodoTemplateServiceTest
         row.put("trigger_version",version);row.put("template_status",templateStatus);row.put("version_template_id",versionTemplateId);row.put("version_status",versionStatus);return row;
     }
     private Map<String,Object> entrySlotBinding(long triggerRuleId,String enabled,int version,String versionStatus)
+    {return entrySlotBinding(triggerRuleId,enabled,version,versionStatus,triggerRuleId==52L?"TD-001":"LEAD_FIRST_CONTACT");}
+    private Map<String,Object> entrySlotBinding(long triggerRuleId,String enabled,int version,String versionStatus,String templateCode)
     {
         Map<String,Object> row=new HashMap<>();row.put("entry_slot_code","LEAD_FIRST_CONTACT_ENTRY");row.put("trigger_rule_id",triggerRuleId);
-        row.put("template_version_id",2L);row.put("template_code",triggerRuleId==52L?"TD-001":"LEAD_FIRST_CONTACT");
+        row.put("template_version_id",2L);row.put("template_code",templateCode);
         row.put("enabled",enabled);row.put("trigger_version",version);row.put("template_status","0");row.put("version_status",versionStatus);return row;
     }
     private Map<String,Object> templateBinding(Long templateId,String versionStatus,String templateStatus)
