@@ -81,7 +81,10 @@ public class LeadProgressCycleService
             boolean dodMaterialsValidated)
     {
         validateIdentity(command,todo);
-        BizLead lead=leads.selectLeadById(command.getLeadId());
+        // Global TD-004 lock order: authoritative lead -> progress fact -> schedule rows ->
+        // the outer Todo conditional transition/action. TodoCommandService only performs
+        // unlocked reads before this handler, so no fact/schedule/Todo lock may precede this row lock.
+        BizLead lead=leads.selectLeadForProgressCycleForUpdate(command.getLeadId());
         require(lead!=null,BusinessErrorCode.DATA_NOT_FOUND,"Lead does not exist");
         BusinessActor actor=actors.current();
         require(actor.administrator()||actor.userId().equals(lead.getOwnerId()),

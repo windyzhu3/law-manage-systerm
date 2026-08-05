@@ -117,7 +117,7 @@ function assertWorkflowFixtureFails(candidate, label) {
 }
 
 function verifyTriggerMetadataWorkflow(source, expectedBaseline) {
-  const createDatabaseStep = workflowStep(source, 'Create isolated Foundation and trigger metadata test databases')
+  const createDatabaseStep = workflowStep(source, 'Create isolated Foundation, trigger metadata and TD-001 test databases')
   const baselineStep = workflowStep(source, 'Initialize v0.15 baseline schemas in empty databases')
   const isolatedMigrationStep = workflowStep(source, 'Verify isolated trigger metadata migration upgrade')
   const sharedMigrationStep = workflowStep(source, 'Execute and verify all Flyway migrations')
@@ -128,8 +128,8 @@ function verifyTriggerMetadataWorkflow(source, expectedBaseline) {
       throw new Error('Trigger metadata workflow steps must be ordered: create database, baseline, isolated migration, shared migrations, report gate')
     }
   }
-  if (!baselineStep.text.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata; do')) {
-    throw new Error('Trigger metadata database must participate in the exact v0.15 baseline loop')
+  if (!baselineStep.text.includes('for database in law_v017 law_v017_foundation law_v017_trigger_metadata law_v017_lead_template; do')) {
+    throw new Error('Foundation, trigger metadata and TD-001 databases must participate in the exact v0.15 baseline loop')
   }
   if (!createDatabaseStep.text.includes('alter database law_v017 character set utf8mb4 collate utf8mb4_unicode_ci')) {
     throw new Error('CI must normalize the auto-created law_v017 database collation before importing the baseline')

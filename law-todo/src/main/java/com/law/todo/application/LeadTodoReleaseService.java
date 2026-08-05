@@ -134,8 +134,10 @@ public class LeadTodoReleaseService
             Long id=number(value(row,"version_id","versionId"));
             if(!CODES.contains(code)||!Objects.equals(requested.get(code),id)
                     ||!"LEAD".equals(text(value(row,"business_type","businessType")))
+                    ||!"0".equals(text(value(row,"template_status","templateStatus")))
                     ||!"PUBLISHED".equals(text(value(row,"version_status","versionStatus"))))
-                throw new TodoException("TODO_LEAD_RELEASE_VERSION_INVALID","Lead release requires exact published LEAD versions");
+                throw new TodoException("TODO_LEAD_RELEASE_VERSION_INVALID",
+                        "Lead release requires exact active published LEAD versions");
             if(result.put(code,row)!=null)
                 throw new TodoException("TODO_LEAD_RELEASE_VERSION_INVALID","Lead release version identity is ambiguous");
         }
@@ -267,29 +269,61 @@ public class LeadTodoReleaseService
             }
             if(td002Node==null||td001Nodes.size()<2)throw routingMismatch();
 
-            Set<String> reviewDecisions=new LinkedHashSet<>();
+            List<JSONObject> td002Outgoing=new java.util.ArrayList<>();
             for(Object raw:edges)
             {
-                if(!(raw instanceof JSONObject edge)||!td002Node.equals(edge.getString("from")))continue;
-                String to=edge.getString("to");
-                JSONObject target=byKey.get(to);
-                if(target!=null&&"DECISION".equals(target.getString("type")))reviewDecisions.add(to);
+                if(raw instanceof JSONObject edge&&td002Node.equals(edge.getString("from")))
+                    td002Outgoing.add(edge);
             }
-            int matching=0;
-            int returnEdges=0;
+            if(td002Outgoing.size()!=1)throw routingMismatch();
+            JSONObject td002Edge=td002Outgoing.get(0);
+            JSONObject reviewDecision=byKey.get(td002Edge.getString("to"));
+            if(reviewDecision==null||!"DECISION".equals(reviewDecision.getString("type"))
+                    ||td002Edge.getJSONObject("condition")!=null
+                    ||Boolean.TRUE.equals(td002Edge.getBoolean("default")))throw routingMismatch();
+
+            String reviewDecisionKey=reviewDecision.getString("key");
+            List<JSONObject> reviewOutgoing=new java.util.ArrayList<>();
             for(Object raw:edges)
             {
-                if(!(raw instanceof JSONObject edge)||!reviewDecisions.contains(edge.getString("from"))
-                        ||!td001Nodes.contains(edge.getString("to")))continue;
-                returnEdges++;
+                if(raw instanceof JSONObject edge&&reviewDecisionKey.equals(edge.getString("from")))
+                    reviewOutgoing.add(edge);
+            }
+            if(reviewOutgoing.size()!=3)throw routingMismatch();
+
+            int trueInvalid=0;
+            int misjudgedValid=0;
+            int defaults=0;
+            Integer defaultPriority=null;
+            List<Integer> conditionPriorities=new java.util.ArrayList<>();
+            for(JSONObject edge:reviewOutgoing)
+            {
+                JSONObject target=byKey.get(edge.getString("to"));
+                if(target==null)throw routingMismatch();
                 JSONObject condition=edge.getJSONObject("condition");
+                boolean defaultEdge=Boolean.TRUE.equals(edge.getBoolean("default"));
+                int priority=edge.getInteger("priority")==null?0:edge.getInteger("priority");
+                if(defaultEdge)
+                {
+                    if(condition!=null||!"END".equals(target.getString("type")))throw routingMismatch();
+                    defaults++;
+                    defaultPriority=priority;
+                    continue;
+                }
                 JSONObject expression=condition==null?null:condition.getJSONObject("$expression");
                 JSONObject predicate=expression==null?null:singlePredicate(expression.getJSONObject("root"));
-                if(predicate!=null&&"reviewResult".equals(predicate.getString("field"))
-                        &&"MISJUDGED_VALID".equals(predicate.getString("value"))
-                        &&"EQ".equals(predicate.getString("operator")))matching++;
+                if(predicate==null||!"reviewResult".equals(predicate.getString("field"))
+                        ||!"EQ".equals(predicate.getString("operator")))throw routingMismatch();
+                conditionPriorities.add(priority);
+                if("TRUE_INVALID".equals(predicate.getString("value"))
+                        &&"END".equals(target.getString("type")))trueInvalid++;
+                else if("MISJUDGED_VALID".equals(predicate.getString("value"))
+                        &&td001Nodes.contains(edge.getString("to")))misjudgedValid++;
+                else throw routingMismatch();
             }
-            if(returnEdges!=1||matching!=1)throw routingMismatch();
+            if(trueInvalid!=1||misjudgedValid!=1||defaults!=1||defaultPriority==null)throw routingMismatch();
+            for(Integer priority:conditionPriorities)
+                if(priority<=defaultPriority)throw routingMismatch();
         }
         catch(TodoException expected){throw expected;}
         catch(Exception invalid){throw routingMismatch();}

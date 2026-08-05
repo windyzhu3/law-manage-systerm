@@ -242,7 +242,8 @@ export default {
         joinMode: this.joinMode,
         outcomeSet: this.outcomeSet,
         routingTargets: this.filteredRoutingTargets,
-        businessType: this.businessType
+        businessType: this.businessType,
+        currentVersionId: this.currentVersionId
       })
     }
   },

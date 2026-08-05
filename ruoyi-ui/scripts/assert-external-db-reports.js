@@ -22,12 +22,15 @@ const requiredClasses = [
   'LeadTodoFlowEndToEndTest',
   'LeadTodoScheduleEndToEndTest',
   'LeadTodoReadModelExternalMysqlIT',
+  'LeadProgressCycleRuntimeMySqlTest',
   'LeadTodoReleaseVersionLockExternalMysqlIT',
   'LeadTodoGuidedConfigurationExternalMysqlIT'
 ]
 const exactTestCounts = new Map([
   ['LeadTodoFlowEndToEndTest', 7],
-  ['LeadTodoScheduleEndToEndTest', 4]
+  ['LeadTodoScheduleEndToEndTest', 4],
+  ['LeadProgressCycleRuntimeMySqlTest', 4],
+  ['LeadTodoReleaseVersionLockExternalMysqlIT', 3]
 ])
 
 function suiteAttributes(xml, className) {

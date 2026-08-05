@@ -28,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -73,7 +74,7 @@ class LeadProgressCycleServiceTest
         source=todo(7001L,88L);
         inserted=new AtomicReference<>();
         lenient().when(actors.current()).thenReturn(actor());
-        lenient().when(leads.selectLeadById(91L)).thenReturn(stored);
+        lenient().when(leads.selectLeadForProgressCycleForUpdate(91L)).thenReturn(stored);
         lenient().when(dictionaries.selectDictDataByType("law_lead_progress_type")).thenReturn(dict("PHONE"));
         lenient().when(todos.selectAttachmentTypes(7001L)).thenReturn(List.of("FOLLOWUP_PROOF"));
         lenient().when(policies.resolveProgressSchedule(stored)).thenReturn(
@@ -122,6 +123,26 @@ class LeadProgressCycleServiceTest
         assertEquals(7200,plan.getValue().windows().get(0).durationMinutes());
         assertEquals(11L,plan.getValue().assignmentPolicyId());
         assertEquals(2,plan.getValue().assignmentPolicyVersion());
+    }
+
+    @Test
+    void locksAndRevalidatesTheLeadBeforeAuthorizationPolicyFactsOrSchedules()
+    {
+        service.complete(command("PHONE",NOW),source);
+
+        InOrder order=org.mockito.Mockito.inOrder(leads,actors,dictionaries,todos,policies,schedules);
+        order.verify(leads).selectLeadForProgressCycleForUpdate(91L);
+        order.verify(actors).current();
+        order.verify(dictionaries).selectDictDataByType("law_lead_progress_type");
+        order.verify(todos).selectAttachmentTypes(7001L);
+        order.verify(leads).selectProgressFollowupByIdempotencyKey("LEAD_PROGRESS:7001");
+        order.verify(leads).insertProgressFollowupIfAbsent(any());
+        order.verify(leads,org.mockito.Mockito.times(2))
+                .selectProgressFollowupByIdempotencyKeyForUpdate("LEAD_PROGRESS:7001");
+        order.verify(policies).resolveProgressSchedule(stored);
+        order.verify(schedules).createPlan(any());
+        order.verify(leads).linkProgressFollowupSchedule(90L,81L,"alice");
+        verify(leads,never()).selectLeadById(any());
     }
 
     @Test

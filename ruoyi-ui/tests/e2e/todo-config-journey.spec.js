@@ -28,7 +28,7 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
     dodMaterials: [{ code: 'FOLLOWUP_PROOF', label: '实质进展凭证' }],
     routes: [
       { value: 'PROGRESS_RECORDED', label: '已记录实质进展', effect: '完成后开启下一轮5天待办',
-        targetCode: 'TD-004', targetVersionCode: null }
+        targetCode: 'TD-004', targetVersionCode: 'TD-004' }
     ],
     rawCodes: ['PROGRESS_RECORDED', 'FOLLOWUP_PROOF'],
     scenarios: 3,
@@ -684,7 +684,9 @@ function assertGuidedDodPersistence(fixture, metadata) {
 function assertGuidedRoutePersistence(fixture, metadata) {
   const bundle = loadPublishedLeadReleaseBundle()
   for (const route of metadata.routes) {
-    const expectedVersion = route.targetVersionCode ? bundle[route.targetVersionCode] : null
+    const expectedVersion = route.effect === '完成后开启下一轮5天待办'
+      ? fixture.versionId
+      : (route.targetVersionCode ? bundle[route.targetVersionCode] : null)
     expect(assertGuidedRouteTarget(fixture, route.value, route.label, route.targetCode, expectedVersion).effectKind)
       .toBe(route.effect === '生成下一待办' ? 'NEXT_TEMPLATE' : ({
         '结束当前路径': 'END',

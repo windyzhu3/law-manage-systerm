@@ -1729,6 +1729,47 @@ check('preserves the governed current task key when refreshing published route t
     outcome.resultValue === 'CONNECTED' && outcome.targetVersionId === 204))
 })
 
+check('preserves and validates the hidden governed TD-004 self target version', () => {
+  const outcomeSet = {
+    resultField: 'result',
+    resultFieldName: 'progress result',
+    recommendationCode: 'TD004_GOVERNED_OUTCOMES',
+    options: [
+      {
+        value: 'PROGRESS_RECORDED',
+        label: 'progress recorded',
+        effectKind: 'SCHEDULE_SELF',
+        targetTemplateCode: 'TD-004',
+        targetVersionId: 104
+      }
+    ]
+  }
+  const targets = [
+    { templateCode: 'TD-004', versionId: 204, businessType: 'LEAD', status: 'PUBLISHED' }
+  ]
+  const patch = steps.materializeOutcomeRouting(outcomeSet, targets, 304, { config: {} })
+  const outcome = patch.config.businessOutcomes[0]
+
+  assert.strictEqual(outcome.effectKind, 'SCHEDULE_SELF')
+  assert.strictEqual(outcome.targetTemplateCode, 'TD-004')
+  assert.strictEqual(outcome.targetVersionId, 304)
+  assert.strictEqual(steps.routingDraftBlocker([outcome], {
+    mode: 'SEQUENTIAL', outcomeSet, routingTargets: targets, businessType: 'LEAD', currentVersionId: 304
+  }), null)
+
+  assert.strictEqual(steps.routingDraftBlocker([{
+    ...outcome, targetVersionId: null
+  }], {
+    mode: 'SEQUENTIAL', outcomeSet, routingTargets: targets, businessType: 'LEAD', currentVersionId: 304
+  }).code, 'TODO_JOURNEY_ROUTING_TARGET_REQUIRED')
+
+  assert.strictEqual(steps.routingDraftBlocker([{
+    ...outcome, targetVersionId: 204
+  }], {
+    mode: 'SEQUENTIAL', outcomeSet, routingTargets: targets, businessType: 'LEAD', currentVersionId: 304
+  }).code, 'TODO_JOURNEY_ROUTING_TARGET_INVALID')
+})
+
 check('materializes the governed first-contact outcomes without free-text business results', () => {
   const outcomeSet = {
     resultField: 'contactResult',

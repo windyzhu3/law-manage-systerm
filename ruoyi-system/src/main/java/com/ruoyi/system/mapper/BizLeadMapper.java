@@ -13,6 +13,7 @@ public interface BizLeadMapper
 {
     public List<BizLead> selectLeadList(BizLead lead);
     public BizLead selectLeadById(Long leadId);
+    public BizLead selectLeadForProgressCycleForUpdate(Long leadId);
     public int insertLead(BizLead lead);
     public int insertSourceBusinessTagIfAbsent(@Param("sourceCode") String sourceCode,
             @Param("createBy") String createBy);

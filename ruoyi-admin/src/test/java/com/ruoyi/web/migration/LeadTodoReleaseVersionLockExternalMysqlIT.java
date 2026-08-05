@@ -3,6 +3,7 @@ package com.ruoyi.web.migration;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,6 +42,7 @@ import com.law.todo.application.TodoTemplateService;
 import com.law.todo.application.TodoTemplateService.EntrySlotBinding;
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.command.TodoConfigurationCommands.LeadReleaseCommand;
+import com.law.todo.application.command.TodoConfigurationCommands.LeadReleaseReadinessQuery;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoConfigurationMapper;
 
@@ -173,6 +175,55 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
         }
     }
 
+    @Test
+    void inactiveDownstreamTemplatesBlockReadinessAndActivationUntilReactivated() throws Exception
+    {
+        Database database=database();
+        try
+        {
+            DataSource dataSource=database.dataSource();
+            createTablesAndFixtures(dataSource);
+            SqlSessionFactory sessions=sessions(dataSource);
+            TodoTemplateService templates=mock(TodoTemplateService.class);
+
+            for(String code:new String[]{"TD-002","TD-003","TD-004"})
+            {
+                assertEquals(1,updateTemplateStatus(dataSource,code,"1"));
+                try(SqlSession session=sessions.openSession(false))
+                {
+                    LeadTodoReleaseService service=new LeadTodoReleaseService(
+                            session.getMapper(TodoConfigurationMapper.class),templates);
+                    TodoException readiness=assertThrows(TodoException.class,()->service.readiness(
+                            new LeadReleaseReadinessQuery(88L,"hash-88",80L,89L,79L)));
+                    assertEquals("TODO_LEAD_RELEASE_VERSION_INVALID",readiness.getBusinessCode());
+                    TodoException activation=assertThrows(TodoException.class,
+                            ()->service.activate(COMMAND,ACTOR));
+                    assertEquals("TODO_LEAD_RELEASE_VERSION_INVALID",activation.getBusinessCode());
+                    session.rollback();
+                }
+                verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),any());
+                assertEquals(1,updateTemplateStatus(dataSource,code,"0"));
+            }
+
+            when(templates.switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR))
+                    .thenReturn(new EntrySlotBinding("LEAD_FIRST_CONTACT_ENTRY",52L,88L,"TD-001"));
+            try(SqlSession session=sessions.openSession(false))
+            {
+                LeadTodoReleaseService service=new LeadTodoReleaseService(
+                        session.getMapper(TodoConfigurationMapper.class),templates);
+                assertTrue(service.readiness(new LeadReleaseReadinessQuery(
+                        88L,"hash-88",80L,89L,79L)).activationReady());
+                assertEquals(88L,service.activate(COMMAND,ACTOR).activeTd001VersionId());
+                session.commit();
+            }
+            assertEquals("APPLIED",actionStatus(dataSource,COMMAND.actionId()));
+        }
+        finally
+        {
+            database.close();
+        }
+    }
+
     private static SqlSessionFactory sessions(DataSource dataSource) throws Exception
     {
         Configuration configuration=new Configuration(new Environment("lead-release-lock-it",
@@ -244,14 +295,41 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
                       (101,'TD-001','TD-001','LEAD','0'),(102,'TD-002','TD-002','LEAD','0'),
                       (103,'TD-003','TD-003','LEAD','0'),(104,'TD-004','TD-004','LEAD','0')
                     """);
-            String compiled="""
-                    {"routing":{"config":{"businessOutcomes":[
+            String compiledTd001="""
+                    {"templateCode":"TD-001","routing":{"config":{"businessOutcomes":[
                       {"targetTemplateCode":"TD-002","targetVersionId":80},
                       {"targetTemplateCode":"TD-003","targetVersionId":89},
-                      {"targetTemplateCode":"TD-004","targetVersionId":79}],"nodes":[
-                      {"type":"TASK","templateCode":"TD-001","templateVersionId":88},
-                      {"type":"TASK","templateCode":"TD-002","templateVersionId":80},
+                      {"targetTemplateCode":"TD-004","targetVersionId":79}],"start":"td001","nodes":[
+                      {"key":"td001","type":"TASK","templateCode":"TD-001","templateVersionId":88},
+                      {"key":"firstResult","type":"DECISION"},
+                      {"key":"td002","type":"TASK","templateCode":"TD-002","templateVersionId":80},
+                      {"key":"reviewResult","type":"DECISION"},
+                      {"key":"td004","type":"TASK","templateCode":"TD-004","templateVersionId":79},
+                      {"key":"reopenedTd001","type":"TASK","templateCode":"TD-001","templateVersionId":88},
+                      {"key":"end","type":"END"}],"edges":[
+                      {"key":"td001-result","from":"td001","to":"firstResult","priority":0},
+                      {"key":"first-suspect","from":"firstResult","to":"td002","priority":20},
+                      {"key":"td002-result","from":"td002","to":"reviewResult","priority":0},
+                      {"key":"review-invalid","from":"reviewResult","to":"end","priority":20,
+                       "condition":{"$expression":{"version":1,"root":{"type":"AND","conditions":[
+                         {"field":"reviewResult","operator":"EQ","value":"TRUE_INVALID"}]}}}},
+                      {"key":"review-reopen","from":"reviewResult","to":"reopenedTd001","priority":10,
+                       "condition":{"$expression":{"version":1,"root":{"type":"AND","conditions":[
+                         {"field":"reviewResult","operator":"EQ","value":"MISJUDGED_VALID"}]}}}},
+                      {"key":"review-default","from":"reviewResult","to":"end","priority":-1,"default":true},
+                      {"key":"reopened-end","from":"reopenedTd001","to":"end","priority":0}]}}}
+                    """;
+            String compiledTd003="""
+                    {"templateCode":"TD-003","routing":{"config":{"businessOutcomes":[
+                      {"value":"CONNECTED","effectKind":"NEXT_TEMPLATE",
+                       "targetTemplateCode":"TD-004","targetVersionId":79}],"nodes":[
                       {"type":"TASK","templateCode":"TD-003","templateVersionId":89},
+                      {"type":"TASK","templateCode":"TD-004","templateVersionId":79}]}}}
+                    """;
+            String compiledTd004="""
+                    {"templateCode":"TD-004","routing":{"config":{"businessOutcomes":[
+                      {"value":"PROGRESS_RECORDED","effectKind":"SCHEDULE_SELF",
+                       "targetTemplateCode":"TD-004","targetVersionId":79}],"nodes":[
                       {"type":"TASK","templateCode":"TD-004","templateVersionId":79}]}}}
                     """;
             try(PreparedStatement insert=connection.prepareStatement("""
@@ -260,10 +338,10 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
                     values(?,?,?,?,?,json_object('event',json_object('eventType','LEAD_ASSIGNED','payloadVersion',1)),cast(? as json))
                     """))
             {
-                insertVersion(insert,88L,5,101L,"hash-88",compiled);
+                insertVersion(insert,88L,5,101L,"hash-88",compiledTd001);
                 insertVersion(insert,80L,4,102L,"hash-80",null);
-                insertVersion(insert,89L,6,103L,"hash-89",null);
-                insertVersion(insert,79L,3,104L,"hash-79",null);
+                insertVersion(insert,89L,6,103L,"hash-89",compiledTd003);
+                insertVersion(insert,79L,3,104L,"hash-79",compiledTd004);
             }
             statement.executeUpdate("""
                     insert into todo_trigger_rule(
@@ -309,6 +387,17 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
         {
             connection.createStatement().execute("set session innodb_lock_wait_timeout=10");
             statement.setString(1,status);statement.setLong(2,versionId);
+            return statement.executeUpdate();
+        }
+    }
+
+    private static int updateTemplateStatus(DataSource dataSource,String code,String status) throws Exception
+    {
+        try(Connection connection=dataSource.getConnection();
+                PreparedStatement statement=connection.prepareStatement(
+                        "update todo_template set status=? where template_code=?"))
+        {
+            statement.setString(1,status);statement.setString(2,code);
             return statement.executeUpdate();
         }
     }

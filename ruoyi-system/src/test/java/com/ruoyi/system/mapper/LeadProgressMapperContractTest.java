@@ -9,6 +9,20 @@ import org.junit.jupiter.api.Test;
 class LeadProgressMapperContractTest
 {
     @Test
+    void progressCompletionLocksTheAuthoritativeLeadRow()
+            throws Exception
+    {
+        String xml=new String(getClass().getResourceAsStream(
+                "/mapper/system/BizLeadMapper.xml").readAllBytes(),StandardCharsets.UTF_8);
+
+        String statement=statement(xml,"selectLeadForProgressCycleForUpdate")
+                .toLowerCase().replaceAll("\\s+"," ");
+        assertTrue(statement.contains("where l.lead_id = #{leadid}"));
+        assertTrue(statement.contains("and l.del_flag = '0'"));
+        assertTrue(statement.contains("for update"));
+    }
+
+    @Test
     void progressFactReadbackUsesAnExplicitDomainProjection()
             throws Exception
     {

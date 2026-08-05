@@ -24,6 +24,7 @@ const classes = [
   'LeadTodoFlowEndToEndTest',
   'LeadTodoScheduleEndToEndTest',
   'LeadTodoReadModelExternalMysqlIT',
+  'LeadProgressCycleRuntimeMySqlTest',
   'LeadTodoReleaseVersionLockExternalMysqlIT',
   'LeadTodoGuidedConfigurationExternalMysqlIT'
 ]
@@ -42,6 +43,8 @@ try {
   classes.forEach(className => writeReport(className))
   writeReport('LeadTodoFlowEndToEndTest', { tests: 7 })
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
+  writeReport('LeadProgressCycleRuntimeMySqlTest', { tests: 4 })
+  writeReport('LeadTodoReleaseVersionLockExternalMysqlIT', { tests: 3 })
   requirePass('complete reports')
 
   for (const className of ['LeadTodoFlowEndToEndTest', 'LeadTodoScheduleEndToEndTest']) {

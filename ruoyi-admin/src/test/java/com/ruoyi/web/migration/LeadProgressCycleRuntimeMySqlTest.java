@@ -1,8 +1,10 @@
 package com.ruoyi.web.migration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -19,10 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.sql.DataSource;
@@ -50,6 +54,7 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService;
 import com.ruoyi.common.core.domain.entity.SysDictData;
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
 import com.ruoyi.system.domain.BizLeadFollowup;
 import com.ruoyi.system.domain.BizLeadSetting;
@@ -65,9 +70,8 @@ class LeadProgressCycleRuntimeMySqlTest
     {
         try(Harness harness=new Harness("concurrent"))
         {
-            CyclicBarrier absentReads=new CyclicBarrier(2);
             AtomicInteger reads=new AtomicInteger();
-            BizLeadMapper fenced=harness.leadPort(absentReads,reads,false);
+            BizLeadMapper fenced=harness.leadPort(null,reads,false);
             LeadProgressCycleService service=harness.service(fenced,harness.schedules);
             LocalDateTime progressAt=LocalDateTime.now().minusMinutes(1).withNano(0);
 
@@ -87,6 +91,29 @@ class LeadProgressCycleRuntimeMySqlTest
                     +"where plan.idempotency_key='LEAD_PROGRESS_5D:91:7001'"));
             assertEquals(0,harness.count("select count(*) from biz_lead_followup "
                     +"where idempotency_key='LEAD_PROGRESS:7001' and schedule_plan_id is null"));
+        }
+    }
+
+    @Test
+    void committedReassignmentWinsTheLeadLockAndRejectsStaleOwnerCompletion() throws Exception
+    {
+        try(Harness harness=new Harness("reassign"))
+        {
+            harness.assertMutationWinsBeforeCompletion(
+                    "update biz_lead set owner_id=9,row_version=row_version+1 where lead_id=91",
+                    "ACCESS_DENIED");
+        }
+    }
+
+    @Test
+    void committedPoolTransitionWinsTheLeadLockAndRejectsStaleStateCompletion() throws Exception
+    {
+        try(Harness harness=new Harness("pool"))
+        {
+            harness.assertMutationWinsBeforeCompletion(
+                    "update biz_lead set pool_status='1',disposition='PUBLIC_POOL',"+
+                            "row_version=row_version+1 where lead_id=91",
+                    "STATE_CONFLICT");
         }
     }
 
@@ -173,7 +200,6 @@ class LeadProgressCycleRuntimeMySqlTest
         {
             return (BizLeadMapper)Proxy.newProxyInstance(BizLeadMapper.class.getClassLoader(),
                     new Class<?>[]{BizLeadMapper.class},(proxy,method,args)->{
-                        if("selectLeadById".equals(method.getName()))return lead();
                         if("linkProgressFollowupSchedule".equals(method.getName())&&failLink)return 0;
                         try
                         {
@@ -185,6 +211,44 @@ class LeadProgressCycleRuntimeMySqlTest
                         }
                         catch(InvocationTargetException wrapped){throw wrapped.getCause();}
                     });
+        }
+
+        private void assertMutationWinsBeforeCompletion(String mutationSql,String expectedCode)
+                throws Exception
+        {
+            LeadProgressCycleService service=service(
+                    leadPort(null,new AtomicInteger(),false),schedules);
+            CountDownLatch completionStarted=new CountDownLatch(1);
+            try(Connection mutation=DriverManager.getConnection(url,user,password);
+                Statement statement=mutation.createStatement())
+            {
+                mutation.setAutoCommit(false);
+                mutation.setTransactionIsolation(Connection.TRANSACTION_REPEATABLE_READ);
+                assertEquals(1,statement.executeUpdate(mutationSql));
+
+                Future<Outcome> completion=workers.submit(()->{
+                    completionStarted.countDown();
+                    return outcome(service,LocalDateTime.now().minusMinutes(1).withNano(0));
+                });
+                assertTrue(completionStarted.await(5,TimeUnit.SECONDS));
+                assertThrows(TimeoutException.class,()->completion.get(300,TimeUnit.MILLISECONDS),
+                        "Completion must wait on the authoritative lead row lock");
+
+                mutation.commit();
+                Outcome outcome=completion.get(10,TimeUnit.SECONDS);
+                assertNull(outcome.value());
+                ServiceException failure=assertInstanceOf(ServiceException.class,outcome.failure());
+                assertEquals(expectedCode,failure.getBusinessCode());
+            }
+            assertNoProgressWrites();
+        }
+
+        private void assertNoProgressWrites() throws Exception
+        {
+            assertEquals(0,count("select count(*) from biz_lead_followup"));
+            assertEquals(0,count("select count(*) from todo_schedule_plan"));
+            assertEquals(0,count("select count(*) from todo_schedule_window"));
+            assertEquals(0,count("select count(*) from todo_instance"));
         }
 
         private List<Outcome> completeConcurrently(LeadProgressCycleService service,
@@ -263,6 +327,15 @@ class LeadProgressCycleRuntimeMySqlTest
             Statement statement=connection.createStatement())
         {
             statement.execute("""
+                    create table biz_lead(
+                      lead_id bigint not null,lead_no varchar(64) not null,status varchar(20) not null,
+                      del_flag char(1) not null,pool_status char(1) not null,
+                      disposition varchar(32) not null,owner_id bigint null,dept_id bigint null,
+                      source_code varchar(64) null,row_version int not null default 0,
+                      primary key(lead_id)
+                    ) engine=innodb default charset=utf8mb4 collate=utf8mb4_unicode_ci
+                    """);
+            statement.execute("""
                     create table biz_lead_followup(
                       followup_id bigint not null auto_increment,lead_id bigint not null,
                       follow_type varchar(30) default 'phone',follow_result varchar(60) default '',
@@ -301,6 +374,13 @@ class LeadProgressCycleRuntimeMySqlTest
                       attachment_type varchar(64) not null,primary key(attachment_id))
                     """);
             statement.execute("""
+                    create table todo_instance(
+                      todo_id bigint not null auto_increment,previous_todo_id bigint null,
+                      template_code varchar(64) not null,business_id bigint not null,
+                      primary key(todo_id)
+                    ) engine=innodb
+                    """);
+            statement.execute("""
                     create table todo_schedule_plan(
                       plan_id bigint not null auto_increment,previous_todo_id bigint not null,
                       template_version_id bigint not null,business_type varchar(64) not null,
@@ -328,6 +408,8 @@ class LeadProgressCycleRuntimeMySqlTest
                       constraint fk_progress_window_plan foreign key(plan_id)
                         references todo_schedule_plan(plan_id)) engine=innodb
                     """);
+            statement.executeUpdate("insert into biz_lead values("+
+                    "91,'L-91','2','0','0','ACTIVE',8,3,'WEB',0)");
             statement.executeUpdate("insert into todo_template values(10,'TD-004','Progress','LEAD',1,'0')");
             statement.executeUpdate("insert into todo_template_version values(88,10,1,'PUBLISHED')");
             statement.executeUpdate("insert into todo_prd_definition_catalog values("+

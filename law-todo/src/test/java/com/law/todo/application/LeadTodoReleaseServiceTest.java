@@ -158,6 +158,33 @@ class LeadTodoReleaseServiceTest
         verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
+    @Test void releaseReadinessRejectsAnInactiveSelectedTemplate()
+    {
+        List<Map<String,Object>> rows=versions();
+        rows.get(1).put("template_status","1");
+        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.readiness(
+                new LeadReleaseReadinessQuery(88L,"hash-88",80L,89L,79L)))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_VERSION_INVALID"));
+        verify(mapper,never()).selectSimulationReadinessBatch(any());
+    }
+
+    @Test void activationRejectsAnInactiveSelectedTemplateBeforeEvidenceOrSwitch()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        rows.get(3).put("template_status","1");
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_VERSION_INVALID"));
+        verify(mapper,never()).selectSimulationReadinessBatch(any());
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
     @Test void rejectsTd001GraphPointingToLegacyOrDifferentDownstreamVersion()
     {
         arrangeReadyRelease();
@@ -252,6 +279,46 @@ class LeadTodoReleaseServiceTest
                 Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
                 .replace("{\"to\":\"end\",\"key\":\"reopened-end\"",additionalWrongReturn+
                         "{\"to\":\"end\",\"key\":\"reopened-end\"");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",ambiguous,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
+    @Test void rejectsMasterGraphWhenAHigherPriorityDirectEdgeBypassesTd002ReviewDecision()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String directBypass="{\"to\":\"end\",\"key\":\"td002-direct-bypass\","+
+                "\"from\":\"td002\",\"priority\":100},";
+        String ambiguous=compiledWithReopenedTd001(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
+                .replace("{\"to\":\"reviewResult\",\"key\":\"td002-result\"",
+                        directBypass+"{\"to\":\"reviewResult\",\"key\":\"td002-result\"");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",ambiguous,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
+    @Test void rejectsMasterGraphWhenTd002ReviewDecisionHasAnAdditionalBranch()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String extraBranch="{\"to\":\"end\",\"key\":\"review-extra\",\"from\":\"reviewResult\","+
+                "\"priority\":15,\"condition\":{\"$expression\":{\"root\":{\"type\":\"AND\","+
+                "\"conditions\":[{\"field\":\"reviewResult\",\"value\":\"SUSPECT_INVALID\","+
+                "\"operator\":\"EQ\"}]},\"version\":1}}},";
+        String ambiguous=compiledWithReopenedTd001(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
+                .replace("{\"to\":\"end\",\"key\":\"review-default\"",
+                        extraBranch+"{\"to\":\"end\",\"key\":\"review-default\"");
         rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",ambiguous,5));
         when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
 
@@ -444,10 +511,16 @@ class LeadTodoReleaseServiceTest
                 +"{\"to\":\"firstResult\",\"key\":\"td001-result\",\"from\":\"td001\",\"priority\":0},"
                 +"{\"to\":\"td002\",\"key\":\"first-suspect\",\"from\":\"firstResult\",\"priority\":20},"
                 +"{\"to\":\"reviewResult\",\"key\":\"td002-result\",\"from\":\"td002\",\"priority\":0},"
+                +"{\"to\":\"end\",\"key\":\"review-invalid\",\"from\":\"reviewResult\","
+                +"\"priority\":20,\"condition\":{\"$expression\":{\"root\":{\"type\":\"AND\","
+                +"\"conditions\":[{\"field\":\"reviewResult\",\"value\":\"TRUE_INVALID\","
+                +"\"operator\":\"EQ\"}]},\"version\":1}}},"
                 +"{\"to\":\"reopenedTd001\",\"key\":\"review-reopen\",\"from\":\"reviewResult\","
                 +"\"priority\":10,\"condition\":{\"$expression\":{\"root\":{\"type\":\"AND\","
                 +"\"conditions\":[{\"field\":\"reviewResult\",\"value\":\"MISJUDGED_VALID\","
                 +"\"operator\":\"EQ\"}]},\"version\":1}}},"
+                +"{\"to\":\"end\",\"key\":\"review-default\",\"from\":\"reviewResult\","
+                +"\"priority\":-1,\"default\":true},"
                 +"{\"to\":\"end\",\"key\":\"reopened-end\",\"from\":\"reopenedTd001\",\"priority\":0}]}}}";
     }
     private String compiled(Map<String,Long> targets,Map<String,Long> nodeTargets)

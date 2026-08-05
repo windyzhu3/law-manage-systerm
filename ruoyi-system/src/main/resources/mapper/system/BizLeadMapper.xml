@@ -189,6 +189,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         where l.lead_id = #{leadId}
     </select>
 
+    <select id="selectLeadForProgressCycleForUpdate" parameterType="Long" resultMap="BizLeadResult">
+        select l.*
+        from biz_lead l
+        where l.lead_id = #{leadId}
+          and l.del_flag = '0'
+        for update
+    </select>
+
     <insert id="insertLead" parameterType="BizLead" useGeneratedKeys="true" keyProperty="leadId">
         insert into biz_lead (
             lead_no, lead_name, contact_name, mobile, wechat, company_name, source_code,

@@ -1089,15 +1089,21 @@ function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, curren
   const options = list(catalog.options)
   const outcomes = options.map((option, index) => {
     const value = String(option.value || '')
-    const target = routingTargets.find(item =>
-      Number(item.versionId || item.version_id) === Number(option.targetVersionId) ||
-      String(item.templateCode || item.template_code || '') === String(option.targetTemplateCode || '')
-    )
-    const targetVersionId = target
-      ? Number(target.versionId || target.version_id)
-      : Number(option.targetVersionId) || null
-    const resultLabel = String(option.label || value)
     const kind = effectKind(option)
+    const configuredTargetCode = String(option.targetTemplateCode || '')
+    const target = configuredTargetCode
+      ? routingTargets.find(item =>
+        String(item.templateCode || item.template_code || '') === configuredTargetCode)
+      : routingTargets.find(item =>
+        Number(item.versionId || item.version_id) === Number(option.targetVersionId))
+    const targetVersionId = kind === 'SCHEDULE_SELF'
+      ? Number(currentVersionId) || null
+      : (target
+          ? Number(target.versionId || target.version_id)
+          : Number(option.targetVersionId) || null)
+    const targetTemplateCode = configuredTargetCode ||
+      String(target && (target.templateCode || target.template_code) || '') || null
+    const resultLabel = String(option.label || value)
     return {
       id: routeKey(`${resultField}_${value}`, index),
       label: `当${resultFieldName}为${resultLabel}时`,
@@ -1106,10 +1112,8 @@ function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, curren
       resultLabel,
       effectKind: kind,
       resultType: kind === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
-      targetVersionId: kind === 'NEXT_TEMPLATE' ? targetVersionId : null,
-      targetTemplateCode: kind === 'NEXT_TEMPLATE'
-        ? option.targetTemplateCode || (target && (target.templateCode || target.template_code)) || null
-        : option.targetTemplateCode || null,
+      targetVersionId: kind === 'NEXT_TEMPLATE' || targetTemplateCode ? targetVersionId : null,
+      targetTemplateCode,
       default: index === options.length - 1,
       condition: literalCondition(resultField, value)
     }
@@ -1269,7 +1273,13 @@ function routingDraftBlocker(rows, options) {
   const outcomes = list(rows).map(normalizedOutcome)
   const settings = object(options)
   const mode = String(settings.mode || 'SEQUENTIAL').toUpperCase()
-  if (outcomes.some(row => row.effectKind === 'NEXT_TEMPLATE' && !row.targetVersionId)) {
+  const outcomeSet = object(settings.outcomeSet)
+  const governedOptions = list(outcomeSet.options)
+  const governedOption = row => governedOptions.find(option =>
+    String(option.value || '') === String(row.resultValue || ''))
+  const requiresTarget = row => row.effectKind === 'NEXT_TEMPLATE' ||
+    Boolean(governedOption(row) && governedOption(row).targetTemplateCode)
+  if (outcomes.some(row => requiresTarget(row) && !row.targetVersionId)) {
     return {
       code: 'TODO_JOURNEY_ROUTING_TARGET_REQUIRED',
       severity: 'BLOCKER',
@@ -1283,7 +1293,6 @@ function routingDraftBlocker(rows, options) {
       message: '并行办理至少需要两个有效的后续待办'
     }
   }
-  const outcomeSet = object(settings.outcomeSet)
   if (mode === 'SEQUENTIAL' && outcomeSet.resultField && list(outcomeSet.options).length) {
     const expected = list(outcomeSet.options).map(option => String(option.value))
     const actual = outcomes.map(row => String(row.resultValue || ''))
@@ -1312,12 +1321,21 @@ function routingDraftBlocker(rows, options) {
     const targets = routeTargetsFor(settings.businessType, list(settings.routingTargets))
     const businessType = String(settings.businessType || '')
     const invalidTarget = outcomes.find(row => {
-      if (row.effectKind !== 'NEXT_TEMPLATE') return false
-      const target = targets.find(item =>
-        Number(item.versionId || item.version_id) === Number(row.targetVersionId)
-      )
+      const option = governedOption(row)
+      const expectedCode = String(option && option.targetTemplateCode || '')
+      if (!expectedCode && row.effectKind !== 'NEXT_TEMPLATE') return false
+      if (row.effectKind === 'SCHEDULE_SELF') {
+        return !Number(settings.currentVersionId) ||
+          String(row.targetTemplateCode || '') !== expectedCode ||
+          Number(row.targetVersionId) !== Number(settings.currentVersionId)
+      }
+      const target = expectedCode
+        ? targets.find(item => String(item.templateCode || item.template_code || '') === expectedCode)
+        : targets.find(item => Number(item.versionId || item.version_id) === Number(row.targetVersionId))
       return !target || String(target.status || '').toUpperCase() !== 'PUBLISHED' ||
-        (businessType && String(target.businessType || target.business_type || '') !== businessType)
+        (businessType && String(target.businessType || target.business_type || '') !== businessType) ||
+        (expectedCode && String(row.targetTemplateCode || '') !== expectedCode) ||
+        Number(target.versionId || target.version_id) !== Number(row.targetVersionId)
     })
     if (invalidTarget) {
       return {
