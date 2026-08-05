@@ -65,3 +65,46 @@
 - [x] Confirm both run directories coexist, no database or listeners remain, and no service survives.
 - [x] Document fresh reproduction, both ignored bundle paths/run IDs and exact numeric exits.
 - [x] Run final parser, validation, ownership, Node contracts and `git diff --check`; commit only intended source and documentation.
+
+### Task 4: Review round 1 ancestry and orphan safety
+
+**Files:**
+- Modify: `scripts/run-lead-todo-guided-acceptance.ps1`
+- Modify: `ruoyi-ui/scripts/check-lead-todo-guided-acceptance-harness.js`
+
+- [x] Add RED fixtures for stale child chronology, multi-level chronology,
+  missing authorization metadata, a captured surviving orphan and an
+  uncaptured orphan.
+- [x] Require every ancestry edge to satisfy child creation time greater than
+  or equal to its current parent, and require nonblank identity/signature data.
+- [x] Capture immutable descendant identities while registered launchers run;
+  clean captured identities even after their root exits or they are reparented.
+
+### Task 5: Review round 1 atomic run lease and explicit E2E path
+
+**Files:**
+- Modify: `scripts/run-lead-todo-guided-acceptance.ps1`
+- Modify: `ruoyi-ui/tests/e2e/support/guided-artifact-directory.js`
+- Modify: `ruoyi-ui/tests/e2e/support/guided-artifact-directory.test.js`
+- Modify: `.github/workflows/ci.yml`
+
+- [x] Add RED tests for missing/shared/nested artifact paths and a duplicate
+  run whose existing temporary fingerprint must remain unchanged.
+- [x] Acquire a persistent `CreateNew` claim before creating a run directory;
+  gate all cleanup and manifest writes on ownership.
+- [x] Require an explicit exact `governed-root/runs/<safeRunId>` artifact path
+  and provide it in the harness and CI.
+
+### Task 6: Review round 1 fresh lifecycle proof
+
+**Files:**
+- Modify: `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`
+- Modify: `docs/superpowers/reports/2026-07-31-lead-todo-guided-configuration-acceptance.md`
+- Modify: `docs/superpowers/reports/2026-08-06-lead-todo-final-review-round-two.md`
+
+- [x] Run parser, ownership/lease self-tests, no-mutation validation, unsafe
+  input tests, Node contracts and CI source contracts.
+- [x] Preserve a new controlled post-bind failure bundle whose cleanup stages
+  are all 0, then a separate final-code Chrome 2/2 success bundle.
+- [x] Prove both schemas, both listeners and all recorded identities absent;
+  update documentation and commit only owned source/docs.

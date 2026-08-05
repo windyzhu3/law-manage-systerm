@@ -22,10 +22,15 @@ harness is intended for release evidence, not for development data.
   `CreationDate`, name, executable path and command line immediately after
   `Start-Process` and before any wait. A PowerShell 5.1-compatible
   `Win32_Process` snapshot accepts a root only when it was created after the
-  run began and its immutable identity still matches. Descendants must also be
-  newer than the run. Cleanup rereads each identity immediately before
-  stopping it deepest-first. A missing PID is already stopped; a reused PID is
-  refused and never killed.
+  run began and its immutable identity still matches. Every parent-child edge
+  must satisfy child creation time greater than or equal to the current parent,
+  and every accepted identity requires nonblank name, executable path, command
+  line and authorization signature. Descendants are captured continuously
+  while a registered launcher runs. Cleanup may therefore stop an already
+  captured child after its launcher exits or Windows reparents it, but it never
+  authorizes a previously uncaptured orphan. Cleanup rereads each identity
+  immediately before stopping it deepest-first. A missing PID is already
+  stopped; a reused PID is refused and never killed.
 - Both the configured backend and frontend ports must be unused before the
   run. Final durable evidence records each port and requires both listener
   counts to be zero. A remaining unowned listener fails closed with
@@ -101,8 +106,11 @@ npm --prefix ruoyi-ui run test:guided-acceptance-harness
 
 Pass a unique, sanitized run ID for reproducible evidence naming. It accepts
 only 1-64 ASCII letters, digits, `_` or `-`. `-ValidateOnly` validates the ID
-and path without creating the directory. A normal run refuses an existing ID,
-so no previous success or failure can be overwritten:
+and path without creating the directory or claim. A normal run first acquires
+an OS-atomic `CreateNew` claim under `runs/.claims/<runId>.json`, then creates
+the run directory. The claim is retained with the evidence. An existing claim
+or concurrent claimant is refused before any run-directory or temporary-file
+mutation, so no previous success or failure can be overwritten:
 
 ```powershell
 $runId = 'release-20260806-001'
@@ -144,11 +152,14 @@ Each run writes to its own ignored directory:
 ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/<runId>/
 ```
 
-The harness sets `TODO_E2E_ARTIFACT_DIR` to that exact path. The Playwright
-spec normalizes it and rejects traversal, absolute external paths and sibling
-prefixes outside the governed output root. The per-run bundle includes:
+The harness and CI set `TODO_E2E_ARTIFACT_DIR` explicitly to that exact path.
+The Playwright spec has no shared-root fallback: it requires exactly the
+governed root followed by `runs/<safeRunId>` and rejects a missing value, the
+shared root, nested paths, traversal, external absolute paths and sibling
+prefixes. The per-run bundle includes:
 
 - `guided-lead-acceptance-manifest.json`
+- `run-claim.json` (matching the persistent `.claims/<runId>.json` lease)
 - `guided-lead-playwright-list.log`
 - `runtime-evidence.json` and `runtime-requery.log`
 - bootstrap, readiness, teardown and the backend/frontend listener proof
@@ -158,13 +169,34 @@ The manifest gives every stable stage ID its sanitized command, UTC/local
 start and end, numeric exit status, output path and non-secret details. These
 files are intentionally ignored by Git and must never be staged or committed.
 
-The harness creates only the selected new run and its private temporary child;
-it never deletes or mixes older run directories. CI may upload the parent
-`lead-todo-guided-configuration` root so every run remains independently
-inspectable.
+The harness creates and cleans only a run for which it owns the matching lease;
+it never deletes or mixes older run directories. Duplicate/concurrent attempts
+cannot change an existing bundle or its temporary fingerprint. CI may upload
+the parent `lead-todo-guided-configuration` root so every run remains
+independently inspectable.
 
 GitHub Actions retains the same directory in the
 `lead-todo-real-e2e-diagnostics` artifact. The broader configuration job also
 uploads `ruoyi-ui/output/playwright` as
 `todo-config-real-e2e-diagnostics`. CI additionally uploads
 `ruoyi-ui/test-results` for the Lead Todo job.
+
+## Review-round-1 reference proof (2026-08-06)
+
+The final safety contract was exercised with two separate retained run leases:
+
+- `20260806-r1-postbind-proof` intentionally exited 1 only at
+  `harness.test-only-failure-after-backend-bind`. Owned-process cleanup,
+  guarded fallback drop, independent schema-absence proof, both listener
+  absence checks and sanitized failure-log capture all exited 0.
+- `20260806-r1-guided-final4` exited 0 with all 32 stages at 0. Chrome passed
+  both governed tests in one invocation (`34.3s`, `49.5s`, `1.4m` total), and
+  the independent runtime row was
+  `10 COMPLETED 92 11 CREATED 92 10 1 1 1 1 432000`.
+
+Each `.claims/<runId>.json`, bundle `run-claim.json` and manifest contain the
+same run ID and lease token. The final run recorded two roots and 72 immutable
+identities across the backend and Playwright trees. After cleanup, every
+recorded identity was absent, both disposable schemas were absent, and ports
+8080 and 4173 had zero listeners. These ignored bundles are local diagnostic
+evidence and must not be committed.

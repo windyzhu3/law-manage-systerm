@@ -278,6 +278,7 @@ for (const required of [
   'serve-e2e-production.js',
   'password="$(openssl rand -hex 9)"',
   'TODO_E2E_REAL_BACKEND: true',
+  'TODO_E2E_ARTIFACT_DIR:',
   'TODO_E2E_DROP_DATABASE_AFTER: true',
   'todo-config-center.spec.js',
   'Reset dedicated Todo configuration Redis',

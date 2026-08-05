@@ -186,6 +186,7 @@ jobs:
       TODO_E2E_REAL_BACKEND: true
       TODO_E2E_DROP_DATABASE_AFTER: true
       TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}
+      TODO_E2E_ARTIFACT_DIR: ${{ github.workspace }}/ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/ci-${{ github.run_id }}-${{ github.run_attempt }}
       LOG_PATH: /tmp/ruoyi-logs
     steps:
       - uses: actions/checkout@v4

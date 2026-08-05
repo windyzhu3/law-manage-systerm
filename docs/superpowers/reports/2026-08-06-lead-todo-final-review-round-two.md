@@ -257,3 +257,45 @@ the exact runtime row `10 COMPLETED 92 -> 11 CREATED 92`, exact-once 1/1/1/1
 and 432000 seconds. Both disposable schemas and both test ports were absent
 afterward. These runtime bundles are reproducible diagnostics, not committed
 source; the updated runbook supplies the fresh-run commands.
+
+## Final-review round 1 corrective closure
+
+The follow-on implementation now closes the remaining safety review findings:
+
+- Every root and child requires exact creation identity plus nonblank name,
+  executable, command line and authorization signature. Each child creation
+  time must be at or after its current parent's creation time at every depth.
+- Backend and Playwright descendants are captured continuously, not only at
+  final cleanup. Captured orphans remain identity-authorized after root exit or
+  reparenting; uncaptured or stale/PID-reused processes are refused.
+- Run ownership is an OS-atomic persistent `CreateNew` claim made before bundle
+  creation. Duplicate/concurrent attempts cannot mutate an existing claim,
+  bundle or temporary fingerprint, and cleanup/manifest writes are lease-gated.
+- The E2E artifact directory is mandatory and must be exactly the governed
+  root plus `runs/<safeRunId>`. The shared root, nested directories, traversal,
+  siblings and outside absolute paths are rejected; CI supplies the explicit
+  per-run path.
+- Registered process-stage capture cannot leak objects into the single stage
+  result; a contract test guards the output stream after the final Chrome run
+  exposed and drove this fix.
+
+The controlled post-bind run `20260806-r1-postbind-proof` returned overall 1
+only at the injected failure stage. Process stop, guarded fallback drop,
+independent database absence, backend/frontend listener absence and sanitized
+failure evidence all returned 0. It captured three immutable backend-tree
+identities; cleanup stopped the two still live identities without a mismatch.
+
+The final-code run `20260806-r1-guided-final4` returned overall 0 with all 32
+stages at 0. It registered backend root PID 2248/application PID 35908 and
+Playwright root PID 8684, continuously recording 72 immutable identities. One
+Chrome invocation passed the governed pair 2/2 in 1.4 minutes (34.3 and 49.5
+seconds). Independent runtime proof remained:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Persistent and in-bundle claims match each manifest's run ID and lease token.
+Both disposable databases independently count 0, ports 8080 and 4173 have no
+listeners, and every captured PID is absent. The two ignored bundles coexist;
+no runtime evidence was staged.

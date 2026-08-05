@@ -309,3 +309,43 @@ Global teardown, schema-absence proof, owned process stop, backend/frontend
 listener absence and sanitized backend evidence all exited 0. The failure and
 success bundles coexist and are intentionally ignored; a fresh reproduction
 uses a new `-RunId` from the updated runbook and never overwrites either one.
+
+## Review round 1 safety closure - 2026-08-06
+
+The run lease is now independent of directory existence. The harness first
+creates `runs/.claims/<runId>.json` with OS `CreateNew`, retains that claim,
+and only then creates the bundle. A duplicate or concurrent attempt is refused
+without changing the prior claim, run directory or temporary fingerprint.
+Playwright also requires an explicit exact
+`lead-todo-guided-configuration/runs/<safeRunId>` artifact path; missing,
+shared-root and nested paths fail closed in both local and CI contracts.
+
+Process authorization now checks every ancestry edge chronologically and
+requires nonblank captured name, executable path, command line and expected
+signature. Descendants are captured continuously while backend and Playwright
+launchers run. An immutable captured child remains cleanup-authorized if its
+root exits or it is reparented, while an uncaptured orphan remains unauthorized.
+The process self-test proves stale-child and multi-level rejection, captured
+orphan authorization, uncaptured-orphan refusal, missing-metadata refusal,
+reused-PID refusal and stop-time identity mismatch refusal.
+
+The retained controlled failure is
+`runs/20260806-r1-postbind-proof/`. Its manifest status is `FAILED` only at
+`harness.test-only-failure-after-backend-bind` (exit 1); 26 other recorded
+stages passed, including owned-process stop, guarded fallback drop, independent
+schema absence, dual-port absence and sanitized backend failure evidence.
+
+The retained final proof is `runs/20260806-r1-guided-final4/`. All 32 stages
+exited 0. Backend launcher PID 2248 resolved application PID 35908; Playwright
+launcher PID 8684 was the second root. Continuous capture recorded 72 immutable
+identities. The one Chrome invocation passed exactly 2/2 in 1.4 minutes (34.3
+and 49.5 seconds). Independent MySQL requery returned:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Both run claims match their bundle claim and manifest lease token. After each
+run, every recorded identity was absent. Both disposable schemas were absent,
+and ports 8080 and 4173 had zero listeners. Runtime bundles remain ignored and
+were not committed.

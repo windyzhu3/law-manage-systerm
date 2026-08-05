@@ -6,8 +6,8 @@ const { resolveGuidedArtifactDirectory } = require('./guided-artifact-directory'
 
 const governedRoot = path.resolve('C:/fixture/output/playwright/lead-todo-guided-configuration')
 
-test('defaults guided evidence to the governed root', () => {
-  assert.equal(resolveGuidedArtifactDirectory(undefined, governedRoot), governedRoot)
+test('requires an explicit guided evidence directory', () => {
+  assert.throws(() => resolveGuidedArtifactDirectory(undefined, governedRoot), /TODO_E2E_ARTIFACT_DIR is required/)
 })
 
 test('accepts a normalized child run directory', () => {
@@ -17,13 +17,15 @@ test('accepts a normalized child run directory', () => {
 
 test('rejects traversal and sibling-prefix evidence paths', () => {
   for (const requested of [
+    governedRoot,
     path.join(governedRoot, '..', 'escaped'),
     `${governedRoot}-sibling`,
-    path.resolve('C:/fixture/outside')
+    path.resolve('C:/fixture/outside'),
+    path.join(governedRoot, 'runs', 'run-001', 'nested')
   ]) {
     assert.throws(
       () => resolveGuidedArtifactDirectory(requested, governedRoot),
-      /outside governed output root/
+      /exact governed runs(?:\/<safeRunId>)? directory|outside governed output root/
     )
   }
 })

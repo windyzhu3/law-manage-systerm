@@ -88,6 +88,9 @@ const processRegister = processStage.indexOf('Register-OwnedProcessRoot')
 const processWait = processStage.indexOf('WaitForExit')
 assert.ok(processStart >= 0 && processRegister > processStart && processWait > processRegister,
   'generic registered process stages must capture immutable ownership after Start-Process and before waiting')
+const registryCaptureLines = processStage.split(/\r?\n/).filter(line => line.includes('Update-OwnedProcessIdentityRegistry'))
+assert.ok(registryCaptureLines.length >= 2, 'registered process stages must capture descendants while waiting and after exit')
+registryCaptureLines.forEach(line => assert.match(line, /\|\s*Out-Null\s*\}\s*$/, 'registry capture must not pollute the single process-stage result'))
 assert.match(source, /browser\.guided-lead-2-of-2[\s\S]*RegisterOwnedRoot/, 'Playwright must opt into start-time root registration')
 
 const ownershipRun = runHarness(['-ProcessOwnershipSelfTest'])
@@ -99,6 +102,11 @@ assert.strictEqual(ownership.reusedPidRejected, true)
 assert.strictEqual(ownership.validDescendantAccepted, true)
 assert.strictEqual(ownership.unownedListenerRefused, true)
 assert.strictEqual(ownership.stopIdentityMismatchRefused, true)
+assert.strictEqual(ownership.staleChildRejected, true)
+assert.strictEqual(ownership.multiLevelChronologyEnforced, true)
+assert.strictEqual(ownership.capturedOrphanAuthorized, true)
+assert.strictEqual(ownership.uncapturedOrphanRejected, true)
+assert.strictEqual(ownership.missingMetadataRejected, true)
 
 const validationRunId = `contract-${process.pid}-${Date.now()}`
 const validationPath = path.join(root, 'ruoyi-ui', 'output', 'playwright', 'lead-todo-guided-configuration', 'runs', validationRunId)
@@ -116,6 +124,30 @@ for (const unsafeRunId of ['../escape', '..', 'bad\\path', 'bad/path']) {
 
 assert.match(source, /lead-todo-guided-configuration[\\\/]runs/, 'runtime evidence must be namespaced under runs/<runId>')
 assert.match(source, /TODO_E2E_ARTIFACT_DIR/, 'the harness must pass its isolated run directory to Playwright')
-assert.match(source, /Refusing to overwrite existing acceptance run/i, 'prior run bundles must never be overwritten')
+assert.match(source, /Refusing existing or concurrent acceptance run/i, 'prior run bundles must never be overwritten')
+assert.match(source, /FileMode\]::CreateNew/, 'run ownership must use an OS-atomic CreateNew claim')
+assert.match(source, /Update-OwnedProcessIdentityRegistry/, 'registered roots must continuously capture immutable descendants')
+assert.match(source, /ExpectedCommandSignature/, 'root authorization must require an expected command signature')
+
+const duplicateRunId = `duplicate-${process.pid}-${Date.now()}`
+const duplicateRunPath = path.join(root, 'ruoyi-ui', 'output', 'playwright', 'lead-todo-guided-configuration', 'runs', duplicateRunId)
+const duplicateClaimPath = path.join(root, 'ruoyi-ui', 'output', 'playwright', 'lead-todo-guided-configuration', 'runs', '.claims', `${duplicateRunId}.json`)
+const duplicateTempPath = path.join(duplicateRunPath, '.harness-temp')
+const fingerprintPath = path.join(duplicateTempPath, 'fingerprint.txt')
+try {
+  fs.mkdirSync(path.dirname(duplicateClaimPath), { recursive: true })
+  fs.mkdirSync(duplicateTempPath, { recursive: true })
+  fs.writeFileSync(duplicateClaimPath, '{"fixture":"pre-existing-claim"}\n', { flag: 'wx' })
+  fs.writeFileSync(fingerprintPath, 'immutable-existing-fingerprint\n', { flag: 'wx' })
+  const before = fs.readFileSync(fingerprintPath, 'utf8')
+  const duplicate = runHarness(['-RunId', duplicateRunId])
+  assert.notStrictEqual(duplicate.status, 0, 'duplicate run must fail closed')
+  assert.match(duplicate.output, /existing or concurrent acceptance run/i)
+  assert.strictEqual(fs.readFileSync(fingerprintPath, 'utf8'), before, 'duplicate run must not mutate the existing temp fingerprint')
+  assert.strictEqual(fs.readFileSync(duplicateClaimPath, 'utf8'), '{"fixture":"pre-existing-claim"}\n')
+} finally {
+  fs.rmSync(duplicateRunPath, { recursive: true, force: true })
+  fs.rmSync(duplicateClaimPath, { force: true })
+}
 
 console.log(`Verified guided Lead Todo acceptance harness contract (${requiredEnvironment.length} environment variables, ${baselines.length} baselines)`)
