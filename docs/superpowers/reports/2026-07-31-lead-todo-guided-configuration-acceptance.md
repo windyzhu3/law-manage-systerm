@@ -12,6 +12,8 @@ Review-round-2 final verified implementation head: `94c6688e7ec1e2cedb504956edcd
 
 Review-round-2 commit message: `fix(todo): close lead template review gaps`
 
+Final-review-round-1 verified implementation head: `f4d523c1b83fa10288da6db44a72b5112fbf4a53`
+
 Decision: **PASS**. The governed TD-001 through TD-004 configuration, simulation,
 publication, coordinated activation, runtime branching and five-day recurrence are ready as
 one verified flow.
@@ -40,7 +42,7 @@ skipped test.
 | TD-001 | 88 | 3/3 passed | `VALID -> TD-004 v92`; `SUSPECT_INVALID -> TD-002 v90`; `UNREACHABLE -> TD-003 v91` |
 | TD-002 | 90 | 3/3 passed | The selected TD-002 task reaches a decision and exactly one current-version TD-001 task for `reviewResult EQ MISJUDGED_VALID` |
 | TD-003 | 91 | 4/4 passed | `CONNECTED -> TD-004 v92`; retain/schedule/end branches remain governed |
-| TD-004 | 92 | 3/3 passed, including required-proof failure | `PROGRESS_RECORDED -> SCHEDULE_SELF TD-004`; the immutable self version may be implicit |
+| TD-004 | 92 | 3/3 passed, including required-proof failure | `PROGRESS_RECORDED -> SCHEDULE_SELF TD-004`; the guided editor persists the exact current immutable self version |
 
 All current-hash simulation evidence rows were `PASSED`. Repeated full-simulation evidence
 from deliberate reruns is append-only and does not replace the governed scenario evidence.
@@ -108,16 +110,38 @@ Review round 2 closed the remaining adversarial gaps:
   the first login timeout; teardown deleting the database afterward caused the secondary
   `Unknown database` log noise.
 
+Final review round 1 closed four additional release and concurrency gaps:
+
+- Readiness and activation now reject any TD-001 through TD-004 candidate whose template is
+  inactive, even when its selected version is published. The external MySQL lock test disables
+  each downstream template independently, proves both paths reject it, re-enables it and then
+  completes the release.
+- TD-002 routing is exact rather than existence-based: the selected TD-002 task has one
+  unconditional edge to one review decision; that decision has exactly `TRUE_INVALID -> END`,
+  `MISJUDGED_VALID -> current TD-001` and a lower-priority default `-> END`. Direct bypasses and
+  extra branches are rejected.
+- TD-004 completion locks the authoritative lead row before authorization, state, progress-fact
+  and scheduling checks. Real MySQL races prove completion waits behind reassignment/dead-pool
+  transitions and then fails with zero fact, plan, occurrence or Todo writes.
+- Chrome exposed a hidden-target defect after the stricter release validator landed: the guided
+  TD-004 self route was binding the previous published version instead of the editable version
+  being released. `SCHEDULE_SELF` now materializes and validates the exact current version; the
+  unchanged coordinated-release assertion then passed on a fresh rerun.
+
 ## Verification matrix
 
 | Layer | Command | Result |
 |---|---|---|
 | Backend reactor | `mvn clean test '-DskipTests=false'` | exit 0, all 10 reactor modules; admin suite 215 tests, 0 failed |
+| Final-review backend reactor | `mvn clean test '-DskipTests=false'` | exit 0, all 10 reactor modules; admin suite 217 tests, 0 failed |
+| Final-review focused release RED/GREEN | `mvn -pl law-todo -am '-Dtest=LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | RED exit 1 with the four expected inactive/routing failures; final exit 0, 24/24 |
+| Final-review progress lock RED/GREEN | `mvn -pl ruoyi-system -am '-Dtest=LeadProgressMapperContractTest,LeadProgressCycleServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | RED failed before the locking mapper was used; final exit 0, 10/10 |
 | Review-round-2 focused RED | `mvn -pl law-todo -am '-Dtest=TodoScheduleServiceTest,TodoDefinitionServiceTest,TodoConfigurationJourneyEvaluatorTest,TodoDefinitionSimulationServiceTest,LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 1 before implementation; the initial compile also reported the intentionally missing central API/helper methods |
 | Review-round-2 focused GREEN | same focused Maven command | exit 0, 127/127, 0 skipped |
 | Release validator | `mvn -pl law-todo -am '-Dtest=LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, included in the 127-test focused gate |
 | Retry routing regression | `mvn -pl ruoyi-system -am '-Dtest=LeadRetryTodoHandlerTest,LeadRetryTodoCommandFlowTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, 6/6 |
 | External MySQL | `mvn -pl ruoyi-admin -am '-Dtest=LeadTodoGuidedConfigurationExternalMysqlIT,LeadTodoFlowEndToEndTest,FlywayMigrationTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, 9/9, 0 skipped; 93 migrations validated through V0.20.80 |
+| Final-review external MySQL | `mvn -pl ruoyi-admin -am '-Dtest=LeadTodoGuidedConfigurationExternalMysqlIT,LeadTodoFlowEndToEndTest,FlywayMigrationTest,LeadProgressCycleRuntimeMySqlTest,LeadTodoReleaseVersionLockExternalMysqlIT' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, 16/16, 0 skipped; progress race 4/4 and release lock 3/3; 93 migrations through V0.20.80 |
 | Backend package | `mvn -pl ruoyi-admin -am package -DskipTests` | exit 0 |
 | Frontend Todo contracts | `npm run test:todo`; `npm run test:todo-config` | exit 0; exit 0 |
 | Journey grouped-condition RED/GREEN | `npm run test:todo-phase-two` | exit 1 before normalization; final exit 0, 63 model and 43 UX checks |
@@ -127,6 +151,7 @@ Review round 2 closed the remaining adversarial gaps:
 | Readiness/login probe | `Invoke-RestMethod http://127.0.0.1:18083/captchaImage`; `POST /login` | exit 0; `captchaEnabled=false`, login code 200, token present in 2850 ms |
 | Real browser exploratory reruns | `npx playwright test tests/e2e/todo-config-journey.spec.js -g GUIDED_LEAD_ --project=chromium` | four exit-1 runs exposed, in order, startup readiness race, unstable dropdown targeting, the canonical material label, and grouped-condition normalization |
 | Real browser final | same Playwright command with `TODO_E2E_BROWSER=chrome` | exit 0, fresh database, 2/2 in 92.6 s; publication/activation 34.8 s, runtime 50.8 s |
+| Final-review real browser | same Playwright command with `TODO_E2E_BROWSER=chrome` | first fresh run correctly failed on stale TD-004 self version; final fresh run exit 0, 2/2 in 88.6 s; publication/activation 32.3 s, runtime 48.7 s |
 | Disposable DB teardown | Playwright global teardown plus schema-existence query | exit 0; teardown logged the dropped database and the follow-up query returned no row |
 | Patch whitespace | `git diff --check` | exit 0 |
 | Worktree inventory | `git status --short` | exit 0; intentionally non-empty and reported separately below |
