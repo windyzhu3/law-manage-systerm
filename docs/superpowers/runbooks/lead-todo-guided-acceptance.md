@@ -18,11 +18,14 @@ harness is intended for release evidence, not for development data.
   information-schema query proves absence. A guarded fallback drop runs only
   if an earlier stage fails after this harness created the database.
 - The backend is started exactly once by the harness. Its launcher PID and the
-  Java listener PID are captured separately. A PowerShell 5.1-compatible
-  `Win32_Process` snapshot proves that every accepted listener is descended
-  from the owned launcher. Cleanup rediscovers all descendants and stops them
-  deepest-first; it never kills a listener merely because it occupies a test
-  port.
+  Java listener PID are captured separately. Every registered root stores PID,
+  `CreationDate`, name, executable path and command line immediately after
+  `Start-Process` and before any wait. A PowerShell 5.1-compatible
+  `Win32_Process` snapshot accepts a root only when it was created after the
+  run began and its immutable identity still matches. Descendants must also be
+  newer than the run. Cleanup rereads each identity immediately before
+  stopping it deepest-first. A missing PID is already stopped; a reused PID is
+  refused and never killed.
 - Both the configured backend and frontend ports must be unused before the
   run. Final durable evidence records each port and requires both listener
   counts to be zero. A remaining unowned listener fails closed with
@@ -96,18 +99,30 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-gu
 npm --prefix ruoyi-ui run test:guided-acceptance-harness
 ```
 
+Pass a unique, sanitized run ID for reproducible evidence naming. It accepts
+only 1-64 ASCII letters, digits, `_` or `-`. `-ValidateOnly` validates the ID
+and path without creating the directory. A normal run refuses an existing ID,
+so no previous success or failure can be overwritten:
+
+```powershell
+$runId = 'release-20260806-001'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-guided-acceptance.ps1 -ValidateOnly -RunId $runId
+```
+
 For harness-maintainer verification only, setting
 `TODO_E2E_HARNESS_FAIL_AFTER_BACKEND_BIND=true` injects one controlled failure
 after the backend listener has been lineage-verified. It remains protected by
 the same fresh `_e2e` database and disposable-Redis guards. The command must
 exit 1, while the manifest must show the failure stage as 1 and
-`services.stop-owned-process-tree`, `database.fallback-guarded-drop` and
-`services.listener-absence` as 0. Do not set this flag for normal acceptance.
+`services.stop-owned-process-tree`, `database.fallback-guarded-drop`,
+`database.fallback-absence-proof` and `services.listener-absence` as 0. The
+failure bundle also retains a sanitized backend log. Do not set this flag for
+normal acceptance.
 
 Run the full acceptance from the repository root:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-guided-acceptance.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-guided-acceptance.ps1 -RunId $runId
 ```
 
 The browser stage runs exactly:
@@ -123,8 +138,15 @@ the 432000-second five-day offset.
 
 ## Evidence and CI retention
 
-Local runtime evidence is written below
-`ruoyi-ui/output/playwright/lead-todo-guided-configuration/`, including:
+Each run writes to its own ignored directory:
+
+```text
+ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/<runId>/
+```
+
+The harness sets `TODO_E2E_ARTIFACT_DIR` to that exact path. The Playwright
+spec normalizes it and rejects traversal, absolute external paths and sibling
+prefixes outside the governed output root. The per-run bundle includes:
 
 - `guided-lead-acceptance-manifest.json`
 - `guided-lead-playwright-list.log`
@@ -135,6 +157,11 @@ Local runtime evidence is written below
 The manifest gives every stable stage ID its sanitized command, UTC/local
 start and end, numeric exit status, output path and non-secret details. These
 files are intentionally ignored by Git and must never be staged or committed.
+
+The harness creates only the selected new run and its private temporary child;
+it never deletes or mixes older run directories. CI may upload the parent
+`lead-todo-guided-configuration` root so every run remains independently
+inspectable.
 
 GitHub Actions retains the same directory in the
 `lead-todo-real-e2e-diagnostics` artifact. The broader configuration job also

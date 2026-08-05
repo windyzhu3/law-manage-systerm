@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test')
 const fs = require('node:fs')
 const path = require('node:path')
 const { executeSql } = require('./support/mysql-e2e-runner')
+const { resolveGuidedArtifactDirectory } = require('./support/guided-artifact-directory')
 const {
   assertSimulationPersistenceUnchanged,
   cleanupTodoConfiguration,
@@ -14,7 +15,8 @@ const {
 const realBackend = process.env.TODO_E2E_REAL_BACKEND === 'true'
 const password = process.env.TODO_CONFIG_E2E_PASSWORD
 const SAMPLE_LEAD_ID = -1001
-const GUIDED_SCREENSHOT_DIR = path.resolve(__dirname, '../../output/playwright/lead-todo-guided-configuration')
+const GUIDED_OUTPUT_ROOT = path.resolve(__dirname, '../../output/playwright/lead-todo-guided-configuration')
+const GUIDED_SCREENSHOT_DIR = resolveGuidedArtifactDirectory(process.env.TODO_E2E_ARTIFACT_DIR, GUIDED_OUTPUT_ROOT)
 const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-004',

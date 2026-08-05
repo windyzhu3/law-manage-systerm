@@ -232,3 +232,28 @@ count 0 and frontend port 4173 with count 0. An additional terminal query
 confirmed the same database and port absence. Runtime evidence remains ignored
 under `ruoyi-ui/output/playwright/lead-todo-guided-configuration/` and is not
 part of the commit.
+
+## Follow-on harness safety closure
+
+The final-review harness findings are closed by immutable process identity and
+per-run proof isolation. PID alone is no longer authority: root and descendant
+use requires an exact creation-time match plus captured executable/command
+signature when available, and the same identity is reread before every kill.
+Backend and Playwright launchers are registered at process start, before any
+wait, so a failed Playwright process remains owned for `finally` cleanup.
+
+Evidence now lives under
+`ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/<runId>/`.
+Run IDs and resolved Playwright paths fail closed on unsafe characters,
+traversal, siblings and external absolute paths. Existing run directories are
+never removed or overwritten. CI continues to upload the parent directory.
+
+The ignored controlled-failure run `20260806-harness-postbind-proof` returned
+the expected overall status 1 while process-tree stop, fallback drop,
+independent schema absence, both listener checks and sanitized failure-log
+retention returned 0. The separate final run
+`20260806-harness-guided-final` returned 0 with all 32 stages at 0, Chrome 2/2,
+the exact runtime row `10 COMPLETED 92 -> 11 CREATED 92`, exact-once 1/1/1/1
+and 432000 seconds. Both disposable schemas and both test ports were absent
+afterward. These runtime bundles are reproducible diagnostics, not committed
+source; the updated runbook supplies the fresh-run commands.

@@ -11,6 +11,7 @@ const productionServerContractPath = path.join(root, 'scripts/check-production-e
 const mysqlRunnerPath = path.join(root, 'tests/e2e/support/mysql-e2e-runner.js')
 const databaseFixturePath = path.join(root, 'tests/e2e/support/todo-config-e2e-database.js')
 const globalTeardownPath = path.join(root, 'tests/e2e/support/todo-e2e-global-teardown.js')
+const guidedArtifactDirectoryPath = path.join(root, 'tests/e2e/support/guided-artifact-directory.js')
 const simulationTracePath = path.join(root, 'src/views/todo/config/journey/components/SimulationTrace.vue')
 const externalReportGatePath = path.join(root, 'scripts/assert-external-db-reports.js')
 const externalReportContractPath = path.join(root, 'scripts/check-external-db-reports-contract.js')
@@ -42,6 +43,7 @@ const journeySpec = read(journeySpecPath)
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
 const globalTeardown = read(globalTeardownPath)
+const guidedArtifactDirectory = read(guidedArtifactDirectoryPath)
 const simulationTrace = read(simulationTracePath)
 for (const required of [
   'TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL execution path is available',
@@ -130,6 +132,8 @@ for (const required of [
   'lead-runtime-next-td004.png'
 ]) requireText(journeySpec, required, 'Guided lead Todo journey real E2E spec')
 for (const required of [
+  'TODO_E2E_ARTIFACT_DIR',
+  'resolveGuidedArtifactDirectory',
   "path.resolve(__dirname, '../../output/playwright/lead-todo-guided-configuration')",
   'loadRuntimeTodo(todo.todoId)',
   "expect(persisted.status).toBe('COMPLETED')",
@@ -148,6 +152,9 @@ for (const required of [
   "metadata.ownerLabels",
   "metadata.scheduleLabels"
 ]) requireText(journeySpec, required, 'Guided lead Todo evidence contract')
+for (const required of ['path.relative', 'path.isAbsolute', 'Refusing guided evidence path outside governed output root']) {
+  requireText(guidedArtifactDirectory, required, 'Guided lead Todo artifact path guard')
+}
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
   'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',

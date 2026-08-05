@@ -266,3 +266,46 @@ The durable `services.listener-absence` manifest stage records backend port
 database absence also returned 0. The ignored runtime artifacts were not
 committed; CI upload locations and fresh-checkout commands remain documented
 in `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.
+
+## Round 6 immutable process identity and isolated proof bundles - 2026-08-06
+
+Round 6 supersedes the PID-only cleanup and shared artifact-directory evidence.
+Root ownership is now PID plus exact `CreationDate`, captured name, executable
+path and command line. Roots must be created after the run began and match the
+recorded identity before they seed descendant discovery. Every descendant is
+creation-threshold checked, and every process is reread immediately before
+`Stop-Process`. An already exited PID is accepted as stopped; a live PID with
+a different creation identity is refused and never killed. Backend and
+Playwright roots are registered immediately after `Start-Process`, before
+waiting, including the Playwright failure path.
+
+Executable PowerShell/Node contracts passed for a pre-minimum root, a reused
+PID, a valid descendant, an unowned listener, stop-time identity mismatch,
+start-time Playwright registration, unsafe run IDs and no-mutation validation.
+The pure E2E path test passed traversal, absolute-external and sibling-prefix
+rejection. The 14 E2E helper tests, real-E2E source contract and harness
+contract all exited 0.
+
+The controlling controlled-failure bundle is the ignored directory
+`ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/20260806-harness-postbind-proof/`.
+The harness exited 1 only because
+`harness.test-only-failure-after-backend-bind=1`; owned-tree stop, guarded
+fallback drop, independent fallback schema-absence proof, dual-port listener
+proof and sanitized failed-backend evidence all exited 0. Its disposable
+database and ports 8080/4173 were independently absent afterward.
+
+The controlling success bundle is the separate ignored directory
+`ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/20260806-harness-guided-final/`.
+All 32 manifest stages exited 0. Harness PID 20184 registered backend root PID
+12488 and Playwright root PID 19404 with immutable identities; the verified
+Java listener was PID 36852. One Chrome invocation passed 2/2 in 1.4 minutes
+(33.3 and 50.0 seconds). The independent runtime row was:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Global teardown, schema-absence proof, owned process stop, backend/frontend
+listener absence and sanitized backend evidence all exited 0. The failure and
+success bundles coexist and are intentionally ignored; a fresh reproduction
+uses a new `-RunId` from the updated runbook and never overwrites either one.

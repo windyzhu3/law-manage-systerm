@@ -1,12 +1,23 @@
 const assert = require('node:assert')
 const fs = require('node:fs')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 
 const root = path.resolve(__dirname, '..', '..')
 const harnessPath = path.join(root, 'scripts', 'run-lead-todo-guided-acceptance.ps1')
 
 assert.ok(fs.existsSync(harnessPath), 'guided Lead Todo acceptance harness must exist')
 const source = fs.readFileSync(harnessPath, 'utf8')
+
+function runHarness(args, env = {}) {
+  const result = spawnSync('powershell.exe', ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', harnessPath, ...args], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, ...env },
+    windowsHide: true
+  })
+  return { ...result, output: `${result.stdout || ''}${result.stderr || ''}`.trim() }
+}
 
 const requiredEnvironment = [
   'TODO_E2E_DB_NAME',
@@ -60,6 +71,9 @@ assert.match(source, /ParentProcessId/, 'owned descendants must be derived throu
 assert.match(source, /function\s+Get-OwnedProcessTree/, 'owned process-tree discovery must be reusable during readiness and finally cleanup')
 assert.ok(source.split('Get-OwnedProcessTree').length - 1 >= 3, 'owned process-tree discovery must run during readiness and cleanup')
 assert.match(source, /ProcessOwnershipSelfTest/, 'ancestry isolation must have a non-mutating PowerShell self-test')
+assert.match(source, /CreationUtc/, 'owned roots and descendants must carry immutable creation identity')
+assert.match(source, /ExecutablePath/, 'process identity should retain an executable signature when Win32_Process exposes one')
+assert.match(source, /CommandLine/, 'process identity should retain a command signature when Win32_Process exposes one')
 assert.match(source, /UNOWNED_SERVICE_LISTENER/, 'an unowned backend or frontend listener must fail closed')
 assert.match(source, /function\s+Assert-OwnedServiceListener/, 'listener ownership refusal must be a reusable executable contract')
 assert.match(source, /function\s+Assert-ServiceListenerAbsence[\s\S]*backendPort[\s\S]*frontendPort/, 'final cleanup must query both backend and frontend ports')
@@ -67,5 +81,41 @@ assert.match(source, /services\.listener-absence/, 'both-port listener proof mus
 assert.match(source, /TODO_E2E_HARNESS_FAIL_AFTER_BACKEND_BIND/, 'controlled post-bind cleanup testing must have an explicit harness-only flag')
 assert.match(source, /harness\.test-only-failure-after-backend-bind/, 'controlled failure must be visible in the sanitized stage manifest')
 assert.doesNotMatch(source, /Stop-Process[^\r\n]*(?:Get-PortOwners|listenerOwners)/, 'listener PIDs must never be killed without ancestry verification')
+
+const processStage = source.slice(source.indexOf('function Invoke-ProcessStage'), source.indexOf('function Get-RequiredEnvironment'))
+const processStart = processStage.indexOf('Start-Process')
+const processRegister = processStage.indexOf('Register-OwnedProcessRoot')
+const processWait = processStage.indexOf('WaitForExit')
+assert.ok(processStart >= 0 && processRegister > processStart && processWait > processRegister,
+  'generic registered process stages must capture immutable ownership after Start-Process and before waiting')
+assert.match(source, /browser\.guided-lead-2-of-2[\s\S]*RegisterOwnedRoot/, 'Playwright must opt into start-time root registration')
+
+const ownershipRun = runHarness(['-ProcessOwnershipSelfTest'])
+assert.strictEqual(ownershipRun.status, 0, ownershipRun.output)
+const ownership = JSON.parse(ownershipRun.stdout)
+assert.strictEqual(ownership.mutationPerformed, false)
+assert.strictEqual(ownership.preMinimumRootRejected, true)
+assert.strictEqual(ownership.reusedPidRejected, true)
+assert.strictEqual(ownership.validDescendantAccepted, true)
+assert.strictEqual(ownership.unownedListenerRefused, true)
+assert.strictEqual(ownership.stopIdentityMismatchRefused, true)
+
+const validationRunId = `contract-${process.pid}-${Date.now()}`
+const validationPath = path.join(root, 'ruoyi-ui', 'output', 'playwright', 'lead-todo-guided-configuration', 'runs', validationRunId)
+assert.ok(!fs.existsSync(validationPath), 'validation fixture must start absent')
+const validation = runHarness(['-ValidateOnly', '-RunId', validationRunId])
+assert.strictEqual(validation.status, 0, validation.output)
+assert.strictEqual(JSON.parse(validation.stdout).mutationPerformed, false)
+assert.ok(!fs.existsSync(validationPath), 'ValidateOnly must not create its run directory')
+
+for (const unsafeRunId of ['../escape', '..', 'bad\\path', 'bad/path']) {
+  const unsafe = runHarness(['-ValidateOnly', '-RunId', unsafeRunId])
+  assert.notStrictEqual(unsafe.status, 0, `unsafe runId ${unsafeRunId} must fail closed`)
+  assert.match(unsafe.output, /unsafe run id|unsupported run id/i)
+}
+
+assert.match(source, /lead-todo-guided-configuration[\\\/]runs/, 'runtime evidence must be namespaced under runs/<runId>')
+assert.match(source, /TODO_E2E_ARTIFACT_DIR/, 'the harness must pass its isolated run directory to Playwright')
+assert.match(source, /Refusing to overwrite existing acceptance run/i, 'prior run bundles must never be overwritten')
 
 console.log(`Verified guided Lead Todo acceptance harness contract (${requiredEnvironment.length} environment variables, ${baselines.length} baselines)`)

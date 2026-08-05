@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [switch]$ValidateOnly,
-    [switch]$ProcessOwnershipSelfTest
+    [switch]$ProcessOwnershipSelfTest,
+    [string]$RunId
 )
 
 Set-StrictMode -Version Latest
@@ -9,7 +10,12 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $uiRoot = Join-Path $repoRoot 'ruoyi-ui'
-$artifactRoot = Join-Path $uiRoot 'output\playwright\lead-todo-guided-configuration'
+$governedArtifactRoot = Join-Path $uiRoot 'output\playwright\lead-todo-guided-configuration'
+$runsRoot = Join-Path $uiRoot 'output\playwright\lead-todo-guided-configuration\runs'
+$effectiveRunId = if ([string]::IsNullOrWhiteSpace($RunId)) {
+    '{0}-{1}' -f (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssfffZ'), ([guid]::NewGuid().ToString('N').Substring(0, 12))
+} else { $RunId }
+$artifactRoot = Join-Path $runsRoot $effectiveRunId
 $manifestPath = Join-Path $artifactRoot 'guided-lead-acceptance-manifest.json'
 $temporaryRoot = Join-Path $artifactRoot '.harness-temp'
 $backendRawLog = Join-Path $temporaryRoot 'backend-raw.log'
@@ -25,7 +31,7 @@ $script:backendLauncher = $null
 $script:backendApplicationPid = $null
 $script:playwrightLauncherPid = $null
 $script:backendStartTimeUtc = $null
-$script:ownedProcessRootPids = New-Object System.Collections.ArrayList
+$script:ownedProcessRootIdentities = New-Object System.Collections.ArrayList
 $script:failure = $null
 $script:runStarted = Get-Date
 $backendPort = 8080
@@ -59,6 +65,21 @@ $plannedStageIds = @(
 
 function Get-IsoUtc([datetime]$value) { return $value.ToUniversalTime().ToString('o') }
 function Get-IsoLocal([datetime]$value) { return $value.ToString('o') }
+
+function Assert-SafeRunId([string]$value) {
+    if ([string]::IsNullOrWhiteSpace($value) -or $value -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$') {
+        throw 'Unsupported run id. Use 1-64 ASCII letters, digits, underscore or hyphen and do not use path separators.'
+    }
+}
+
+function Assert-PathUnderRoot([string]$path, [string]$root, [string]$label) {
+    $fullPath = [System.IO.Path]::GetFullPath($path)
+    $fullRoot = [System.IO.Path]::GetFullPath($root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $fullPath.StartsWith($fullRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing $label path outside governed output root."
+    }
+    return $fullPath
+}
 
 function Get-RelativeArtifactPath([string]$path) {
     if ([string]::IsNullOrWhiteSpace($path)) { return $null }
@@ -149,7 +170,8 @@ function Invoke-ProcessStage(
     [string[]]$ArgumentList,
     [string]$WorkingDirectory,
     [string]$OutputPath,
-    [string]$InputPath
+    [string]$InputPath,
+    [switch]$RegisterOwnedRoot
 ) {
     $started = Get-Date
     $stdoutPath = $OutputPath + '.stdout.tmp'
@@ -163,11 +185,17 @@ function Invoke-ProcessStage(
             RedirectStandardOutput = $stdoutPath
             RedirectStandardError = $stderrPath
             WindowStyle = 'Hidden'
-            Wait = $true
             PassThru = $true
         }
         if ($InputPath) { $parameters.RedirectStandardInput = $InputPath }
         $process = Start-Process @parameters
+        $processIdentity = $null
+        if ($RegisterOwnedRoot) {
+            $processIdentity = Register-OwnedProcessRoot ([int]$process.Id) $started.ToUniversalTime()
+        }
+        $process.WaitForExit()
+        $process.Refresh()
+        $exitCode = [int]$process.ExitCode
         $ended = Get-Date
         $stdout = if (Test-Path $stdoutPath) { Get-Content $stdoutPath -Raw } else { $null }
         $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { $null }
@@ -176,10 +204,10 @@ function Invoke-ProcessStage(
         if (-not [string]::IsNullOrWhiteSpace([string]$stderr)) { $combinedParts += ([string]$stderr).TrimEnd() }
         $combined = Protect-Text ($combinedParts -join [Environment]::NewLine)
         Write-Utf8NoBom $OutputPath ($combined.TrimEnd() + [Environment]::NewLine)
-        Add-StageResult $Id $Command $started $ended ([int]$process.ExitCode) $OutputPath @{ processId = $process.Id }
-        if ($process.ExitCode -ne 0) { throw "Stage $Id exited with status $($process.ExitCode). See $(Get-RelativeArtifactPath $OutputPath)." }
+        Add-StageResult $Id $Command $started $ended $exitCode $OutputPath @{ processId = $process.Id; processIdentity = $processIdentity }
+        if ($exitCode -ne 0) { throw "Stage $Id exited with status $exitCode. See $(Get-RelativeArtifactPath $OutputPath)." }
         Write-Host ("[PASS] {0}" -f $Id)
-        return [pscustomobject]@{ ExitCode = [int]$process.ExitCode; Output = $combined; ProcessId = $process.Id }
+        return [pscustomobject]@{ ExitCode = $exitCode; Output = $combined; ProcessId = $process.Id; ProcessIdentity = $processIdentity }
     } catch {
         $ended = Get-Date
         if (-not ($script:stages | Where-Object { $_.id -eq $Id })) {
@@ -233,20 +261,51 @@ function Get-Win32ProcessSnapshot {
             ParentProcessId = [int]$_.ParentProcessId
             Name = [string]$_.Name
             CreationUtc = $creationUtc
+            ExecutablePath = [string]$_.ExecutablePath
+            CommandLine = [string]$_.CommandLine
         }
     })
 }
 
+function New-ProcessIdentity($processRow) {
+    if ($null -eq $processRow -or $null -eq $processRow.CreationUtc) { return $null }
+    [pscustomobject]@{
+        ProcessId = [int]$processRow.ProcessId
+        ParentProcessId = [int]$processRow.ParentProcessId
+        CreationUtc = ([datetime]$processRow.CreationUtc).ToUniversalTime()
+        Name = [string]$processRow.Name
+        ExecutablePath = [string]$processRow.ExecutablePath
+        CommandLine = [string]$processRow.CommandLine
+    }
+}
+
+function Test-ProcessIdentityMatch($identity, $processRow, [Nullable[datetime]]$MinimumCreationUtc) {
+    if ($null -eq $identity -or $null -eq $processRow -or $null -eq $identity.CreationUtc -or $null -eq $processRow.CreationUtc) { return $false }
+    $identityCreation = ([datetime]$identity.CreationUtc).ToUniversalTime()
+    $rowCreation = ([datetime]$processRow.CreationUtc).ToUniversalTime()
+    if ($null -ne $MinimumCreationUtc -and $rowCreation -lt ([datetime]$MinimumCreationUtc).ToUniversalTime()) { return $false }
+    if ([int]$identity.ProcessId -ne [int]$processRow.ProcessId -or $identityCreation.Ticks -ne $rowCreation.Ticks) { return $false }
+    foreach ($property in @('Name', 'ExecutablePath', 'CommandLine')) {
+        $expected = [string]$identity.$property
+        if (-not [string]::IsNullOrWhiteSpace($expected) -and $expected -ne [string]$processRow.$property) { return $false }
+    }
+    return $true
+}
+
 function Get-OwnedProcessTree(
-    [int[]]$RootPids,
+    [object[]]$RootIdentities,
     [object[]]$ProcessSnapshot,
     [Nullable[datetime]]$MinimumCreationUtc
 ) {
-    $roots = @($RootPids | Where-Object { $_ -gt 0 } | Select-Object -Unique)
+    $roots = @($RootIdentities | Where-Object { $null -ne $_ })
     if ($roots.Count -eq 0) { return @() }
     $snapshot = if ($null -eq $ProcessSnapshot -or $ProcessSnapshot.Count -eq 0) { @(Get-Win32ProcessSnapshot) } else { @($ProcessSnapshot) }
     $depthByPid = @{}
-    foreach ($rootPid in $roots) { $depthByPid[[int]$rootPid] = 0 }
+    foreach ($root in $roots) {
+        $rootRow = $snapshot | Where-Object { [int]$_.ProcessId -eq [int]$root.ProcessId } | Select-Object -First 1
+        if (Test-ProcessIdentityMatch $root $rootRow $MinimumCreationUtc) { $depthByPid[[int]$root.ProcessId] = 0 }
+    }
+    if ($depthByPid.Count -eq 0) { return @() }
     $changed = $true
     while ($changed) {
         $changed = $false
@@ -254,9 +313,9 @@ function Get-OwnedProcessTree(
             $pidValue = [int]$processRow.ProcessId
             $parentValue = [int]$processRow.ParentProcessId
             if (-not $depthByPid.ContainsKey($pidValue) -and $depthByPid.ContainsKey($parentValue)) {
-                $creationAllowed = $true
-                if ($null -ne $MinimumCreationUtc -and $processRow.CreationUtc) {
-                    $creationAllowed = ([datetime]$processRow.CreationUtc) -ge ([datetime]$MinimumCreationUtc).AddSeconds(-2)
+                $creationAllowed = $null -ne $processRow.CreationUtc
+                if ($creationAllowed -and $null -ne $MinimumCreationUtc) {
+                    $creationAllowed = ([datetime]$processRow.CreationUtc).ToUniversalTime() -ge ([datetime]$MinimumCreationUtc).ToUniversalTime()
                 }
                 if ($creationAllowed) {
                     $depthByPid[$pidValue] = [int]$depthByPid[$parentValue] + 1
@@ -271,15 +330,33 @@ function Get-OwnedProcessTree(
             ParentProcessId = [int]$_.ParentProcessId
             Name = [string]$_.Name
             CreationUtc = $_.CreationUtc
+            ExecutablePath = [string]$_.ExecutablePath
+            CommandLine = [string]$_.CommandLine
             Depth = [int]$depthByPid[[int]$_.ProcessId]
         }
     })
 }
 
-function Register-OwnedProcessRoot([int]$processId) {
-    if ($processId -gt 0 -and -not $script:ownedProcessRootPids.Contains($processId)) {
-        [void]$script:ownedProcessRootPids.Add($processId)
+function Register-OwnedProcessRoot([int]$processId, [datetime]$MinimumCreationUtc) {
+    if ($processId -le 0) { throw 'Owned process root PID must be positive.' }
+    $deadline = (Get-Date).AddSeconds(3)
+    $row = $null
+    do {
+        $row = @(Get-Win32ProcessSnapshot) | Where-Object { [int]$_.ProcessId -eq $processId } | Select-Object -First 1
+        if ($row) { break }
+        Start-Sleep -Milliseconds 50
+    } while ((Get-Date) -lt $deadline)
+    $identity = New-ProcessIdentity $row
+    if (-not (Test-ProcessIdentityMatch $identity $row $MinimumCreationUtc)) {
+        throw "Refusing process root PID $processId because its immutable creation identity is unavailable or predates the run."
     }
+    $alreadyRegistered = @($script:ownedProcessRootIdentities | Where-Object {
+        [int]$_.ProcessId -eq $processId -and ([datetime]$_.CreationUtc).Ticks -eq ([datetime]$identity.CreationUtc).Ticks
+    }).Count -gt 0
+    if (-not $alreadyRegistered) {
+        [void]$script:ownedProcessRootIdentities.Add($identity)
+    }
+    return $identity
 }
 
 function Assert-OwnedServiceListener([string]$serviceName, [int[]]$listenerPids, [int[]]$ownedPids, [int]$launcherPid) {
@@ -335,10 +412,11 @@ function Stop-OwnedProcessTree {
     try {
         $stoppedPids = New-Object System.Collections.ArrayList
         $discoveredPids = New-Object System.Collections.ArrayList
+        $identityMismatchRefusedPids = New-Object System.Collections.ArrayList
         $listenerOwnership = @()
         for ($pass = 0; $pass -lt 3; $pass++) {
             $snapshot = @(Get-Win32ProcessSnapshot)
-            $ownedTree = @(Get-OwnedProcessTree @($script:ownedProcessRootPids) $snapshot $script:backendStartTimeUtc)
+            $ownedTree = @(Get-OwnedProcessTree @($script:ownedProcessRootIdentities) $snapshot $script:runStarted.ToUniversalTime())
             $ownedIds = @($ownedTree | Select-Object -ExpandProperty ProcessId)
             foreach ($ownedPid in $ownedIds) {
                 if (-not $discoveredPids.Contains([int]$ownedPid)) { [void]$discoveredPids.Add([int]$ownedPid) }
@@ -354,8 +432,20 @@ function Stop-OwnedProcessTree {
             }
             $toStop = @($ownedTree | Where-Object { $_.ProcessId -ne $PID } | Sort-Object Depth -Descending)
             foreach ($ownedProcess in $toStop) {
-                $process = Get-Process -Id ([int]$ownedProcess.ProcessId) -ErrorAction SilentlyContinue
-                if ($process) {
+                $currentRow = @(Get-Win32ProcessSnapshot) | Where-Object { [int]$_.ProcessId -eq [int]$ownedProcess.ProcessId } | Select-Object -First 1
+                if ($null -eq $currentRow) {
+                    if (-not $stoppedPids.Contains([int]$ownedProcess.ProcessId)) {
+                        [void]$stoppedPids.Add([int]$ownedProcess.ProcessId)
+                    }
+                    continue
+                }
+                if (-not (Test-ProcessIdentityMatch $ownedProcess $currentRow $script:runStarted.ToUniversalTime())) {
+                    if (-not $identityMismatchRefusedPids.Contains([int]$ownedProcess.ProcessId)) {
+                        [void]$identityMismatchRefusedPids.Add([int]$ownedProcess.ProcessId)
+                    }
+                    continue
+                }
+                if ($currentRow) {
                     Stop-Process -Id ([int]$ownedProcess.ProcessId) -Force -ErrorAction SilentlyContinue
                     if (-not (Get-Process -Id ([int]$ownedProcess.ProcessId) -ErrorAction SilentlyContinue) -and
                         -not $stoppedPids.Contains([int]$ownedProcess.ProcessId)) {
@@ -366,16 +456,20 @@ function Stop-OwnedProcessTree {
             if ($toStop.Count -eq 0) { break }
             Start-Sleep -Milliseconds 500
         }
-        $remainingTree = @(Get-OwnedProcessTree @($script:ownedProcessRootPids) @(Get-Win32ProcessSnapshot) $script:backendStartTimeUtc)
+        if ($identityMismatchRefusedPids.Count -ne 0) {
+            throw "Owned process cleanup refused PID identity mismatch: $(@($identityMismatchRefusedPids) -join ',')."
+        }
+        $remainingTree = @(Get-OwnedProcessTree @($script:ownedProcessRootIdentities) @(Get-Win32ProcessSnapshot) $script:runStarted.ToUniversalTime())
         if ($remainingTree.Count -ne 0) {
             throw "Owned process tree did not stop completely: $(@($remainingTree.ProcessId) -join ',')."
         }
         $script:ownedServicesStopped = $true
         $ended = Get-Date
         Add-StageResult 'services.stop-owned-process-tree' 'Get-CimInstance Win32_Process; Stop-Process <verified-owned-descendants-deepest-first>' $started $ended 0 $null @{
-            roots = @($script:ownedProcessRootPids | ForEach-Object { [int]$_ })
+            roots = @($script:ownedProcessRootIdentities)
             discoveredPids = @($discoveredPids | ForEach-Object { [int]$_ })
             stoppedPids = @($stoppedPids | ForEach-Object { [int]$_ })
+            identityMismatchRefusedPids = @($identityMismatchRefusedPids | ForEach-Object { [int]$_ })
             listenerOwnershipBeforeStop = $listenerOwnership
         }
         Write-Host '[PASS] services.stop-owned-process-tree'
@@ -417,6 +511,8 @@ function Write-Manifest([string]$status, [string]$database, [string]$marker) {
         acceptance = 'GUIDED_LEAD_TEMPLATES + GUIDED_LEAD_RUNTIME'
         status = $status
         repository = $repoRoot
+        runId = $effectiveRunId
+        evidenceDirectory = Get-RelativeArtifactPath $artifactRoot
         database = $database
         runMarker = $marker
         harnessPid = [int]$PID
@@ -424,7 +520,7 @@ function Write-Manifest([string]$status, [string]$database, [string]$marker) {
         backendApplicationPid = if ($script:backendApplicationPid) { [int]$script:backendApplicationPid } else { $null }
         backendLauncherIsApplication = if ($script:backendLauncher -and $script:backendApplicationPid) { [int]$script:backendLauncher.Id -eq [int]$script:backendApplicationPid } else { $null }
         playwrightLauncherPid = $script:playwrightLauncherPid
-        ownedProcessRootPids = @($script:ownedProcessRootPids | ForEach-Object { [int]$_ })
+        ownedProcessRoots = @($script:ownedProcessRootIdentities)
         servicePorts = @{ backend = $backendPort; frontend = $frontendPort }
         startUtc = Get-IsoUtc $script:runStarted
         startLocal = Get-IsoLocal $script:runStarted
@@ -439,29 +535,52 @@ function Write-Manifest([string]$status, [string]$database, [string]$marker) {
 
 if ($ProcessOwnershipSelfTest) {
     $now = (Get-Date).ToUniversalTime()
+    $minimum = $now
     $fixture = @(
-        [pscustomobject]@{ ProcessId = 100; ParentProcessId = 1; Name = 'launcher.exe'; CreationUtc = $now; Depth = 0 },
-        [pscustomobject]@{ ProcessId = 101; ParentProcessId = 100; Name = 'java.exe'; CreationUtc = $now; Depth = 0 },
-        [pscustomobject]@{ ProcessId = 102; ParentProcessId = 101; Name = 'worker.exe'; CreationUtc = $now; Depth = 0 },
-        [pscustomobject]@{ ProcessId = 900; ParentProcessId = 1; Name = 'unowned.exe'; CreationUtc = $now; Depth = 0 }
+        [pscustomobject]@{ ProcessId = 100; ParentProcessId = 1; Name = 'early.exe'; CreationUtc = $now.AddSeconds(-1); ExecutablePath = 'C:\fixture\early.exe'; CommandLine = 'early'; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 200; ParentProcessId = 1; Name = 'reused.exe'; CreationUtc = $now.AddSeconds(2); ExecutablePath = 'C:\fixture\reused.exe'; CommandLine = 'reused-new'; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 300; ParentProcessId = 1; Name = 'launcher.exe'; CreationUtc = $now.AddSeconds(1); ExecutablePath = 'C:\fixture\launcher.exe'; CommandLine = 'launcher'; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 301; ParentProcessId = 300; Name = 'java.exe'; CreationUtc = $now.AddSeconds(2); ExecutablePath = 'C:\fixture\java.exe'; CommandLine = 'java child'; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 900; ParentProcessId = 1; Name = 'unowned.exe'; CreationUtc = $now.AddSeconds(1); ExecutablePath = 'C:\fixture\unowned.exe'; CommandLine = 'unowned'; Depth = 0 }
     )
-    $tree = @(Get-OwnedProcessTree @(100) $fixture $now.AddSeconds(-1))
+    $earlyIdentity = New-ProcessIdentity $fixture[0]
+    $reusedIdentity = [pscustomobject]@{ ProcessId = 200; ParentProcessId = 1; Name = 'reused.exe'; CreationUtc = $now.AddSeconds(1); ExecutablePath = 'C:\fixture\reused.exe'; CommandLine = 'reused-old' }
+    $validIdentity = New-ProcessIdentity $fixture[2]
+    $preMinimumTree = @(Get-OwnedProcessTree @($earlyIdentity) $fixture $minimum)
+    $reusedTree = @(Get-OwnedProcessTree @($reusedIdentity) $fixture $minimum)
+    $tree = @(Get-OwnedProcessTree @($validIdentity) $fixture $minimum)
     $ids = @($tree | Select-Object -ExpandProperty ProcessId)
-    if ($ids.Count -ne 3 -or $ids -notcontains 100 -or $ids -notcontains 101 -or $ids -notcontains 102 -or $ids -contains 900) {
+    if ($preMinimumTree.Count -ne 0) { throw 'Process ownership self-test failed pre-minimum root rejection.' }
+    if ($reusedTree.Count -ne 0) { throw 'Process ownership self-test failed reused PID rejection.' }
+    if ($ids.Count -ne 2 -or $ids -notcontains 300 -or $ids -notcontains 301 -or $ids -contains 900) {
         throw 'Process ownership self-test failed ancestry isolation.'
     }
-    $deepest = $tree | Where-Object ProcessId -eq 102
-    if (-not $deepest -or [int]$deepest.Depth -ne 2) { throw 'Process ownership self-test failed depth calculation.' }
+    $deepest = $tree | Where-Object ProcessId -eq 301
+    if (-not $deepest -or [int]$deepest.Depth -ne 1) { throw 'Process ownership self-test failed depth calculation.' }
     $unownedRefused = $false
-    try { [void](Assert-OwnedServiceListener 'fixture' @(900) $ids 100) } catch {
+    try { [void](Assert-OwnedServiceListener 'fixture' @(900) $ids 300) } catch {
         $unownedRefused = $_.Exception.Message -like 'UNOWNED_SERVICE_LISTENER:*'
     }
     if (-not $unownedRefused) { throw 'Process ownership self-test failed unowned-listener refusal.' }
-    [pscustomobject]@{ mode = 'ProcessOwnershipSelfTest'; mutationPerformed = $false; ownedPids = $ids; unownedPidExcluded = $true; unownedListenerRefused = $true; deepestFirstDepth = 2 } | ConvertTo-Json -Depth 4
+    $stopMismatchRefused = -not (Test-ProcessIdentityMatch $validIdentity $fixture[1] $minimum)
+    [pscustomobject]@{
+        mode = 'ProcessOwnershipSelfTest'
+        mutationPerformed = $false
+        preMinimumRootRejected = ($preMinimumTree.Count -eq 0)
+        reusedPidRejected = ($reusedTree.Count -eq 0)
+        validDescendantAccepted = ($ids -contains 301)
+        ownedPids = $ids
+        unownedPidExcluded = $true
+        unownedListenerRefused = $true
+        stopIdentityMismatchRefused = $stopMismatchRefused
+        deepestFirstDepth = 1
+    } | ConvertTo-Json -Depth 4
     exit 0
 }
 
 if ($ValidateOnly) {
+    Assert-SafeRunId $effectiveRunId
+    [void](Assert-PathUnderRoot $artifactRoot $runsRoot 'acceptance run')
     $candidateDatabase = [Environment]::GetEnvironmentVariable('TODO_E2E_DB_NAME')
     if ([string]::IsNullOrWhiteSpace($candidateDatabase)) { $candidateDatabase = 'dry_run_validation_e2e' }
     Assert-SafeDatabaseName $candidateDatabase
@@ -475,6 +594,8 @@ if ($ValidateOnly) {
     [pscustomobject]@{
         mode = 'ValidateOnly'
         mutationPerformed = $false
+        runId = $effectiveRunId
+        evidenceDirectory = Get-RelativeArtifactPath $artifactRoot
         databaseGuard = $candidateDatabase
         requiredEnvironment = @(
             'TODO_E2E_DB_NAME', 'TODO_E2E_DB_HOST', 'TODO_E2E_DB_PORT', 'TODO_E2E_DB_USER', 'TODO_E2E_DB_PASSWORD',
@@ -490,8 +611,10 @@ if ($ValidateOnly) {
 $database = $null
 $runMarker = $null
 try {
-    if (-not (Test-Path $artifactRoot)) { [void](New-Item -ItemType Directory -Force -Path $artifactRoot) }
-    if (Test-Path $temporaryRoot) { Remove-Item -Recurse -Force $temporaryRoot }
+    Assert-SafeRunId $effectiveRunId
+    [void](Assert-PathUnderRoot $artifactRoot $runsRoot 'acceptance run')
+    if (Test-Path $artifactRoot) { throw "Refusing to overwrite existing acceptance run $effectiveRunId." }
+    [void](New-Item -ItemType Directory -Force -Path $artifactRoot)
     [void](New-Item -ItemType Directory -Force -Path $temporaryRoot)
 
     $database = Get-RequiredEnvironment 'TODO_E2E_DB_NAME'
@@ -635,16 +758,12 @@ try {
     $script:backendStartTimeUtc = $backendStart.ToUniversalTime()
     try {
         $script:backendLauncher = Start-Process -FilePath $javaExecutable -ArgumentList @('-jar', ('"' + $jarPath + '"')) -WorkingDirectory $repoRoot -RedirectStandardOutput $backendRawLog -RedirectStandardError $backendRawErrorLog -WindowStyle Hidden -PassThru
-        Register-OwnedProcessRoot ([int]$script:backendLauncher.Id)
-        $startSnapshot = @(Get-Win32ProcessSnapshot)
-        $harnessDescendants = @(Get-OwnedProcessTree @([int]$PID) $startSnapshot $script:runStarted.ToUniversalTime())
-        if (@($harnessDescendants | Where-Object { $_.ProcessId -eq [int]$script:backendLauncher.Id }).Count -ne 1) {
-            throw 'Backend launcher is not a verified descendant of the acceptance harness.'
-        }
+        $backendIdentity = Register-OwnedProcessRoot ([int]$script:backendLauncher.Id) $script:backendStartTimeUtc
         Add-StageResult 'backend.start' 'java -jar ruoyi-admin/target/ruoyi-admin.jar [configuration via environment]' $backendStart (Get-Date) 0 $backendEvidenceLog @{
             harnessPid = [int]$PID
             backendLauncherPid = [int]$script:backendLauncher.Id
             launcherOwnershipVerified = $true
+            launcherIdentity = $backendIdentity
         }
         Write-Host '[PASS] backend.start'
     } catch {
@@ -657,7 +776,7 @@ try {
         $lastError = $null
         while ((Get-Date) -lt $deadline) {
             $snapshot = @(Get-Win32ProcessSnapshot)
-            $ownedTree = @(Get-OwnedProcessTree @([int]$script:backendLauncher.Id) $snapshot $script:backendStartTimeUtc)
+            $ownedTree = @(Get-OwnedProcessTree @($script:ownedProcessRootIdentities) $snapshot $script:backendStartTimeUtc)
             $ownedIds = @($ownedTree | Select-Object -ExpandProperty ProcessId)
             $owners = @(Get-PortOwners $backendPort)
             if ($owners.Count -gt 0) {
@@ -748,12 +867,12 @@ select '$runMarker',
     $env:TODO_CONFIG_E2E_DOD_CODE = $dodCode
     $env:TODO_CONFIG_E2E_LEAD_NO = $leadNo
     $env:TODO_E2E_FILE_STORAGE_ROOT = Join-Path $artifactRoot 'file-center'
+    $env:TODO_E2E_ARTIFACT_DIR = $artifactRoot
 
     $playwrightDisplay = 'npx playwright test tests/e2e/todo-config-journey.spec.js --grep "GUIDED_LEAD_" --project=chromium --reporter=list'
     $playwrightLog = Join-Path $artifactRoot 'guided-lead-playwright-list.log'
-    $playwright = Invoke-ProcessStage 'browser.guided-lead-2-of-2' $playwrightDisplay $npxExecutable @('playwright', 'test', 'tests/e2e/todo-config-journey.spec.js', '--grep', 'GUIDED_LEAD_', '--project=chromium', '--reporter=list') $uiRoot $playwrightLog $null
+    $playwright = Invoke-ProcessStage 'browser.guided-lead-2-of-2' $playwrightDisplay $npxExecutable @('playwright', 'test', 'tests/e2e/todo-config-journey.spec.js', '--grep', 'GUIDED_LEAD_', '--project=chromium', '--reporter=list') $uiRoot $playwrightLog $null -RegisterOwnedRoot
     $script:playwrightLauncherPid = [int]$playwright.ProcessId
-    Register-OwnedProcessRoot $script:playwrightLauncherPid
     if ($playwright.Output -notmatch '(?m)^\s*2 passed\b' -or $playwright.Output -match '(?m)^\s*\d+ (failed|skipped)\b') {
         throw 'Playwright list output did not prove exactly 2 passed with zero failed or skipped tests.'
     }
@@ -824,7 +943,7 @@ where first_todo.todo_id=$firstTodoId;
     $script:failure = Protect-Text $_.Exception.Message
     Write-Host ("[FAIL] {0}" -f $script:failure) -ForegroundColor Red
 } finally {
-    if ($script:ownedProcessRootPids.Count -gt 0 -and -not $script:ownedServicesStopped) {
+    if ($script:ownedProcessRootIdentities.Count -gt 0 -and -not $script:ownedServicesStopped) {
         try { Stop-OwnedProcessTree } catch { if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message } }
     }
     if ($script:databaseCreated -and -not $script:databaseDropped -and $database) {
@@ -833,6 +952,11 @@ where first_todo.todo_id=$firstTodoId;
             $fallbackSql = New-SqlInput 'fallback-drop.sql' "drop database if exists ``$database``;"
             Invoke-MysqlStage 'database.fallback-guarded-drop' 'mysql [credential-env] < guarded-fallback-drop.sql' $fallbackSql (Join-Path $artifactRoot 'fallback-drop.log') $null | Out-Null
             $script:databaseDropped = $true
+            $fallbackAbsenceSql = New-SqlInput 'fallback-absence.sql' "select count(*) from information_schema.schemata where schema_name='$database';"
+            $fallbackAbsenceOutput = Join-Path $artifactRoot 'fallback-database-absence-proof.log'
+            Invoke-MysqlStage 'database.fallback-absence-proof' 'mysql [credential-env] information_schema < fallback-absence.sql' $fallbackAbsenceSql $fallbackAbsenceOutput $null | Out-Null
+            $fallbackAbsenceRow = @(Parse-SingleTabRow $fallbackAbsenceOutput 1)
+            if ([int]$fallbackAbsenceRow[0] -ne 0) { throw "Fallback database absence proof failed for $database." }
         } catch {
             if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message }
         }
