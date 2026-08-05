@@ -173,3 +173,25 @@ Task 11 commit. This dirty-state disclosure is separate from the passing product
 All Task 11 disposable schemas, including the final browser database, external migration gate and
 RED/GREEN migration schemas, were dropped after verification. All required database, backend,
 frontend and browser gates passed. No unresolved Task 11 release blocker remains.
+
+## Final review round 2 addendum — 2026-08-06
+
+- TD-004 `SCHEDULE_SELF` is bound to the exact editable candidate during load,
+  save, journey/preflight and simulation. Missing, stale, wrong-draft and old
+  published targets are rejected.
+- One completion orchestrator now gives normal, force and automatic completion
+  the same lead-lock-before-Todo-mutation order while preserving terminal,
+  audit and idempotency semantics.
+- The real MySQL lead-progress race suite increased from 4 to 6 cases and
+  covers normal-versus-force and normal-versus-auto with no loser-side partial
+  writes.
+- The final required Chrome pair was rerun on a newly initialized database:
+  `GUIDED_LEAD_TEMPLATES` and `GUIDED_LEAD_RUNTIME` passed 2/2 in 1.5 minutes.
+  Fresh runtime evidence at 2026-08-06 02:01:42 +08 shows TD-004 v92
+  completing and creating the next TD-004 v92 with a 432000-second due offset.
+- Full backend verification passed all 10 modules: 1547 tests, zero failures
+  or errors; 37 tests were intentionally skipped without external-environment
+  variables. The external MySQL gate separately passed 48/48 with zero skips.
+
+Detailed evidence and the final verification matrix are recorded in
+`docs/superpowers/reports/2026-08-06-lead-todo-final-review-round-two.md`.
