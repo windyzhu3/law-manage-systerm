@@ -151,7 +151,8 @@ Final review round 1 closed four additional release and concurrency gaps:
 | Readiness/login probe | `Invoke-RestMethod http://127.0.0.1:18083/captchaImage`; `POST /login` | exit 0; `captchaEnabled=false`, login code 200, token present in 2850 ms |
 | Real browser exploratory reruns | `npx playwright test tests/e2e/todo-config-journey.spec.js -g GUIDED_LEAD_ --project=chromium` | four exit-1 runs exposed, in order, startup readiness race, unstable dropdown targeting, the canonical material label, and grouped-condition normalization |
 | Real browser final | same Playwright command with `TODO_E2E_BROWSER=chrome` | exit 0, fresh database, 2/2 in 92.6 s; publication/activation 34.8 s, runtime 50.8 s |
-| Final-review real browser | same Playwright command with `TODO_E2E_BROWSER=chrome` | first fresh run correctly failed on stale TD-004 self version; final fresh run exit 0, 2/2 in 88.6 s; publication/activation 32.3 s, runtime 48.7 s |
+| Final-review real browser (superseded evidence) | same Playwright command with `TODO_E2E_BROWSER=chrome` | not used for final acceptance because retained logs could not prove both tests shared one database and application start |
+| Final rereview one-DB browser | `npx playwright test tests/e2e/todo-config-journey.spec.js --grep "GUIDED_LEAD_" --project=chromium --reporter=list` | exit 0 on `lead_todo_round3_single_e2e`, one backend PID/start, exactly 2/2 in one invocation; templates 33.1 s, runtime 53.4 s |
 | Disposable DB teardown | Playwright global teardown plus schema-existence query | exit 0; teardown logged the dropped database and the follow-up query returned no row |
 | Patch whitespace | `git diff --check` | exit 0 |
 | Worktree inventory | `git status --short` | exit 0; intentionally non-empty and reported separately below |
@@ -176,19 +177,31 @@ frontend and browser gates passed. No unresolved Task 11 release blocker remains
 
 ## Final review round 2 addendum — 2026-08-06
 
+This addendum is the controlling final browser evidence. Earlier browser rows
+and runtime identifiers in this document are retained as historical runs only.
+
 - TD-004 `SCHEDULE_SELF` is bound to the exact editable candidate during load,
   save, journey/preflight and simulation. Missing, stale, wrong-draft and old
   published targets are rejected.
 - One completion orchestrator now gives normal, force and automatic completion
-  the same lead-lock-before-Todo-mutation order while preserving terminal,
-  audit and idempotency semantics.
+  the same preparation fence. All three lock/revalidate the lead before any
+  Todo, exception-log or audit mutation. Normal/auto run the handler before
+  the Todo transition; force transitions first and then runs the handler. The
+  whole operation remains atomic and preserves audit and idempotency semantics.
 - The real MySQL lead-progress race suite increased from 4 to 6 cases and
   covers normal-versus-force and normal-versus-auto with no loser-side partial
   writes.
-- The final required Chrome pair was rerun on a newly initialized database:
-  `GUIDED_LEAD_TEMPLATES` and `GUIDED_LEAD_RUNTIME` passed 2/2 in 1.5 minutes.
-  Fresh runtime evidence at 2026-08-06 02:01:42 +08 shows TD-004 v92
-  completing and creating the next TD-004 v92 with a 432000-second due offset.
+- The final required Chrome pair was rerun in one invocation on the single
+  database `lead_todo_round3_single_e2e` and one backend PID 14984. The backend
+  log contains one database identity and one application start. The exact
+  list-reporter command passed `GUIDED_LEAD_TEMPLATES` then
+  `GUIDED_LEAD_RUNTIME` 2/2 in 1.5 minutes with exit 0 (33.1 s and 53.4 s).
+- Fresh runtime evidence at 2026-08-06 02:31:02 +08 and an independent query
+  show TD-004 v88 Todo 8 completing and creating Todo 9 on TD-004 v88, with
+  exactly one fact, plan, occurrence and next Todo and a 432000-second offset.
+- Readiness/login, Playwright, requery, global teardown, absence query and
+  backend stop all exited 0. Global teardown dropped the same database; the
+  follow-up schema query returned zero rows and port 8080 had zero listeners.
 - Full backend verification passed all 10 modules: 1547 tests, zero failures
   or errors; 37 tests were intentionally skipped without external-environment
   variables. The external MySQL gate separately passed 48/48 with zero skips.
