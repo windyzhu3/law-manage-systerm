@@ -17,6 +17,19 @@ import com.law.todo.spi.TodoFieldReferenceDirectory.ReferencePage;
 
 class TodoFieldDisplayResolutionServiceTest
 {
+    @Test void ignoresPlainAndTypedValuesThatDoNotUseAReferenceDirectory()
+    {
+        TodoFieldDisplayResolutionService service=new TodoFieldDisplayResolutionService(List.of());
+
+        Map<String,DisplayReference> result=service.resolve(List.of(
+                new TodoFieldDisplayResolutionService.FieldValue(field("contactedAt","DATE_TIME",null,null),
+                        "2026-08-01T09:00:00"),
+                new TodoFieldDisplayResolutionService.FieldValue(field("remark","PLAIN_VALUE",null,null),"已联系")),
+                new Actor(1L,"admin",103L));
+
+        assertThat(result).isEmpty();
+    }
+
     @Test void batchesValuesBySemanticDirectoryAndNeverFallsBackToRawIds()
     {
         AtomicInteger calls=new AtomicInteger();

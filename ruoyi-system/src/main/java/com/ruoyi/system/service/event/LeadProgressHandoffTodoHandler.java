@@ -37,7 +37,7 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
     @Override
     public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
     {
-        parse(todo,payload);
+        parseSimulation(payload);
         Map<String,Object> routing=new LinkedHashMap<>();
         if(payload!=null)routing.putAll(payload);
         routing.put("result","PROGRESS_RECORDED");
@@ -51,7 +51,8 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
     @Override
     public CompletionResult handle(CompletionContext context)
     {
-        ProgressCycleOutcome outcome=execute(context.todo(),context.payload());
+        ProgressCycleOutcome outcome=cycles.completeAfterDodValidation(
+                parse(context.todo(),context.payload()),context.todo());
         Map<String,Object> routing=new LinkedHashMap<>();
         routing.put("result","PROGRESS_RECORDED");
         routing.put("followupId",outcome.followupId());
@@ -68,10 +69,21 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
 
     private LeadProgressCompleteCommand parse(TodoInstance todo,Map<String,Object> payload)
     {
+        return parse(payload,todo==null?null:todo.getBusinessId(),todo==null?null:todo.getTodoId());
+    }
+
+    private LeadProgressCompleteCommand parseSimulation(Map<String,Object> payload)
+    {
+        // Read-only examples deliberately use synthetic negative business IDs and have no persisted Todo.
+        // The parser still validates the complete business payload against non-persisted positive identities.
+        return parse(payload,1L,1L);
+    }
+
+    private LeadProgressCompleteCommand parse(Map<String,Object> payload,Long leadId,Long todoId)
+    {
         try
         {
-            return LeadProgressPayloadParser.parse(payload,
-                    todo==null?null:todo.getBusinessId(),todo==null?null:todo.getTodoId());
+            return LeadProgressPayloadParser.parse(payload,leadId,todoId);
         }
         catch(PayloadValidationException invalid)
         {throw new TodoException(invalid.getBusinessCode(),invalid.getMessage());}

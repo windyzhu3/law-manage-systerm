@@ -257,6 +257,78 @@ class LeadTodoFlowEndToEndTest extends LeadTodoProductionPortsExternalMysqlIT
     }
 
     @Test
+    void td004DuplicateCompletionCreatesOneProgressPlanOccurrenceAndNextTodo() throws Exception
+    {
+        MigrationTestDatabase.migrate();
+        try(SqlSession session=sessions().openSession(false))
+        {
+            Connection db=session.getConnection();
+            try
+            {
+                PublishedIds published=discoverPublishedIds(db);
+                Fixtures fixture=insertFixtures(db,published);
+                Ports ports=productionPorts(session);
+                authenticate(fixture.ownerId(),fixture.deptId(),fixture.ownerName(),Set.of());
+
+                TodoInstance root=trigger(ports.events(),published,fixture.validLeadId(),
+                        fixture.validLeadNo(),fixture.ownerId(),fixture.deptId(),"progress-cycle");
+                prepare(ports.commands(),root.getTodoId(),
+                        actor(fixture.ownerId(),fixture.ownerName(),fixture.deptId()),"progress-root");
+                ports.commands().complete(root.getTodoId(),
+                        firstContact("VALID","progress-root",fixture.validProofId(),true),
+                        actor(fixture.ownerId(),fixture.ownerName(),fixture.deptId()));
+                TodoRow td004=onlyChild(db,root.getTodoId(),published.td004());
+
+                long proofId=generated(db,
+                        "insert into file_object(logical_name,status,created_by,create_time) "
+                        +"values(?,'ACTIVE',?,sysdate())","progress-proof.txt",fixture.ownerId());
+                assertEquals(1,update(db,
+                        "insert into file_business_relation(file_object_id,business_type,business_id,"
+                        +"material_type,visibility,scope_dept_id,scope_user_id,created_by,created_dept_id,"
+                        +"active,create_time) values(?,'LEAD',?,'FOLLOWUP_PROOF','BUSINESS',0,0,?,?,1,sysdate())",
+                        proofId,fixture.validLeadId(),fixture.ownerId(),fixture.deptId()));
+
+                prepare(ports.commands(),td004.todoId(),
+                        actor(fixture.ownerId(),fixture.ownerName(),fixture.deptId()),"progress");
+                LocalDateTime progressAt=LocalDateTime.now().minusMinutes(1).withNano(0);
+                ActionCommand completion=new ActionCommand(action("progress-complete"),
+                        "Task 11 recurring progress",Map.of(
+                                "progressType","PHONE",
+                                "progressAt",progressAt.toString(),
+                                "remark","Real MySQL five-day cycle"),List.of(proofId));
+                TodoInstance first=ports.commands().complete(td004.todoId(),completion,
+                        actor(fixture.ownerId(),fixture.ownerName(),fixture.deptId()));
+                TodoInstance replay=ports.commands().complete(td004.todoId(),completion,
+                        actor(fixture.ownerId(),fixture.ownerName(),fixture.deptId()));
+                assertEquals(first.getTodoId(),replay.getTodoId());
+                assertEquals("COMPLETED",replay.getStatus());
+
+                assertEquals(1,count(db,"select count(*) from biz_lead_followup "
+                        +"where lead_id=? and source_todo_id=? and follow_result='SUBSTANTIVE_PROGRESS'",
+                        fixture.validLeadId(),td004.todoId()));
+                assertEquals(1,count(db,"select count(*) from todo_schedule_plan "
+                        +"where previous_todo_id=? and schedule_purpose='LEAD_PROGRESS_5D'",
+                        td004.todoId()));
+
+                assertEquals(1,ports.schedules().materializeDue(
+                        LocalDateTime.now().plusSeconds(1),100));
+                assertEquals(0,ports.schedules().materializeDue(
+                        LocalDateTime.now().plusSeconds(1),100));
+                assertEquals(1,count(db,"select count(*) from todo_schedule_occurrence occurrence "
+                        +"join todo_schedule_plan plan on plan.plan_id=occurrence.plan_id "
+                        +"where plan.previous_todo_id=?",td004.todoId()));
+                assertEquals(1,count(db,"select count(*) from todo_instance "
+                        +"where previous_todo_id=? and template_version_id=?",td004.todoId(),published.td004()));
+            }
+            finally
+            {
+                SecurityContextHolder.clearContext();
+                session.rollback();
+            }
+        }
+    }
+
+    @Test
     void overdueTd002RunsCompleteDefaultAndMovesLeadToDeadPool() throws Exception
     {
         MigrationTestDatabase.migrate();

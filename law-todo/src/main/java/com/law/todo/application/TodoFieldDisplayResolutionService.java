@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,8 @@ import com.law.todo.spi.TodoFieldReferenceDirectory.ReferencePage;
 @Service
 public class TodoFieldDisplayResolutionService
 {
+    private static final Set<String> REFERENCE_SEMANTICS=Set.of(
+            "USER_ID","DEPT_ID","POST_ID","ROLE_KEY","DICT","BUSINESS_REF");
     private final List<TodoFieldReferenceDirectory> directories;
 
     public TodoFieldDisplayResolutionService(List<TodoFieldReferenceDirectory> directories)
@@ -31,7 +34,7 @@ public class TodoFieldDisplayResolutionService
         for(FieldValue value:values==null?List.<FieldValue>of():values)
         {
             FieldResource field=value.field();
-            if(value.rawValue()==null||"PLAIN_VALUE".equals(field.semanticType()))continue;
+            if(value.rawValue()==null||!REFERENCE_SEMANTICS.contains(field.semanticType()))continue;
             grouped.computeIfAbsent(new ResolutionKey(field.semanticType(),field.optionSource(),field.dictType()),
                     ignored->new ArrayList<>()).add(value);
         }

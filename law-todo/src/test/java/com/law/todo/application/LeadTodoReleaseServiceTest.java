@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -171,6 +172,68 @@ class LeadTodoReleaseServiceTest
         verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
+    @Test void acceptsDeferredRetryMetadataWithoutAnImmediateTd003TaskNode()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",
+                compiled(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L),
+                        Map.of("TD-002",80L,"TD-004",79L)),5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectLeadReleaseTriggerForUpdate("LEAD_FIRST_CONTACT_ENTRY",88L))
+                .thenReturn(trigger(52L,3,"N"));
+        when(templates.switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR))
+                .thenReturn(new EntrySlotBinding("LEAD_FIRST_CONTACT_ENTRY",52L,88L,"TD-001"));
+        when(mapper.completeLeadReleaseAction("release-20260731",fingerprint(),52L)).thenReturn(1);
+
+        assertThat(service.activate(command(),ACTOR).activeTd001VersionId()).isEqualTo(88L);
+    }
+
+    @Test void acceptsTd002LogicalReopenTargetWithoutLockingAFutureTd001Version()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        rows.set(1,version(80L,"TD-002","LEAD","PUBLISHED","hash-80",
+                td002Compiled(80L,70L),4));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectLeadReleaseTriggerForUpdate("LEAD_FIRST_CONTACT_ENTRY",88L))
+                .thenReturn(trigger(52L,3,"N"));
+        when(templates.switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR))
+                .thenReturn(new EntrySlotBinding("LEAD_FIRST_CONTACT_ENTRY",52L,88L,"TD-001"));
+        when(mapper.completeLeadReleaseAction("release-20260731",fingerprint(),52L)).thenReturn(1);
+
+        assertThat(service.activate(command(),ACTOR).activeTd001VersionId()).isEqualTo(88L);
+        verify(templates).switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR);
+    }
+
+    @Test void rejectsTd003ConnectedRouteThatTargetsAnotherTd004Version()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        rows.set(2,version(89L,"TD-003","LEAD","PUBLISHED","hash-89",
+                td003Compiled(89L,78L),6));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
+    @Test void rejectsTd004ScheduleSelfRouteThatTargetsAnotherVersion()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        rows.set(3,version(79L,"TD-004","LEAD","PUBLISHED","hash-79",
+                td004Compiled(79L,78L),3));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
     @Test void rejectsStaleTriggerExpectedVersionWithoutCompletingAction()
     {
         arrangeReadyRelease();
@@ -283,10 +346,10 @@ class LeadTodoReleaseServiceTest
             "template_version_id",70L,"enabled","Y","trigger_version",6,"template_code","TD-001");}
     private List<Map<String,Object>> versions()
     {return new ArrayList<>(List.of(
-            version(88L,"TD-001","LEAD","PUBLISHED","hash-88",compiled(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)),5),
-            version(80L,"TD-002","LEAD","PUBLISHED","hash-80",null,4),
-            version(89L,"TD-003","LEAD","PUBLISHED","hash-89",null,6),
-            version(79L,"TD-004","LEAD","PUBLISHED","hash-79",null,3)));
+            version(88L,"TD-001","LEAD","PUBLISHED","hash-88",compiledWithReopenedTd001(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)),5),
+            version(80L,"TD-002","LEAD","PUBLISHED","hash-80",td002Compiled(80L,70L),4),
+            version(89L,"TD-003","LEAD","PUBLISHED","hash-89",td003CompiledWithoutNodeCodes(89L,79L),6),
+            version(79L,"TD-004","LEAD","PUBLISHED","hash-79",td004Compiled(79L,79L),3)));
     }
     private List<Map<String,Object>> readyReadiness()
     {return new ArrayList<>(List.of(readiness(88L,"hash-88",3,3,true),readiness(80L,"hash-80",2,2,true),
@@ -306,11 +369,44 @@ class LeadTodoReleaseServiceTest
             Map.entry("event_type","LEAD_ASSIGNED"),Map.entry("business_type","LEAD"));}
     private String compiled(Map<String,Long> targets)
     {
+        Map<String,Long> immediateNodes=new LinkedHashMap<>(targets);
+        immediateNodes.remove("TD-003");
+        return compiled(targets,immediateNodes);
+    }
+    private String compiledWithReopenedTd001(Map<String,Long> targets)
+    {
+        String compiled=compiled(targets);
+        return compiled.replace("\"nodes\":[{\"type\":\"TASK\",\"templateVersionId\":88}",
+                "\"nodes\":[{\"type\":\"TASK\",\"templateVersionId\":88},"
+                +"{\"type\":\"TASK\",\"templateVersionId\":88}");
+    }
+    private String compiled(Map<String,Long> targets,Map<String,Long> nodeTargets)
+    {
         String outcomes=targets.entrySet().stream().map(entry->"{\"targetTemplateCode\":\""+entry.getKey()
                 +"\",\"targetVersionId\":"+entry.getValue()+"}").collect(java.util.stream.Collectors.joining(","));
-        String nodes=targets.entrySet().stream().map(entry->"{\"type\":\"TASK\",\"templateCode\":\""+entry.getKey()
-                +"\",\"templateVersionId\":"+entry.getValue()+"}").collect(java.util.stream.Collectors.joining(","));
+        String nodes=nodeTargets.entrySet().stream().map(entry->"{\"type\":\"TASK\",\"templateVersionId\":"
+                +entry.getValue()+"}").collect(java.util.stream.Collectors.joining(","));
         return "{\"templateCode\":\"TD-001\",\"routing\":{\"config\":{\"businessOutcomes\":["+outcomes
-                +"],\"nodes\":[{\"type\":\"TASK\",\"templateCode\":\"TD-001\",\"templateVersionId\":88},"+nodes+"]}}}";
+                +"],\"nodes\":[{\"type\":\"TASK\",\"templateVersionId\":88},"+nodes+"]}}}";
     }
+    private String td002Compiled(long self,long td001)
+    {return routeCompiled("TD-002",self,"MISJUDGED_VALID","NEXT_TEMPLATE","TD-001",td001);}
+    private String td003Compiled(long self,long td004)
+    {return routeCompiled("TD-003",self,"CONNECTED","NEXT_TEMPLATE","TD-004",td004);}
+    private String td003CompiledWithoutNodeCodes(long self,long td004)
+    {
+        return td003Compiled(self,td004)
+                .replace("\"type\":\"TASK\",\"templateCode\":\"TD-003\",",
+                        "\"type\":\"TASK\",")
+                .replace("\"type\":\"TASK\",\"templateCode\":\"TD-004\",",
+                        "\"type\":\"TASK\",");
+    }
+    private String td004Compiled(long self,long next)
+    {return routeCompiled("TD-004",self,"PROGRESS_RECORDED","SCHEDULE_SELF","TD-004",next);}
+    private String routeCompiled(String code,long self,String result,String effect,String targetCode,long target)
+    {return "{\"templateCode\":\""+code+"\",\"routing\":{\"config\":{\"businessOutcomes\":["
+            +"{\"value\":\""+result+"\",\"effectKind\":\""+effect+"\",\"targetTemplateCode\":\""
+            +targetCode+"\",\"targetVersionId\":"+target+"}],\"nodes\":["
+            +"{\"type\":\"TASK\",\"templateCode\":\""+code+"\",\"templateVersionId\":"+self+"},"
+            +"{\"type\":\"TASK\",\"templateCode\":\""+targetCode+"\",\"templateVersionId\":"+target+"}]}}}";}
 }

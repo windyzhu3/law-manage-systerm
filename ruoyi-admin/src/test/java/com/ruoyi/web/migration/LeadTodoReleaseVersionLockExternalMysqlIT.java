@@ -201,8 +201,8 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
             statement.execute("""
                     create table todo_template_version(
                       version_id bigint not null primary key,version_no int not null,template_id bigint not null,
-                      status varchar(20) not null,definition_hash varchar(64) null,compiled_json json null,
-                      event_type varchar(64) null,payload_version int null
+                      status varchar(20) not null,definition_hash varchar(64) null,
+                      definition_json json null,compiled_json json null
                     ) engine=innodb
                     """);
             statement.execute("""
@@ -256,8 +256,8 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
                     """;
             try(PreparedStatement insert=connection.prepareStatement("""
                     insert into todo_template_version(
-                      version_id,version_no,template_id,status,definition_hash,compiled_json,event_type,payload_version)
-                    values(?,?,?,?,?,cast(? as json),'LEAD_ASSIGNED',1)
+                      version_id,version_no,template_id,status,definition_hash,definition_json,compiled_json)
+                    values(?,?,?,?,?,json_object('event',json_object('eventType','LEAD_ASSIGNED','payloadVersion',1)),cast(? as json))
                     """))
             {
                 insertVersion(insert,88L,5,101L,"hash-88",compiled);

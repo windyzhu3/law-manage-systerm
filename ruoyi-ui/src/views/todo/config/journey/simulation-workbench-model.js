@@ -252,8 +252,19 @@ export function journeySimulationReadiness(journey) {
   }
 }
 
+export function shouldInvalidateSimulationForTemplateHashChange(previousHash, nextHash) {
+  const previous = String(previousHash || '').trim()
+  const next = String(nextHash || '').trim()
+  return Boolean(previous) && previous !== next
+}
+
 export function mergeJourneySimulationReadiness(journey, readiness) {
   if (!journey || !readiness) return journey
+  const template = journey.template || {}
+  const sameTemplate = Number(readiness.templateId) === Number(template.templateId)
+  const sameVersion = Number(readiness.versionId) === Number(template.versionId)
+  const authoritativeHash = String(readiness.definitionHash || '')
+  if (!sameTemplate || !sameVersion || !authoritativeHash) return journey
   const otherIssues = (journey.issues || []).filter(issue => !isSimulationReadinessIssue(issue))
   const simulationIssues = readiness.issues || []
   const steps = (journey.steps || []).map(step =>
@@ -267,6 +278,10 @@ export function mergeJourneySimulationReadiness(journey, readiness) {
   )
   return {
     ...journey,
+    template: {
+      ...template,
+      definitionHash: authoritativeHash
+    },
     simulationReadiness: readiness,
     issues: otherIssues.concat(simulationIssues),
     steps

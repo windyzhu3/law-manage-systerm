@@ -74,6 +74,7 @@ import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.event.LeadFirstContactHandler;
 import com.ruoyi.system.service.event.LeadFirstContactValidator;
 import com.ruoyi.system.service.event.LeadInvalidReviewTodoHandler;
+import com.ruoyi.system.service.event.LeadProgressHandoffTodoHandler;
 import com.ruoyi.system.service.event.LeadRetryTodoHandler;
 import com.ruoyi.system.service.event.LeadTodoSourceContextService;
 import com.ruoyi.system.service.event.OutboxBusinessEventPublisher;
@@ -86,6 +87,7 @@ import com.ruoyi.system.service.lead.LeadFirstContactService;
 import com.ruoyi.system.service.lead.LeadInvalidReviewService;
 import com.ruoyi.system.service.lead.LeadPermissionPolicy;
 import com.ruoyi.system.service.lead.LeadPoolService;
+import com.ruoyi.system.service.lead.LeadProgressCycleService;
 import com.ruoyi.system.service.lead.LeadRetryService;
 import com.ruoyi.system.service.todo.RuoYiTodoBusinessAccessChecker;
 
@@ -257,6 +259,8 @@ class LeadTodoProductionPortsExternalMysqlIT
         LeadCallRecordService calls=new LeadCallRecordService(facts,leads,leadAccess,actors,dictionaries,
                 fileAccess,permissions,List.of());
         LeadAssignmentPolicyService policies=new LeadAssignmentPolicyService(facts);
+        LeadProgressCycleService progressCycles=new LeadProgressCycleService(leads,actors,
+                dictionaries,todos,schedules,policies);
         LeadPoolService pool=new LeadPoolService(leads,leadAccess,actors,outbox);
         LeadDeadPoolService deadPool=new LeadDeadPoolService(
                 leads,facts,leadAccess,actors,schedules,outbox);
@@ -275,7 +279,8 @@ class LeadTodoProductionPortsExternalMysqlIT
                 List.of(new LeadFirstContactHandler(firstContacts),
                         new LeadInvalidReviewTodoHandler(reviews,
                                 new LeadTodoSourceContextService(outboxMapper,facts)),
-                        new LeadRetryTodoHandler(retries,schedules)),
+                        new LeadRetryTodoHandler(retries,schedules),
+                        new LeadProgressHandoffTodoHandler(progressCycles)),
                 routing,completionLifecycle);
         return new Ports(events,commands,schedules);
     }

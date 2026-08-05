@@ -45,7 +45,8 @@ class LeadRetryTodoHandlerTest
                 "attemptCount",1),8L,"alice"));
 
         assertEquals(false,result.completeTodo());
-        assertEquals(Map.of("result","CONTINUE_CURRENT_WINDOW","retryRecordId",71L,
+        assertEquals(Map.of("result","CONTINUE_CURRENT_WINDOW",
+                "contactResult","CONTINUE_CURRENT_WINDOW","retryRecordId",71L,
                 "nextStage","T1_AM","attemptNo",1,"replayed",false),
                 result.routingPayload());
     }
@@ -75,14 +76,17 @@ class LeadRetryTodoHandlerTest
                 CompletionContext.human(todo,client,8L,"alice"));
 
         assertTrue(connected.completeTodo());
-        assertEquals(Map.of("result","CONNECTED","retryRecordId",72L,
-                "attemptNo",1,"replayed",false,"ownerId",8L),connected.routingPayload());
+        assertEquals(Map.of("result","CONNECTED","contactResult","CONNECTED",
+                "retryRecordId",72L,"attemptNo",1,"replayed",false,"ownerId",8L),
+                connected.routingPayload());
         assertTrue(next.completeTodo());
-        assertEquals(Map.of("result","NEXT_WINDOW","retryRecordId",73L,
-                "nextStage","T2_PM","attemptNo",2,"replayed",false),next.routingPayload());
+        assertEquals(Map.of("result","NEXT_WINDOW","contactResult","NEXT_WINDOW",
+                "retryRecordId",73L,"nextStage","T2_PM","attemptNo",2,"replayed",false),
+                next.routingPayload());
         assertTrue(exhausted.completeTodo());
-        assertEquals(Map.of("result","EXHAUSTED","retryRecordId",74L,
-                "nextStage","EXHAUSTED","attemptNo",3,"replayed",true),
+        assertEquals(Map.of("result","EXHAUSTED","contactResult","EXHAUSTED",
+                "retryRecordId",74L,"nextStage","EXHAUSTED","attemptNo",3,
+                "replayed",true),
                 exhausted.routingPayload());
     }
 
@@ -123,6 +127,25 @@ class LeadRetryTodoHandlerTest
         assertNull(command.getNextRetryTime());
         assertEquals(LocalDateTime.of(2026,7,26,11,0),
                 command.getCallRecord().getStartedAt());
+    }
+
+    @Test
+    void dry_run_exposes_authoritative_retry_effect_without_mutating_business_state()
+    {
+        LeadRetryTodoHandler handler=new LeadRetryTodoHandler(retries,schedules);
+        TodoInstance todo=todo();
+
+        assertTrue(handler.supportsSimulation());
+        var connected=handler.simulate(todo,Map.of("contactResult","CONNECTED"));
+        var nextWindow=handler.simulate(todo,Map.of("contactResult","NEXT_WINDOW"));
+
+        assertEquals(Map.of("contactResult","CONNECTED","result","CONNECTED"),
+                connected.routingPayload());
+        assertEquals(java.util.List.of("TD-004"),connected.producedTemplateCodes());
+        assertEquals(Map.of("contactResult","NEXT_WINDOW","result","NEXT_WINDOW"),
+                nextWindow.routingPayload());
+        assertTrue(nextWindow.producedTemplateCodes().isEmpty());
+        org.mockito.Mockito.verifyNoInteractions(retries,schedules);
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.spi.TodoCompletionHandler;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
+import com.law.todo.spi.TodoCompletionHandler.SimulationResult;
 import com.ruoyi.system.service.lead.LeadRetryService;
 import com.ruoyi.system.service.lead.LeadRetryService.RetryOutcome;
 
@@ -27,6 +28,22 @@ public class LeadRetryTodoHandler implements TodoCompletionHandler
 
     @Override public String catalogCode(){return "TD-003_COMPLETE";}
 
+    @Override public boolean supportsSimulation(){return true;}
+
+    @Override public String simulationDescription()
+    {return "返回重试结果及联系成功后的 TD-004 路由，不写入通话、重试或调度记录";}
+
+    @Override
+    public SimulationResult simulate(TodoInstance todo,Map<String,Object> payload)
+    {
+        Map<String,Object> routing=new LinkedHashMap<>(LeadTodoPayloadMapper.values(payload));
+        String result=LeadTodoPayloadMapper.text(routing,"result","contactResult");
+        if(result!=null)routing.put("result",result);
+        return "CONNECTED".equals(result)
+                ?SimulationResult.produces(routing,java.util.List.of("TD-004"))
+                :SimulationResult.none(routing);
+    }
+
     @Override
     public void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName)
     {execute(todo,payload);}
@@ -37,6 +54,7 @@ public class LeadRetryTodoHandler implements TodoCompletionHandler
         RetryOutcome outcome=execute(context.todo(),context.payload());
         Map<String,Object> routing=new LinkedHashMap<>();
         routing.put("result",outcome.result());
+        routing.put("contactResult",outcome.result());
         if(outcome.retryRecordId()!=null)routing.put("retryRecordId",outcome.retryRecordId());
         if(outcome.nextStage()!=null)routing.put("nextStage",outcome.nextStage());
         routing.put("attemptNo",outcome.attemptNo());

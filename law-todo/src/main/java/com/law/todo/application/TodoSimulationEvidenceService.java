@@ -194,7 +194,8 @@ public class TodoSimulationEvidenceService
     {
         if(latest==null||latest.isEmpty())return "MISSING";
         Object hash=value(latest,"definition_hash","definitionHash");
-        if(hash==null||!definitionHash.equals(String.valueOf(hash)))return "DEFINITION_CHANGED";
+        if(definitionHash==null||definitionHash.isBlank()
+                ||hash==null||!definitionHash.equals(String.valueOf(hash)))return "DEFINITION_CHANGED";
         Object status=value(latest,"result_status","resultStatus");
         if(status==null||!"PASSED".equals(String.valueOf(status)))return "LAST_RUN_FAILED";
         Object expires=value(latest,"expire_time","expireTime");

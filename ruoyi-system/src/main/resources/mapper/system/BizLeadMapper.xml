@@ -367,10 +367,24 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
           #{followUserId},#{sourceTodoId},null,#{idempotencyKey},#{taskStatus},#{createBy},sysdate())
     </insert>
     <select id="selectProgressFollowupByIdempotencyKey" resultType="BizLeadFollowup">
-        select * from biz_lead_followup where idempotency_key=#{idempotencyKey}
+        select followup_id as followupId,lead_id as leadId,follow_type as followType,
+          follow_result as followResult,progress_at as progressAt,content,
+          next_follow_time as nextFollowTime,follow_user_id as followUserId,
+          source_todo_id as sourceTodoId,schedule_plan_id as schedulePlanId,
+          idempotency_key as idempotencyKey,task_status as taskStatus,
+          create_by as createBy,create_time as createTime,update_by as updateBy,
+          update_time as updateTime,remark
+        from biz_lead_followup where idempotency_key=#{idempotencyKey}
     </select>
     <select id="selectProgressFollowupByIdempotencyKeyForUpdate" resultType="BizLeadFollowup">
-        select * from biz_lead_followup where idempotency_key=#{idempotencyKey} for update
+        select followup_id as followupId,lead_id as leadId,follow_type as followType,
+          follow_result as followResult,progress_at as progressAt,content,
+          next_follow_time as nextFollowTime,follow_user_id as followUserId,
+          source_todo_id as sourceTodoId,schedule_plan_id as schedulePlanId,
+          idempotency_key as idempotencyKey,task_status as taskStatus,
+          create_by as createBy,create_time as createTime,update_by as updateBy,
+          update_time as updateTime,remark
+        from biz_lead_followup where idempotency_key=#{idempotencyKey} for update
     </select>
     <update id="linkProgressFollowupSchedule">
         update biz_lead_followup

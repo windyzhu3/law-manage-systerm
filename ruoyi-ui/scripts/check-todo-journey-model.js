@@ -1680,6 +1680,37 @@ check('builds ordered terminal and parallel routing graphs while preserving adva
   )
 })
 
+check('preserves the governed current task key when refreshing published route targets', () => {
+  const current = {
+    config: {
+      start: 'td003',
+      nodes: [
+        { key: 'td003', type: 'TASK', templateCode: 'TD-003', templateVersionId: 103 },
+        { key: 'retryResult', type: 'DECISION' },
+        { key: 'route_end', type: 'END' }
+      ],
+      edges: []
+    }
+  }
+  const patch = steps.materializeOutcomeRouting({
+    resultField: 'contactResult',
+    resultFieldName: 'retry result',
+    recommendationCode: 'TD003_GOVERNED_OUTCOMES',
+    options: [
+      { value: 'CONNECTED', label: 'connected', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-004', targetVersionId: 104 },
+      { value: 'EXHAUSTED', label: 'exhausted', effectKind: 'END' }
+    ]
+  }, [
+    { templateCode: 'TD-004', versionId: 204, businessType: 'LEAD', status: 'PUBLISHED' }
+  ], 103, current)
+
+  assert.strictEqual(patch.config.start, 'td003')
+  assert(patch.config.nodes.some(node => node.key === 'td003' && node.templateVersionId === 103))
+  assert(!patch.config.nodes.some(node => node.key === 'current_task'))
+  assert(patch.config.businessOutcomes.some(outcome =>
+    outcome.resultValue === 'CONNECTED' && outcome.targetVersionId === 204))
+})
+
 check('materializes the governed first-contact outcomes without free-text business results', () => {
   const outcomeSet = {
     resultField: 'contactResult',
@@ -1706,6 +1737,14 @@ check('materializes the governed first-contact outcomes without free-text busine
     ['contactResult', 'UNREACHABLE', '无法联系']
   ])
   assert.deepStrictEqual(outcomes.map(row => row.targetVersionId), [104, 102, 103])
+  assert(patch.config.nodes.some(node => node.key === 'td002' && node.templateVersionId === 102))
+  assert(patch.config.nodes.some(node => node.key === 'reopenedTd001' && node.templateVersionId === 101))
+  assert(patch.config.edges.some(edge => edge.from === 'td002' && edge.to === 'reviewResult'))
+  assert(patch.config.edges.some(edge => edge.from === 'reviewResult' && edge.to === 'reopenedTd001'))
+  assert(patch.config.edges.some(edge => edge.from === 'firstResult' && edge.to === 'end' &&
+    edge.condition.$expression.root.conditions[0].value === 'UNREACHABLE'))
+  assert(!patch.config.nodes.some(node => node.templateVersionId === 103),
+    'TD-003 is materialized only by the persisted retry schedule')
   assert.deepStrictEqual(outcomes.map(row =>
     row.condition.$expression.root.conditions[0]
   ), [

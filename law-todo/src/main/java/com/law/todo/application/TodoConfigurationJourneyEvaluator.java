@@ -164,7 +164,7 @@ public class TodoConfigurationJourneyEvaluator
         if(blank(calendar)||templates!=null&&!calendarAvailable(calendar))
             local.add(blocker("TODO_JOURNEY_CALENDAR_REQUIRED","SLA","sla.calendarCode",
                     "The service-level calendar is unavailable","Choose an active working calendar"));
-        if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue")))
+        if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue"))&&!hasScheduleWindows(sla))
             local.add(blocker("TODO_JOURNEY_SLA_DURATION_REQUIRED","SLA","sla",
                     "A positive service-level duration is required","Set a duration for this todo"));
         append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty(),fieldValue("config",sla));
@@ -250,6 +250,8 @@ public class TodoConfigurationJourneyEvaluator
         Object evidence=value.containsKey(canonical)?value.get(canonical):value.get(legacy);
         return evidence instanceof Collection<?> collection&&!collection.isEmpty();
     }
+    private boolean hasScheduleWindows(Map<String,Object> sla)
+    {Object windows=map(sla.get("schedule")).get("windows");return windows instanceof Collection<?> values&&!values.isEmpty();}
     private boolean positive(Object value){try{return value!=null&&Long.parseLong(String.valueOf(value))>0;}catch(NumberFormatException invalid){return false;}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
     private boolean blank(String value){return value==null||value.isBlank();}

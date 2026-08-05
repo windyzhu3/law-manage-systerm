@@ -95,7 +95,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.69", current.getVersion().getVersion());
+        assertEquals("0.20.80", current.getVersion().getVersion());
         verifyTodoSchedulePolicySnapshotSchema(url);
         verifyPublishedLeadTodoFlow(url);
         verifyDatabaseInvariants(url);
@@ -566,14 +566,14 @@ class FlywayMigrationTest
                     + "and sample_payload_json is not null"));
             assertEquals(5L, count(connection,
                 "select count(*) from todo_validator_metadata where status='ACTIVE'"));
-            assertEquals(38L, count(connection,
+            assertEquals(41L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='FIELD' and status='ACTIVE'"));
             assertEquals(2L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='FIELD' "
                     + "and status='ACTIVE' and resource_code in ('invalidReasonCode','salesExplanation')"));
-            assertEquals(15L, count(connection,
+            assertEquals(16L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='MATERIAL' and status='ACTIVE'"));
-            assertEquals(5L, count(connection,
+            assertEquals(8L, count(connection,
                 "select count(*) from todo_configuration_resource_item where resource_type='DOD_RECIPE' and status='ACTIVE'"));
             assertEquals(1L, count(connection,
                 "select count(*) from sys_menu where component='todo/config/resource/index' "

@@ -215,6 +215,24 @@ class TodoConfigurationJourneyEvaluatorTest
                 "TODO_JOURNEY_CALENDAR_REQUIRED","TODO_JOURNEY_ROUTING_INVALID");
     }
 
+    @Test void acceptsWindowScheduledSlaWithoutScalarDuration()
+    {
+        TodoDefinitionDocument base=definition("LEAD_ASSIGNED",Map.of());
+        TodoDefinitionDocument scheduled=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
+                base.event(),base.owner(),base.dod(),new SlaRule(Map.of(
+                        "calendarCode","DEFAULT","schedule",Map.of("windows",List.of(
+                                Map.of("windowCode","T0","dayOffset",0,"durationMinutes",120,"maxAttempts",3),
+                                Map.of("windowCode","T1_AM","dayOffset",1,"startTime","09:00:00",
+                                        "endTime","11:00:00","maxAttempts",1))))),
+                base.ui(),base.routing(),base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
+
+        var result=evaluator.evaluate(detail(),scheduled,ready());
+
+        assertThat(result.step("SLA").state()).isEqualTo("COMPLETED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_SLA_DURATION_REQUIRED");
+    }
+
     @Test void mapsTypedOutcomeCompletenessIssuesToTheRoutingStep()
     {
         TodoDefinitionDocument definition=definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS"));

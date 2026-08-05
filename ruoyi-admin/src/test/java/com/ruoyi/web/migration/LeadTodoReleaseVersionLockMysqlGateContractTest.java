@@ -24,9 +24,13 @@ class LeadTodoReleaseVersionLockMysqlGateContractTest
             "release version lock proof must run with the credentialed migration MySQL environment");
         assertTrue(step.matches("(?s).*mvn\\s+.*-Dtest=[^\\r\\n]*LeadTodoReleaseVersionLockExternalMysqlIT[^\\r\\n]*\\s+test.*"),
             "migration MySQL gate must explicitly execute the release version lock proof");
+        assertTrue(step.matches("(?s).*mvn\\s+.*-Dtest=[^\\r\\n]*LeadTodoGuidedConfigurationExternalMysqlIT[^\\r\\n]*\\s+test.*"),
+            "migration MySQL gate must explicitly execute the guided lead release-bundle proof");
 
         String reportGate=Files.readString(Path.of("..","ruoyi-ui","scripts","assert-external-db-reports.js"));
         assertTrue(reportGate.contains("'LeadTodoReleaseVersionLockExternalMysqlIT'"),
             "the report gate must fail when the release version lock proof is not discovered or is skipped");
+        assertTrue(reportGate.contains("'LeadTodoGuidedConfigurationExternalMysqlIT'"),
+            "the report gate must fail when the guided lead release-bundle proof is not discovered or is skipped");
     }
 }

@@ -66,6 +66,20 @@ public class LeadProgressCycleService
     @Transactional
     public ProgressCycleOutcome complete(LeadProgressCompleteCommand command,TodoInstance todo)
     {
+        return complete(command,todo,false);
+    }
+
+    /** TodoCommandService has already validated File Center material types against the DoD. */
+    @Transactional
+    public ProgressCycleOutcome completeAfterDodValidation(LeadProgressCompleteCommand command,
+            TodoInstance todo)
+    {
+        return complete(command,todo,true);
+    }
+
+    private ProgressCycleOutcome complete(LeadProgressCompleteCommand command,TodoInstance todo,
+            boolean dodMaterialsValidated)
+    {
         validateIdentity(command,todo);
         BizLead lead=leads.selectLeadById(command.getLeadId());
         require(lead!=null,BusinessErrorCode.DATA_NOT_FOUND,"Lead does not exist");
@@ -83,9 +97,12 @@ public class LeadProgressCycleService
         LocalDateTime progressAt=command.getProgressAt().withNano(0);
         require(!progressAt.isAfter(LocalDateTime.now(clock).plusMinutes(MAX_FUTURE_DRIFT_MINUTES)),
                 BusinessErrorCode.VALIDATION_FAILED,"Progress time is materially in the future");
-        List<String> attachmentTypes=todos.selectAttachmentTypes(todo.getTodoId());
-        require(attachmentTypes!=null&&attachmentTypes.contains(PROOF_TYPE),
-                BusinessErrorCode.PRECONDITION_FAILED,"FOLLOWUP_PROOF attachment is required");
+        if(!dodMaterialsValidated)
+        {
+            List<String> attachmentTypes=todos.selectAttachmentTypes(todo.getTodoId());
+            require(attachmentTypes!=null&&attachmentTypes.contains(PROOF_TYPE),
+                    BusinessErrorCode.PRECONDITION_FAILED,"FOLLOWUP_PROOF attachment is required");
+        }
 
         String factKey="LEAD_PROGRESS:"+todo.getTodoId();
         String remark=normalizeRemark(command.getRemark());

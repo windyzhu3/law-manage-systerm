@@ -109,6 +109,18 @@ class TodoDefinitionCompilerTest
         assertTrue(compiler.compile(definition,ordinary).errors().stream().anyMatch(issue->"TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
     }
 
+    @Test void guardedPublishPreflightAllowsAReopenedTaskToReferenceItsOwnDraftVersion()
+    {
+        TodoDefinitionDocument definition=withRouting(route(9L,9L));
+        CompilationContext guarded=new CompilationContext(9L,true,id->new TemplateVersion(id,"DRAFT"));
+        CompilationContext ordinary=new CompilationContext(9L,false,id->new TemplateVersion(id,"DRAFT"));
+
+        assertTrue(compiler.compile(definition,guarded).errors().stream().noneMatch(issue->
+                "TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
+        assertTrue(compiler.compile(definition,ordinary).errors().stream().anyMatch(issue->
+                "TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED".equals(issue.code())));
+    }
+
     @Test void preflightRejectsEveryNonTaskStartType()
     {
         for (String type : List.of("DECISION","FORK","LOOP","END"))

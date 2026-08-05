@@ -108,6 +108,22 @@ class TodoSimulationEvidenceServiceTest
     }
 
     @Test
+    void draftWithoutPreflightHashKeepsTheGateIncompleteInsteadOfCrashingTheJourney()
+    {
+        TodoSimulationEvidenceService service=new TodoSimulationEvidenceService(mapper);
+        when(mapper.selectPassingSimulationEvidence(anyMap())).thenReturn(null);
+        when(mapper.selectLatestSimulationEvidence(anyMap())).thenReturn(Map.of(
+                "definition_hash","previous-definition-hash","result_status","PASSED"));
+
+        var gate=service.gate(42L,9L,null,List.of(scenario()));
+
+        assertThat(gate.publicationReady()).isFalse();
+        assertThat(gate.blockers()).containsExactly(
+                new TodoSimulationEvidenceService.SimulationGateBlocker(
+                        "TD001_VALID","DEFINITION_CHANGED"));
+    }
+
+    @Test
     void preflightExplainsMissingEvidenceWithChineseScenarioNamesAndReasons()
     {
         when(mapper.selectTemplateIdentityByVersionId(9L)).thenReturn(Map.of(

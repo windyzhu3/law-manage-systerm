@@ -141,7 +141,7 @@ jobs:
           TODO_MIGRATION_DB_PASSWORD: root
         run: |
           mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
-          mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FileMaterialEndToEndTest,FileObjectLockOrderExternalMysqlIT,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest,TodoAssignmentDelegationMapperExternalMysqlIT,TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadTodoProductionPortsExternalMysqlIT,LeadTodoFlowEndToEndTest,LeadTodoScheduleEndToEndTest,LeadTodoReadModelExternalMysqlIT,LeadTodoReleaseVersionLockExternalMysqlIT -Dsurefire.failIfNoSpecifiedTests=false test
+          mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FileMaterialEndToEndTest,FileObjectLockOrderExternalMysqlIT,HistoricalMigrationPreflightEndToEndTest,FoundationCollationMigrationTest,PhaseTwoDatabaseInvariantTest,TodoPhaseTwoTransactionTest,TodoRoutingJoinConcurrencyTest,TodoAutoActionFencingConcurrencyTest,TodoDefinitionLedgerConcurrencyTest,TodoAssignmentDelegationMapperExternalMysqlIT,TodoScheduleLockOrderExternalMysqlIT,LeadFlowMapperExternalMysqlIT,LeadTodoProductionPortsExternalMysqlIT,LeadTodoFlowEndToEndTest,LeadTodoScheduleEndToEndTest,LeadTodoReadModelExternalMysqlIT,LeadTodoReleaseVersionLockExternalMysqlIT,LeadTodoGuidedConfigurationExternalMysqlIT -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Assert external-database Todo tests were not skipped
         run: node ruoyi-ui/scripts/assert-external-db-reports.js ruoyi-admin/target/surefire-reports
       - name: Generate ephemeral Foundation test password
@@ -257,6 +257,8 @@ jobs:
           lead_id="$(mysql --batch --skip-column-names --protocol=tcp -h127.0.0.1 -uroot -proot law_todo_config_e2e \
             -e "select lead_id from biz_lead where lead_no='$lead_no' and create_by='$run_marker' limit 1")"
           echo "TODO_CONFIG_E2E_BUSINESS_ID=$lead_id" >> "$GITHUB_ENV"
+      - name: Reset dedicated Todo configuration Redis
+        run: test "$(redis-cli -h127.0.0.1 -p6379 FLUSHDB)" = OK
       - name: Build backend
         run: mvn --batch-mode --no-transfer-progress -DskipTests package
       - name: Start real backend
@@ -273,7 +275,8 @@ jobs:
           nohup java -jar ruoyi-admin/target/ruoyi-admin.jar > "$RUNNER_TEMP/todo-config-backend.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/todo-config-backend.pid"
           for attempt in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:8080/captchaImage >/dev/null; then exit 0; fi
+            captcha_json="$(curl --fail --silent http://127.0.0.1:8080/captchaImage || true)"
+            if grep -q '"captchaEnabled":false' <<<"$captcha_json"; then exit 0; fi
             sleep 2
           done
           cat "$RUNNER_TEMP/todo-config-backend.log"
@@ -308,7 +311,7 @@ jobs:
         run: npx playwright install --with-deps "$TODO_E2E_BROWSER"
       - name: Run Todo configuration real-backend journey
         working-directory: ruoyi-ui
-        run: npm run test:e2e -- tests/e2e/todo-config-center.spec.js
+        run: npm run test:e2e -- tests/e2e/todo-config-center.spec.js tests/e2e/todo-config-journey.spec.js
       - name: Upload real-backend diagnostics
         if: always()
         uses: actions/upload-artifact@v4

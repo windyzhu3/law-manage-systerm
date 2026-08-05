@@ -220,8 +220,8 @@ class LeadRetryTodoCommandFlowTest
         assertEquals("T1_AM",scalar(
                 "select retry_stage from lead_state where lead_id=7",String.class));
         assertEquals(1,routing.payloads().size());
-        assertEquals(Map.of("result","NEXT_WINDOW","retryRecordId",3L,
-                "nextStage","T1_AM","attemptNo",3,"replayed",false),
+        assertEquals(Map.of("result","NEXT_WINDOW","contactResult","NEXT_WINDOW",
+                "retryRecordId",3L,"nextStage","T1_AM","attemptNo",3,"replayed",false),
                 routing.payloads().get(0));
         assertEquals(0,count("todo_relation"));
         assertEquals(0,count("todo_instance where todo_id=41"));

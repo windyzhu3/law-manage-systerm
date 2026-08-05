@@ -24,7 +24,8 @@ const classes = [
   'LeadTodoFlowEndToEndTest',
   'LeadTodoScheduleEndToEndTest',
   'LeadTodoReadModelExternalMysqlIT',
-  'LeadTodoReleaseVersionLockExternalMysqlIT'
+  'LeadTodoReleaseVersionLockExternalMysqlIT',
+  'LeadTodoGuidedConfigurationExternalMysqlIT'
 ]
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-external-reports-'))
 
@@ -39,23 +40,23 @@ function requireFailure(label) { const result = run(); if (result.status === 0) 
 
 try {
   classes.forEach(className => writeReport(className))
-  writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 7 })
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
   requirePass('complete reports')
 
   for (const className of ['LeadTodoFlowEndToEndTest', 'LeadTodoScheduleEndToEndTest']) {
     fs.unlinkSync(reportPath(className))
     requireFailure(`missing report: ${className}`)
-    writeReport(className, { tests: className === 'LeadTodoFlowEndToEndTest' ? 6 : 4 })
+    writeReport(className, { tests: className === 'LeadTodoFlowEndToEndTest' ? 7 : 4 })
   }
 
   writeReport('LeadTodoFlowEndToEndTest', { tests: 0 })
   requireFailure('zero tests: Task 11 flow')
-  writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 7 })
 
-  writeReport('LeadTodoFlowEndToEndTest', { tests: 5 })
-  requireFailure('incorrect Task 11 flow test count')
   writeReport('LeadTodoFlowEndToEndTest', { tests: 6 })
+  requireFailure('incorrect Task 11 flow test count')
+  writeReport('LeadTodoFlowEndToEndTest', { tests: 7 })
 
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4, skipped: 1 })
   requireFailure('skipped test: Task 11 schedule')

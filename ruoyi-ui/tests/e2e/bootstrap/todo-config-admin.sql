@@ -12,6 +12,7 @@ set @failed_template_code=concat('E2E_TODO_CONFIG_',@run_marker,'_JOURNEY_FAILED
 set @warning_template_code=concat('E2E_TODO_CONFIG_',@run_marker,'_JOURNEY_WARNING');
 set @repair_event_type=upper(concat('E2E_SCHEMA_REPAIR_',@run_marker));
 set @warning_decision_code=concat('E2E_ADVISORY_',@run_marker);
+set @runtime_policy_code=concat('TODO_E2E_POLICY_',left(sha2(@run_marker,256),32));
 
 delimiter //
 drop procedure if exists todo_config_e2e_bootstrap_guard//
@@ -56,15 +57,18 @@ begin
   if exists(select 1 from todo_decision where decision_code=@warning_decision_code and coalesce(create_by,'')<>coalesce(@run_marker,'')) then
     signal sqlstate '45000' set message_text='Todo journey advisory decision collides with another resource';
   end if;
+  if exists(select 1 from biz_lead_assignment_policy where policy_code=@runtime_policy_code and coalesce(create_by,'')<>coalesce(@run_marker,'')) then
+    signal sqlstate '45000' set message_text='Todo runtime assignment policy collides with another resource';
+  end if;
 end//
 delimiter ;
 
 call todo_config_e2e_bootstrap_guard();
 
 insert into sys_role(role_name,role_key,role_sort,data_scope,menu_check_strictly,dept_check_strictly,status,del_flag,create_by,create_time,remark)
-select 'Todo E2E admin','todo_config_admin',90,'5',1,1,'0','0',@run_marker,sysdate(),@test_remark
+select 'Todo E2E admin','todo_config_admin',90,'3',1,1,'0','0',@run_marker,sysdate(),@test_remark
 where not exists(select 1 from sys_role where role_key='todo_config_admin' and del_flag='0');
-update sys_role set status='0',create_by=@run_marker,remark=@test_remark
+update sys_role set status='0',data_scope='3',create_by=@run_marker,remark=@test_remark
 where role_key='todo_config_admin' and del_flag='0' and remark like 'TEST_ONLY|TODO_CONFIG_E2E|%';
 set @todo_config_role_id=(select role_id from sys_role where role_key='todo_config_admin' and del_flag='0' and create_by=@run_marker and remark=@test_remark order by role_id limit 1);
 
@@ -108,14 +112,56 @@ select u.user_id,r.role_id from sys_user u join sys_role r on r.role_key=u.user_
 where u.user_name in ('todo_business_admin','todo_resource_admin','todo_publisher','todo_auditor')
   and u.create_by=@run_marker and u.remark=@test_remark and r.create_by=@run_marker and r.remark=@test_remark;
 
+-- Isolate runtime leads in a disposable child department. The publisher is the
+-- department leader so TD-002 supervisor routing resolves deterministically.
+set @runtime_dept_code=concat('TODO_E2E_',@run_marker);
+insert into sys_dept(parent_id,ancestors,dept_name,dept_code,order_num,leader,status,del_flag,create_by,create_time)
+select 103,'0,100,101,103',concat('Todo E2E ',left(@run_marker,20)),@runtime_dept_code,99,
+  'todo_publisher','0','0',@run_marker,sysdate()
+where not exists(select 1 from sys_dept where dept_code=@runtime_dept_code);
+set @runtime_dept_id=(select dept_id from sys_dept where dept_code=@runtime_dept_code and create_by=@run_marker limit 1);
+update sys_user set dept_id=@runtime_dept_id
+where user_name='todo_config_admin' and create_by=@run_marker and remark=@test_remark;
+
+-- Runtime TD-003 and TD-004 schedules require an immutable assignment-policy
+-- snapshot for the disposable sales department.
+set @runtime_td003_version_id=(select v.version_id from todo_template t
+  join todo_template_version v on v.template_id=t.template_id
+  where t.template_code='TD-003' and v.status='PUBLISHED'
+  order by v.version_no desc,v.version_id desc limit 1);
+insert into biz_lead_assignment_policy(policy_code,policy_name,sales_dept_id,source_code,business_type,
+  retry_rule_json,status,row_version,create_by,create_time)
+select @runtime_policy_code,concat('Todo E2E runtime policy - ',left(@run_marker,20)),@runtime_dept_id,'*','LEAD',
+  json_object(
+    'templateVersionId',@runtime_td003_version_id,'ruleVersionId',@runtime_td003_version_id,
+    'timezone','Asia/Shanghai','windows',json_array(
+      json_object('windowCode','T0','windowOrder',0,'dayOffset',0,'startOffsetMinutes',0,'durationMinutes',120,'maxAttempts',3,'occurrenceNo',1),
+      json_object('windowCode','T1_AM','windowOrder',1,'dayOffset',1,'startTime','09:00:00','endTime','11:00:00','maxAttempts',1,'occurrenceNo',1),
+      json_object('windowCode','T1_NOON','windowOrder',2,'dayOffset',1,'startTime','12:00:00','endTime','14:00:00','maxAttempts',1,'occurrenceNo',1),
+      json_object('windowCode','T1_PM','windowOrder',3,'dayOffset',1,'startTime','15:00:00','endTime','18:00:00','maxAttempts',1,'occurrenceNo',1),
+      json_object('windowCode','T2_AM','windowOrder',4,'dayOffset',2,'startTime','09:00:00','endTime','11:00:00','maxAttempts',1,'occurrenceNo',1),
+      json_object('windowCode','T2_NOON','windowOrder',5,'dayOffset',2,'startTime','12:00:00','endTime','14:00:00','maxAttempts',1,'occurrenceNo',1),
+      json_object('windowCode','T2_PM','windowOrder',6,'dayOffset',2,'startTime','15:00:00','endTime','18:00:00','maxAttempts',1,'occurrenceNo',1)
+    )
+  ),'ACTIVE',0,@run_marker,sysdate()
+where @runtime_dept_id is not null and @runtime_td003_version_id is not null
+  and not exists(select 1 from biz_lead_assignment_policy where policy_code=@runtime_policy_code);
+set @runtime_policy_id=(select policy_id from biz_lead_assignment_policy
+  where policy_code=@runtime_policy_code and create_by=@run_marker limit 1);
+insert ignore into biz_lead_assignment_policy_candidate(policy_id,user_id,sort_order,status,create_by,create_time)
+values(@runtime_policy_id,@todo_config_user_id,0,'ACTIVE',@run_marker,sysdate());
+
 -- Grant only the six configuration pages, their operation buttons, and their parent directory.
 insert ignore into sys_role_menu(role_id,menu_id)
 select @todo_config_role_id,m.menu_id from sys_menu m
 where m.status='0' and (
   (m.menu_type='M' and m.path='todo-engine')
-  or m.component in ('todo/config/template/index','todo/config/journey/index','todo/config/trigger/index','todo/config/sla/index',
+  or m.component in ('todo/index','todo/config/template/index','todo/config/journey/index','todo/config/trigger/index','todo/config/sla/index',
                      'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index','todo/config/resource/index')
-  or m.perms='lead:mine:query'
+  or m.perms in ('lead:mine:query','lead:assign','lead:first-contact:handle',
+                 'lead:invalid-review:handle','lead:retry:handle',
+                 'todo:list','todo:query','todo:claim','todo:start','todo:submit','todo:complete',
+                 'todo:definition:publish')
   or m.parent_id in (select page.menu_id from sys_menu page where page.component in (
        'todo/config/template/index','todo/config/journey/index','todo/config/trigger/index','todo/config/sla/index',
        'todo/config/dod/index','todo/config/simulation/index','todo/config/release/index','todo/config/resource/index'))
@@ -138,9 +184,10 @@ where r.role_key in ('todo_business_admin','todo_resource_admin','todo_publisher
       m.component='todo/config/resource/index'
       or m.perms in ('todo:resource:list','todo:resource:query','todo:resource:add','todo:resource:edit','todo:resource:status')))
     or (r.role_key='todo_publisher' and (
-      m.component in ('todo/config/template/index','todo/config/journey/index','todo/config/simulation/index','todo/config/release/index')
+      m.component in ('todo/index','todo/config/template/index','todo/config/journey/index','todo/config/simulation/index','todo/config/release/index')
       or m.perms in ('todo:template:list','todo:simulation:list','todo:simulation:simulate',
-                     'todo:release:list','todo:release:publish','todo:release:diff','todo:definition:diff')))
+                     'todo:release:list','todo:release:publish','todo:release:diff','todo:definition:diff','todo:definition:publish',
+                     'todo:list','todo:query','todo:claim','todo:start','todo:submit','todo:complete','lead:invalid-review:handle')))
     or (r.role_key='todo_auditor' and (
       m.component in ('todo/config/template/index','todo/config/journey/index','todo/config/release/index')
       or m.perms in ('todo:template:list','todo:release:list','todo:release:diff','todo:definition:diff')))

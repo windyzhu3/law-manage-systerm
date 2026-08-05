@@ -165,9 +165,9 @@ public class TodoDefinitionCompiler
                 errors.add(issue("TODO_ROUTE_TASK_VERSION_NOT_FOUND", path, "TASK template version does not exist"));
                 continue;
             }
-            boolean guardedCurrentStart = startTask && versionId.equals(context.currentVersionId())
+            boolean guardedCurrentVersion = versionId.equals(context.currentVersionId())
                     && context.guardedPublishPreflight() && "DRAFT".equals(version.status());
-            if (!"PUBLISHED".equals(version.status()) && !guardedCurrentStart)
+            if (!"PUBLISHED".equals(version.status()) && !guardedCurrentVersion)
                 errors.add(issue("TODO_ROUTE_TASK_VERSION_NOT_PUBLISHED", path,
                         "TASK template version must be published"));
         }

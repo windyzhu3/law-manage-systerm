@@ -123,6 +123,28 @@ class TodoDefinitionSimulationServiceTest
                 result.issues().stream().map(i->i.code()+i.path()).sorted().toList());
     }
 
+    @Test void window_scheduled_sla_is_simulatable_without_a_fake_scalar_duration()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        TodoDefinitionDocument scheduled=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
+                base.event(),base.owner(),base.dod(),new TodoDefinitionDocument.SlaRule(Map.of(
+                        "calendarCode","DEFAULT","schedule",Map.of("windows",List.of(
+                                Map.of("windowCode","T0","dayOffset",0,"durationMinutes",120,"maxAttempts",3),
+                                Map.of("windowCode","T1_AM","dayOffset",1,"startTime","09:00:00",
+                                        "endTime","11:00:00","maxAttempts",1))))),
+                base.ui(),base.routing(),base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(version(new TodoDefinitionCodec().canonicalJson(scheduled)));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+
+        var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,
+                        LocalDateTime.of(2026,7,17,9,0)));
+
+        assertEquals("WINDOW_SCHEDULED",result.sla().status());
+        assertFalse(result.issues().stream().anyMatch(issue->
+                "TODO_SIMULATION_SLA_DURATION_UNKNOWN".equals(issue.code())));
+    }
+
     @Test void simulation_round_robin_never_advances_runtime_cursor()
     {
         TodoDefinitionDocument definition=definition(Map.of("type","ROUND_ROBIN","strategyKey","lead",

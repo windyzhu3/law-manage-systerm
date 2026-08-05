@@ -213,6 +213,7 @@ import {
   scenarioGate,
   readinessRepairTarget,
   simulationCompletionMessage,
+  shouldInvalidateSimulationForTemplateHashChange,
   versionDiffPlan
 } from '../simulation-workbench-model'
 
@@ -342,7 +343,8 @@ export default {
     }
   },
   watch: {
-    'template.definitionHash'() {
+    'template.definitionHash'(nextHash, previousHash) {
+      if (!shouldInvalidateSimulationForTemplateHashChange(previousHash, nextHash)) return
       this.authoritativeDraftHash = ''
       this.simulation = null
       this.readiness = this.initialReadiness

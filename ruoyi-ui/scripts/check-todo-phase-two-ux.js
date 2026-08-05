@@ -28,6 +28,7 @@ function loadScenarioWorkbenchModel() {
       readinessRepairTarget,
       journeySimulationReadiness,
       mergeJourneySimulationReadiness,
+      shouldInvalidateSimulationForTemplateHashChange,
       persistedScenarioResults
     }`
   )()
@@ -194,6 +195,50 @@ check('projects and merges server simulation readiness without losing journey co
     model.journeySimulationReadiness(merged),
     readiness,
     'the authoritative definition hash and publication gate must survive the parent-child feedback cycle'
+  )
+})
+
+check('accepts a successful simulation response as the authoritative hash for the same draft version', () => {
+  const model = loadScenarioWorkbenchModel()
+  const journey = {
+    template: {
+      templateId: 18,
+      versionId: 90,
+      definitionHash: 'hash-before-latest-preflight'
+    },
+    steps: [
+      { code: 'SIMULATION_PUBLISH', state: 'BLOCKED', issueCount: 1, value: { config: {} } }
+    ],
+    issues: [{ code: 'TODO_FULL_SIMULATION_REQUIRED', stepCode: 'SIMULATION_PUBLISH' }]
+  }
+  const responseReadiness = {
+    templateId: 18,
+    versionId: 90,
+    definitionHash: 'hash-returned-by-successful-simulation',
+    blockingScenarios: [],
+    fullSimulationPassed: true,
+    publicationReady: true,
+    issues: []
+  }
+
+  const merged = model.mergeJourneySimulationReadiness(journey, responseReadiness)
+
+  assert.strictEqual(merged.template.definitionHash, responseReadiness.definitionHash)
+  assert.deepStrictEqual(model.journeySimulationReadiness(merged), responseReadiness,
+    'the parent must not manufacture stale evidence from its pre-simulation hash')
+})
+
+check('does not invalidate fresh simulation evidence when a previously blank draft hash is materialized', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.strictEqual(
+    model.shouldInvalidateSimulationForTemplateHashChange('', 'hash-returned-by-successful-simulation'),
+    false,
+    'preflight materializing the first authoritative hash must not erase the simulation response that supplied it'
+  )
+  assert.strictEqual(model.shouldInvalidateSimulationForTemplateHashChange('hash-before-edit', ''), true)
+  assert.strictEqual(
+    model.shouldInvalidateSimulationForTemplateHashChange('hash-before-edit', 'hash-after-edit'),
+    true
   )
 })
 

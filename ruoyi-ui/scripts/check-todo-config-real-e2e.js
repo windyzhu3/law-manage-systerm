@@ -28,6 +28,14 @@ function forbidText(source, value, label) {
   if (source.includes(value)) throw new Error(`${label} must not include ${value}`)
 }
 
+function requireBefore(source, first, second, label) {
+  const firstIndex = source.indexOf(first)
+  const secondIndex = source.indexOf(second)
+  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
+    throw new Error(`${label} must place ${first} before ${second}`)
+  }
+}
+
 const spec = read(specPath)
 const journeySpec = read(journeySpecPath)
 const mysqlRunner = read(mysqlRunnerPath)
@@ -100,6 +108,25 @@ for (const required of [
   'resources\\/events\\/\\d+\\/versions$',
   "'.event-resource-meta'"
 ]) requireText(journeySpec, required, 'Todo journey real E2E spec')
+for (const required of [
+  'loadGuidedLeadDrafts',
+  'GUIDED_LEAD_TEMPLATES',
+  'assertSevenStepPersistence',
+  'refreshGovernedRouteTargets',
+  "assertGuidedRouteTarget(fixture, 'CONNECTED', 'TD-004', td004VersionId)",
+  'runGovernedScenarioBatch',
+  'activate-lead-release',
+  'td002-seven-steps.png',
+  'td003-retry-timeline.png',
+  'td004-five-day-cycle.png',
+  'lead-release-active-binding.png',
+  'GUIDED_LEAD_RUNTIME executes governed lead branches and five-day recurrence',
+  'TD001_SUSPECT_INVALID_TRUE_INVALID',
+  'TD001_SUSPECT_INVALID_MISJUDGED_VALID',
+  'TD001_UNREACHABLE_TD003_CONNECTED',
+  'TD004_PROGRESS_RECORDED_NEXT_TD004',
+  'lead-runtime-next-td004.png'
+]) requireText(journeySpec, required, 'Guided lead Todo journey real E2E spec')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
   'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',
@@ -152,8 +179,15 @@ for (const required of [
   'E2E_SCHEMA_REPAIR_',
   'todo:resource:edit',
   'todo:release:publish',
+  'todo:definition:publish',
   'todo:definition:diff',
-  'lead:mine:query'
+  'lead:mine:query',
+  'lead:assign',
+  'todo:claim',
+  'todo:start',
+  'todo:submit',
+  'todo:complete',
+  'lead:invalid-review:handle'
 ]) requireText(bootstrap, required, 'Test-only identity bootstrap')
 for (const required of [
   "coalesce(remark,'')", "coalesce(create_by,'')", "coalesce(@test_remark,'')", 'todo.e2e.captcha.restore.'
@@ -185,6 +219,7 @@ for (const required of [
   'NavigationMenuEncodingExternalMysqlIT',
   'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
+  'LeadTodoGuidedConfigurationExternalMysqlIT',
   'tests > 0',
   'skipped === 0',
   'failures === 0',
@@ -208,8 +243,18 @@ for (const required of [
   'serve-e2e-production.js',
   'password="$(openssl rand -hex 9)"',
   'TODO_E2E_REAL_BACKEND: true',
-  'todo-config-center.spec.js'
+  'todo-config-center.spec.js',
+  'Reset dedicated Todo configuration Redis',
+  'redis-cli -h127.0.0.1 -p6379 FLUSHDB',
+  '"captchaEnabled":false'
 ]) requireText(workflow, required, 'CI workflow')
+requireText(workflow, 'todo-config-journey.spec.js', 'CI workflow')
+requireBefore(workflow, '- name: Create isolated Todo configuration test identity',
+  '- name: Reset dedicated Todo configuration Redis', 'CI workflow E2E startup ordering')
+requireBefore(workflow, '- name: Reset dedicated Todo configuration Redis',
+  '- name: Start real backend', 'CI workflow E2E startup ordering')
+requireBefore(workflow, '"captchaEnabled":false',
+  '- name: Run Todo configuration real-backend journey', 'CI workflow E2E readiness ordering')
 forbidText(workflow, "grep -R '<skipped'", 'CI workflow')
 
 console.log('Todo configuration real-backend E2E source contract passed')

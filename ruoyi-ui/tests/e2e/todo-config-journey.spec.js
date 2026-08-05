@@ -1,4 +1,7 @@
 const { test, expect } = require('@playwright/test')
+const fs = require('node:fs')
+const path = require('node:path')
+const { executeSql } = require('./support/mysql-e2e-runner')
 const {
   assertSimulationPersistenceUnchanged,
   cleanupTodoConfiguration,
@@ -11,6 +14,30 @@ const {
 const realBackend = process.env.TODO_E2E_REAL_BACKEND === 'true'
 const password = process.env.TODO_CONFIG_E2E_PASSWORD
 const SAMPLE_LEAD_ID = -1001
+const GUIDED_SCREENSHOT_DIR = path.resolve(__dirname, '../../../output/playwright/lead-todo-guided-configuration')
+const GUIDED_LEAD_TEMPLATES = Object.freeze([
+  {
+    code: 'TD-004',
+    recipe: '五天实质进展完成',
+    labels: ['进展类型', '进展发生时间', '跟进凭证'],
+    scenarios: 3,
+    screenshot: 'td004-five-day-cycle.png'
+  },
+  {
+    code: 'TD-003',
+    recipe: '重试拨打完成',
+    labels: ['联系结果', '客户姓名', '所在城市', '客户诉求', '是否到所', '联系凭证'],
+    scenarios: 4,
+    screenshot: 'td003-retry-timeline.png'
+  },
+  {
+    code: 'TD-002',
+    recipe: '主管复核完成',
+    labels: ['复核结果', '复核意见'],
+    scenarios: 3,
+    screenshot: 'td002-seven-steps.png'
+  }
+])
 
 test.use({ viewport: { width: 1672, height: 941 } })
 
@@ -168,6 +195,155 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     expect(published.status === 'PUBLISHED').toBeTruthy()
   })
 
+  test('GUIDED_LEAD_TEMPLATES keep seven-step configuration, pass governed scenarios, publish and activate one release bundle', async ({ page }) => {
+    test.setTimeout(180000)
+    fs.mkdirSync(GUIDED_SCREENSHOT_DIR, { recursive: true })
+    await loginAs(page, 'todo_config_admin', password)
+    const guided = loadGuidedLeadDrafts()
+
+    for (const metadata of GUIDED_LEAD_TEMPLATES) {
+      const fixture = guided[metadata.code]
+      expect(fixture.status).toBe('DRAFT')
+      await assertSevenStepPersistence(page, fixture, metadata)
+      await runGovernedScenarioBatch(page, fixture, metadata.scenarios)
+      await page.screenshot({
+        path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot),
+        fullPage: true
+      })
+      await publishCurrentGuidedDraft(page, fixture)
+      expect(loadPublishedVersion(fixture.templateId, fixture.versionId).status).toBe('PUBLISHED')
+    }
+
+    const td001 = guided['TD-001']
+    await openJourney(page, td001, 'ROUTING')
+    const recommendation = page.getByRole('button', { name: '应用首联推荐路由' })
+    await expect(recommendation).toBeVisible()
+    await recommendation.click()
+    await saveCurrentJourney(page, td001)
+    await runGovernedScenarioBatch(page, td001, 3)
+    await publishCurrentGuidedDraft(page, td001)
+
+    const publishedBundle = loadPublishedLeadReleaseBundle()
+    expect(publishedBundle['TD-001']).toBe(td001.versionId)
+    for (const metadata of GUIDED_LEAD_TEMPLATES) {
+      expect(publishedBundle[metadata.code]).toBe(guided[metadata.code].versionId)
+    }
+    alignRuntimeAssignmentPolicy(publishedBundle['TD-003'])
+
+    await openJourney(page, td001, 'SIMULATION_PUBLISH')
+    const releasePanel = page.getByTestId('lead-release-panel')
+    await expect(releasePanel).toBeVisible()
+    const activation = releasePanel.getByTestId('activate-lead-release')
+    const activationDisabled = await activation.isDisabled()
+    if (!activationDisabled) {
+      const activationResponse = page.waitForResponse(response =>
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/prod-api/todo/config/lead-release/activate'
+      )
+      await activation.click()
+      await page.getByRole('button', { name: '确认启用' }).click()
+      await expectSuccessfulApiResponse(await activationResponse)
+    }
+    await expect(releasePanel).toContainText('当前组合已启用')
+    await page.screenshot({
+      path: path.join(GUIDED_SCREENSHOT_DIR, 'lead-release-active-binding.png'),
+      fullPage: true
+    })
+
+    await page.goto('/todo-engine/todo-release-record')
+    const releaseHistory = page.getByRole('main')
+    await expect(releaseHistory).toBeVisible()
+    for (const metadata of GUIDED_LEAD_TEMPLATES) {
+      await expect(releaseHistory).toContainText(metadata.code)
+    }
+  })
+
+  test('GUIDED_LEAD_RUNTIME executes governed lead branches and five-day recurrence', async ({ page }) => {
+    test.setTimeout(240000)
+    fs.mkdirSync(GUIDED_SCREENSHOT_DIR, { recursive: true })
+    const evidence = {}
+    const activeBundle = loadPublishedLeadReleaseBundle()
+
+    await switchIdentity(page, 'todo_config_admin')
+    const trueInvalid = await createAndAssignRuntimeLead(page, 'TD001_SUSPECT_INVALID_TRUE_INVALID')
+    const trueInvalidProof = createRuntimeProof(trueInvalid, 'CONTACT_PROOF', 'true-invalid')
+    const trueInvalidTd001 = await waitForRuntimeTodo(trueInvalid.leadId, 'TD-001')
+    await completeTodoLifecycle(page, trueInvalidTd001.todoId, 'true-invalid-td001', suspectInvalidFields('true-invalid'), [trueInvalidProof])
+    const trueInvalidTd002 = await waitForRuntimeTodo(trueInvalid.leadId, 'TD-002', trueInvalidTd001.todoId)
+    expect(trueInvalidTd002.templateVersionId).toBe(activeBundle['TD-002'])
+    await switchIdentity(page, 'todo_publisher')
+    await completeTodoLifecycle(page, trueInvalidTd002.todoId, 'true-invalid-td002', {
+      reviewResult: 'TRUE_INVALID', reviewOpinion: 'Task 11 confirmed invalid'
+    })
+    const trueInvalidState = loadRuntimeLeadState(trueInvalid.leadId)
+    expect(trueInvalidState.disposition).toBe('DEAD_POOL')
+    expect(trueInvalidState.invalidReviewStatus).toBe('CONFIRMED')
+    expect(runtimeCount(`select count(*) from todo_instance where business_type='LEAD' and business_id=${trueInvalid.leadId} and previous_todo_id=${trueInvalidTd002.todoId}`)).toBe(0)
+    evidence.TD001_SUSPECT_INVALID_TRUE_INVALID = runtimeEvidence(trueInvalid, trueInvalidTd001, trueInvalidTd002)
+
+    await switchIdentity(page, 'todo_config_admin')
+    const misjudged = await createAndAssignRuntimeLead(page, 'TD001_SUSPECT_INVALID_MISJUDGED_VALID')
+    const misjudgedProof = createRuntimeProof(misjudged, 'CONTACT_PROOF', 'misjudged')
+    const misjudgedTd001 = await waitForRuntimeTodo(misjudged.leadId, 'TD-001')
+    await completeTodoLifecycle(page, misjudgedTd001.todoId, 'misjudged-td001', suspectInvalidFields('misjudged'), [misjudgedProof])
+    const misjudgedTd002 = await waitForRuntimeTodo(misjudged.leadId, 'TD-002', misjudgedTd001.todoId)
+    await switchIdentity(page, 'todo_publisher')
+    await completeTodoLifecycle(page, misjudgedTd002.todoId, 'misjudged-td002', {
+      reviewResult: 'MISJUDGED_VALID', reviewOpinion: 'Task 11 returns to first contact'
+    })
+    const returnedTd001 = await waitForRuntimeTodo(misjudged.leadId, 'TD-001', misjudgedTd002.todoId)
+    expect(returnedTd001.status).toBe('CREATED')
+    expect(returnedTd001.templateVersionId).toBe(activeBundle['TD-001'])
+    evidence.TD001_SUSPECT_INVALID_MISJUDGED_VALID = runtimeEvidence(misjudged, misjudgedTd001, misjudgedTd002, returnedTd001)
+
+    await switchIdentity(page, 'todo_config_admin')
+    const retry = await createAndAssignRuntimeLead(page, 'TD001_UNREACHABLE_TD003_CONNECTED')
+    const unreachableProof = createRuntimeProof(retry, 'CONTACT_PROOF', 'unreachable')
+    const unreachableTd001 = await waitForRuntimeTodo(retry.leadId, 'TD-001')
+    await completeTodoLifecycle(page, unreachableTd001.todoId, 'unreachable-td001', unreachableFields('unreachable'), [unreachableProof])
+    const retryTd003 = await waitForRuntimeTodo(retry.leadId, 'TD-003')
+    expect(retryTd003.templateVersionId).toBe(activeBundle['TD-003'])
+    const retryProof = createRuntimeProof(retry, 'CONTACT_PROOF', 'retry-connected')
+    await completeTodoLifecycle(page, retryTd003.todoId, 'retry-td003', connectedRetryFields('retry-connected'), [retryProof])
+    const firstTd004 = await waitForRuntimeTodo(retry.leadId, 'TD-004', retryTd003.todoId)
+    expect(firstTd004.status).toBe('CREATED')
+    expect(firstTd004.templateVersionId).toBe(activeBundle['TD-004'])
+    evidence.TD001_UNREACHABLE_TD003_CONNECTED = runtimeEvidence(retry, unreachableTd001, retryTd003, firstTd004)
+
+    const progressProof = createRuntimeProof(retry, 'FOLLOWUP_PROOF', 'progress')
+    const progressAt = localDateTime(new Date(Date.now() - 60000))
+    const progressBody = await completeTodoLifecycle(page, firstTd004.todoId, 'progress-td004', {
+      progressType: 'PHONE', progressAt, remark: 'Task 11 five-day cycle'
+    }, [progressProof])
+    assertApiSuccess(await authenticatedApi(page, 'POST', `/prod-api/todo/${firstTd004.todoId}/complete`, progressBody))
+    const nextTd004 = await waitForRuntimeTodo(retry.leadId, 'TD-004', firstTd004.todoId)
+    expect(nextTd004.templateVersionId).toBe(activeBundle['TD-004'])
+    const cycle = loadFiveDayCycleEvidence(firstTd004.todoId, nextTd004.todoId)
+    expect(cycle.followupCount).toBe(1)
+    expect(cycle.planCount).toBe(1)
+    expect(cycle.occurrenceCount).toBe(1)
+    expect(cycle.nextTodoCount).toBe(1)
+    expect(cycle.dueOffsetSeconds).toBe(432000)
+    evidence.TD004_PROGRESS_RECORDED_NEXT_TD004 = {
+      ...runtimeEvidence(retry, firstTd004, nextTd004),
+      followupId: cycle.followupId,
+      planId: cycle.planId,
+      occurrenceId: cycle.occurrenceId,
+      dueOffsetSeconds: cycle.dueOffsetSeconds
+    }
+
+    await page.goto('/todo')
+    const todoPage = page.locator('.todo-page')
+    await expect(todoPage).toBeVisible()
+    const search = todoPage.locator('.biz-filter-main .el-input input').first()
+    await search.fill(retry.leadNo)
+    await search.press('Enter')
+    await expect(todoPage).toContainText(retry.leadNo)
+    await expect(todoPage).toContainText('5天实质进展待办')
+    await page.screenshot({ path: path.join(GUIDED_SCREENSHOT_DIR, 'lead-runtime-next-td004.png'), fullPage: true })
+    fs.writeFileSync(path.join(GUIDED_SCREENSHOT_DIR, 'runtime-evidence.json'), `${JSON.stringify(evidence, null, 2)}\n`, 'utf8')
+  })
+
   test('SCENARIO_BUSINESS_ADMIN_BOUNDARY can edit and simulate but cannot maintain resources or publish', async ({ page }) => {
     await loginAs(page, 'todo_business_admin', password)
     await openJourney(page, fixtures.failed, 'SIMULATION_PUBLISH')
@@ -227,6 +403,222 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
 async function openJourney(page, fixture, step) {
   await page.goto(`/todo-engine/todo-template-journey?templateId=${fixture.templateId}&step=${step}`)
   await expect(page.getByTestId('template-journey-shell')).toBeVisible()
+}
+
+function parseMysqlRows(output, columns) {
+  return String(output || '').trim().split(/\r?\n/).filter(Boolean).map(line => {
+    const values = line.split('\t')
+    if (values.length !== columns.length) throw new Error(`Guided Todo query returned ${values.length} columns; expected ${columns.length}`)
+    return columns.reduce((row, column, index) => {
+      row[column] = values[index] === 'NULL' ? null : values[index]
+      return row
+    }, {})
+  })
+}
+
+function loadGuidedLeadDrafts() {
+  const database = process.env.TODO_E2E_DB_NAME
+  const rows = parseMysqlRows(executeSql(`
+    select t.template_code,t.template_id,v.version_id,v.version_no,v.status,v.definition_hash
+    from todo_template t
+    join todo_template_version v on v.template_id=t.template_id
+    join (
+      select template_id,max(version_no) version_no
+      from todo_template_version where status='DRAFT' group by template_id
+    ) latest on latest.template_id=v.template_id and latest.version_no=v.version_no
+    where t.template_code in ('TD-001','TD-002','TD-003','TD-004')
+    order by t.template_code;
+  `, database), ['templateCode', 'templateId', 'versionId', 'versionNo', 'status', 'definitionHash'])
+  const result = {}
+  for (const row of rows) {
+    result[row.templateCode] = {
+      ...row,
+      templateId: Number(row.templateId),
+      versionId: Number(row.versionId),
+      versionNo: Number(row.versionNo)
+    }
+  }
+  expect(Object.keys(result)).toEqual(['TD-001', 'TD-002', 'TD-003', 'TD-004'])
+  return result
+}
+
+function loadPublishedVersion(templateId, versionId) {
+  const rows = parseMysqlRows(executeSql(`
+    select status,definition_hash from todo_template_version
+    where template_id=${Number(templateId)} and version_id=${Number(versionId)};
+  `, process.env.TODO_E2E_DB_NAME), ['status', 'definitionHash'])
+  if (rows.length !== 1) throw new Error(`Published Todo version ${versionId} was not found`)
+  return rows[0]
+}
+
+function loadPublishedLeadReleaseBundle() {
+  const rows = parseMysqlRows(executeSql(`
+    select t.template_code,v.version_id
+    from todo_template t join todo_template_version v on v.template_id=t.template_id
+    where t.template_code in ('TD-001','TD-002','TD-003','TD-004')
+      and v.status='PUBLISHED'
+      and v.version_no=(select max(candidate.version_no) from todo_template_version candidate
+        where candidate.template_id=t.template_id and candidate.status='PUBLISHED')
+    order by t.template_code;
+  `, process.env.TODO_E2E_DB_NAME), ['templateCode', 'versionId'])
+  return rows.reduce((result, row) => {
+    result[row.templateCode] = Number(row.versionId)
+    return result
+  }, {})
+}
+
+function alignRuntimeAssignmentPolicy(td003VersionId) {
+  const marker = process.env.TODO_CONFIG_E2E_RUN_MARKER
+  executeSql(`
+    update biz_lead_assignment_policy
+    set retry_rule_json=json_set(retry_rule_json,
+          '$.templateVersionId',cast(${Number(td003VersionId)} as unsigned),
+          '$.ruleVersionId',cast(${Number(td003VersionId)} as unsigned)),
+        row_version=row_version+1,update_by=${sqlLiteral(marker)},update_time=now()
+    where create_by=${sqlLiteral(marker)} and business_type='LEAD' and status='ACTIVE';
+  `, e2eDatabase())
+  expect(runtimeCount(`
+    select count(*) from biz_lead_assignment_policy
+    where create_by=${sqlLiteral(marker)} and business_type='LEAD' and status='ACTIVE'
+      and cast(json_unquote(json_extract(retry_rule_json,'$.templateVersionId')) as unsigned)=${Number(td003VersionId)}
+      and cast(json_unquote(json_extract(retry_rule_json,'$.ruleVersionId')) as unsigned)=${Number(td003VersionId)}
+  `)).toBe(1)
+}
+
+async function assertSevenStepPersistence(page, fixture, metadata) {
+  await openJourney(page, fixture, 'EVENT')
+  const navigation = page.locator('.journey-step-nav')
+  const steps = navigation.locator('.journey-step-nav__item')
+  await expect(steps).toHaveCount(7)
+  await expect(steps.locator('strong')).toHaveText([
+    '业务事件', '触发条件', '负责人', '完成标准', '办理时限', '后续路由', '模拟发布'
+  ])
+
+  const expectedSections = [
+    '.event-step', '.trigger-step', '.owner-step', '.dod-step',
+    '.sla-step', '.routing-step', '.simulation-publish-step'
+  ]
+  for (let index = 0; index < expectedSections.length; index += 1) {
+    await steps.nth(index).click()
+    await expect(page.locator(expectedSections[index])).toBeVisible()
+  }
+
+  if (metadata.code === 'TD-003') {
+    await refreshGovernedRouteTargets(page, steps, fixture)
+    const td004VersionId = loadPublishedLeadReleaseBundle()['TD-004']
+    assertGuidedRouteTarget(fixture, 'CONNECTED', 'TD-004', td004VersionId)
+  }
+
+  await steps.nth(3).click()
+  const recommendedRecipe = page.locator('.recipe-card').filter({ hasText: metadata.recipe }).first()
+  await expect(recommendedRecipe).toBeVisible()
+  if (!(await recommendedRecipe.evaluate(element => element.classList.contains('is-selected')))) {
+    await recommendedRecipe.click()
+    await saveCurrentJourney(page, fixture)
+  }
+  await expect(recommendedRecipe).toHaveClass(/is-selected/)
+  for (const label of metadata.labels) await expect(page.locator('.dod-step')).toContainText(label)
+
+  await steps.nth(0).click()
+  await steps.nth(3).click()
+  await expect(page.locator('.recipe-card.is-selected')).toContainText(metadata.recipe)
+  await expect(page.locator('.journey-page')).not.toContainText(/undefined|业务字段\s*\d+|用户\s*ID/i)
+}
+
+async function refreshGovernedRouteTargets(page, steps, fixture) {
+  await steps.nth(5).click()
+  const recommendation = page.locator('.routing-step .business-routing__actions .el-button--primary')
+  await expect(recommendation).toBeVisible()
+  await recommendation.click()
+  await saveCurrentJourney(page, fixture)
+}
+
+function assertGuidedRouteTarget(fixture, resultValue, targetTemplateCode, targetVersionId) {
+  const rows = parseMysqlRows(executeSql(`
+    select outcome.target_template_code,outcome.target_version_id
+    from todo_template_version version
+    join json_table(version.definition_json,'$.routing.config.businessOutcomes[*]' columns(
+      legacy_value varchar(64) path '$.value',
+      result_value varchar(64) path '$.resultValue',
+      target_template_code varchar(64) path '$.targetTemplateCode',
+      target_version_id bigint path '$.targetVersionId'
+    )) outcome
+    where version.version_id=${Number(fixture.versionId)}
+      and coalesce(outcome.result_value,outcome.legacy_value)=${sqlLiteral(resultValue)};
+  `, e2eDatabase()), ['targetTemplateCode', 'targetVersionId'])
+  expect(rows).toHaveLength(1)
+  expect(rows[0].targetTemplateCode).toBe(targetTemplateCode)
+  expect(Number(rows[0].targetVersionId)).toBe(Number(targetVersionId))
+}
+
+async function saveCurrentJourney(page, fixture) {
+  const response = page.waitForResponse(item =>
+    item.request().method() === 'PUT' &&
+    new URL(item.url()).pathname === `/prod-api/todo/config/templates/${fixture.templateId}/journey`
+  )
+  await page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true }).click()
+  await expectSuccessfulApiResponse(await response)
+}
+
+async function runGovernedScenarioBatch(page, fixture, expectedScenarioCount) {
+  await openJourney(page, fixture, 'SIMULATION_PUBLISH')
+  const step = page.getByTestId('simulation-publish-step')
+  const payloadResponse = page.waitForResponse(response =>
+    response.request().method() === 'POST' &&
+    new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixture.templateId}/journey/payload`
+  )
+  await step.getByRole('button', { name: '一键加载只读样例' }).click()
+  await expectSuccessfulApiResponse(await payloadResponse)
+  await expect(step.getByTestId('business-object-payload-editor')).toContainText('只读样例')
+  const scenarioCards = step.locator('.scenario-card')
+  await expect(scenarioCards).toHaveCount(expectedScenarioCount)
+  const batchResponse = page.waitForResponse(response =>
+    response.request().method() === 'POST' &&
+    new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixture.templateId}/journey/scenarios/batch-simulate`
+  )
+  await step.getByTestId('batch-scenario-gate').getByRole('button').click()
+  await expectSuccessfulApiResponse(await batchResponse)
+  await expect(scenarioCards.locator('.el-tag--success')).toHaveCount(expectedScenarioCount)
+
+  const simulationResponse = page.waitForResponse(response =>
+    response.request().method() === 'POST' &&
+    new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixture.templateId}/journey/simulate`
+  )
+  await step.getByTestId('run-journey-simulation').click()
+  await expectSuccessfulApiResponse(await simulationResponse)
+  await expectFixedTrace(step)
+  await expect(step.locator('.simulation-trace li.is-blocked')).toHaveCount(0)
+  await expect(step.getByTestId('publish-current-draft')).toBeEnabled()
+}
+
+async function publishCurrentGuidedDraft(page, fixture) {
+  const response = page.waitForResponse(item =>
+    item.request().method() === 'POST' &&
+    new URL(item.url()).pathname === `/prod-api/todo/config/release-records/${fixture.versionId}/publish`
+  )
+  await page.getByTestId('publish-current-draft').click()
+  await page.getByRole('button', { name: '确认发布' }).click()
+  await expectSuccessfulApiResponse(await response)
+  await expect(page.locator('.el-message--success').filter({ hasText: '当前版本已发布' })).toBeVisible()
+  await assertPublishedVersionHistory(page, fixture)
+}
+
+async function assertPublishedVersionHistory(page, fixture) {
+  await page.goto('/todo-engine/todo-release-record')
+  await expect(page.getByRole('heading', { name: '发布记录' })).toBeVisible()
+  const keyword = page.getByPlaceholder('模板名称或编码')
+  await keyword.fill(fixture.templateCode)
+  const response = page.waitForResponse(item =>
+    item.request().method() === 'GET' &&
+    new URL(item.url()).pathname === '/prod-api/todo/config/release-records'
+  )
+  await keyword.press('Enter')
+  const listResponse = await response
+  expect(listResponse.status()).toBe(200)
+  expect([0, 200]).toContain(Number((await listResponse.json()).code))
+  const row = page.locator('.el-table__row').filter({ hasText: fixture.templateCode }).first()
+  await expect(row).toContainText(`v${fixture.versionNo}`)
+  await expect(row).toContainText('已发布')
 }
 
 async function selectBusinessObject(page, step, keyword) {
@@ -299,6 +691,248 @@ async function authenticatedApi(page, method, path, body) {
     const payload = await response.json()
     return { status: response.status, code: payload.code, message: payload.msg, data: payload.data }
   }, { method, path, body })
+}
+
+async function switchIdentity(page, username) {
+  await page.context().clearCookies()
+  await page.goto('/login')
+  await page.evaluate(() => {
+    window.localStorage.clear()
+    window.sessionStorage.clear()
+  })
+  await loginAs(page, username, password)
+}
+
+function e2eDatabase() {
+  const database = process.env.TODO_E2E_DB_NAME
+  if (!database) throw new Error('TODO_E2E_DB_NAME is required for runtime acceptance')
+  return database
+}
+
+function sqlLiteral(value) {
+  return `'${String(value == null ? '' : value).replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
+}
+
+async function createAndAssignRuntimeLead(page, scenario) {
+  const unique = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`.toUpperCase()
+  const leadNo = `T11${unique}`.slice(0, 32)
+  const marker = process.env.TODO_CONFIG_E2E_RUN_MARKER || 'task11-runtime'
+  const rows = parseMysqlRows(executeSql(`
+    set @runtime_user_id=(select user_id from sys_user where user_name='todo_config_admin' and del_flag='0' limit 1);
+    set @runtime_dept_id=(select dept_id from sys_user where user_id=@runtime_user_id);
+    insert into biz_lead(lead_no,lead_name,contact_name,mobile,source_code,status,pool_status,priority,
+      owner_id,dept_id,disposition,del_flag,create_by,create_time,update_time,remark)
+    values(${sqlLiteral(leadNo)},${sqlLiteral(`Task 11 ${scenario}`)},'Task 11 contact','13800000000','online',
+      '0','0','2',null,@runtime_dept_id,'ACTIVE','0',${sqlLiteral(marker)},sysdate(),sysdate(),${sqlLiteral(scenario)});
+    set @runtime_lead_id=last_insert_id();
+    select @runtime_lead_id,${sqlLiteral(leadNo)},@runtime_user_id,@runtime_dept_id;
+  `, e2eDatabase()), ['leadId', 'leadNo', 'ownerId', 'deptId'])
+  if (rows.length !== 1) throw new Error(`Runtime lead ${leadNo} could not be created`)
+  const lead = {
+    leadId: Number(rows[0].leadId),
+    leadNo: rows[0].leadNo,
+    ownerId: Number(rows[0].ownerId),
+    deptId: Number(rows[0].deptId),
+    scenario
+  }
+  assertApiSuccess(await authenticatedApi(page, 'POST', '/prod-api/lead/assign', {
+    leadId: lead.leadId,
+    ownerId: lead.ownerId,
+    reason: `Task 11 runtime ${scenario}`
+  }))
+  return lead
+}
+
+function createRuntimeProof(lead, materialType, label) {
+  const unique = `${lead.leadId}-${label}-${Date.now()}`
+  const rows = parseMysqlRows(executeSql(`
+    set @runtime_user_id=(select user_id from sys_user where user_name='todo_config_admin' and del_flag='0' limit 1);
+    set @runtime_dept_id=(select dept_id from sys_user where user_id=@runtime_user_id);
+    insert into file_object(logical_name,current_version_no,next_version_no,status,created_by,create_time,update_time,version)
+    values(${sqlLiteral(`Task 11 ${label}`)},1,2,'ACTIVE',@runtime_user_id,sysdate(),sysdate(),0);
+    set @runtime_file_id=last_insert_id();
+    insert into file_object_version(file_object_id,version_no,storage_provider,object_key,original_file_name,
+      content_type,size_bytes,sha256,change_description,created_by,create_time)
+    values(@runtime_file_id,1,'LOCAL',${sqlLiteral(`todo-e2e/${unique}.txt`)},${sqlLiteral(`${label}.txt`)},
+      'text/plain',1,sha2(${sqlLiteral(unique)},256),'Task 11 governed runtime evidence',@runtime_user_id,sysdate());
+    insert into file_business_relation(file_object_id,business_type,business_id,material_type,visibility,
+      scope_dept_id,scope_user_id,created_by,created_dept_id,active,create_time)
+    values(@runtime_file_id,'LEAD',${Number(lead.leadId)},${sqlLiteral(materialType)},'BUSINESS',0,0,
+      @runtime_user_id,@runtime_dept_id,1,sysdate());
+    select @runtime_file_id;
+  `, e2eDatabase()), ['fileObjectId'])
+  if (rows.length !== 1) throw new Error(`Runtime proof ${label} could not be created`)
+  return Number(rows[0].fileObjectId)
+}
+
+async function waitForRuntimeTodo(leadId, templateCode, previousTodoId) {
+  const deadline = Date.now() + 45000
+  const previous = previousTodoId == null ? '' : ` and previous_todo_id=${Number(previousTodoId)}`
+  while (Date.now() < deadline) {
+    const rows = parseMysqlRows(executeSql(`
+      select todo_id,todo_no,template_code,template_version_id,status,owner_id,owner_dept_id,
+        previous_todo_id,root_todo_id,date_format(created_at,'%Y-%m-%dT%H:%i:%s'),
+        date_format(due_at,'%Y-%m-%dT%H:%i:%s')
+      from todo_instance
+      where business_type='LEAD' and business_id=${Number(leadId)}
+        and template_code=${sqlLiteral(templateCode)}${previous}
+      order by todo_id desc limit 1;
+    `, e2eDatabase()), [
+      'todoId', 'todoNo', 'templateCode', 'templateVersionId', 'status', 'ownerId', 'ownerDeptId',
+      'previousTodoId', 'rootTodoId', 'createdAt', 'dueAt'
+    ])
+    if (rows.length === 1) {
+      const row = rows[0]
+      return {
+        ...row,
+        todoId: Number(row.todoId),
+        templateVersionId: Number(row.templateVersionId),
+        ownerId: row.ownerId == null ? null : Number(row.ownerId),
+        ownerDeptId: row.ownerDeptId == null ? null : Number(row.ownerDeptId),
+        previousTodoId: row.previousTodoId == null ? null : Number(row.previousTodoId),
+        rootTodoId: row.rootTodoId == null ? null : Number(row.rootTodoId)
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+  throw new Error(`Timed out waiting for ${templateCode} for lead ${leadId}`)
+}
+
+async function completeTodoLifecycle(page, todoId, actionPrefix, fields, fileObjectIds = []) {
+  const prefix = `${actionPrefix}-${todoId}-${Date.now()}`
+  const transition = async action => {
+    const body = {
+      actionId: `${prefix}-${action}`,
+      opinion: `Task 11 ${action}`,
+      fields: {},
+      fileObjectIds: []
+    }
+    assertApiSuccess(await authenticatedApi(page, 'POST', `/prod-api/todo/${todoId}/${action}`, body))
+  }
+  await transition('claim')
+  await transition('start')
+  await transition('submit')
+  const completion = {
+    actionId: `${prefix}-complete`,
+    opinion: 'Task 11 governed completion',
+    fields: { ...fields },
+    fileObjectIds: [...fileObjectIds]
+  }
+  assertApiSuccess(await authenticatedApi(page, 'POST', `/prod-api/todo/${todoId}/complete`, completion))
+  return completion
+}
+
+function localDateTime(value = new Date()) {
+  const pad = number => String(number).padStart(2, '0')
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}` +
+    `T${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+}
+
+function suspectInvalidFields(label) {
+  const contactedAt = localDateTime()
+  return {
+    contactResult: 'SUSPECT_INVALID',
+    contactedAt,
+    startedAt: contactedAt,
+    callChannel: 'MANUAL',
+    invalidReasonCode: 'OTHER',
+    salesExplanation: `Task 11 ${label} requires supervisor review`,
+    manualNotes: `Task 11 ${label} first contact`
+  }
+}
+
+function unreachableFields(label) {
+  const contactedAt = localDateTime()
+  return {
+    contactResult: 'UNREACHABLE',
+    contactedAt,
+    startedAt: contactedAt,
+    callChannel: 'MANUAL',
+    manualNotes: `Task 11 ${label} first contact`
+  }
+}
+
+function connectedRetryFields(label) {
+  const startedAt = localDateTime()
+  return {
+    contactResult: 'CONNECTED',
+    result: 'CONNECTED',
+    startedAt,
+    callChannel: 'MANUAL',
+    attemptCount: 1,
+    name: `Task 11 ${label}`,
+    city: 'Shanghai',
+    demand: 'Runtime acceptance demand',
+    visited: '0',
+    manualNotes: `Task 11 ${label} retry`
+  }
+}
+
+function loadRuntimeLeadState(leadId) {
+  const rows = parseMysqlRows(executeSql(`
+    select disposition,invalid_review_status,first_contact_result,retry_stage,retry_attempt_count
+    from biz_lead where lead_id=${Number(leadId)};
+  `, e2eDatabase()), ['disposition', 'invalidReviewStatus', 'firstContactResult', 'retryStage', 'retryAttemptCount'])
+  if (rows.length !== 1) throw new Error(`Runtime lead ${leadId} was not found`)
+  return { ...rows[0], retryAttemptCount: Number(rows[0].retryAttemptCount) }
+}
+
+function runtimeCount(sql) {
+  const rows = parseMysqlRows(executeSql(sql, e2eDatabase()), ['count'])
+  if (rows.length !== 1) throw new Error('Runtime count query must return exactly one row')
+  return Number(rows[0].count)
+}
+
+function runtimeEvidence(lead, ...todos) {
+  return {
+    leadId: lead.leadId,
+    leadNo: lead.leadNo,
+    scenario: lead.scenario,
+    leadState: loadRuntimeLeadState(lead.leadId),
+    todos: todos.filter(Boolean).map(todo => {
+      const actions = parseMysqlRows(executeSql(`
+        select action_type from todo_action_log where todo_id=${Number(todo.todoId)} order by action_log_id;
+      `, e2eDatabase()), ['actionType']).map(row => row.actionType)
+      return {
+        todoId: todo.todoId,
+        todoNo: todo.todoNo,
+        templateCode: todo.templateCode,
+        templateVersionId: todo.templateVersionId,
+        status: todo.status,
+        previousTodoId: todo.previousTodoId,
+        actions
+      }
+    })
+  }
+}
+
+function loadFiveDayCycleEvidence(firstTodoId, nextTodoId) {
+  const rows = parseMysqlRows(executeSql(`
+    select f.followup_id,p.plan_id,o.occurrence_id,
+      (select count(*) from biz_lead_followup fact where fact.source_todo_id=${Number(firstTodoId)}) followup_count,
+      (select count(*) from todo_schedule_plan plan where plan.previous_todo_id=${Number(firstTodoId)}
+        and plan.schedule_purpose='LEAD_PROGRESS_5D') plan_count,
+      (select count(*) from todo_schedule_occurrence occurrence where occurrence.plan_id=p.plan_id) occurrence_count,
+      (select count(*) from todo_instance next_todo where next_todo.todo_id=${Number(nextTodoId)}
+        and next_todo.previous_todo_id=${Number(firstTodoId)} and next_todo.template_code='TD-004') next_todo_count,
+      timestampdiff(second,p.first_contact_at,w.due_at) due_offset_seconds
+    from biz_lead_followup f
+    join todo_schedule_plan p on p.plan_id=f.schedule_plan_id
+    join todo_schedule_window w on w.plan_id=p.plan_id and w.window_code='P5D'
+    join todo_schedule_occurrence o on o.plan_id=p.plan_id and o.todo_id=${Number(nextTodoId)}
+    where f.source_todo_id=${Number(firstTodoId)};
+  `, e2eDatabase()), [
+    'followupId', 'planId', 'occurrenceId', 'followupCount', 'planCount', 'occurrenceCount',
+    'nextTodoCount', 'dueOffsetSeconds'
+  ])
+  if (rows.length !== 1) throw new Error(`Five-day cycle for Todo ${firstTodoId} was not materialized exactly once`)
+  return Object.fromEntries(Object.entries(rows[0]).map(([key, value]) => [key, Number(value)]))
+}
+
+function assertApiSuccess(result) {
+  expect(result.status, JSON.stringify(result)).toBe(200)
+  expect([0, 200], JSON.stringify(result)).toContain(Number(result.code))
+  return result
 }
 
 async function expectSuccessfulApiResponse(response) {

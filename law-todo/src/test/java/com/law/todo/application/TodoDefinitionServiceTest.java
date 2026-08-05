@@ -205,6 +205,32 @@ class TodoDefinitionServiceTest
         assertEquals("alice",value.get("updateBy"));
     }
 
+    @Test void updateDraftAcceptsWindowScheduledSlaWithoutScalarMinutes()
+    {
+        String document="""
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{}},"dod":{"config":{}},
+                 "sla":{"config":{"calendarCode":"DEFAULT","schedule":{"windows":[
+                   {"windowCode":"T0","dayOffset":0,"durationMinutes":120,"maxAttempts":3},
+                   {"windowCode":"T1_AM","dayOffset":1,"startTime":"09:00:00","endTime":"11:00:00","maxAttempts":1}
+                 ]}}},
+                 "ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+        Map<String,Object> current=draft(null,null);current.put("business_type","LEAD");
+        current.put("definition_json",document);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L));
+        templateDraftLedger("edit-window-schedule");
+        when(mapper.updateTemplateVersionDraft(anyMap())).thenReturn(1);
+
+        Long result=service().updateDraft(new UpdateDraftCommand("edit-window-schedule",9L,
+                null,null,null,null,null,document,document),actor);
+
+        assertEquals(9L,result);
+        verify(mapper).updateTemplateVersionDraft(anyMap());
+    }
+
     @Test void updateDraftUsesSourceTokenAndReturnsTheRecordedResultForAnIdenticalReplay()
     {
         String currentDocument="""
@@ -706,7 +732,7 @@ class TodoDefinitionServiceTest
         when(mapper.selectDefinitionActionForUpdate(actionId)).thenAnswer(invocation->{
             Map<String,Object> claimed=action.get();if(claimed==null)return null;
             Map<String,Object> locked=new HashMap<>();locked.put("action_type",claimed.get("actionType"));locked.put("request_fingerprint",claimed.get("requestFingerprint"));
-            locked.put("operator_id",claimed.get("operatorId"));locked.put("operator_name",claimed.get("operatorName"));locked.put("action_status",claimed.getOrDefault("actionStatus","CLAIMED"));locked.put("entity_id",claimed.get("entityId"));return locked;
+            locked.put("operator_id",claimed.get("operatorId"));locked.put("operator_name",claimed.get("operatorName"));locked.put("action_status",claimed.getOrDefault("actionStatus","CLAIMED"));locked.put("entity_id",claimed.get("entityId"));locked.put("source_entity_id",claimed.get("sourceEntityId"));return locked;
         });
         when(mapper.completeDefinitionAction(org.mockito.ArgumentMatchers.eq(actionId),anyString(),org.mockito.ArgumentMatchers.anyLong())).thenAnswer(invocation->{
             action.get().put("actionStatus","APPLIED");action.get().put("entityId",invocation.getArgument(2));return 1;

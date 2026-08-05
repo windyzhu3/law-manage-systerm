@@ -162,6 +162,8 @@ function cleanupTodoConfiguration(code) {
     delimiter ;
     call todo_config_e2e_guard();
     set @run_marker='${sqlLiteral(runMarker)}'; set @test_remark=concat('TEST_ONLY|TODO_CONFIG_E2E|',@run_marker);
+    set @runtime_dept_code=concat('TODO_E2E_',@run_marker);
+    set @runtime_policy_code=concat('TODO_E2E_POLICY_',left(sha2(@run_marker,256),32));
     set @sla_code='${sqlLiteral(slaCode)}'; set @dod_code='${sqlLiteral(dodCode)}'; set @lead_no='${sqlLiteral(leadNo)}'; set @template_code='${sqlLiteral(code)}';
     set @warning_decision_code=concat('E2E_ADVISORY_',@run_marker);
     set @template_prefix=concat('E2E_TODO_CONFIG_',@run_marker,'_');
@@ -179,6 +181,8 @@ function cleanupTodoConfiguration(code) {
         and create_by=@run_marker and remark=@test_remark),'');
     set @event_resource_ids=coalesce((select group_concat(event_catalog_id order by event_catalog_id separator ',')
       from todo_event_catalog where event_type=concat('E2E_SCHEMA_REPAIR_',@run_marker)),'');
+    set @runtime_policy_id=(select policy_id from biz_lead_assignment_policy
+      where policy_code=@runtime_policy_code and create_by=@run_marker limit 1);
     delimiter //
     drop procedure if exists todo_config_e2e_ownership_guard//
     create procedure todo_config_e2e_ownership_guard()
@@ -222,8 +226,11 @@ function cleanupTodoConfiguration(code) {
     delete from sys_config where config_key=@captcha_restore_key and create_by=@run_marker and remark=@test_remark;
     delete from sys_user_role where find_in_set(user_id,@test_user_ids)>0 or find_in_set(role_id,@test_role_ids)>0;
     delete from sys_role_menu where find_in_set(role_id,@test_role_ids)>0;
+    delete from biz_lead_assignment_policy_candidate where policy_id=@runtime_policy_id;
+    delete from biz_lead_assignment_policy where policy_id=@runtime_policy_id and create_by=@run_marker;
     delete from sys_user where find_in_set(user_id,@test_user_ids)>0 and create_by=@run_marker and remark=@test_remark;
     delete from sys_role where find_in_set(role_id,@test_role_ids)>0 and create_by=@run_marker and remark=@test_remark;
+    delete from sys_dept where dept_code=@runtime_dept_code and create_by=@run_marker;
     call assertCleanupCount('todo_simulation_record',(select count(*) from todo_simulation_record where find_in_set(template_version_id,@version_ids)>0));
     call assertCleanupCount('todo_template_draft_rule_ref',(select count(*) from todo_template_draft_rule_ref where find_in_set(version_id,@version_ids)>0));
     call assertCleanupCount('todo_trigger_rule',(select count(*) from todo_trigger_rule where find_in_set(template_id,@template_ids)>0 or find_in_set(template_version_id,@version_ids)>0));
@@ -241,6 +248,8 @@ function cleanupTodoConfiguration(code) {
     call assertCleanupCount('captcha_restore',(select count(*) from sys_config where config_key=@captcha_restore_key));
     call assertCleanupCount('sys_user',(select count(*) from sys_user where find_in_set(user_id,@test_user_ids)>0 and create_by=@run_marker));
     call assertCleanupCount('sys_role',(select count(*) from sys_role where find_in_set(role_id,@test_role_ids)>0 and create_by=@run_marker));
+    call assertCleanupCount('biz_lead_assignment_policy',(select count(*) from biz_lead_assignment_policy where policy_code=@runtime_policy_code and create_by=@run_marker));
+    call assertCleanupCount('sys_dept',(select count(*) from sys_dept where dept_code=@runtime_dept_code and create_by=@run_marker));
     call todo_config_e2e_guard();
     drop procedure todo_config_e2e_ownership_guard; drop procedure assertCleanupCount; drop procedure todo_config_e2e_guard;
   `

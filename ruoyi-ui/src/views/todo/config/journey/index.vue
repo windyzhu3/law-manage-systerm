@@ -1047,8 +1047,7 @@ export default {
     },
     applySimulationReadiness(readiness) {
       if (!this.journey || !readiness) return
-      const exact = journeySimulationReadiness({ ...this.journey, simulationReadiness: readiness })
-      this.journey = mergeJourneySimulationReadiness(this.journey, exact)
+      this.journey = mergeJourneySimulationReadiness(this.journey, readiness)
     },
     async handlePublished() {
       await this.loadJourney()

@@ -64,6 +64,7 @@ public class LeadTodoReleaseService
         Map<String,Boolean> evidence=evidenceStatus(versions,evidenceRows);
         validateRouting(command,
                 text(value(versions.get("TD-001"),"compiled_json","compiledJson")));
+        validateCoordinatedRouting(command,versions);
         Map<String,Object> candidate=mapper.selectLeadReleaseTrigger(ENTRY_SLOT,query.td001VersionId());
         int expected=candidate==null?0:integer(value(candidate,"trigger_version","triggerVersion"));
         List<Map<String,Object>> bindings=mapper.selectLeadEntrySlotBindings(ENTRY_SLOT);
@@ -104,6 +105,7 @@ public class LeadTodoReleaseService
                 mapper.selectTemplateVersionsForUpdate(ids));
         validateEvidence(versions,mapper.selectSimulationReadinessBatch(ids));
         validateRouting(command,text(value(versions.get("TD-001"),"compiled_json","compiledJson")));
+        validateCoordinatedRouting(command,versions);
 
         Map<String,Object> trigger=mapper.selectLeadReleaseTriggerForUpdate(ENTRY_SLOT,command.td001VersionId());
         if(trigger==null||trigger.isEmpty())trigger=createDisabledTrigger(versions.get("TD-001"),actor);
@@ -194,8 +196,12 @@ public class LeadTodoReleaseService
             if(routing==null)throw routingMismatch();
             Map<String,Long> expected=downstream(command);
             Map<String,Long> outcomes=targets(routing.getJSONArray("businessOutcomes"),"targetTemplateCode","targetVersionId",false);
-            Map<String,Long> nodes=targets(routing.getJSONArray("nodes"),"templateCode","templateVersionId",true);
-            if(!expected.equals(outcomes)||!expected.equals(nodes))throw routingMismatch();
+            Set<Long> expectedNodes=new LinkedHashSet<>();
+            expectedNodes.add(command.td001VersionId());
+            expectedNodes.add(command.td002VersionId());
+            expectedNodes.add(command.td004VersionId());
+            Set<Long> nodes=taskVersionIds(routing.getJSONArray("nodes"));
+            if(!expected.equals(outcomes)||!expectedNodes.equals(nodes))throw routingMismatch();
         }
         catch(TodoException expected){throw expected;}
         catch(Exception invalid){throw routingMismatch();}
@@ -213,6 +219,72 @@ public class LeadTodoReleaseService
             if(allowCurrent&&"TD-001".equals(code))continue;
             if(!Set.of("TD-002","TD-003","TD-004").contains(code)||id==null||result.put(code,id)!=null)
                 throw routingMismatch();
+        }
+        return result;
+    }
+
+    private void validateCoordinatedRouting(LeadReleaseCommand command,
+            Map<String,Map<String,Object>> versions)
+    {
+        // TD-002 logically reopens the currently active lead-entry TD-001. Requiring its
+        // immutable published graph to point at the not-yet-published TD-001 candidate would
+        // create an impossible publication cycle. The active TD-001 graph owns that return path.
+        validateLockedRoute(versions.get("TD-003"),"TD-003",command.td003VersionId(),
+                "CONNECTED","NEXT_TEMPLATE","TD-004",command.td004VersionId());
+        validateLockedRoute(versions.get("TD-004"),"TD-004",command.td004VersionId(),
+                "PROGRESS_RECORDED","SCHEDULE_SELF","TD-004",command.td004VersionId());
+    }
+
+    private void validateLockedRoute(Map<String,Object> version,String selfCode,long selfVersionId,
+            String resultValue,String effectKind,String targetCode,long targetVersionId)
+    {
+        try
+        {
+            JSONObject root=JSON.parseObject(text(value(version,"compiled_json","compiledJson")));
+            JSONObject routing=root==null?null:root.getJSONObject("routing");
+            routing=routing==null?null:routing.getJSONObject("config");
+            if(routing==null)throw routingMismatch();
+            int matching=0;
+            for(Object raw:routing.getJSONArray("businessOutcomes"))
+            {
+                if(!(raw instanceof JSONObject outcome))throw routingMismatch();
+                String value=outcome.getString("resultValue");
+                if(value==null)value=outcome.getString("value");
+                String configuredCode=outcome.getString("targetTemplateCode");
+                Long configuredVersion=outcome.getLong("targetVersionId");
+                if(resultValue.equals(value))
+                {
+                    matching++;
+                    if(!effectKind.equals(outcome.getString("effectKind"))
+                            ||!targetCode.equals(configuredCode)
+                            ||!Objects.equals(targetVersionId,configuredVersion))throw routingMismatch();
+                }
+                else if(configuredCode!=null||configuredVersion!=null)throw routingMismatch();
+            }
+            if(matching!=1)throw routingMismatch();
+
+            JSONArray nodes=routing.getJSONArray("nodes");
+            Set<Long> expected=new LinkedHashSet<>();
+            expected.add(selfVersionId);
+            expected.add(targetVersionId);
+            Set<Long> actual=taskVersionIds(nodes);
+            if(!expected.equals(actual))throw routingMismatch();
+        }
+        catch(TodoException expected){throw expected;}
+        catch(Exception invalid){throw routingMismatch();}
+    }
+
+    private Set<Long> taskVersionIds(JSONArray values)
+    {
+        if(values==null)throw routingMismatch();
+        Set<Long> result=new LinkedHashSet<>();
+        for(Object raw:values)
+        {
+            if(!(raw instanceof JSONObject value))throw routingMismatch();
+            if(!"TASK".equals(value.getString("type")))continue;
+            Long id=value.getLong("templateVersionId");
+            if(id==null)throw routingMismatch();
+            result.add(id);
         }
         return result;
     }
@@ -292,7 +364,7 @@ public class LeadTodoReleaseService
         }
         catch(Exception ignored){return Map.of();}
     }
-    private TodoException routingMismatch(){return new TodoException("TODO_LEAD_RELEASE_ROUTING_MISMATCH","TD-001 routing must target the exact approved downstream versions");}
+    private TodoException routingMismatch(){return new TodoException("TODO_LEAD_RELEASE_ROUTING_MISMATCH","Coordinated lead routing must lock the exact approved template versions");}
     private Object value(Map<String,Object> row,String snake,String camel){return row.containsKey(snake)?row.get(snake):row.get(camel);}
     private String text(Object value){return value==null?null:String.valueOf(value);}
     private Long number(Object value){return value==null?null:Long.valueOf(String.valueOf(value));}

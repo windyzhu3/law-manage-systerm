@@ -31,7 +31,7 @@ class LeadProgressHandoffTodoHandlerTest
         TodoInstance todo=new TodoInstance();todo.setTodoId(7001L);todo.setTemplateCode("TD-004");
         todo.setTemplateVersionId(88L);todo.setBusinessType("LEAD");todo.setBusinessId(91L);
         LeadProgressCycleService cycles=org.mockito.Mockito.mock(LeadProgressCycleService.class);
-        when(cycles.complete(any(),same(todo))).thenReturn(
+        when(cycles.completeAfterDodValidation(any(),same(todo))).thenReturn(
                 new LeadProgressCycleService.ProgressCycleOutcome(
                         90L,81L,progressAt.plusDays(5),false));
         LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(cycles);
@@ -49,7 +49,7 @@ class LeadProgressHandoffTodoHandlerTest
                 result.routingPayload());
         ArgumentCaptor<LeadProgressCompleteCommand> command=
                 ArgumentCaptor.forClass(LeadProgressCompleteCommand.class);
-        verify(cycles).complete(command.capture(),same(todo));
+        verify(cycles).completeAfterDodValidation(command.capture(),same(todo));
         assertEquals(91L,command.getValue().getLeadId());
         assertEquals(7001L,command.getValue().getTodoId());
         assertEquals("PHONE",command.getValue().getProgressType());
@@ -77,6 +77,23 @@ class LeadProgressHandoffTodoHandlerTest
                 "result","PROGRESS_RECORDED"),result.routingPayload());
         assertTrue(result.producedTemplateCodes().isEmpty(),
                 "SCHEDULE_SELF is an outcome effect, not an ordinary graph-produced task");
+        verifyNoInteractions(cycles);
+    }
+
+    @Test
+    void readonlySampleCanValidateTheRecurringEffectWithoutPersistedBusinessIdentity()
+    {
+        TodoInstance sample=new TodoInstance();
+        sample.setTemplateCode("TD-004");
+        sample.setBusinessType("LEAD");
+        sample.setBusinessId(-1001L);
+        LeadProgressCycleService cycles=org.mockito.Mockito.mock(LeadProgressCycleService.class);
+        LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(cycles);
+
+        SimulationResult result=handler.simulate(sample,Map.of(
+                "progressType","PHONE","progressAt","2026-07-31T10:00:00"));
+
+        assertEquals("PROGRESS_RECORDED",result.routingPayload().get("result"));
         verifyNoInteractions(cycles);
     }
 

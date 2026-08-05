@@ -236,6 +236,11 @@ public class TodoDefinitionSimulationService
         Long minutes=positiveLong(rule.get("minutes"));
         if(minutes==null)
         {
+            Object schedule=rule.get("schedule");
+            Object windows=schedule instanceof Map<?,?> values?values.get("windows"):null;
+            if(windows instanceof java.util.Collection<?> configured&&!configured.isEmpty())
+                return new SlaTrace("WINDOW_SCHEDULED",calendarCode,command.effectiveAt(),null,null,null,null,
+                        List.of("schedule:windows:"+configured.size()));
             issues.add(new SimulationIssue("TODO_SIMULATION_SLA_DURATION_UNKNOWN","sla.minutes","ERROR","A positive SLA duration is required"));
             return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,List.of("duration:invalid"));
         }

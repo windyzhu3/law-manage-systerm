@@ -1100,35 +1100,80 @@ function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, curren
   return buildBusinessRoutingPatch(outcomes, {
     mode: 'SEQUENTIAL',
     joinMode: 'ALL',
-    currentVersionId
+    currentVersionId,
+    outcomeSet: catalog
   }, current)
 }
 
-function buildSequentialRoute(outcomes, currentVersionId) {
-  const nodes = [{ key: 'current_task', type: 'TASK', templateVersionId: Number(currentVersionId) || null }]
+function buildLeadFirstContactRoute(outcomes, currentVersionId) {
+  const byResult = result => outcomes.find(row => row.resultValue === result)
+  const valid = byResult('VALID')
+  const suspect = byResult('SUSPECT_INVALID')
+  if (!valid || !suspect || !valid.targetVersionId || !suspect.targetVersionId) return null
+
+  return {
+    start: 'td001',
+    nodes: [
+      { key: 'td001', type: 'TASK', templateCode: 'TD-001', templateVersionId: Number(currentVersionId) || null },
+      { key: 'firstResult', type: 'DECISION' },
+      { key: 'td002', type: 'TASK', templateCode: 'TD-002', templateVersionId: suspect.targetVersionId },
+      { key: 'reviewResult', type: 'DECISION' },
+      { key: 'td004', type: 'TASK', templateCode: 'TD-004', templateVersionId: valid.targetVersionId },
+      { key: 'reopenedTd001', type: 'TASK', templateCode: 'TD-001', templateVersionId: Number(currentVersionId) || null },
+      { key: 'end', type: 'END' }
+    ],
+    edges: [
+      { key: 'td001-result', from: 'td001', to: 'firstResult', priority: 0 },
+      { key: 'first-valid', from: 'firstResult', to: 'td004', priority: 30, condition: literalCondition('contactResult', 'VALID') },
+      { key: 'first-suspect', from: 'firstResult', to: 'td002', priority: 20, condition: literalCondition('contactResult', 'SUSPECT_INVALID') },
+      { key: 'first-unreachable', from: 'firstResult', to: 'end', priority: 10, condition: literalCondition('contactResult', 'UNREACHABLE') },
+      { key: 'first-default', from: 'firstResult', to: 'end', priority: -1, default: true },
+      { key: 'td002-result', from: 'td002', to: 'reviewResult', priority: 0 },
+      { key: 'review-invalid', from: 'reviewResult', to: 'end', priority: 20, condition: literalCondition('reviewResult', 'TRUE_INVALID') },
+      { key: 'review-reopen', from: 'reviewResult', to: 'reopenedTd001', priority: 10, condition: literalCondition('reviewResult', 'MISJUDGED_VALID') },
+      { key: 'review-default', from: 'reviewResult', to: 'end', priority: -1, default: true },
+      { key: 'reopened-end', from: 'reopenedTd001', to: 'end', priority: 0 },
+      { key: 'td004-end', from: 'td004', to: 'end', priority: 0 }
+    ]
+  }
+}
+
+function governedCurrentTaskKey(current, currentVersionId) {
+  const config = object(current && current.config)
+  const start = String(config.start || '')
+  const node = list(config.nodes).find(item =>
+    String(item && item.key) === start &&
+    String(item && item.type) === 'TASK' &&
+    Number(item && item.templateVersionId) === Number(currentVersionId)
+  )
+  return node ? start : 'current_task'
+}
+
+function buildSequentialRoute(outcomes, currentVersionId, currentTaskKey = 'current_task') {
+  const nodes = [{ key: currentTaskKey, type: 'TASK', templateVersionId: Number(currentVersionId) || null }]
   const edges = []
   const endKey = 'route_end'
   if (!outcomes.length) {
     nodes.push({ key: endKey, type: 'END' })
-    edges.push({ key: 'edge_current_end', from: 'current_task', to: endKey })
-    return { start: 'current_task', nodes, edges }
+    edges.push({ key: 'edge_current_end', from: currentTaskKey, to: endKey })
+    return { start: currentTaskKey, nodes, edges }
   }
   if (outcomes.length === 1 && !outcomes[0].condition) {
     const row = outcomes[0]
     if (row.resultType === 'END') {
       nodes.push({ key: endKey, type: 'END' })
-      edges.push({ key: 'edge_current_end', from: 'current_task', to: endKey })
+      edges.push({ key: 'edge_current_end', from: currentTaskKey, to: endKey })
     } else {
       const taskKey = `task_${row.id}`
       nodes.push({ key: taskKey, type: 'TASK', templateVersionId: row.targetVersionId })
       nodes.push({ key: endKey, type: 'END' })
-      edges.push({ key: `edge_current_${row.id}`, from: 'current_task', to: taskKey })
+      edges.push({ key: `edge_current_${row.id}`, from: currentTaskKey, to: taskKey })
       edges.push({ key: `edge_${row.id}_end`, from: taskKey, to: endKey })
     }
-    return { start: 'current_task', nodes, edges }
+    return { start: currentTaskKey, nodes, edges }
   }
   nodes.push({ key: 'business_result', type: 'DECISION' }, { key: endKey, type: 'END' })
-  edges.push({ key: 'edge_current_result', from: 'current_task', to: 'business_result' })
+  edges.push({ key: 'edge_current_result', from: currentTaskKey, to: 'business_result' })
   const hasDefault = outcomes.some(row => row.default)
   outcomes.forEach((row, index) => {
     const target = row.resultType === 'END' ? endKey : `task_${row.id}`
@@ -1146,20 +1191,20 @@ function buildSequentialRoute(outcomes, currentVersionId) {
     if (!edge.default && row.condition) edge.condition = clone(row.condition)
     edges.push(edge)
   })
-  return { start: 'current_task', nodes, edges }
+  return { start: currentTaskKey, nodes, edges }
 }
 
-function buildParallelRoute(outcomes, currentVersionId, joinMode) {
+function buildParallelRoute(outcomes, currentVersionId, joinMode, currentTaskKey = 'current_task') {
   const rows = outcomes.filter(row => row.resultType !== 'END')
   const branches = rows.map(row => row.id)
   const nodes = [
-    { key: 'current_task', type: 'TASK', templateVersionId: Number(currentVersionId) || null },
+    { key: currentTaskKey, type: 'TASK', templateVersionId: Number(currentVersionId) || null },
     { key: 'parallel_start', type: 'FORK' },
     { key: 'parallel_join', type: 'JOIN', joinMode, branches },
     { key: 'route_end', type: 'END' }
   ]
   const edges = [
-    { key: 'edge_current_parallel', from: 'current_task', to: 'parallel_start' },
+    { key: 'edge_current_parallel', from: currentTaskKey, to: 'parallel_start' },
     { key: 'edge_join_end', from: 'parallel_join', to: 'route_end' }
   ]
   rows.forEach((row, index) => {
@@ -1178,7 +1223,7 @@ function buildParallelRoute(outcomes, currentVersionId, joinMode) {
       to: 'parallel_join'
     })
   })
-  return { start: 'current_task', nodes, edges }
+  return { start: currentTaskKey, nodes, edges }
 }
 
 function buildBusinessRoutingPatch(rows, options, current) {
@@ -1186,9 +1231,13 @@ function buildBusinessRoutingPatch(rows, options, current) {
   const outcomes = list(rows).map(normalizedOutcome)
   const mode = String(settings.mode || 'SEQUENTIAL').toUpperCase()
   const joinMode = String(settings.joinMode || 'ALL').toUpperCase() === 'ANY' ? 'ANY' : 'ALL'
-  const graph = mode === 'PARALLEL'
-    ? buildParallelRoute(outcomes, settings.currentVersionId, joinMode)
-    : buildSequentialRoute(outcomes, settings.currentVersionId)
+  const governedFirstContact = String(object(settings.outcomeSet).recommendationCode || '') === 'TD001_STANDARD_ROUTE'
+    ? buildLeadFirstContactRoute(outcomes, settings.currentVersionId)
+    : null
+  const currentTaskKey = governedCurrentTaskKey(current, settings.currentVersionId)
+  const graph = governedFirstContact || (mode === 'PARALLEL'
+    ? buildParallelRoute(outcomes, settings.currentVersionId, joinMode, currentTaskKey)
+    : buildSequentialRoute(outcomes, settings.currentVersionId, currentTaskKey))
   return {
     config: {
       ...clone(object(current && current.config)),

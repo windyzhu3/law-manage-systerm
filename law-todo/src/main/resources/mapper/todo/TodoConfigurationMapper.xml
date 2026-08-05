@@ -516,7 +516,7 @@
   </select>
   <select id="selectLeadReleaseVersions" resultType="java.util.Map">
     select v.version_id,v.version_no,v.template_id,v.status version_status,v.definition_hash,
-      cast(v.compiled_json as char) compiled_json,v.event_type,v.payload_version,
+      cast(v.compiled_json as char) compiled_json,
       t.template_code,t.template_name,t.business_type,t.status template_status
     from todo_template_version v join todo_template t on t.template_id=v.template_id
     where v.version_id in
@@ -528,7 +528,7 @@
   </select>
   <select id="selectTemplateVersionsForUpdate" resultType="java.util.Map">
     select v.version_id,v.version_no,v.template_id,v.status version_status,v.definition_hash,
-      cast(v.compiled_json as char) compiled_json,v.event_type,v.payload_version,
+      cast(v.compiled_json as char) compiled_json,
       t.template_code,t.template_name,t.business_type,t.status template_status
     from todo_template_version v join todo_template t on t.template_id=v.template_id
     where v.version_id in
