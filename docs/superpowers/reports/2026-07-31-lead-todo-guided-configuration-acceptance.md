@@ -208,3 +208,32 @@ and runtime identifiers in this document are retained as historical runs only.
 
 Detailed evidence and the final verification matrix are recorded in
 `docs/superpowers/reports/2026-08-06-lead-todo-final-review-round-two.md`.
+
+## Reusable one-command acceptance addendum - 2026-08-06
+
+The final governed pair is now covered by a committed PowerShell 5.1 harness
+and source contract. `scripts/run-lead-todo-guided-acceptance.ps1` refuses an
+existing or non-`_e2e` database, obtains all credentials from environment
+variables without recording their values, imports the 11 baseline scripts,
+runs Flyway and builds both applications, starts one backend, bootstraps once,
+runs one exact Playwright command, requeries runtime state independently and
+always performs guarded cleanup. The no-write `-ValidateOnly` mode and
+`npm run test:guided-acceptance-harness` both pass.
+
+The accepted run used `lead_todo_r4_20260805191157_e2e`, harness PID 20416,
+launcher PID 18092 and Java listener PID 24884. The sanitized application log
+has one database identity and one application start. All 32 manifest stages
+exited 0. The one browser invocation passed the two required tests in 1.5
+minutes (33.9 seconds and 52.7 seconds).
+
+An independent query proved TD-004 Todo 10 `COMPLETED` to Todo 11 `CREATED`,
+both on exact version 92, with previous Todo 10, exact-once 1/1/1/1 rows and a
+432000-second offset. Global teardown dropped the database; the absence query,
+backend stop and listener-absence checks all exited 0.
+
+The run artifacts are ignored runtime evidence under
+`ruoyi-ui/output/playwright/lead-todo-guided-configuration/`; they were not and
+must not be committed. GitHub Actions uploads that directory through
+`lead-todo-real-e2e-diagnostics` and `todo-config-real-e2e-diagnostics`. The
+fresh-checkout environment variables and commands are listed in
+`docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.

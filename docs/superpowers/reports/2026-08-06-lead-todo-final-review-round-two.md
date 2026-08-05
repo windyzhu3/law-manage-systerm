@@ -122,3 +122,62 @@ Playwright's global teardown dropped the exact database
 query returned zero rows, after which PID 14984 was stopped and port 8080 had
 zero listeners. Pre-existing Docker containers and unrelated user-owned
 worktree artifacts were preserved.
+
+## Round 4 reusable acceptance harness
+
+The browser evidence is now reproducible from a fresh checkout through
+`scripts/run-lead-todo-guided-acceptance.ps1`. The PowerShell 5.1 parser,
+non-mutating `-ValidateOnly` mode and the npm harness contract all pass. The
+contract checks 13 required environment variables, the `_e2e` database guard,
+all 11 baseline SQL sources, one exact browser command, independent runtime
+requery, guarded teardown and separate harness/launcher/application PIDs.
+
+The final harness run used the one fresh database
+`lead_todo_r4_20260805191157_e2e` from 2026-08-06 03:11:57 to 03:15:29 +08:00.
+All 32 recorded stages have numeric exit status 0. Harness PID 20416 launched
+wrapper PID 18092; the listener independently resolved Java application PID
+24884, so the manifest does not conflate the wrapper and application process.
+The sanitized backend log contains exactly one database identity and one
+`Started RuoYiApplication` record.
+
+Bootstrap executed once after migration and application readiness. Its
+independent proof row was:
+
+```text
+r420260805191157  1  1  1  1  1
+```
+
+Those counts prove one marked configuration administrator, role, Lead, SLA
+rule and DoD rule. Readiness then proved `captchaEnabled=false`, login code 200,
+a non-empty token and no token logging.
+
+One browser process executed exactly:
+
+```text
+npx playwright test tests/e2e/todo-config-journey.spec.js --grep "GUIDED_LEAD_" --project=chromium --reporter=list
+```
+
+It passed exactly 2/2 with one worker in 92.7 seconds: templates in 33.9
+seconds and runtime in 52.7 seconds. The independent terminal database query
+then returned:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+This proves TD-004 Todo 10 completed, Todo 11 was created on the same exact
+version 92 and linked by `previous_todo_id=10`, with exactly one follow-up
+fact, plan, occurrence and next Todo and the five-day offset.
+
+The repository global teardown dropped that exact database. A separate
+information-schema query returned 0, the owned backend stopped, and ports 8080
+and 4173 had zero listeners. The disposable MySQL and Redis containers were
+left running and no unrelated service or worktree artifact was changed.
+
+All runtime logs, JSON, screenshots and the sanitized manifest remain under
+the ignored `ruoyi-ui/output/playwright/lead-todo-guided-configuration/`
+directory and are not part of the commit. CI uploads this path in the
+`lead-todo-real-e2e-diagnostics` artifact (and the broader configuration job's
+`todo-config-real-e2e-diagnostics` artifact). Fresh-checkout prerequisites,
+environment variable names and safe execution commands are documented in
+`docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.
