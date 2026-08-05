@@ -10,6 +10,7 @@ const productionServerPath = path.join(root, 'scripts/serve-e2e-production.js')
 const productionServerContractPath = path.join(root, 'scripts/check-production-e2e-server.js')
 const mysqlRunnerPath = path.join(root, 'tests/e2e/support/mysql-e2e-runner.js')
 const databaseFixturePath = path.join(root, 'tests/e2e/support/todo-config-e2e-database.js')
+const globalTeardownPath = path.join(root, 'tests/e2e/support/todo-e2e-global-teardown.js')
 const simulationTracePath = path.join(root, 'src/views/todo/config/journey/components/SimulationTrace.vue')
 const externalReportGatePath = path.join(root, 'scripts/assert-external-db-reports.js')
 const externalReportContractPath = path.join(root, 'scripts/check-external-db-reports-contract.js')
@@ -40,6 +41,7 @@ const spec = read(specPath)
 const journeySpec = read(journeySpecPath)
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
+const globalTeardown = read(globalTeardownPath)
 const simulationTrace = read(simulationTracePath)
 for (const required of [
   'TODO_E2E_MYSQL_CONTAINER', 'docker', 'mysql', 'No MySQL execution path is available',
@@ -127,6 +129,15 @@ for (const required of [
   'TD004_PROGRESS_RECORDED_NEXT_TD004',
   'lead-runtime-next-td004.png'
 ]) requireText(journeySpec, required, 'Guided lead Todo journey real E2E spec')
+for (const required of [
+  "path.resolve(__dirname, '../../output/playwright/lead-todo-guided-configuration')",
+  'loadRuntimeTodo(todo.todoId)',
+  "expect(persisted.status).toBe('COMPLETED')",
+  'assertGuidedDodPersistence',
+  'assertGuidedRoutePersistence',
+  "metadata.ownerLabels",
+  "metadata.scheduleLabels"
+]) requireText(journeySpec, required, 'Guided lead Todo evidence contract')
 requireText(databaseFixture, "require('./mysql-e2e-runner')", 'Todo configuration database fixture')
 for (const required of [
   'assertCleanupCount', 'assertSafeE2eDatabase', 'todo_config_e2e_guard', 'todo_definition_action', 'call todo_config_e2e_guard();',
@@ -198,7 +209,14 @@ requireText(playwrightConfig, 'tests/e2e/**/*.spec.js', 'Playwright configuratio
 requireText(playwrightConfig, 'TODO_E2E_REAL_BACKEND', 'Playwright configuration')
 requireText(playwrightConfig, 'serve-e2e-production.js', 'Playwright configuration')
 requireText(playwrightConfig, 'workers: realBackend ? 1 : undefined', 'Playwright configuration')
+requireText(playwrightConfig, "globalTeardown: './tests/e2e/support/todo-e2e-global-teardown.js'", 'Playwright disposable database cleanup')
 forbidText(playwrightConfig, "npm run dev", 'Playwright real-backend configuration')
+for (const required of [
+  "process.env.TODO_E2E_DROP_DATABASE_AFTER !== 'true'",
+  'assertSafeE2eDatabase(database)',
+  'drop database',
+  'executeSql'
+]) requireText(globalTeardown, required, 'Todo E2E disposable database teardown')
 
 const productionServer = read(productionServerPath)
 for (const required of ['/prod-api', 'TODO_E2E_BACKEND_URL', 'dist', 'index.html']) requireText(productionServer, required, 'Production E2E server')
@@ -243,11 +261,13 @@ for (const required of [
   'serve-e2e-production.js',
   'password="$(openssl rand -hex 9)"',
   'TODO_E2E_REAL_BACKEND: true',
+  'TODO_E2E_DROP_DATABASE_AFTER: true',
   'todo-config-center.spec.js',
   'Reset dedicated Todo configuration Redis',
   'redis-cli -h127.0.0.1 -p6379 FLUSHDB',
   '"captchaEnabled":false'
 ]) requireText(workflow, required, 'CI workflow')
+requireText(workflow, 'ruoyi-ui/output/playwright', 'CI guided Todo artifact path')
 requireText(workflow, 'todo-config-journey.spec.js', 'CI workflow')
 requireBefore(workflow, '- name: Create isolated Todo configuration test identity',
   '- name: Reset dedicated Todo configuration Redis', 'CI workflow E2E startup ordering')

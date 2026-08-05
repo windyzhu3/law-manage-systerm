@@ -9,6 +9,7 @@ module.exports = defineConfig({
   timeout: realBackend ? 90000 : 30000,
   workers: realBackend ? 1 : undefined,
   retries: 0,
+  globalTeardown: './tests/e2e/support/todo-e2e-global-teardown.js',
   projects: [
     {
       name: 'chromium',

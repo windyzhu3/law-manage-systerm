@@ -37,6 +37,7 @@ import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.domain.TodoException;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.mapper.TodoConfigurationMapper;
+import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.spi.TodoAutoActionCapabilityRegistry;
 import com.law.todo.spi.TodoDictionaryValidationPort;
 
@@ -830,6 +831,8 @@ public class TodoDefinitionService
                 JSONObject schedule=rule.getJSONObject("schedule");
                 boolean hasScheduleWindows=schedule!=null&&schedule.getJSONArray("windows")!=null
                         &&!schedule.getJSONArray("windows").isEmpty();
+                if(hasScheduleWindows)
+                    TodoScheduleService.requireValidWindowConfiguration(schedule.getJSONArray("windows"));
                 if (!hasScheduleWindows&&rule.getLongValue("minutes") <= 0)
                     throw new TodoException("TODO_SLA_MINUTES_INVALID", "SLA minutes must be positive");
             }

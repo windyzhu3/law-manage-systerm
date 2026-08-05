@@ -184,6 +184,7 @@ jobs:
       TODO_E2E_DB_USER: root
       TODO_E2E_DB_PASSWORD: root
       TODO_E2E_REAL_BACKEND: true
+      TODO_E2E_DROP_DATABASE_AFTER: true
       TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}
       LOG_PATH: /tmp/ruoyi-logs
     steps:

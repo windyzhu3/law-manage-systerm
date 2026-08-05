@@ -18,6 +18,7 @@ import com.law.todo.definition.model.TodoDefinitionDocument;
 import com.law.todo.expression.ConditionExpression;
 import com.law.todo.expression.ConditionTypeChecker;
 import com.law.todo.routing.RoutingGraphValidator;
+import com.law.todo.schedule.TodoScheduleService;
 
 /** Deterministic, read-only health projection for the editable configuration snapshot. */
 @Component
@@ -164,7 +165,17 @@ public class TodoConfigurationJourneyEvaluator
         if(blank(calendar)||templates!=null&&!calendarAvailable(calendar))
             local.add(blocker("TODO_JOURNEY_CALENDAR_REQUIRED","SLA","sla.calendarCode",
                     "The service-level calendar is unavailable","Choose an active working calendar"));
-        if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue"))&&!hasScheduleWindows(sla))
+        boolean scheduled=hasScheduleWindows(sla);
+        if(scheduled)
+        {
+            try{TodoScheduleService.requireValidWindowConfiguration(map(sla.get("schedule")).get("windows"));}
+            catch(RuntimeException invalid)
+            {
+                local.add(blocker("TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID","SLA","sla.schedule.windows",
+                        "The configured schedule windows are invalid","Repair window codes, order, timing and retry limits"));
+            }
+        }
+        if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue"))&&!scheduled)
             local.add(blocker("TODO_JOURNEY_SLA_DURATION_REQUIRED","SLA","sla",
                     "A positive service-level duration is required","Set a duration for this todo"));
         append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty(),fieldValue("config",sla));

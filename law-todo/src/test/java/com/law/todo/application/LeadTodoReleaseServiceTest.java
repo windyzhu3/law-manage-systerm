@@ -177,8 +177,7 @@ class LeadTodoReleaseServiceTest
         arrangeReadyRelease();
         List<Map<String,Object>> rows=versions();
         rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",
-                compiled(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L),
-                        Map.of("TD-002",80L,"TD-004",79L)),5));
+                compiledWithReopenedTd001(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)),5));
         when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
         when(mapper.selectLeadReleaseTriggerForUpdate("LEAD_FIRST_CONTACT_ENTRY",88L))
                 .thenReturn(trigger(52L,3,"N"));
@@ -204,6 +203,41 @@ class LeadTodoReleaseServiceTest
 
         assertThat(service.activate(command(),ACTOR).activeTd001VersionId()).isEqualTo(88L);
         verify(templates).switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR);
+    }
+
+    @Test void rejectsMasterGraphWithoutMisjudgedValidReopenEdge()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String disconnected=compiledWithReopenedTd001(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
+                .replace("{\"to\":\"reopenedTd001\",\"key\":\"review-reopen\",\"from\":\"reviewResult\","
+                        +"\"priority\":10,\"condition\":{\"$expression\":{\"root\":{\"type\":\"AND\","
+                        +"\"conditions\":[{\"field\":\"reviewResult\",\"value\":\"MISJUDGED_VALID\","
+                        +"\"operator\":\"EQ\"}]},\"version\":1}}},","");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",disconnected,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
+    @Test void rejectsMasterGraphWithWrongTd002ReopenCondition()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String wrongCondition=compiledWithReopenedTd001(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
+                .replace("\"value\":\"MISJUDGED_VALID\"","\"value\":\"TRUE_INVALID\"");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",wrongCondition,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
     @Test void rejectsTd003ConnectedRouteThatTargetsAnotherTd004Version()
@@ -375,10 +409,25 @@ class LeadTodoReleaseServiceTest
     }
     private String compiledWithReopenedTd001(Map<String,Long> targets)
     {
-        String compiled=compiled(targets);
-        return compiled.replace("\"nodes\":[{\"type\":\"TASK\",\"templateVersionId\":88}",
-                "\"nodes\":[{\"type\":\"TASK\",\"templateVersionId\":88},"
-                +"{\"type\":\"TASK\",\"templateVersionId\":88}");
+        String outcomes=targets.entrySet().stream().map(entry->"{\"targetTemplateCode\":\""+entry.getKey()
+                +"\",\"targetVersionId\":"+entry.getValue()+"}").collect(java.util.stream.Collectors.joining(","));
+        return "{\"templateCode\":\"TD-001\",\"routing\":{\"config\":{\"businessOutcomes\":["+outcomes
+                +"],\"nodes\":["
+                +"{\"key\":\"td001\",\"type\":\"TASK\",\"templateCode\":\"TD-001\",\"templateVersionId\":88},"
+                +"{\"key\":\"firstResult\",\"type\":\"DECISION\"},"
+                +"{\"key\":\"td002\",\"type\":\"TASK\",\"templateCode\":\"TD-002\",\"templateVersionId\":80},"
+                +"{\"key\":\"reviewResult\",\"type\":\"DECISION\"},"
+                +"{\"key\":\"td004\",\"type\":\"TASK\",\"templateCode\":\"TD-004\",\"templateVersionId\":79},"
+                +"{\"key\":\"reopenedTd001\",\"type\":\"TASK\",\"templateCode\":\"TD-001\",\"templateVersionId\":88},"
+                +"{\"key\":\"end\",\"type\":\"END\"}],\"edges\":["
+                +"{\"to\":\"firstResult\",\"key\":\"td001-result\",\"from\":\"td001\",\"priority\":0},"
+                +"{\"to\":\"td002\",\"key\":\"first-suspect\",\"from\":\"firstResult\",\"priority\":20},"
+                +"{\"to\":\"reviewResult\",\"key\":\"td002-result\",\"from\":\"td002\",\"priority\":0},"
+                +"{\"to\":\"reopenedTd001\",\"key\":\"review-reopen\",\"from\":\"reviewResult\","
+                +"\"priority\":10,\"condition\":{\"$expression\":{\"root\":{\"type\":\"AND\","
+                +"\"conditions\":[{\"field\":\"reviewResult\",\"value\":\"MISJUDGED_VALID\","
+                +"\"operator\":\"EQ\"}]},\"version\":1}}},"
+                +"{\"to\":\"end\",\"key\":\"reopened-end\",\"from\":\"reopenedTd001\",\"priority\":0}]}}}";
     }
     private String compiled(Map<String,Long> targets,Map<String,Long> nodeTargets)
     {
@@ -402,7 +451,13 @@ class LeadTodoReleaseServiceTest
                         "\"type\":\"TASK\",");
     }
     private String td004Compiled(long self,long next)
-    {return routeCompiled("TD-004",self,"PROGRESS_RECORDED","SCHEDULE_SELF","TD-004",next);}
+    {
+        if(next!=self)return routeCompiled("TD-004",self,"PROGRESS_RECORDED","SCHEDULE_SELF","TD-004",next);
+        return "{\"templateCode\":\"TD-004\",\"routing\":{\"config\":{\"businessOutcomes\":["
+                +"{\"value\":\"PROGRESS_RECORDED\",\"effectKind\":\"SCHEDULE_SELF\","
+                +"\"targetTemplateCode\":\"TD-004\"}],\"nodes\":[{\"type\":\"TASK\","
+                +"\"templateCode\":\"TD-004\",\"templateVersionId\":"+self+"}]}}}";
+    }
     private String routeCompiled(String code,long self,String result,String effect,String targetCode,long target)
     {return "{\"templateCode\":\""+code+"\",\"routing\":{\"config\":{\"businessOutcomes\":["
             +"{\"value\":\""+result+"\",\"effectKind\":\""+effect+"\",\"targetTemplateCode\":\""

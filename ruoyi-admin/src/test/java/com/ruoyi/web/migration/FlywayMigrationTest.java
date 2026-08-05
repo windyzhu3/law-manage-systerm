@@ -84,6 +84,15 @@ class FlywayMigrationTest
         governanceSchemaFlyway.migrate();
         verifyLeadGovernanceAuditSchemaBoundary(url);
         verifyLeadNavigationFailureRepairAndRetry(url);
+        Flyway preScheduleMaterializerFlyway = Flyway.configure()
+            .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
+            .baselineOnMigrate(true)
+            .baselineVersion("0.15.0")
+            .locations("classpath:db/migration")
+            .target("0.20.79")
+            .load();
+        preScheduleMaterializerFlyway.migrate();
+        preseedTodoScheduleMaterializerJob(url);
         Flyway flyway = Flyway.configure()
             .dataSource(url, System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"))
             .baselineOnMigrate(true)
@@ -96,6 +105,8 @@ class FlywayMigrationTest
 
         assertTrue(result.success);
         assertEquals("0.20.80", current.getVersion().getVersion());
+        assertEquals(1L, count(url, "select count(*) from sys_job "
+            + "where invoke_target='todoScheduleTask.scan'"));
         verifyTodoSchedulePolicySnapshotSchema(url);
         verifyPublishedLeadTodoFlow(url);
         verifyDatabaseInvariants(url);
@@ -117,6 +128,24 @@ class FlywayMigrationTest
         verifyReadableNavigationMenuNames(url);
         verifyTodoTemplateVersionEditMetadata(url);
         verifyLeadSourceGovernance(url);
+    }
+
+    private void preseedTodoScheduleMaterializerJob(String url)
+    {
+        try (Connection connection = DriverManager.getConnection(url,
+            System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD"));
+            Statement statement = connection.createStatement())
+        {
+            statement.executeUpdate("insert into sys_job(job_id,job_name,job_group,invoke_target,"
+                + "cron_expression,misfire_policy,concurrent,status,create_by,create_time,remark) "
+                + "select coalesce(max(job_id),0)+1,'preseeded schedule materializer','LAW',"
+                + "'todoScheduleTask.scan','0 0 * * * ?','3','1','1','migration-test',sysdate(),"
+                + "'preseeded before V0.20.80' from sys_job");
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Could not preseed the schedule materializer job", exception);
+        }
     }
 
     private void insertLeadSourceGovernanceFixtures(String url)
@@ -1481,6 +1510,19 @@ class FlywayMigrationTest
         {
             assertTrue(rows.next());
             return rows.getLong(1);
+        }
+    }
+
+    private long count(String url, String sql)
+    {
+        try (Connection connection = DriverManager.getConnection(url,
+            System.getenv("TODO_MIGRATION_DB_USER"), System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            return count(connection, sql);
+        }
+        catch (SQLException exception)
+        {
+            throw new AssertionError("Could not query migration count", exception);
         }
     }
 

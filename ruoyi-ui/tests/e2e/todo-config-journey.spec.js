@@ -14,11 +14,15 @@ const {
 const realBackend = process.env.TODO_E2E_REAL_BACKEND === 'true'
 const password = process.env.TODO_CONFIG_E2E_PASSWORD
 const SAMPLE_LEAD_ID = -1001
-const GUIDED_SCREENSHOT_DIR = path.resolve(__dirname, '../../../output/playwright/lead-todo-guided-configuration')
+const GUIDED_SCREENSHOT_DIR = path.resolve(__dirname, '../../output/playwright/lead-todo-guided-configuration')
 const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-004',
     recipe: '五天实质进展完成',
+    eventName: '首联有效',
+    eventFields: ['线索负责人', '首联结果'],
+    ownerLabels: ['业务对象负责人', '当前业务对象负责人'],
+    scheduleLabels: ['每 5 天循环', '自动开启下一轮'],
     labels: ['进展类型', '进展发生时间', '跟进凭证'],
     scenarios: 3,
     screenshot: 'td004-five-day-cycle.png'
@@ -26,6 +30,10 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-003',
     recipe: '重试拨打完成',
+    eventName: '线索重试窗口到期',
+    eventFields: ['当前重试窗口', '线索负责人'],
+    ownerLabels: ['业务对象负责人', '当前业务对象负责人'],
+    scheduleLabels: ['重试窗口时间轴', 'T0', 'T+1', 'T+2'],
     labels: ['联系结果', '客户姓名', '所在城市', '客户诉求', '是否到所', '联系凭证'],
     scenarios: 4,
     screenshot: 'td003-retry-timeline.png'
@@ -33,6 +41,10 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-002',
     recipe: '主管复核完成',
+    eventName: '疑似无效线索已标记',
+    eventFields: ['复核主管', '疑似无效原因'],
+    ownerLabels: ['事件中的负责人', '复核主管'],
+    scheduleLabels: ['办理时长', '工作分钟内'],
     labels: ['复核结果', '复核意见'],
     scenarios: 3,
     screenshot: 'td002-seven-steps.png'
@@ -206,10 +218,6 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
       expect(fixture.status).toBe('DRAFT')
       await assertSevenStepPersistence(page, fixture, metadata)
       await runGovernedScenarioBatch(page, fixture, metadata.scenarios)
-      await page.screenshot({
-        path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot),
-        fullPage: true
-      })
       await publishCurrentGuidedDraft(page, fixture)
       expect(loadPublishedVersion(fixture.templateId, fixture.versionId).status).toBe('PUBLISHED')
     }
@@ -493,6 +501,10 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
   await expect(steps.locator('strong')).toHaveText([
     '业务事件', '触发条件', '负责人', '完成标准', '办理时限', '后续路由', '模拟发布'
   ])
+  const event = page.locator('.event-detail')
+  await expect(event).toContainText(metadata.eventName)
+  for (const label of metadata.eventFields) await expect(event).toContainText(label)
+  await expect(event).not.toContainText(/业务字段\s*\d+|undefined|\uFFFD/i)
 
   const expectedSections = [
     '.event-step', '.trigger-step', '.owner-step', '.dod-step',
@@ -503,25 +515,39 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
     await expect(page.locator(expectedSections[index])).toBeVisible()
   }
 
-  if (metadata.code === 'TD-003') {
-    await refreshGovernedRouteTargets(page, steps, fixture)
-    const td004VersionId = loadPublishedLeadReleaseBundle()['TD-004']
-    assertGuidedRouteTarget(fixture, 'CONNECTED', 'TD-004', td004VersionId)
+  await steps.nth(2).click()
+  const owner = page.locator('.owner-step')
+  for (const label of metadata.ownerLabels) await expect(owner).toContainText(label)
+  await expect(owner).not.toContainText(/业务字段\s*\d+|用户\s*ID|undefined|\uFFFD/i)
+
+  await steps.nth(4).click()
+  const sla = page.locator('.sla-step')
+  for (const label of metadata.scheduleLabels) await expect(sla).toContainText(label)
+  if (metadata.code !== 'TD-002') {
+    await page.screenshot({ path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot), fullPage: true })
   }
 
   await steps.nth(3).click()
   const recommendedRecipe = page.locator('.recipe-card').filter({ hasText: metadata.recipe }).first()
   await expect(recommendedRecipe).toBeVisible()
-  if (!(await recommendedRecipe.evaluate(element => element.classList.contains('is-selected')))) {
-    await recommendedRecipe.click()
-    await saveCurrentJourney(page, fixture)
-  }
+  await recommendedRecipe.click()
+  await saveCurrentJourney(page, fixture)
   await expect(recommendedRecipe).toHaveClass(/is-selected/)
   for (const label of metadata.labels) await expect(page.locator('.dod-step')).toContainText(label)
+  if (metadata.code === 'TD-002') {
+    await page.screenshot({ path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot), fullPage: true })
+  }
 
   await steps.nth(0).click()
   await steps.nth(3).click()
   await expect(page.locator('.recipe-card.is-selected')).toContainText(metadata.recipe)
+  assertGuidedDodPersistence(fixture, metadata)
+
+  await refreshGovernedRouteTargets(page, steps, fixture)
+  await steps.nth(0).click()
+  await steps.nth(5).click()
+  await expect(page.locator('.routing-step .routing-outcomes')).toBeVisible()
+  assertGuidedRoutePersistence(fixture, metadata)
   await expect(page.locator('.journey-page')).not.toContainText(/undefined|业务字段\s*\d+|用户\s*ID/i)
 }
 
@@ -535,20 +561,52 @@ async function refreshGovernedRouteTargets(page, steps, fixture) {
 
 function assertGuidedRouteTarget(fixture, resultValue, targetTemplateCode, targetVersionId) {
   const rows = parseMysqlRows(executeSql(`
-    select outcome.target_template_code,outcome.target_version_id
+    select outcome.target_template_code,outcome.target_version_id,outcome.effect_kind
     from todo_template_version version
     join json_table(version.definition_json,'$.routing.config.businessOutcomes[*]' columns(
       legacy_value varchar(64) path '$.value',
       result_value varchar(64) path '$.resultValue',
+      effect_kind varchar(64) path '$.effectKind',
       target_template_code varchar(64) path '$.targetTemplateCode',
       target_version_id bigint path '$.targetVersionId'
     )) outcome
     where version.version_id=${Number(fixture.versionId)}
       and coalesce(outcome.result_value,outcome.legacy_value)=${sqlLiteral(resultValue)};
-  `, e2eDatabase()), ['targetTemplateCode', 'targetVersionId'])
+  `, e2eDatabase()), ['targetTemplateCode', 'targetVersionId', 'effectKind'])
   expect(rows).toHaveLength(1)
   expect(rows[0].targetTemplateCode).toBe(targetTemplateCode)
-  expect(Number(rows[0].targetVersionId)).toBe(Number(targetVersionId))
+  if (targetVersionId != null) expect(Number(rows[0].targetVersionId)).toBe(Number(targetVersionId))
+  return rows[0]
+}
+
+function assertGuidedDodPersistence(fixture, metadata) {
+  const definition = loadGuidedDefinition(fixture.versionId)
+  const fields = definition.dod && definition.dod.config && definition.dod.config.requiredFields
+  expect(Array.isArray(fields) && fields.length > 0, `${metadata.code} completion recipe was not persisted`).toBeTruthy()
+}
+
+function assertGuidedRoutePersistence(fixture, metadata) {
+  if (metadata.code === 'TD-002') {
+    expect(assertGuidedRouteTarget(fixture, 'MISJUDGED_VALID', 'TD-001', null).effectKind).toBe('NEXT_TEMPLATE')
+    return
+  }
+  if (metadata.code === 'TD-003') {
+    const td004VersionId = loadPublishedLeadReleaseBundle()['TD-004']
+    expect(assertGuidedRouteTarget(fixture, 'CONNECTED', 'TD-004', td004VersionId).effectKind).toBe('NEXT_TEMPLATE')
+    return
+  }
+  // A draft self-route intentionally stores version zero and is compiler-bound to this immutable
+  // version at publication; the release validator checks the resulting numeric lock.
+  expect(assertGuidedRouteTarget(fixture, 'PROGRESS_RECORDED', 'TD-004', null).effectKind)
+    .toBe('SCHEDULE_SELF')
+}
+
+function loadGuidedDefinition(versionId) {
+  const rows = parseMysqlRows(executeSql(`
+    select definition_json from todo_template_version where version_id=${Number(versionId)};
+  `, e2eDatabase()), ['definitionJson'])
+  if (rows.length !== 1) throw new Error(`Guided Todo definition ${versionId} was not found`)
+  return JSON.parse(rows[0].definitionJson)
 }
 
 async function saveCurrentJourney(page, fixture) {
@@ -890,19 +948,37 @@ function runtimeEvidence(lead, ...todos) {
     scenario: lead.scenario,
     leadState: loadRuntimeLeadState(lead.leadId),
     todos: todos.filter(Boolean).map(todo => {
+      const persisted = loadRuntimeTodo(todo.todoId)
       const actions = parseMysqlRows(executeSql(`
         select action_type from todo_action_log where todo_id=${Number(todo.todoId)} order by action_log_id;
       `, e2eDatabase()), ['actionType']).map(row => row.actionType)
+      if (actions.includes('COMPLETE')) expect(persisted.status).toBe('COMPLETED')
       return {
-        todoId: todo.todoId,
-        todoNo: todo.todoNo,
-        templateCode: todo.templateCode,
-        templateVersionId: todo.templateVersionId,
-        status: todo.status,
-        previousTodoId: todo.previousTodoId,
+        todoId: persisted.todoId,
+        todoNo: persisted.todoNo,
+        templateCode: persisted.templateCode,
+        templateVersionId: persisted.templateVersionId,
+        status: persisted.status,
+        previousTodoId: persisted.previousTodoId,
         actions
       }
     })
+  }
+}
+
+function loadRuntimeTodo(todoId) {
+  const rows = parseMysqlRows(executeSql(`
+    select todo_id,todo_no,template_code,template_version_id,status,previous_todo_id
+    from todo_instance where todo_id=${Number(todoId)};
+  `, e2eDatabase()), [
+    'todoId', 'todoNo', 'templateCode', 'templateVersionId', 'status', 'previousTodoId'
+  ])
+  if (rows.length !== 1) throw new Error(`Runtime Todo ${todoId} was not found during terminal evidence refresh`)
+  return {
+    ...rows[0],
+    todoId: Number(rows[0].todoId),
+    templateVersionId: Number(rows[0].templateVersionId),
+    previousTodoId: rows[0].previousTodoId == null ? null : Number(rows[0].previousTodoId)
   }
 }
 

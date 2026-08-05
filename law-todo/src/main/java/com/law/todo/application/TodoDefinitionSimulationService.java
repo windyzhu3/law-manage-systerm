@@ -48,6 +48,7 @@ import com.law.todo.domain.service.WorkingTimeCalculator.WorkCalendar;
 import com.law.todo.expression.ConditionEvaluator;
 import com.law.todo.expression.ConditionValidator;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.schedule.TodoScheduleService;
 import com.law.todo.spi.TodoCompletionHandler;
 
 /** Pure read-only dry run over a compiled immutable definition snapshot. */
@@ -239,8 +240,21 @@ public class TodoDefinitionSimulationService
             Object schedule=rule.get("schedule");
             Object windows=schedule instanceof Map<?,?> values?values.get("windows"):null;
             if(windows instanceof java.util.Collection<?> configured&&!configured.isEmpty())
-                return new SlaTrace("WINDOW_SCHEDULED",calendarCode,command.effectiveAt(),null,null,null,null,
-                        List.of("schedule:windows:"+configured.size()));
+            {
+                try
+                {
+                    int count=TodoScheduleService.requireValidWindowConfiguration(windows).size();
+                    return new SlaTrace("WINDOW_SCHEDULED",calendarCode,command.effectiveAt(),null,null,null,null,
+                            List.of("schedule:windows:"+count));
+                }
+                catch(RuntimeException invalid)
+                {
+                    issues.add(new SimulationIssue("TODO_SIMULATION_SCHEDULE_WINDOWS_INVALID",
+                            "sla.schedule.windows","ERROR",safeMessage(invalid)));
+                    return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,
+                            List.of("schedule:windows:invalid"));
+                }
+            }
             issues.add(new SimulationIssue("TODO_SIMULATION_SLA_DURATION_UNKNOWN","sla.minutes","ERROR","A positive SLA duration is required"));
             return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,List.of("duration:invalid"));
         }

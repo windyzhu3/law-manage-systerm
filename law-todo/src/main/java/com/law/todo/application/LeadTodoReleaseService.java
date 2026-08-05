@@ -226,13 +226,81 @@ public class LeadTodoReleaseService
     private void validateCoordinatedRouting(LeadReleaseCommand command,
             Map<String,Map<String,Object>> versions)
     {
-        // TD-002 logically reopens the currently active lead-entry TD-001. Requiring its
-        // immutable published graph to point at the not-yet-published TD-001 candidate would
-        // create an impossible publication cycle. The active TD-001 graph owns that return path.
+        // TD-002's immutable standalone graph is intentionally not locked to a future TD-001
+        // version. The release candidate's master graph must instead connect the selected TD-002
+        // node back to a second node of this exact TD-001 version for MISJUDGED_VALID.
+        validateTd002ReopenRoute(versions.get("TD-001"),command.td001VersionId(),command.td002VersionId());
         validateLockedRoute(versions.get("TD-003"),"TD-003",command.td003VersionId(),
                 "CONNECTED","NEXT_TEMPLATE","TD-004",command.td004VersionId());
         validateLockedRoute(versions.get("TD-004"),"TD-004",command.td004VersionId(),
                 "PROGRESS_RECORDED","SCHEDULE_SELF","TD-004",command.td004VersionId());
+    }
+
+    private void validateTd002ReopenRoute(Map<String,Object> td001,long td001VersionId,long td002VersionId)
+    {
+        try
+        {
+            JSONObject root=JSON.parseObject(text(value(td001,"compiled_json","compiledJson")));
+            JSONObject routing=root==null?null:root.getJSONObject("routing");
+            routing=routing==null?null:routing.getJSONObject("config");
+            JSONArray nodes=routing==null?null:routing.getJSONArray("nodes");
+            JSONArray edges=routing==null?null:routing.getJSONArray("edges");
+            if(nodes==null||edges==null)throw routingMismatch();
+
+            Map<String,JSONObject> byKey=new LinkedHashMap<>();
+            String td002Node=null;
+            Set<String> td001Nodes=new LinkedHashSet<>();
+            for(Object raw:nodes)
+            {
+                if(!(raw instanceof JSONObject node))throw routingMismatch();
+                String key=node.getString("key");
+                if(key==null||key.isBlank()||byKey.put(key,node)!=null)throw routingMismatch();
+                if(!"TASK".equals(node.getString("type")))continue;
+                String code=node.getString("templateCode");
+                Long versionId=node.getLong("templateVersionId");
+                if("TD-002".equals(code)&&Objects.equals(td002VersionId,versionId))
+                {
+                    if(td002Node!=null)throw routingMismatch();
+                    td002Node=key;
+                }
+                if("TD-001".equals(code)&&Objects.equals(td001VersionId,versionId))td001Nodes.add(key);
+            }
+            if(td002Node==null||td001Nodes.size()<2)throw routingMismatch();
+
+            Set<String> reviewDecisions=new LinkedHashSet<>();
+            for(Object raw:edges)
+            {
+                if(!(raw instanceof JSONObject edge)||!td002Node.equals(edge.getString("from")))continue;
+                String to=edge.getString("to");
+                JSONObject target=byKey.get(to);
+                if(target!=null&&"DECISION".equals(target.getString("type")))reviewDecisions.add(to);
+            }
+            int matching=0;
+            for(Object raw:edges)
+            {
+                if(!(raw instanceof JSONObject edge)||!reviewDecisions.contains(edge.getString("from"))
+                        ||!td001Nodes.contains(edge.getString("to")))continue;
+                JSONObject condition=edge.getJSONObject("condition");
+                JSONObject expression=condition==null?null:condition.getJSONObject("$expression");
+                JSONObject predicate=expression==null?null:singlePredicate(expression.getJSONObject("root"));
+                if(predicate!=null&&"reviewResult".equals(predicate.getString("field"))
+                        &&"MISJUDGED_VALID".equals(predicate.getString("value"))
+                        &&"EQ".equals(predicate.getString("operator")))matching++;
+            }
+            if(matching!=1)throw routingMismatch();
+        }
+        catch(TodoException expected){throw expected;}
+        catch(Exception invalid){throw routingMismatch();}
+    }
+
+    private JSONObject singlePredicate(JSONObject root)
+    {
+        if(root==null)return null;
+        if(root.containsKey("field"))return root;
+        JSONArray conditions=root.getJSONArray("conditions");
+        if(!"AND".equals(root.getString("type"))||conditions==null||conditions.size()!=1)return null;
+        Object only=conditions.get(0);
+        return only instanceof JSONObject predicate&&predicate.containsKey("field")?predicate:null;
     }
 
     private void validateLockedRoute(Map<String,Object> version,String selfCode,long selfVersionId,
@@ -255,9 +323,11 @@ public class LeadTodoReleaseService
                 if(resultValue.equals(value))
                 {
                     matching++;
+                    boolean implicitSelf="SCHEDULE_SELF".equals(effectKind)
+                            &&selfCode.equals(targetCode)&&configuredVersion==null;
                     if(!effectKind.equals(outcome.getString("effectKind"))
                             ||!targetCode.equals(configuredCode)
-                            ||!Objects.equals(targetVersionId,configuredVersion))throw routingMismatch();
+                            ||(!implicitSelf&&!Objects.equals(targetVersionId,configuredVersion)))throw routingMismatch();
                 }
                 else if(configuredCode!=null||configuredVersion!=null)throw routingMismatch();
             }

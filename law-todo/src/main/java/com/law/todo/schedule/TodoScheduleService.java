@@ -5,6 +5,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
@@ -149,18 +150,12 @@ public class TodoScheduleService
     public List<TodoScheduleWindow> configuredWindows(LocalDateTime firstContactCompletedAt,
             List<ScheduleWindowRule> rules)
     {
-        if(firstContactCompletedAt==null||rules==null||rules.isEmpty())
+        if(firstContactCompletedAt==null)
             throw new TodoException("TODO_SCHEDULE_RULE_INVALID","Configured schedule windows are required");
+        validateScheduleWindowRules(rules);
         List<TodoScheduleWindow> windows=new ArrayList<>();
-        HashSet<String> codes=new HashSet<>();
-        HashSet<Integer> orders=new HashSet<>();
         for(ScheduleWindowRule rule:rules)
         {
-            if(rule==null||rule.windowCode()==null||rule.windowCode().isBlank()
-                    ||rule.windowOrder()<0||rule.dayOffset()<0||rule.maxAttempts()<=0
-                    ||rule.occurrenceNo()<=0||!codes.add(rule.windowCode().trim())
-                    ||!orders.add(rule.windowOrder()))
-                throw new TodoException("TODO_SCHEDULE_RULE_INVALID","Configured schedule window is invalid");
             LocalDateTime startAt;
             LocalDateTime dueAt;
             LocalTime startTime;
@@ -191,6 +186,113 @@ public class TodoScheduleService
         windows.sort(java.util.Comparator.comparingInt(TodoScheduleWindow::windowOrder));
         return List.copyOf(windows);
     }
+
+    /**
+     * Parses and validates the canonical definition schedule using the same invariants as runtime
+     * materialization. Missing presentation-only order and occurrence fields are deterministic:
+     * list order and occurrence one respectively.
+     */
+    public static List<ScheduleWindowRule> requireValidWindowConfiguration(Object configured)
+    {
+        if(!(configured instanceof Collection<?> values)||values.isEmpty())
+            throw invalidScheduleRule("Configured schedule windows are required");
+        List<ScheduleWindowRule> rules=new ArrayList<>();
+        int implicitOrder=0;
+        for(Object raw:values)
+        {
+            if(!(raw instanceof Map<?,?> window))
+                throw invalidScheduleRule("Configured schedule window must be an object");
+            String code=requiredText(window,"windowCode");
+            int order=optionalInteger(window,"windowOrder",implicitOrder++);
+            int dayOffset=requiredInteger(window,"dayOffset");
+            int attempts=requiredInteger(window,"maxAttempts");
+            int occurrence=optionalInteger(window,"occurrenceNo",1);
+            Integer startOffset=optionalInteger(window,"startOffsetMinutes");
+            Integer duration=optionalInteger(window,"durationMinutes");
+            LocalTime start=parseTime(window,"startTime");
+            LocalTime end=parseTime(window,"endTime");
+            rules.add(new ScheduleWindowRule(code,order,dayOffset,start,end,startOffset,duration,
+                    attempts,occurrence));
+        }
+        validateScheduleWindowRules(rules);
+        return List.copyOf(rules);
+    }
+
+    private static void validateScheduleWindowRules(List<ScheduleWindowRule> rules)
+    {
+        if(rules==null||rules.isEmpty())
+            throw invalidScheduleRule("Configured schedule windows are required");
+        HashSet<String> codes=new HashSet<>();
+        HashSet<Integer> orders=new HashSet<>();
+        for(ScheduleWindowRule rule:rules)
+        {
+            if(rule==null||rule.windowCode()==null||rule.windowCode().isBlank()
+                    ||rule.windowOrder()<0||rule.dayOffset()<0||rule.maxAttempts()<=0
+                    ||rule.occurrenceNo()<=0||!codes.add(rule.windowCode().trim())
+                    ||!orders.add(rule.windowOrder()))
+                throw invalidScheduleRule("Configured schedule window identity is invalid");
+            if(rule.dayOffset()==0)
+            {
+                if(rule.startOffsetMinutes()==null||rule.startOffsetMinutes()<0
+                        ||rule.durationMinutes()==null||rule.durationMinutes()<=0
+                        ||rule.startTime()!=null||rule.endTime()!=null)
+                    throw invalidScheduleRule("Same-day schedule window requires a non-negative offset and positive duration");
+            }
+            else if(rule.startTime()==null||rule.endTime()==null
+                    ||!rule.endTime().isAfter(rule.startTime())
+                    ||rule.startOffsetMinutes()!=null||rule.durationMinutes()!=null)
+                throw invalidScheduleRule("Future schedule window requires a valid local-time period");
+        }
+    }
+
+    private static String requiredText(Map<?,?> value,String key)
+    {
+        Object raw=value.get(key);
+        if(raw==null||String.valueOf(raw).isBlank())throw invalidScheduleRule(key+" is required");
+        return String.valueOf(raw).trim();
+    }
+
+    private static int requiredInteger(Map<?,?> value,String key)
+    {
+        Integer result=optionalInteger(value,key);
+        if(result==null)throw invalidScheduleRule(key+" is required");
+        return result;
+    }
+
+    private static int optionalInteger(Map<?,?> value,String key,int fallback)
+    {
+        Integer result=optionalInteger(value,key);
+        return result==null?fallback:result;
+    }
+
+    private static Integer optionalInteger(Map<?,?> value,String key)
+    {
+        Object raw=value.get(key);
+        if(raw==null)return null;
+        try
+        {
+            if(raw instanceof Number number)
+            {
+                double decimal=number.doubleValue();
+                int result=number.intValue();
+                if(decimal!=result)throw new NumberFormatException();
+                return result;
+            }
+            return Integer.valueOf(String.valueOf(raw));
+        }
+        catch(NumberFormatException invalid){throw invalidScheduleRule(key+" must be an integer");}
+    }
+
+    private static LocalTime parseTime(Map<?,?> value,String key)
+    {
+        Object raw=value.get(key);
+        if(raw==null||String.valueOf(raw).isBlank())return null;
+        try{return LocalTime.parse(String.valueOf(raw));}
+        catch(RuntimeException invalid){throw invalidScheduleRule(key+" must be a local time");}
+    }
+
+    private static TodoException invalidScheduleRule(String message)
+    {return new TodoException("TODO_SCHEDULE_RULE_INVALID",message);}
 
     /**
      * Conditionally claims each due window. The occurrence key is stable across a failed retry and

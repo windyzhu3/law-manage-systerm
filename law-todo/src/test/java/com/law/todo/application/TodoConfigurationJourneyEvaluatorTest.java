@@ -221,7 +221,8 @@ class TodoConfigurationJourneyEvaluatorTest
         TodoDefinitionDocument scheduled=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
                 base.event(),base.owner(),base.dod(),new SlaRule(Map.of(
                         "calendarCode","DEFAULT","schedule",Map.of("windows",List.of(
-                                Map.of("windowCode","T0","dayOffset",0,"durationMinutes",120,"maxAttempts",3),
+                                Map.of("windowCode","T0","dayOffset",0,"startOffsetMinutes",0,
+                                        "durationMinutes",120,"maxAttempts",3),
                                 Map.of("windowCode","T1_AM","dayOffset",1,"startTime","09:00:00",
                                         "endTime","11:00:00","maxAttempts",1))))),
                 base.ui(),base.routing(),base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
@@ -231,6 +232,21 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.step("SLA").state()).isEqualTo("COMPLETED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
                 .doesNotContain("TODO_JOURNEY_SLA_DURATION_REQUIRED");
+    }
+
+    @Test void blocksStructurallyInvalidScheduleWindows()
+    {
+        TodoDefinitionDocument base=definition("LEAD_ASSIGNED",Map.of());
+        TodoDefinitionDocument malformed=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
+                base.event(),base.owner(),base.dod(),new SlaRule(Map.of(
+                        "calendarCode","DEFAULT","schedule",Map.of("windows",List.of(Map.of())))),
+                base.ui(),base.routing(),base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
+
+        var result=evaluator.evaluate(detail(),malformed,ready());
+
+        assertThat(result.step("SLA").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .contains("TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID");
     }
 
     @Test void mapsTypedOutcomeCompletenessIssuesToTheRoutingStep()

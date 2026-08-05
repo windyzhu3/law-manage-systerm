@@ -212,7 +212,7 @@ class TodoDefinitionServiceTest
                  "event":{"eventType":"LEAD_CREATED","payloadVersion":1,"condition":{}},
                  "owner":{"config":{}},"dod":{"config":{}},
                  "sla":{"config":{"calendarCode":"DEFAULT","schedule":{"windows":[
-                   {"windowCode":"T0","dayOffset":0,"durationMinutes":120,"maxAttempts":3},
+                   {"windowCode":"T0","dayOffset":0,"startOffsetMinutes":0,"durationMinutes":120,"maxAttempts":3},
                    {"windowCode":"T1_AM","dayOffset":1,"startTime":"09:00:00","endTime":"11:00:00","maxAttempts":1}
                  ]}}},
                  "ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
@@ -229,6 +229,28 @@ class TodoDefinitionServiceTest
 
         assertEquals(9L,result);
         verify(mapper).updateTemplateVersionDraft(anyMap());
+    }
+
+    @Test void updateDraftRejectsStructurallyInvalidScheduleWindows()
+    {
+        String document="""
+                {"schemaVersion":1,"templateCode":"TD-001",
+                 "event":{"eventType":"LEAD_FIRST_CONTACT_UNREACHABLE","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{}},"dod":{"config":{}},
+                 "sla":{"config":{"calendarCode":"DEFAULT","schedule":{"windows":[{}]}}},
+                 "ui":{"config":{}},"routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+        Map<String,Object> current=draft(null,null);current.put("business_type","LEAD");
+        current.put("definition_json",document);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L));
+
+        TodoException error=assertThrows(TodoException.class,()->service().updateDraft(
+                new UpdateDraftCommand("edit-invalid-window-schedule",9L,
+                        null,null,null,null,null,document,document),actor));
+
+        assertEquals("TODO_SCHEDULE_RULE_INVALID",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
     @Test void updateDraftUsesSourceTokenAndReturnsTheRecordedResultForAnIdenticalReplay()
