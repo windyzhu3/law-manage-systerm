@@ -237,3 +237,32 @@ must not be committed. GitHub Actions uploads that directory through
 `lead-todo-real-e2e-diagnostics` and `todo-config-real-e2e-diagnostics`. The
 fresh-checkout environment variables and commands are listed in
 `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.
+
+## Process ownership hardening addendum - 2026-08-06
+
+The reusable harness now treats process ownership as a release assertion. It
+uses `Win32_Process` ancestry, accepts the backend listener only when descended
+from the recorded launcher, rediscovers owned descendants in `finally` and
+stops them deepest-first. It refuses but never kills an unowned listener. The
+environment contract contains 14 variables, including the mandatory
+`TODO_E2E_REDIS_DISPOSABLE` guard.
+
+The post-bind controlled-failure run used
+`lead_todo_r5_fail_20260805194004_e2e`. It proved launcher PID 3692 -> Java
+listener PID 11568 ownership, rediscovered PIDs 3692/30492/11568 after the
+intentional failure, deleted the database and recorded zero backend and
+frontend listeners. Cleanup stages all exited 0; only the deliberate failure
+stage exited 1, so the harness correctly returned 1.
+
+The final successful run used `lead_todo_r5_final_20260805194313_e2e`, harness
+PID 36624, backend launcher PID 6616, owned Java listener PID 34568 and
+Playwright launcher PID 30996. All 32 stages exited 0. The exact Chrome pair
+passed 2/2 in 84.6 seconds (33.4 and 45.1 seconds). The independent TD-004 row
+again proved Todo 10 `COMPLETED` -> Todo 11 `CREATED`, version 92, exact-once
+1/1/1/1 and 432000 seconds.
+
+The durable `services.listener-absence` manifest stage records backend port
+8080/count 0 and frontend port 4173/count 0. Global teardown and independent
+database absence also returned 0. The ignored runtime artifacts were not
+committed; CI upload locations and fresh-checkout commands remain documented
+in `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.

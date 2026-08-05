@@ -16,6 +16,7 @@ const requiredEnvironment = [
   'TODO_E2E_DB_PASSWORD',
   'TODO_E2E_REDIS_HOST',
   'TODO_E2E_REDIS_PORT',
+  'TODO_E2E_REDIS_DISPOSABLE',
   'TODO_CONFIG_E2E_PASSWORD',
   'TODO_CONFIG_E2E_PASSWORD_HASH',
   'TODO_CONFIG_E2E_RUN_MARKER',
@@ -54,5 +55,17 @@ assert.match(source, /backendLauncherPid/i, 'manifest must distinguish the backe
 assert.match(source, /backendApplicationPid/i, 'manifest must distinguish the Java application process')
 assert.match(source, /guided-lead-acceptance-manifest\.json/, 'sanitized manifest must be emitted')
 assert.match(source, /ValidateOnly/, 'a no-mutation validation mode must be supported')
+assert.match(source, /Get-CimInstance\s+(?:-ClassName\s+)?Win32_Process/, 'process ownership must use a PS5-compatible Win32_Process snapshot')
+assert.match(source, /ParentProcessId/, 'owned descendants must be derived through parent process IDs')
+assert.match(source, /function\s+Get-OwnedProcessTree/, 'owned process-tree discovery must be reusable during readiness and finally cleanup')
+assert.ok(source.split('Get-OwnedProcessTree').length - 1 >= 3, 'owned process-tree discovery must run during readiness and cleanup')
+assert.match(source, /ProcessOwnershipSelfTest/, 'ancestry isolation must have a non-mutating PowerShell self-test')
+assert.match(source, /UNOWNED_SERVICE_LISTENER/, 'an unowned backend or frontend listener must fail closed')
+assert.match(source, /function\s+Assert-OwnedServiceListener/, 'listener ownership refusal must be a reusable executable contract')
+assert.match(source, /function\s+Assert-ServiceListenerAbsence[\s\S]*backendPort[\s\S]*frontendPort/, 'final cleanup must query both backend and frontend ports')
+assert.match(source, /services\.listener-absence/, 'both-port listener proof must be a durable manifest stage')
+assert.match(source, /TODO_E2E_HARNESS_FAIL_AFTER_BACKEND_BIND/, 'controlled post-bind cleanup testing must have an explicit harness-only flag')
+assert.match(source, /harness\.test-only-failure-after-backend-bind/, 'controlled failure must be visible in the sanitized stage manifest')
+assert.doesNotMatch(source, /Stop-Process[^\r\n]*(?:Get-PortOwners|listenerOwners)/, 'listener PIDs must never be killed without ancestry verification')
 
 console.log(`Verified guided Lead Todo acceptance harness contract (${requiredEnvironment.length} environment variables, ${baselines.length} baselines)`)

@@ -128,7 +128,8 @@ worktree artifacts were preserved.
 The browser evidence is now reproducible from a fresh checkout through
 `scripts/run-lead-todo-guided-acceptance.ps1`. The PowerShell 5.1 parser,
 non-mutating `-ValidateOnly` mode and the npm harness contract all pass. The
-contract checks 13 required environment variables, the `_e2e` database guard,
+contract checks 14 required environment variables, including the explicit
+disposable-Redis declaration, the `_e2e` database guard,
 all 11 baseline SQL sources, one exact browser command, independent runtime
 requery, guarded teardown and separate harness/launcher/application PIDs.
 
@@ -181,3 +182,53 @@ directory and are not part of the commit. CI uploads this path in the
 `todo-config-real-e2e-diagnostics` artifact). Fresh-checkout prerequisites,
 environment variable names and safe execution commands are documented in
 `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`.
+
+## Round 5 process-ownership and dual-port evidence
+
+Round 5 supersedes the Round 4 process-cleanup evidence while retaining its
+product result. The harness now discovers ownership through PowerShell
+5.1-compatible `Win32_Process` parent relationships. Backend readiness accepts
+the listener only when its PID is in the owned launcher's descendant tree.
+Finally cleanup rediscovers all owned descendants, stops them deepest-first and
+never kills an arbitrary process merely because it is listening on a test
+port. Any remaining unowned backend or frontend listener fails closed with
+`UNOWNED_SERVICE_LISTENER`.
+
+The source contract now checks all 14 required environment variables,
+including `TODO_E2E_REDIS_DISPOSABLE`, plus ancestry discovery, finally
+rediscovery, unowned-listener refusal, the controlled failure seam and durable
+backend/frontend port evidence. The non-mutating process self-test selected the
+fixture tree 100 -> 101 -> 102, calculated depth 2, excluded PID 900 and proved
+the unowned listener is refused.
+
+A real controlled failure ran on the fresh database
+`lead_todo_r5_fail_20260805194004_e2e`. Backend listener PID 11568 was verified
+as a descendant of launcher PID 3692. After the explicit post-bind failure,
+finally rediscovered PIDs 3692, 30492 and 11568. The owned-tree stop,
+guarded fallback drop and dual-port proof all exited 0; the independent schema
+count, backend listener count and frontend listener count were all 0. The
+harness itself correctly exited 1 because the injected failure stage is the
+expected subject of this test.
+
+The controlling successful run then used exactly one fresh database,
+`lead_todo_r5_final_20260805194313_e2e`, from 2026-08-06 03:43:14 to 03:46:43
++08:00. All 32 stages exited 0. Harness PID 36624 owned backend launcher PID
+6616; Java listener PID 34568 was independently proven to be its descendant.
+Playwright launcher PID 30996 was retained as a second cleanup root. The
+sanitized backend log again contains one database identity and one application
+start.
+
+The bootstrap proof was `r520260805194313 1 1 1 1 1`. The exact one-invocation
+Chrome pair passed 2/2 in 84.6 seconds: template configuration in 33.4 seconds
+and runtime in 45.1 seconds. The independent terminal result remained:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Global teardown and the schema-absence query exited 0. The final manifest's
+`services.listener-absence` stage explicitly records backend port 8080 with
+count 0 and frontend port 4173 with count 0. An additional terminal query
+confirmed the same database and port absence. Runtime evidence remains ignored
+under `ruoyi-ui/output/playwright/lead-todo-guided-configuration/` and is not
+part of the commit.

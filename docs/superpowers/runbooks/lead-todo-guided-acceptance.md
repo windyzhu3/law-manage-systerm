@@ -18,8 +18,15 @@ harness is intended for release evidence, not for development data.
   information-schema query proves absence. A guarded fallback drop runs only
   if an earlier stage fails after this harness created the database.
 - The backend is started exactly once by the harness. Its launcher PID and the
-  Java listener PID are captured separately, then all owned PIDs are stopped
-  and the listener absence is verified.
+  Java listener PID are captured separately. A PowerShell 5.1-compatible
+  `Win32_Process` snapshot proves that every accepted listener is descended
+  from the owned launcher. Cleanup rediscovers all descendants and stops them
+  deepest-first; it never kills a listener merely because it occupies a test
+  port.
+- Both the configured backend and frontend ports must be unused before the
+  run. Final durable evidence records each port and requires both listener
+  counts to be zero. A remaining unowned listener fails closed with
+  `UNOWNED_SERVICE_LISTENER` and is not killed.
 
 Do not point these variables at a shared, staging or production database or
 Redis instance.
@@ -78,13 +85,24 @@ variables while diagnosing a run.
 
 ## Validate and run
 
-The validation mode parses the source contract and checks all required files
-without creating directories, databases or processes:
+The validation mode checks the 14 required environment names, safety contract
+and source files without creating directories, databases or processes. The
+ownership self-test uses an in-memory process fixture and also performs no
+mutation:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-guided-acceptance.ps1 -ValidateOnly
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-lead-todo-guided-acceptance.ps1 -ProcessOwnershipSelfTest
 npm --prefix ruoyi-ui run test:guided-acceptance-harness
 ```
+
+For harness-maintainer verification only, setting
+`TODO_E2E_HARNESS_FAIL_AFTER_BACKEND_BIND=true` injects one controlled failure
+after the backend listener has been lineage-verified. It remains protected by
+the same fresh `_e2e` database and disposable-Redis guards. The command must
+exit 1, while the manifest must show the failure stage as 1 and
+`services.stop-owned-process-tree`, `database.fallback-guarded-drop` and
+`services.listener-absence` as 0. Do not set this flag for normal acceptance.
 
 Run the full acceptance from the repository root:
 
@@ -111,7 +129,7 @@ Local runtime evidence is written below
 - `guided-lead-acceptance-manifest.json`
 - `guided-lead-playwright-list.log`
 - `runtime-evidence.json` and `runtime-requery.log`
-- bootstrap, readiness, teardown and listener proofs
+- bootstrap, readiness, teardown and the backend/frontend listener proof
 - the sanitized backend log and screenshots
 
 The manifest gives every stable stage ID its sanitized command, UTC/local

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$ValidateOnly
+    [switch]$ValidateOnly,
+    [switch]$ProcessOwnershipSelfTest
 )
 
 Set-StrictMode -Version Latest
@@ -18,11 +19,17 @@ $script:stages = New-Object System.Collections.ArrayList
 $script:secrets = New-Object System.Collections.ArrayList
 $script:databaseCreated = $false
 $script:databaseDropped = $false
-$script:backendStopped = $false
+$script:ownedServicesStopped = $false
+$script:serviceListenerAbsenceRecorded = $false
 $script:backendLauncher = $null
 $script:backendApplicationPid = $null
+$script:playwrightLauncherPid = $null
+$script:backendStartTimeUtc = $null
+$script:ownedProcessRootPids = New-Object System.Collections.ArrayList
 $script:failure = $null
 $script:runStarted = Get-Date
+$backendPort = 8080
+$frontendPort = 4173
 
 $baselineFiles = @(
     'sql/ry_20260417.sql',
@@ -47,7 +54,7 @@ $plannedStageIds = @(
     'backend.start', 'backend.readiness-before-bootstrap', 'fixture.bootstrap-once', 'fixture.bootstrap-proof',
     'redis.flush-disposable-db', 'backend.readiness-login', 'browser.guided-lead-2-of-2',
     'database.runtime-requery', 'database.global-teardown', 'database.absence-proof',
-    'backend.stop', 'backend.listener-absence', 'evidence.backend-log'
+    'services.stop-owned-process-tree', 'services.listener-absence', 'evidence.backend-log'
 )
 
 function Get-IsoUtc([datetime]$value) { return $value.ToUniversalTime().ToString('o') }
@@ -215,6 +222,77 @@ function Get-PortOwners([int]$port) {
     @(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
 }
 
+function Get-Win32ProcessSnapshot {
+    @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | ForEach-Object {
+        $creationUtc = $null
+        if ($_.CreationDate) {
+            try { $creationUtc = ([datetime]$_.CreationDate).ToUniversalTime() } catch { }
+        }
+        [pscustomobject]@{
+            ProcessId = [int]$_.ProcessId
+            ParentProcessId = [int]$_.ParentProcessId
+            Name = [string]$_.Name
+            CreationUtc = $creationUtc
+        }
+    })
+}
+
+function Get-OwnedProcessTree(
+    [int[]]$RootPids,
+    [object[]]$ProcessSnapshot,
+    [Nullable[datetime]]$MinimumCreationUtc
+) {
+    $roots = @($RootPids | Where-Object { $_ -gt 0 } | Select-Object -Unique)
+    if ($roots.Count -eq 0) { return @() }
+    $snapshot = if ($null -eq $ProcessSnapshot -or $ProcessSnapshot.Count -eq 0) { @(Get-Win32ProcessSnapshot) } else { @($ProcessSnapshot) }
+    $depthByPid = @{}
+    foreach ($rootPid in $roots) { $depthByPid[[int]$rootPid] = 0 }
+    $changed = $true
+    while ($changed) {
+        $changed = $false
+        foreach ($processRow in $snapshot) {
+            $pidValue = [int]$processRow.ProcessId
+            $parentValue = [int]$processRow.ParentProcessId
+            if (-not $depthByPid.ContainsKey($pidValue) -and $depthByPid.ContainsKey($parentValue)) {
+                $creationAllowed = $true
+                if ($null -ne $MinimumCreationUtc -and $processRow.CreationUtc) {
+                    $creationAllowed = ([datetime]$processRow.CreationUtc) -ge ([datetime]$MinimumCreationUtc).AddSeconds(-2)
+                }
+                if ($creationAllowed) {
+                    $depthByPid[$pidValue] = [int]$depthByPid[$parentValue] + 1
+                    $changed = $true
+                }
+            }
+        }
+    }
+    @($snapshot | Where-Object { $depthByPid.ContainsKey([int]$_.ProcessId) } | ForEach-Object {
+        [pscustomobject]@{
+            ProcessId = [int]$_.ProcessId
+            ParentProcessId = [int]$_.ParentProcessId
+            Name = [string]$_.Name
+            CreationUtc = $_.CreationUtc
+            Depth = [int]$depthByPid[[int]$_.ProcessId]
+        }
+    })
+}
+
+function Register-OwnedProcessRoot([int]$processId) {
+    if ($processId -gt 0 -and -not $script:ownedProcessRootPids.Contains($processId)) {
+        [void]$script:ownedProcessRootPids.Add($processId)
+    }
+}
+
+function Assert-OwnedServiceListener([string]$serviceName, [int[]]$listenerPids, [int[]]$ownedPids, [int]$launcherPid) {
+    $listeners = @($listenerPids | Select-Object -Unique)
+    if ($listeners.Count -ne 1) {
+        throw "UNOWNED_SERVICE_LISTENER: expected exactly one $serviceName listener descended from launcher PID $launcherPid; observed $($listeners -join ',')."
+    }
+    if (@($ownedPids) -notcontains [int]$listeners[0]) {
+        throw "UNOWNED_SERVICE_LISTENER: $serviceName listener PID $($listeners[0]) is not descended from owned launcher PID $launcherPid."
+    }
+    return [int]$listeners[0]
+}
+
 function New-SqlInput([string]$name, [string]$sql) {
     $path = Join-Path $temporaryRoot $name
     Write-Utf8NoBom $path ($sql.Trim() + [Environment]::NewLine)
@@ -251,27 +329,85 @@ function Parse-SingleTabRow([string]$path, [int]$columnCount) {
     return $columns
 }
 
-function Stop-OwnedBackend {
-    if ($script:backendStopped) { return }
+function Stop-OwnedProcessTree {
+    if ($script:ownedServicesStopped) { return }
     $started = Get-Date
     try {
-        $candidatePids = @($script:backendApplicationPid, $(if ($script:backendLauncher) { $script:backendLauncher.Id })) | Where-Object { $_ } | Select-Object -Unique
-        foreach ($pidValue in $candidatePids) {
-            $process = Get-Process -Id ([int]$pidValue) -ErrorAction SilentlyContinue
-            if ($process) {
-                Stop-Process -Id ([int]$pidValue) -Force
-                try { Wait-Process -Id ([int]$pidValue) -Timeout 30 -ErrorAction SilentlyContinue } catch { }
+        $stoppedPids = New-Object System.Collections.ArrayList
+        $discoveredPids = New-Object System.Collections.ArrayList
+        $listenerOwnership = @()
+        for ($pass = 0; $pass -lt 3; $pass++) {
+            $snapshot = @(Get-Win32ProcessSnapshot)
+            $ownedTree = @(Get-OwnedProcessTree @($script:ownedProcessRootPids) $snapshot $script:backendStartTimeUtc)
+            $ownedIds = @($ownedTree | Select-Object -ExpandProperty ProcessId)
+            foreach ($ownedPid in $ownedIds) {
+                if (-not $discoveredPids.Contains([int]$ownedPid)) { [void]$discoveredPids.Add([int]$ownedPid) }
             }
+            if ($pass -eq 0) {
+                foreach ($service in @(@{ name = 'backend'; port = $backendPort }, @{ name = 'frontend'; port = $frontendPort })) {
+                    foreach ($listenerPid in @(Get-PortOwners ([int]$service.port))) {
+                        $isOwned = $ownedIds -contains [int]$listenerPid
+                        $listenerOwnership += [pscustomobject]@{ service = $service.name; port = [int]$service.port; processId = [int]$listenerPid; owned = [bool]$isOwned }
+                        if ($service.name -eq 'backend' -and $isOwned) { $script:backendApplicationPid = [int]$listenerPid }
+                    }
+                }
+            }
+            $toStop = @($ownedTree | Where-Object { $_.ProcessId -ne $PID } | Sort-Object Depth -Descending)
+            foreach ($ownedProcess in $toStop) {
+                $process = Get-Process -Id ([int]$ownedProcess.ProcessId) -ErrorAction SilentlyContinue
+                if ($process) {
+                    Stop-Process -Id ([int]$ownedProcess.ProcessId) -Force -ErrorAction SilentlyContinue
+                    if (-not (Get-Process -Id ([int]$ownedProcess.ProcessId) -ErrorAction SilentlyContinue) -and
+                        -not $stoppedPids.Contains([int]$ownedProcess.ProcessId)) {
+                        [void]$stoppedPids.Add([int]$ownedProcess.ProcessId)
+                    }
+                }
+            }
+            if ($toStop.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 500
         }
-        $script:backendStopped = $true
+        $remainingTree = @(Get-OwnedProcessTree @($script:ownedProcessRootPids) @(Get-Win32ProcessSnapshot) $script:backendStartTimeUtc)
+        if ($remainingTree.Count -ne 0) {
+            throw "Owned process tree did not stop completely: $(@($remainingTree.ProcessId) -join ',')."
+        }
+        $script:ownedServicesStopped = $true
         $ended = Get-Date
-        Add-StageResult 'backend.stop' 'Stop-Process <owned-backend-pids>' $started $ended 0 $null @{ stoppedPids = @($candidatePids | ForEach-Object { [int]$_ }) }
-        Write-Host '[PASS] backend.stop'
+        Add-StageResult 'services.stop-owned-process-tree' 'Get-CimInstance Win32_Process; Stop-Process <verified-owned-descendants-deepest-first>' $started $ended 0 $null @{
+            roots = @($script:ownedProcessRootPids | ForEach-Object { [int]$_ })
+            discoveredPids = @($discoveredPids | ForEach-Object { [int]$_ })
+            stoppedPids = @($stoppedPids | ForEach-Object { [int]$_ })
+            listenerOwnershipBeforeStop = $listenerOwnership
+        }
+        Write-Host '[PASS] services.stop-owned-process-tree'
     } catch {
         $ended = Get-Date
-        Add-StageResult 'backend.stop' 'Stop-Process <owned-backend-pids>' $started $ended 1 $null @{ error = Protect-Text $_.Exception.Message }
+        Add-StageResult 'services.stop-owned-process-tree' 'Get-CimInstance Win32_Process; Stop-Process <verified-owned-descendants-deepest-first>' $started $ended 1 $null @{ error = Protect-Text $_.Exception.Message }
         throw
     }
+}
+
+function Assert-ServiceListenerAbsence([int]$backendPort, [int]$frontendPort) {
+    if ($script:serviceListenerAbsenceRecorded) { return }
+    $started = Get-Date
+    $outputPath = Join-Path $artifactRoot 'service-listener-absence.json'
+    $backendOwners = @(Get-PortOwners $backendPort)
+    $frontendOwners = @(Get-PortOwners $frontendPort)
+    $proof = [ordered]@{
+        backendPort = $backendPort
+        backendListenerCount = $backendOwners.Count
+        backendListenerPids = @($backendOwners | ForEach-Object { [int]$_ })
+        frontendPort = $frontendPort
+        frontendListenerCount = $frontendOwners.Count
+        frontendListenerPids = @($frontendOwners | ForEach-Object { [int]$_ })
+    }
+    Write-Utf8NoBom $outputPath (($proof | ConvertTo-Json -Depth 5) + [Environment]::NewLine)
+    $script:serviceListenerAbsenceRecorded = $true
+    if ($backendOwners.Count -ne 0 -or $frontendOwners.Count -ne 0) {
+        Add-StageResult 'services.listener-absence' 'Get-NetTCPConnection <backend-and-frontend-ports> [expect zero listeners]' $started (Get-Date) 1 $outputPath $proof
+        throw "UNOWNED_SERVICE_LISTENER: cleanup refuses to kill listeners that are not verified descendants; backend=$($backendOwners -join ',') frontend=$($frontendOwners -join ',')."
+    }
+    Add-StageResult 'services.listener-absence' 'Get-NetTCPConnection <backend-and-frontend-ports> [expect zero listeners]' $started (Get-Date) 0 $outputPath $proof
+    Write-Host '[PASS] services.listener-absence'
 }
 
 function Write-Manifest([string]$status, [string]$database, [string]$marker) {
@@ -287,6 +423,9 @@ function Write-Manifest([string]$status, [string]$database, [string]$marker) {
         backendLauncherPid = if ($script:backendLauncher) { [int]$script:backendLauncher.Id } else { $null }
         backendApplicationPid = if ($script:backendApplicationPid) { [int]$script:backendApplicationPid } else { $null }
         backendLauncherIsApplication = if ($script:backendLauncher -and $script:backendApplicationPid) { [int]$script:backendLauncher.Id -eq [int]$script:backendApplicationPid } else { $null }
+        playwrightLauncherPid = $script:playwrightLauncherPid
+        ownedProcessRootPids = @($script:ownedProcessRootPids | ForEach-Object { [int]$_ })
+        servicePorts = @{ backend = $backendPort; frontend = $frontendPort }
         startUtc = Get-IsoUtc $script:runStarted
         startLocal = Get-IsoLocal $script:runStarted
         endUtc = Get-IsoUtc (Get-Date)
@@ -296,6 +435,30 @@ function Write-Manifest([string]$status, [string]$database, [string]$marker) {
         stages = @($script:stages)
     }
     Write-Utf8NoBom $manifestPath (($manifest | ConvertTo-Json -Depth 12) + [Environment]::NewLine)
+}
+
+if ($ProcessOwnershipSelfTest) {
+    $now = (Get-Date).ToUniversalTime()
+    $fixture = @(
+        [pscustomobject]@{ ProcessId = 100; ParentProcessId = 1; Name = 'launcher.exe'; CreationUtc = $now; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 101; ParentProcessId = 100; Name = 'java.exe'; CreationUtc = $now; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 102; ParentProcessId = 101; Name = 'worker.exe'; CreationUtc = $now; Depth = 0 },
+        [pscustomobject]@{ ProcessId = 900; ParentProcessId = 1; Name = 'unowned.exe'; CreationUtc = $now; Depth = 0 }
+    )
+    $tree = @(Get-OwnedProcessTree @(100) $fixture $now.AddSeconds(-1))
+    $ids = @($tree | Select-Object -ExpandProperty ProcessId)
+    if ($ids.Count -ne 3 -or $ids -notcontains 100 -or $ids -notcontains 101 -or $ids -notcontains 102 -or $ids -contains 900) {
+        throw 'Process ownership self-test failed ancestry isolation.'
+    }
+    $deepest = $tree | Where-Object ProcessId -eq 102
+    if (-not $deepest -or [int]$deepest.Depth -ne 2) { throw 'Process ownership self-test failed depth calculation.' }
+    $unownedRefused = $false
+    try { [void](Assert-OwnedServiceListener 'fixture' @(900) $ids 100) } catch {
+        $unownedRefused = $_.Exception.Message -like 'UNOWNED_SERVICE_LISTENER:*'
+    }
+    if (-not $unownedRefused) { throw 'Process ownership self-test failed unowned-listener refusal.' }
+    [pscustomobject]@{ mode = 'ProcessOwnershipSelfTest'; mutationPerformed = $false; ownedPids = $ids; unownedPidExcluded = $true; unownedListenerRefused = $true; deepestFirstDepth = 2 } | ConvertTo-Json -Depth 4
+    exit 0
 }
 
 if ($ValidateOnly) {
@@ -469,9 +632,20 @@ try {
     $env:FLYWAY_ENABLED = 'true'
     Remove-Item -Force -ErrorAction SilentlyContinue $backendRawLog, $backendRawErrorLog
     $backendStart = Get-Date
+    $script:backendStartTimeUtc = $backendStart.ToUniversalTime()
     try {
         $script:backendLauncher = Start-Process -FilePath $javaExecutable -ArgumentList @('-jar', ('"' + $jarPath + '"')) -WorkingDirectory $repoRoot -RedirectStandardOutput $backendRawLog -RedirectStandardError $backendRawErrorLog -WindowStyle Hidden -PassThru
-        Add-StageResult 'backend.start' 'java -jar ruoyi-admin/target/ruoyi-admin.jar [configuration via environment]' $backendStart (Get-Date) 0 $backendEvidenceLog @{ backendLauncherPid = [int]$script:backendLauncher.Id }
+        Register-OwnedProcessRoot ([int]$script:backendLauncher.Id)
+        $startSnapshot = @(Get-Win32ProcessSnapshot)
+        $harnessDescendants = @(Get-OwnedProcessTree @([int]$PID) $startSnapshot $script:runStarted.ToUniversalTime())
+        if (@($harnessDescendants | Where-Object { $_.ProcessId -eq [int]$script:backendLauncher.Id }).Count -ne 1) {
+            throw 'Backend launcher is not a verified descendant of the acceptance harness.'
+        }
+        Add-StageResult 'backend.start' 'java -jar ruoyi-admin/target/ruoyi-admin.jar [configuration via environment]' $backendStart (Get-Date) 0 $backendEvidenceLog @{
+            harnessPid = [int]$PID
+            backendLauncherPid = [int]$script:backendLauncher.Id
+            launcherOwnershipVerified = $true
+        }
         Write-Host '[PASS] backend.start'
     } catch {
         Add-StageResult 'backend.start' 'java -jar ruoyi-admin/target/ruoyi-admin.jar [configuration via environment]' $backendStart (Get-Date) 1 $backendEvidenceLog @{ error = Protect-Text $_.Exception.Message }
@@ -482,19 +656,39 @@ try {
         $deadline = (Get-Date).AddSeconds(180)
         $lastError = $null
         while ((Get-Date) -lt $deadline) {
-            if ($script:backendLauncher.HasExited) { throw "Backend exited before readiness with status $($script:backendLauncher.ExitCode)." }
-            try {
-                $owners = @(Get-PortOwners $backendPort)
-                if ($owners.Count -eq 1) {
+            $snapshot = @(Get-Win32ProcessSnapshot)
+            $ownedTree = @(Get-OwnedProcessTree @([int]$script:backendLauncher.Id) $snapshot $script:backendStartTimeUtc)
+            $ownedIds = @($ownedTree | Select-Object -ExpandProperty ProcessId)
+            $owners = @(Get-PortOwners $backendPort)
+            if ($owners.Count -gt 0) {
+                $script:backendApplicationPid = Assert-OwnedServiceListener 'backend' $owners $ownedIds ([int]$script:backendLauncher.Id)
+                try {
                     $response = Invoke-RestMethod -Uri "http://127.0.0.1:$backendPort/captchaImage" -TimeoutSec 5
-                    $script:backendApplicationPid = [int]$owners[0]
-                    return @{ ready = $true; listenerCount = 1; backendApplicationPid = [int]$owners[0]; captchaEndpointReached = ($null -ne $response) }
-                }
-            } catch { $lastError = $_.Exception.Message }
+                    return @{
+                        ready = $true
+                        listenerCount = 1
+                        backendLauncherPid = [int]$script:backendLauncher.Id
+                        backendApplicationPid = [int]$script:backendApplicationPid
+                        listenerOwnershipVerified = $true
+                        captchaEndpointReached = ($null -ne $response)
+                    }
+                } catch { $lastError = $_.Exception.Message }
+            }
+            if ($script:backendLauncher.HasExited -and $ownedTree.Count -eq 0) {
+                $script:backendLauncher.WaitForExit()
+                throw "Owned backend process tree exited before readiness with launcher status $($script:backendLauncher.ExitCode)."
+            }
             Start-Sleep -Seconds 2
         }
         throw "Backend readiness timed out. Last error: $lastError"
     } | Out-Null
+
+    if ($env:TODO_E2E_HARNESS_FAIL_AFTER_BACKEND_BIND -eq 'true') {
+        Invoke-RecordedOperation 'harness.test-only-failure-after-backend-bind' 'throw controlled harness-only failure after verified backend listener binding' (Join-Path $artifactRoot 'controlled-failure-after-backend-bind.log') {
+            Assert-SafeDatabaseName $database
+            throw 'CONTROLLED_HARNESS_FAILURE_AFTER_BACKEND_BIND'
+        } | Out-Null
+    }
 
     $bootstrapTemplate = Get-Content (Join-Path $repoRoot 'ruoyi-ui\tests\e2e\bootstrap\todo-config-admin.sql') -Raw
     $bootstrapSql = $bootstrapTemplate.Replace('TODO_CONFIG_E2E_PASSWORD_HASH', $configurationPasswordHash).
@@ -558,6 +752,8 @@ select '$runMarker',
     $playwrightDisplay = 'npx playwright test tests/e2e/todo-config-journey.spec.js --grep "GUIDED_LEAD_" --project=chromium --reporter=list'
     $playwrightLog = Join-Path $artifactRoot 'guided-lead-playwright-list.log'
     $playwright = Invoke-ProcessStage 'browser.guided-lead-2-of-2' $playwrightDisplay $npxExecutable @('playwright', 'test', 'tests/e2e/todo-config-journey.spec.js', '--grep', 'GUIDED_LEAD_', '--project=chromium', '--reporter=list') $uiRoot $playwrightLog $null
+    $script:playwrightLauncherPid = [int]$playwright.ProcessId
+    Register-OwnedProcessRoot $script:playwrightLauncherPid
     if ($playwright.Output -notmatch '(?m)^\s*2 passed\b' -or $playwright.Output -match '(?m)^\s*\d+ (failed|skipped)\b') {
         throw 'Playwright list output did not prove exactly 2 passed with zero failed or skipped tests.'
     }
@@ -602,13 +798,9 @@ where first_todo.todo_id=$firstTodoId;
     $absenceRow = @(Parse-SingleTabRow $absenceOutput 1)
     if ([int]$absenceRow[0] -ne 0) { throw "Database absence proof failed for $database." }
 
-    Stop-OwnedBackend
-    Invoke-RecordedOperation 'backend.listener-absence' 'Get-NetTCPConnection <backend-port> [expect zero listeners]' (Join-Path $artifactRoot 'backend-listener-absence.json') {
-        Start-Sleep -Seconds 1
-        $owners = @(Get-PortOwners $backendPort)
-        if ($owners.Count -ne 0) { throw "Backend listener remains on port $backendPort with owners $($owners -join ',')." }
-        return @{ backendPort = $backendPort; listenerCount = 0 }
-    } | Out-Null
+    Stop-OwnedProcessTree
+    Start-Sleep -Seconds 1
+    Assert-ServiceListenerAbsence $backendPort $frontendPort
 
     $backendEvidenceStarted = Get-Date
     try {
@@ -632,8 +824,8 @@ where first_todo.todo_id=$firstTodoId;
     $script:failure = Protect-Text $_.Exception.Message
     Write-Host ("[FAIL] {0}" -f $script:failure) -ForegroundColor Red
 } finally {
-    if ($script:backendLauncher -and -not $script:backendStopped) {
-        try { Stop-OwnedBackend } catch { if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message } }
+    if ($script:ownedProcessRootPids.Count -gt 0 -and -not $script:ownedServicesStopped) {
+        try { Stop-OwnedProcessTree } catch { if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message } }
     }
     if ($script:databaseCreated -and -not $script:databaseDropped -and $database) {
         try {
@@ -644,6 +836,9 @@ where first_todo.todo_id=$firstTodoId;
         } catch {
             if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message }
         }
+    }
+    if (-not $script:serviceListenerAbsenceRecorded -and (Test-Path $artifactRoot)) {
+        try { Assert-ServiceListenerAbsence $backendPort $frontendPort } catch { if (-not $script:failure) { $script:failure = Protect-Text $_.Exception.Message } }
     }
     if ($script:backendLauncher -and -not (Test-Path $backendEvidenceLog) -and ((Test-Path $backendRawLog) -or (Test-Path $backendRawErrorLog))) {
         try {
