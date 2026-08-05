@@ -276,10 +276,12 @@ public class LeadTodoReleaseService
                 if(target!=null&&"DECISION".equals(target.getString("type")))reviewDecisions.add(to);
             }
             int matching=0;
+            int returnEdges=0;
             for(Object raw:edges)
             {
                 if(!(raw instanceof JSONObject edge)||!reviewDecisions.contains(edge.getString("from"))
                         ||!td001Nodes.contains(edge.getString("to")))continue;
+                returnEdges++;
                 JSONObject condition=edge.getJSONObject("condition");
                 JSONObject expression=condition==null?null:condition.getJSONObject("$expression");
                 JSONObject predicate=expression==null?null:singlePredicate(expression.getJSONObject("root"));
@@ -287,7 +289,7 @@ public class LeadTodoReleaseService
                         &&"MISJUDGED_VALID".equals(predicate.getString("value"))
                         &&"EQ".equals(predicate.getString("operator")))matching++;
             }
-            if(matching!=1)throw routingMismatch();
+            if(returnEdges!=1||matching!=1)throw routingMismatch();
         }
         catch(TodoException expected){throw expected;}
         catch(Exception invalid){throw routingMismatch();}

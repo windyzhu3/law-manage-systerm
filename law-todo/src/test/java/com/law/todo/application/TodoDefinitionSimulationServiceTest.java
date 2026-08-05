@@ -58,6 +58,7 @@ class TodoDefinitionSimulationServiceTest
 
         assertEquals("MATCHED",result.trigger().status());
         assertEquals(7L,result.owner().ownerId());
+        assertEquals("PLANNED",result.sla().status());
         assertEquals("TASK",result.routes().get(0).nodeType());
         assertFalse(result.definitionHash().isBlank());
         verify(mapper,never()).insertInstance(org.mockito.ArgumentMatchers.any());
@@ -163,6 +164,34 @@ class TodoDefinitionSimulationServiceTest
         assertEquals("UNKNOWN",result.sla().status());
         assertTrue(result.issues().stream().anyMatch(issue->
                 "TODO_SIMULATION_SCHEDULE_WINDOWS_INVALID".equals(issue.code())));
+    }
+
+    @Test void every_present_invalid_or_mixed_schedule_fails_simulation_instead_of_using_scalar_fallback()
+    {
+        TodoDefinitionDocument base=definition(Map.of("type","USER","value",7L));
+        List<Map<String,Object>> invalid=List.of(
+                Map.of("calendarCode","DEFAULT","minutes",60,"schedule",Map.of(
+                        "windows",List.of(Map.of()))),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows","T0")),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows",List.of())),
+                Map.of("calendarCode","DEFAULT","schedule",List.of("T0")));
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(calendar());
+        for(Map<String,Object> sla:invalid)
+        {
+            TodoDefinitionDocument configured=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
+                    base.event(),base.owner(),base.dod(),new TodoDefinitionDocument.SlaRule(sla),
+                    base.ui(),base.routing(),base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
+            when(mapper.selectTemplateVersionById(9L)).thenReturn(
+                    version(new TodoDefinitionCodec().canonicalJson(configured)));
+
+            var result=new TodoDefinitionSimulationService(mapper,new TodoAssignmentResolver()).simulate(9L,
+                    new SimulateDefinitionCommand(Map.of("stage","READY"),"LEAD",3L,
+                            LocalDateTime.of(2026,7,17,9,0)));
+
+            assertEquals("UNKNOWN",result.sla().status());
+            assertTrue(result.issues().stream().anyMatch(issue->
+                    "TODO_SIMULATION_SCHEDULE_WINDOWS_INVALID".equals(issue.code())));
+        }
     }
 
     @Test void simulation_round_robin_never_advances_runtime_cursor()

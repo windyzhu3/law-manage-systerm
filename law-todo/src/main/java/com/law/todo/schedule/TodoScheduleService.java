@@ -218,6 +218,60 @@ public class TodoScheduleService
         return List.copyOf(rules);
     }
 
+    /**
+     * Resolves the one canonical timing mode accepted by every definition entry point. A schedule
+     * is never allowed to fall back to scalar timing: once the schedule property is present its
+     * shape and windows must be valid, and it cannot coexist with a configured scalar duration.
+     */
+    public static SlaTimingConfiguration requireValidSlaTimingConfiguration(Map<?,?> configured)
+    {
+        if(configured==null)
+            throw new TodoException("TODO_SLA_MINUTES_INVALID","SLA minutes must be positive");
+        boolean schedulePresent=configured.containsKey("schedule");
+        boolean scalarConfigured=configured.get("minutes")!=null
+                ||configured.get("durationValue")!=null||configured.get("durationUnit")!=null;
+        if(schedulePresent)
+        {
+            if(scalarConfigured)
+                throw invalidScheduleRule("Scheduled and scalar SLA timing cannot be combined");
+            Object rawSchedule=configured.get("schedule");
+            if(!(rawSchedule instanceof Map<?,?> schedule)||!schedule.containsKey("windows"))
+                throw invalidScheduleRule("Configured schedule must contain windows");
+            return new SlaTimingConfiguration(SlaTimingMode.WINDOWS,null,
+                    requireValidWindowConfiguration(schedule.get("windows")));
+        }
+        Long minutes=positiveLong(configured.get("minutes"));
+        if(minutes==null)
+            minutes=durationMinutes(configured.get("durationValue"),configured.get("durationUnit"));
+        if(minutes==null)
+            throw new TodoException("TODO_SLA_MINUTES_INVALID","SLA minutes must be positive");
+        return new SlaTimingConfiguration(SlaTimingMode.SCALAR,minutes,List.of());
+    }
+
+    private static Long positiveLong(Object raw)
+    {
+        if(raw==null)return null;
+        try
+        {
+            long value=raw instanceof Number number?number.longValue():Long.parseLong(String.valueOf(raw));
+            return value>0?value:null;
+        }
+        catch(NumberFormatException invalid){return null;}
+    }
+
+    private static Long durationMinutes(Object rawValue,Object rawUnit)
+    {
+        Long value=positiveLong(rawValue);
+        if(value==null||rawUnit==null)return null;
+        return switch(String.valueOf(rawUnit).trim().toUpperCase(java.util.Locale.ROOT))
+        {
+            case "MINUTE" -> value;
+            case "HOUR" -> Math.multiplyExact(value,60L);
+            case "DAY" -> Math.multiplyExact(value,24L*60L);
+            default -> null;
+        };
+    }
+
     private static void validateScheduleWindowRules(List<ScheduleWindowRule> rules)
     {
         if(rules==null||rules.isEmpty())
@@ -769,6 +823,17 @@ public class TodoScheduleService
     public record ScheduleWindowRule(String windowCode,int windowOrder,int dayOffset,
             LocalTime startTime,LocalTime endTime,Integer startOffsetMinutes,Integer durationMinutes,
             int maxAttempts,int occurrenceNo) { }
+
+    public enum SlaTimingMode { SCALAR,WINDOWS }
+
+    public record SlaTimingConfiguration(SlaTimingMode mode,Long minutes,
+            List<ScheduleWindowRule> windows)
+    {
+        public SlaTimingConfiguration
+        {
+            windows=windows==null?List.of():List.copyOf(windows);
+        }
+    }
 
     public enum SchedulePurpose
     {

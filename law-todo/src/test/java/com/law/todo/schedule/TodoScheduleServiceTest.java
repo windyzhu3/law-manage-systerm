@@ -36,6 +36,44 @@ class TodoScheduleServiceTest
 {
     private static final LocalDateTime NOW=LocalDateTime.of(2026,7,25,8,30);
 
+    private static List<Map<String,Object>> validWindowConfiguration()
+    {
+        return List.of(Map.of("windowCode","T0","dayOffset",0,"startOffsetMinutes",0,
+                "durationMinutes",120,"maxAttempts",3));
+    }
+
+    @Test
+    void slaTimingParserAcceptsExactlyOneScalarOrWindowScheduleMode()
+    {
+        var scalar=TodoScheduleService.requireValidSlaTimingConfiguration(
+                Map.of("calendarCode","DEFAULT","minutes",60));
+        var scheduled=TodoScheduleService.requireValidSlaTimingConfiguration(Map.of(
+                "calendarCode","DEFAULT","schedule",Map.of("windows",validWindowConfiguration())));
+
+        assertEquals(TodoScheduleService.SlaTimingMode.SCALAR,scalar.mode());
+        assertEquals(60L,scalar.minutes());
+        assertEquals(TodoScheduleService.SlaTimingMode.WINDOWS,scheduled.mode());
+        assertEquals(1,scheduled.windows().size());
+    }
+
+    @Test
+    void slaTimingParserRejectsMixedMalformedWrongTypeAndEmptySchedules()
+    {
+        List<Map<String,Object>> invalid=List.of(
+                Map.of("calendarCode","DEFAULT","minutes",60,"schedule",Map.of(
+                        "windows",List.of(Map.of()))),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows","T0")),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows",List.of())),
+                Map.of("calendarCode","DEFAULT","schedule",List.of("T0")));
+
+        for(Map<String,Object> rule:invalid)
+        {
+            TodoException error=assertThrows(TodoException.class,
+                    ()->TodoScheduleService.requireValidSlaTimingConfiguration(rule));
+            assertEquals("TODO_SCHEDULE_RULE_INVALID",error.getBusinessCode());
+        }
+    }
+
     @Test
     void resolves_occurrence_only_when_persisted_key_is_linked_to_the_source_todo()
     {

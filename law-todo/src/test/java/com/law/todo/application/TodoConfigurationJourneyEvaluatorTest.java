@@ -234,6 +234,16 @@ class TodoConfigurationJourneyEvaluatorTest
                 .doesNotContain("TODO_JOURNEY_SLA_DURATION_REQUIRED");
     }
 
+    @Test void acceptsScalarOnlySla()
+    {
+        var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of()),ready());
+
+        assertThat(result.step("SLA").state()).isEqualTo("COMPLETED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_SLA_DURATION_REQUIRED",
+                        "TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID");
+    }
+
     @Test void blocksStructurallyInvalidScheduleWindows()
     {
         TodoDefinitionDocument base=definition("LEAD_ASSIGNED",Map.of());
@@ -247,6 +257,29 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.step("SLA").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
                 .contains("TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID");
+    }
+
+    @Test void blocksEveryPresentInvalidOrMixedScheduleInsteadOfUsingScalarFallback()
+    {
+        TodoDefinitionDocument base=definition("LEAD_ASSIGNED",Map.of());
+        List<Map<String,Object>> invalid=List.of(
+                Map.of("calendarCode","DEFAULT","minutes",60,"schedule",Map.of(
+                        "windows",List.of(Map.of()))),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows","T0")),
+                Map.of("calendarCode","DEFAULT","schedule",Map.of("windows",List.of())),
+                Map.of("calendarCode","DEFAULT","schedule",List.of("T0")));
+
+        for(Map<String,Object> sla:invalid)
+        {
+            TodoDefinitionDocument configured=new TodoDefinitionDocument(base.schemaVersion(),base.templateCode(),
+                    base.event(),base.owner(),base.dod(),new SlaRule(sla),base.ui(),base.routing(),
+                    base.autoActions(),base.decisionRefs(),base.acceptanceRefs());
+            var result=evaluator.evaluate(detail(),configured,ready());
+
+            assertThat(result.step("SLA").state()).isEqualTo("BLOCKED");
+            assertThat(result.issues()).extracting(JourneyIssue::code)
+                    .contains("TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID");
+        }
     }
 
     @Test void mapsTypedOutcomeCompletenessIssuesToTheRoutingStep()

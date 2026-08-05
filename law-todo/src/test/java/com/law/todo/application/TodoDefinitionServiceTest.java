@@ -231,6 +231,21 @@ class TodoDefinitionServiceTest
         verify(mapper).updateTemplateVersionDraft(anyMap());
     }
 
+    @Test void updateDraftAcceptsScalarOnlySla()
+    {
+        String document=definitionWithSla("\"minutes\":60");
+        Map<String,Object> current=draft(null,null);current.put("business_type","LEAD");
+        current.put("definition_json",document);
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L));
+        templateDraftLedger("edit-scalar-sla");
+        when(mapper.updateTemplateVersionDraft(anyMap())).thenReturn(1);
+
+        assertEquals(9L,service().updateDraft(new UpdateDraftCommand("edit-scalar-sla",9L,
+                null,null,null,null,null,document,document),actor));
+        verify(mapper).updateTemplateVersionDraft(anyMap());
+    }
+
     @Test void updateDraftRejectsStructurallyInvalidScheduleWindows()
     {
         String document="""
@@ -250,6 +265,31 @@ class TodoDefinitionServiceTest
                         null,null,null,null,null,document,document),actor));
 
         assertEquals("TODO_SCHEDULE_RULE_INVALID",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
+    }
+
+    @Test void updateDraftRejectsEveryPresentInvalidOrMixedScheduleInsteadOfUsingScalarFallback()
+    {
+        List<String> invalidSla=List.of(
+                "\"minutes\":60,\"schedule\":{\"windows\":[{}]}",
+                "\"schedule\":{\"windows\":\"T0\"}",
+                "\"schedule\":{\"windows\":[]}",
+                "\"schedule\":[\"T0\"]");
+        when(mapper.selectCalendarByCode("DEFAULT")).thenReturn(Map.of("calendar_id",1L));
+        for(int index=0;index<invalidSla.size();index++)
+        {
+            String actionId="edit-invalid-schedule-"+index;
+            String document=definitionWithSla(invalidSla.get(index));
+            Map<String,Object> current=draft(null,null);current.put("business_type","LEAD");
+            current.put("definition_json",document);
+            when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+
+            TodoException error=assertThrows(TodoException.class,()->service().updateDraft(
+                    new UpdateDraftCommand(actionId,9L,
+                            null,null,null,null,null,document,document),actor));
+
+            assertEquals("TODO_SCHEDULE_RULE_INVALID",error.getBusinessCode());
+        }
         verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
@@ -765,6 +805,12 @@ class TodoDefinitionServiceTest
             new TodoDefinitionDocument.EventRule("LEAD_CREATED",1,Map.of()),new TodoDefinitionDocument.OwnerRule(Map.of()),
             new TodoDefinitionDocument.DodRule(Map.of()),new TodoDefinitionDocument.SlaRule(Map.of()),new TodoDefinitionDocument.UiSchema(Map.of()),
             new TodoDefinitionDocument.RoutingGraph(Map.of()),List.of(),List.of(),List.of()));}
+    private String definitionWithSla(String sla)
+    {return "{\"schemaVersion\":1,\"templateCode\":\"TD-001\","+
+            "\"event\":{\"eventType\":\"LEAD_FIRST_CONTACT_UNREACHABLE\",\"payloadVersion\":1,\"condition\":{}},"+
+            "\"owner\":{\"config\":{}},\"dod\":{\"config\":{}},\"sla\":{\"config\":{\"calendarCode\":\"DEFAULT\","+
+            sla+"}},\"ui\":{\"config\":{}},\"routing\":{\"config\":{}},\"autoActions\":[],"+
+            "\"decisionRefs\":[],\"acceptanceRefs\":[]}";}
     private TodoDefinitionService service(){return new TodoDefinitionService(mapper,compiler());}
     private TodoDefinitionCompiler compiler(){return new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),new TodoDecisionService(mapper));}
     private void registeredEvent(){when(mapper.selectEventCatalog("LEAD_CREATED",1)).thenReturn(Map.of("event_type","LEAD_CREATED","payload_version",1,"payload_schema_json","{\"type\":\"object\"}","status","ACTIVE"));}

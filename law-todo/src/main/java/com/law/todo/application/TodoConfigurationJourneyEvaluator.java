@@ -165,19 +165,20 @@ public class TodoConfigurationJourneyEvaluator
         if(blank(calendar)||templates!=null&&!calendarAvailable(calendar))
             local.add(blocker("TODO_JOURNEY_CALENDAR_REQUIRED","SLA","sla.calendarCode",
                     "The service-level calendar is unavailable","Choose an active working calendar"));
-        boolean scheduled=hasScheduleWindows(sla);
-        if(scheduled)
+        try
         {
-            try{TodoScheduleService.requireValidWindowConfiguration(map(sla.get("schedule")).get("windows"));}
-            catch(RuntimeException invalid)
+            TodoScheduleService.requireValidSlaTimingConfiguration(sla);
+        }
+        catch(com.law.todo.domain.TodoException invalid)
+        {
+            if("TODO_SCHEDULE_RULE_INVALID".equals(invalid.getBusinessCode()))
             {
                 local.add(blocker("TODO_JOURNEY_SCHEDULE_WINDOWS_INVALID","SLA","sla.schedule.windows",
                         "The configured schedule windows are invalid","Repair window codes, order, timing and retry limits"));
             }
-        }
-        if(!positive(sla.get("minutes"))&&!positive(sla.get("durationValue"))&&!scheduled)
-            local.add(blocker("TODO_JOURNEY_SLA_DURATION_REQUIRED","SLA","sla",
+            else local.add(blocker("TODO_JOURNEY_SLA_DURATION_REQUIRED","SLA","sla",
                     "A positive service-level duration is required","Set a duration for this todo"));
+        }
         append(issues,local);return step("SLA","Service level agreement",local,true,local.isEmpty(),fieldValue("config",sla));
     }
 
@@ -261,9 +262,6 @@ public class TodoConfigurationJourneyEvaluator
         Object evidence=value.containsKey(canonical)?value.get(canonical):value.get(legacy);
         return evidence instanceof Collection<?> collection&&!collection.isEmpty();
     }
-    private boolean hasScheduleWindows(Map<String,Object> sla)
-    {Object windows=map(sla.get("schedule")).get("windows");return windows instanceof Collection<?> values&&!values.isEmpty();}
-    private boolean positive(Object value){try{return value!=null&&Long.parseLong(String.valueOf(value))>0;}catch(NumberFormatException invalid){return false;}}
     private String text(Object value){return value==null?null:String.valueOf(value);}
     private boolean blank(String value){return value==null||value.isBlank();}
 

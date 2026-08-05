@@ -24,6 +24,13 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
     ownerLabels: ['业务对象负责人', '当前业务对象负责人'],
     scheduleLabels: ['每 5 天循环', '自动开启下一轮'],
     labels: ['进展类型', '进展发生时间', '跟进凭证'],
+    dodFields: [{ code: 'progressType', label: '进展类型' }, { code: 'progressAt', label: '进展发生时间' }],
+    dodMaterials: [{ code: 'FOLLOWUP_PROOF', label: '实质进展凭证' }],
+    routes: [
+      { value: 'PROGRESS_RECORDED', label: '已记录实质进展', effect: '完成后开启下一轮5天待办',
+        targetCode: 'TD-004', targetVersionCode: null }
+    ],
+    rawCodes: ['PROGRESS_RECORDED', 'FOLLOWUP_PROOF'],
     scenarios: 3,
     screenshot: 'td004-five-day-cycle.png'
   },
@@ -35,6 +42,20 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
     ownerLabels: ['业务对象负责人', '当前业务对象负责人'],
     scheduleLabels: ['重试窗口时间轴', 'T0', 'T+1', 'T+2'],
     labels: ['联系结果', '客户姓名', '所在城市', '客户诉求', '是否到所', '联系凭证'],
+    dodFields: [{ code: 'contactResult', label: '联系结果' }],
+    dodMaterials: [{ code: 'CONTACT_PROOF', label: '联系凭证' }],
+    conditionalFields: ['name', 'city', 'demand', 'visited'],
+    routes: [
+      { value: 'CONNECTED', label: '联系成功', effect: '生成下一待办', targetCode: 'TD-004',
+        targetVersionCode: 'TD-004', targetLabel: '5天实质进展待办' },
+      { value: 'CONTINUE_CURRENT_WINDOW', label: '本窗口继续', effect: '保留当前待办', targetCode: null,
+        targetVersionCode: null },
+      { value: 'NEXT_WINDOW', label: '进入下一窗口', effect: '等待系统计划下一窗口', targetCode: null,
+        targetVersionCode: null },
+      { value: 'EXHAUSTED', label: '全部重试耗尽', effect: '结束当前路径', targetCode: null,
+        targetVersionCode: null }
+    ],
+    rawCodes: ['CONNECTED', 'CONTINUE_CURRENT_WINDOW', 'NEXT_WINDOW', 'EXHAUSTED', 'CONTACT_PROOF'],
     scenarios: 4,
     screenshot: 'td003-retry-timeline.png'
   },
@@ -46,6 +67,15 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
     ownerLabels: ['事件中的负责人', '复核主管'],
     scheduleLabels: ['办理时长', '工作分钟内'],
     labels: ['复核结果', '复核意见'],
+    dodFields: [{ code: 'reviewResult', label: '复核结果' }, { code: 'reviewOpinion', label: '复核意见' }],
+    dodMaterials: [],
+    routes: [
+      { value: 'TRUE_INVALID', label: '确认无效', effect: '结束当前路径', targetCode: null,
+        targetVersionCode: null },
+      { value: 'MISJUDGED_VALID', label: '误判有效', effect: '生成下一待办', targetCode: 'TD-001',
+        targetVersionCode: 'TD-001', targetLabel: '首联待办' }
+    ],
+    rawCodes: ['TRUE_INVALID', 'MISJUDGED_VALID'],
     scenarios: 3,
     screenshot: 'td002-seven-steps.png'
   }
@@ -534,6 +564,7 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
   await saveCurrentJourney(page, fixture)
   await expect(recommendedRecipe).toHaveClass(/is-selected/)
   for (const label of metadata.labels) await expect(page.locator('.dod-step')).toContainText(label)
+  await assertGuidedDodDropdownLabels(page, metadata)
   if (metadata.code === 'TD-002') {
     await page.screenshot({ path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot), fullPage: true })
   }
@@ -547,8 +578,64 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
   await steps.nth(0).click()
   await steps.nth(5).click()
   await expect(page.locator('.routing-step .routing-outcomes')).toBeVisible()
+  await assertGuidedRouteUi(page, metadata)
   assertGuidedRoutePersistence(fixture, metadata)
+  await steps.nth(0).click()
+  await steps.nth(5).click()
+  await assertGuidedRouteUi(page, metadata)
   await expect(page.locator('.journey-page')).not.toContainText(/undefined|业务字段\s*\d+|用户\s*ID/i)
+}
+
+async function assertGuidedDodDropdownLabels(page, metadata) {
+  const cards = page.locator('.dod-step .dod-config-card')
+  await expect(cards).toHaveCount(2)
+  const fieldSelect = cards.nth(0).locator('.el-select')
+  let dropdown = await openElementSelect(page, fieldSelect)
+  for (const field of metadata.dodFields) await expect(dropdown).toContainText(field.label)
+  await expect(dropdown).not.toContainText(new RegExp(metadata.rawCodes.join('|')))
+  await page.keyboard.press('Escape')
+  if (metadata.dodMaterials.length) {
+    const materialSelect = cards.nth(1).locator('.el-select')
+    dropdown = await openElementSelect(page, materialSelect)
+    for (const material of metadata.dodMaterials) await expect(dropdown).toContainText(material.label)
+    await expect(dropdown).not.toContainText(new RegExp(metadata.rawCodes.join('|')))
+    await page.keyboard.press('Escape')
+  }
+}
+
+async function openElementSelect(page, select) {
+  const filterInput = select.locator('.el-select__input')
+  const trigger = await filterInput.count() ? filterInput : select.locator('.el-input__inner').first()
+  await trigger.focus()
+  await trigger.press('ArrowDown')
+  const dropdown = page.locator('.el-select-dropdown:visible').last()
+  await expect(dropdown).toBeVisible()
+  return dropdown
+}
+
+async function assertGuidedRouteUi(page, metadata) {
+  const routing = page.locator('.routing-step .routing-outcomes')
+  const cards = routing.locator('.routing-outcome')
+  await expect(cards).toHaveCount(metadata.routes.length)
+  for (let index = 0; index < metadata.routes.length; index += 1) {
+    const expected = metadata.routes[index]
+    const card = cards.nth(index)
+    const selects = card.locator('.routing-outcome__main > .el-select')
+    await expect(selects.first().locator('input')).toHaveValue(expected.label)
+    await expect(card.locator('.routing-effect-card strong')).toHaveText(expected.effect)
+    await expect(card.locator('.routing-outcome__sentence')).toContainText(`“${expected.label}”`)
+    const outcomeDropdown = await openElementSelect(page, selects.first())
+    await expect(outcomeDropdown).toContainText(expected.label)
+    await expect(outcomeDropdown).not.toContainText(new RegExp(metadata.rawCodes.join('|')))
+    await page.keyboard.press('Escape')
+    if (expected.targetLabel) {
+      await expect(selects.nth(1).locator('input')).toHaveValue(expected.targetLabel)
+      const targetDropdown = await openElementSelect(page, selects.nth(1))
+      await expect(targetDropdown).toContainText(expected.targetLabel)
+      await page.keyboard.press('Escape')
+    }
+  }
+  for (const rawCode of metadata.rawCodes) await expect(routing).not.toContainText(rawCode)
 }
 
 async function refreshGovernedRouteTargets(page, steps, fixture) {
@@ -559,46 +646,53 @@ async function refreshGovernedRouteTargets(page, steps, fixture) {
   await saveCurrentJourney(page, fixture)
 }
 
-function assertGuidedRouteTarget(fixture, resultValue, targetTemplateCode, targetVersionId) {
+function assertGuidedRouteTarget(fixture, resultValue, resultLabel, targetTemplateCode, targetVersionId) {
   const rows = parseMysqlRows(executeSql(`
-    select outcome.target_template_code,outcome.target_version_id,outcome.effect_kind
+    select coalesce(outcome.result_label,outcome.legacy_label),outcome.target_template_code,
+      outcome.target_version_id,outcome.effect_kind
     from todo_template_version version
     join json_table(version.definition_json,'$.routing.config.businessOutcomes[*]' columns(
       legacy_value varchar(64) path '$.value',
       result_value varchar(64) path '$.resultValue',
+      legacy_label varchar(128) path '$.label',
+      result_label varchar(128) path '$.resultLabel',
       effect_kind varchar(64) path '$.effectKind',
       target_template_code varchar(64) path '$.targetTemplateCode',
       target_version_id bigint path '$.targetVersionId'
     )) outcome
     where version.version_id=${Number(fixture.versionId)}
       and coalesce(outcome.result_value,outcome.legacy_value)=${sqlLiteral(resultValue)};
-  `, e2eDatabase()), ['targetTemplateCode', 'targetVersionId', 'effectKind'])
+  `, e2eDatabase()), ['resultLabel', 'targetTemplateCode', 'targetVersionId', 'effectKind'])
   expect(rows).toHaveLength(1)
+  expect(rows[0].resultLabel).toBe(resultLabel)
   expect(rows[0].targetTemplateCode).toBe(targetTemplateCode)
-  if (targetVersionId != null) expect(Number(rows[0].targetVersionId)).toBe(Number(targetVersionId))
+  expect(rows[0].targetVersionId == null ? null : Number(rows[0].targetVersionId))
+    .toBe(targetVersionId == null ? null : Number(targetVersionId))
   return rows[0]
 }
 
 function assertGuidedDodPersistence(fixture, metadata) {
   const definition = loadGuidedDefinition(fixture.versionId)
-  const fields = definition.dod && definition.dod.config && definition.dod.config.requiredFields
-  expect(Array.isArray(fields) && fields.length > 0, `${metadata.code} completion recipe was not persisted`).toBeTruthy()
+  const dod = definition.dod && definition.dod.config
+  expect(dod.requiredFields).toEqual(metadata.dodFields.map(field => field.code))
+  expect((dod.materials || []).map(material => material.type || material.code))
+    .toEqual(metadata.dodMaterials.map(material => material.code))
+  expect((dod.conditionalRequired || []).map(rule => rule.field))
+    .toEqual(metadata.conditionalFields || [])
 }
 
 function assertGuidedRoutePersistence(fixture, metadata) {
-  if (metadata.code === 'TD-002') {
-    expect(assertGuidedRouteTarget(fixture, 'MISJUDGED_VALID', 'TD-001', null).effectKind).toBe('NEXT_TEMPLATE')
-    return
+  const bundle = loadPublishedLeadReleaseBundle()
+  for (const route of metadata.routes) {
+    const expectedVersion = route.targetVersionCode ? bundle[route.targetVersionCode] : null
+    expect(assertGuidedRouteTarget(fixture, route.value, route.label, route.targetCode, expectedVersion).effectKind)
+      .toBe(route.effect === '生成下一待办' ? 'NEXT_TEMPLATE' : ({
+        '结束当前路径': 'END',
+        '保留当前待办': 'RETAIN_CURRENT',
+        '等待系统计划下一窗口': 'SCHEDULE_NEXT',
+        '完成后开启下一轮5天待办': 'SCHEDULE_SELF'
+      })[route.effect])
   }
-  if (metadata.code === 'TD-003') {
-    const td004VersionId = loadPublishedLeadReleaseBundle()['TD-004']
-    expect(assertGuidedRouteTarget(fixture, 'CONNECTED', 'TD-004', td004VersionId).effectKind).toBe('NEXT_TEMPLATE')
-    return
-  }
-  // A draft self-route intentionally stores version zero and is compiler-bound to this immutable
-  // version at publication; the release validator checks the resulting numeric lock.
-  expect(assertGuidedRouteTarget(fixture, 'PROGRESS_RECORDED', 'TD-004', null).effectKind)
-    .toBe('SCHEDULE_SELF')
 }
 
 function loadGuidedDefinition(versionId) {

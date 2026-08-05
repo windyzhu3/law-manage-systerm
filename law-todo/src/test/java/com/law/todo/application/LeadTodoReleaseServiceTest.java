@@ -240,6 +240,27 @@ class LeadTodoReleaseServiceTest
         verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
+    @Test void rejectsMasterGraphWithCorrectReopenEdgeAndAnAdditionalWrongReturnEdge()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String additionalWrongReturn="{\"to\":\"reopenedTd001\",\"key\":\"review-wrong-return\","+
+                "\"from\":\"reviewResult\",\"priority\":9,\"condition\":{\"$expression\":{\"root\":"+
+                "{\"type\":\"AND\",\"conditions\":[{\"field\":\"reviewResult\",\"value\":"+
+                "\"TRUE_INVALID\",\"operator\":\"EQ\"}]},\"version\":1}}},";
+        String ambiguous=compiledWithReopenedTd001(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L))
+                .replace("{\"to\":\"end\",\"key\":\"reopened-end\"",additionalWrongReturn+
+                        "{\"to\":\"end\",\"key\":\"reopened-end\"");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",ambiguous,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
+    }
+
     @Test void rejectsTd003ConnectedRouteThatTargetsAnotherTd004Version()
     {
         arrangeReadyRelease();

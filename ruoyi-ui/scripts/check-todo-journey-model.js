@@ -1365,6 +1365,24 @@ check('ranks and materializes contextual DoD recipes without mutating catalogs o
   assert.deepStrictEqual(otherDraft, { config: { requiredFields: ['untouched'] } })
 })
 
+check('expands grouped recipe conditional fields into canonical runtime requirements', () => {
+  const patch = steps.materializeDodRecipe({
+    code: 'LEAD-RETRY',
+    requiredFields: ['contactResult'],
+    conditionalRules: [{
+      when: { field: 'contactResult', operator: 'EQ', value: 'CONNECTED' },
+      requiredFields: ['name', 'city', 'demand', 'visited']
+    }]
+  }, { config: {} })
+
+  assert.deepStrictEqual(patch.config.conditionalRequired, [
+    { field: 'name', when: { field: 'contactResult', equals: 'CONNECTED' } },
+    { field: 'city', when: { field: 'contactResult', equals: 'CONNECTED' } },
+    { field: 'demand', when: { field: 'contactResult', equals: 'CONNECTED' } },
+    { field: 'visited', when: { field: 'contactResult', equals: 'CONNECTED' } }
+  ])
+})
+
 check('updates only governed DoD collections and projects an employee-visible preview from the live draft', () => {
   const current = {
     config: {

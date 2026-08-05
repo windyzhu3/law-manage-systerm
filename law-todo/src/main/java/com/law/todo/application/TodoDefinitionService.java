@@ -828,13 +828,7 @@ public class TodoDefinitionService
                 String code = rule.getString("calendarCode");
                 if (code == null || mapper.selectCalendarByCode(code) == null)
                     throw new TodoException("TODO_SLA_CALENDAR_NOT_FOUND", "SLA calendar not found");
-                JSONObject schedule=rule.getJSONObject("schedule");
-                boolean hasScheduleWindows=schedule!=null&&schedule.getJSONArray("windows")!=null
-                        &&!schedule.getJSONArray("windows").isEmpty();
-                if(hasScheduleWindows)
-                    TodoScheduleService.requireValidWindowConfiguration(schedule.getJSONArray("windows"));
-                if (!hasScheduleWindows&&rule.getLongValue("minutes") <= 0)
-                    throw new TodoException("TODO_SLA_MINUTES_INVALID", "SLA minutes must be positive");
+                TodoScheduleService.requireValidSlaTimingConfiguration(rule);
             }
         }
         if (next != null && !next.isBlank())

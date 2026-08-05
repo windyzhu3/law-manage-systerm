@@ -747,9 +747,26 @@ function canonicalDodMaterials(config) {
 
 function canonicalDodConditions(config) {
   const source = object(config)
-  return clone(Object.prototype.hasOwnProperty.call(source, 'conditionalRequired')
+  const rules = clone(Object.prototype.hasOwnProperty.call(source, 'conditionalRequired')
     ? list(source.conditionalRequired)
     : list(source.conditionalRules))
+  return rules.flatMap(rule => {
+    const canonical = clone(object(rule))
+    const groupedFields = list(canonical.requiredFields).map(String).filter(Boolean)
+    delete canonical.requiredFields
+    const when = clone(object(canonical.when))
+    if (!Object.prototype.hasOwnProperty.call(when, 'equals') &&
+        String(when.operator || '').toUpperCase() === 'EQ' &&
+        Object.prototype.hasOwnProperty.call(when, 'value')) {
+      when.equals = clone(when.value)
+      delete when.operator
+      delete when.value
+    }
+    canonical.when = when
+    if (canonical.field) return [canonical]
+    if (!groupedFields.length) return [canonical]
+    return groupedFields.map(field => ({ ...clone(canonical), field, when: clone(when) }))
+  })
 }
 
 const DOD_CONDITION_IDENTITY = '__dodConditionIdentity'

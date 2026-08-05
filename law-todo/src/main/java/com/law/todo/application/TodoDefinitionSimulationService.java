@@ -226,7 +226,7 @@ public class TodoDefinitionSimulationService
     private SlaTrace sla(TodoDefinitionDocument definition,SimulateDefinitionCommand command,List<SimulationIssue> issues)
     {
         Map<String,Object> rule=definition.sla().config();String calendarCode=text(rule.get("calendarCode"));
-        if(rule.isEmpty()||(calendarCode==null&&rule.get("minutes")==null))
+        if(rule.isEmpty())
             return new SlaTrace("NOT_CONFIGURED",null,command.effectiveAt(),null,null,null,null,List.of("sla:not-configured"));
         Map<String,Object> row=calendarCode==null?null:mapper.selectCalendarByCode(calendarCode);
         if(row==null)
@@ -234,30 +234,21 @@ public class TodoDefinitionSimulationService
             issues.add(new SimulationIssue("TODO_SIMULATION_CALENDAR_UNKNOWN","sla.calendarCode","ERROR","Configured calendar is unavailable"));
             return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,List.of("calendar:not-found"));
         }
-        Long minutes=positiveLong(rule.get("minutes"));
-        if(minutes==null)
+        TodoScheduleService.SlaTimingConfiguration timing;
+        try{timing=TodoScheduleService.requireValidSlaTimingConfiguration(rule);}
+        catch(com.law.todo.domain.TodoException invalid)
         {
-            Object schedule=rule.get("schedule");
-            Object windows=schedule instanceof Map<?,?> values?values.get("windows"):null;
-            if(windows instanceof java.util.Collection<?> configured&&!configured.isEmpty())
-            {
-                try
-                {
-                    int count=TodoScheduleService.requireValidWindowConfiguration(windows).size();
-                    return new SlaTrace("WINDOW_SCHEDULED",calendarCode,command.effectiveAt(),null,null,null,null,
-                            List.of("schedule:windows:"+count));
-                }
-                catch(RuntimeException invalid)
-                {
-                    issues.add(new SimulationIssue("TODO_SIMULATION_SCHEDULE_WINDOWS_INVALID",
-                            "sla.schedule.windows","ERROR",safeMessage(invalid)));
-                    return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,
-                            List.of("schedule:windows:invalid"));
-                }
-            }
-            issues.add(new SimulationIssue("TODO_SIMULATION_SLA_DURATION_UNKNOWN","sla.minutes","ERROR","A positive SLA duration is required"));
-            return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,List.of("duration:invalid"));
+            boolean scheduleInvalid="TODO_SCHEDULE_RULE_INVALID".equals(invalid.getBusinessCode());
+            issues.add(new SimulationIssue(scheduleInvalid?"TODO_SIMULATION_SCHEDULE_WINDOWS_INVALID":
+                    "TODO_SIMULATION_SLA_DURATION_UNKNOWN",scheduleInvalid?"sla.schedule.windows":"sla.minutes",
+                    "ERROR",safeMessage(invalid)));
+            return new SlaTrace("UNKNOWN",calendarCode,command.effectiveAt(),null,null,null,null,
+                    List.of(scheduleInvalid?"schedule:windows:invalid":"duration:invalid"));
         }
+        if(timing.mode()==TodoScheduleService.SlaTimingMode.WINDOWS)
+            return new SlaTrace("WINDOW_SCHEDULED",calendarCode,command.effectiveAt(),null,null,null,null,
+                    List.of("schedule:windows:"+timing.windows().size()));
+        Long minutes=timing.minutes();
         try
         {
             WorkCalendar calendar=calendar(row);WorkingTimeCalculator calculator=new WorkingTimeCalculator();
