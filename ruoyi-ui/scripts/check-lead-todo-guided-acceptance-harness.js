@@ -83,14 +83,22 @@ assert.match(source, /harness\.test-only-failure-after-backend-bind/, 'controlle
 assert.doesNotMatch(source, /Stop-Process[^\r\n]*(?:Get-PortOwners|listenerOwners)/, 'listener PIDs must never be killed without ancestry verification')
 
 const processStage = source.slice(source.indexOf('function Invoke-ProcessStage'), source.indexOf('function Get-RequiredEnvironment'))
+const recordedOperationStage = source.slice(source.indexOf('function Invoke-RecordedOperation'), source.indexOf('function Invoke-ProcessStage'))
 const processStart = processStage.indexOf('Start-Process')
 const processRegister = processStage.indexOf('Register-OwnedProcessRoot')
 const processWait = processStage.indexOf('WaitForExit')
 assert.ok(processStart >= 0 && processRegister > processStart && processWait > processRegister,
   'generic registered process stages must capture immutable ownership after Start-Process and before waiting')
-const registryCaptureLines = processStage.split(/\r?\n/).filter(line => line.includes('Update-OwnedProcessIdentityRegistry'))
-assert.ok(registryCaptureLines.length >= 2, 'registered process stages must capture descendants while waiting and after exit')
-registryCaptureLines.forEach(line => assert.match(line, /\|\s*Out-Null\s*\}\s*$/, 'registry capture must not pollute the single process-stage result'))
+assert.match(source, /function\s+Update-AllRegisteredRoots/, 'one common refresh must cover every currently registered immutable root')
+const registryCaptureLines = processStage.split(/\r?\n/).filter(line => line.includes('Update-AllRegisteredRoots'))
+assert.ok(registryCaptureLines.length >= 3, 'generic process stages must refresh all roots before, during and after every stage')
+registryCaptureLines.forEach(line => assert.match(line, /\|\s*Out-Null/, 'registry capture must not pollute the single process-stage result'))
+const genericPoll = processStage.slice(processStage.indexOf('while (-not $process.WaitForExit(100))'), processStage.indexOf('$process.Refresh()'))
+assert.match(genericPoll, /Update-AllRegisteredRoots\s*\|\s*Out-Null/, 'every generic external-process poll must refresh all registered roots')
+assert.doesNotMatch(genericPoll, /RegisterOwnedRoot[^\r\n]*Update-AllRegisteredRoots/, 'all-root polling must not depend on whether the current stage registered a root')
+const operationBoundaryLines = recordedOperationStage.split(/\r?\n/).filter(line => line.includes('Update-AllRegisteredRoots'))
+assert.ok(operationBoundaryLines.length >= 2, 'pure recorded stages must refresh all roots at both stage boundaries')
+operationBoundaryLines.forEach(line => assert.match(line, /\|\s*Out-Null/, 'pure-stage boundary refresh must not emit into the result stream'))
 assert.match(source, /browser\.guided-lead-2-of-2[\s\S]*RegisterOwnedRoot/, 'Playwright must opt into start-time root registration')
 
 const ownershipRun = runHarness(['-ProcessOwnershipSelfTest'])
@@ -107,6 +115,7 @@ assert.strictEqual(ownership.multiLevelChronologyEnforced, true)
 assert.strictEqual(ownership.capturedOrphanAuthorized, true)
 assert.strictEqual(ownership.uncapturedOrphanRejected, true)
 assert.strictEqual(ownership.missingMetadataRejected, true)
+assert.strictEqual(ownership.allRegisteredRootsRefreshedDuringUnrelatedStage, true)
 
 const validationRunId = `contract-${process.pid}-${Date.now()}`
 const validationPath = path.join(root, 'ruoyi-ui', 'output', 'playwright', 'lead-todo-guided-configuration', 'runs', validationRunId)

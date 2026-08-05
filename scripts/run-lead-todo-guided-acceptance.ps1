@@ -190,6 +190,7 @@ function Invoke-RecordedOperation(
 ) {
     $started = Get-Date
     try {
+        Update-AllRegisteredRoots | Out-Null
         $result = & $Action
         $ended = Get-Date
         if ($OutputPath) {
@@ -205,6 +206,8 @@ function Invoke-RecordedOperation(
         if ($OutputPath) { Write-Utf8NoBom $OutputPath ($safeMessage + [Environment]::NewLine) }
         Add-StageResult $Id $Command $started $ended 1 $OutputPath @{ error = $safeMessage }
         throw
+    } finally {
+        Update-AllRegisteredRoots | Out-Null
     }
 }
 
@@ -224,6 +227,7 @@ function Invoke-ProcessStage(
     $stderrPath = $OutputPath + '.stderr.tmp'
     Remove-Item -Force -ErrorAction SilentlyContinue $stdoutPath, $stderrPath
     try {
+        Update-AllRegisteredRoots | Out-Null
         if ($RegisterOwnedRoot -and [string]::IsNullOrWhiteSpace($OwnedCommandSignature)) {
             throw "Stage $Id must provide a nonblank OwnedCommandSignature before starting an owned process."
         }
@@ -242,10 +246,11 @@ function Invoke-ProcessStage(
         if ($RegisterOwnedRoot) {
             $processIdentity = Register-OwnedProcessRoot ([int]$process.Id) $started.ToUniversalTime() $OwnedCommandSignature
         }
+        Update-AllRegisteredRoots | Out-Null
         while (-not $process.WaitForExit(100)) {
-            if ($RegisterOwnedRoot) { Update-OwnedProcessIdentityRegistry $script:runStarted.ToUniversalTime() | Out-Null }
+            Update-AllRegisteredRoots | Out-Null
         }
-        if ($RegisterOwnedRoot) { Update-OwnedProcessIdentityRegistry $script:runStarted.ToUniversalTime() | Out-Null }
+        Update-AllRegisteredRoots | Out-Null
         $process.Refresh()
         $exitCode = [int]$process.ExitCode
         $ended = Get-Date
@@ -270,6 +275,7 @@ function Invoke-ProcessStage(
         }
         throw
     } finally {
+        Update-AllRegisteredRoots | Out-Null
         Remove-Item -Force -ErrorAction SilentlyContinue $stdoutPath, $stderrPath
     }
 }
@@ -429,9 +435,12 @@ function Get-ValidatedStoredProcessIdentities(
     })
 }
 
-function Update-OwnedProcessIdentityRegistry([Nullable[datetime]]$MinimumCreationUtc) {
+function Update-OwnedProcessIdentityRegistry(
+    [Nullable[datetime]]$MinimumCreationUtc,
+    [object[]]$ProcessSnapshot
+) {
     if ($script:ownedProcessRootIdentities.Count -eq 0) { return @() }
-    $snapshot = @(Get-Win32ProcessSnapshot)
+    $snapshot = if ($PSBoundParameters.ContainsKey('ProcessSnapshot')) { @($ProcessSnapshot) } else { @(Get-Win32ProcessSnapshot) }
     $tree = @(Get-OwnedProcessTree @($script:ownedProcessRootIdentities) $snapshot $MinimumCreationUtc)
     foreach ($row in $tree) {
         $root = $script:ownedProcessRootIdentities | Where-Object {
@@ -445,6 +454,15 @@ function Update-OwnedProcessIdentityRegistry([Nullable[datetime]]$MinimumCreatio
         }
     }
     return $tree
+}
+
+function Update-AllRegisteredRoots([object[]]$ProcessSnapshot) {
+    if ($script:ownedProcessRootIdentities.Count -eq 0) { return }
+    if ($PSBoundParameters.ContainsKey('ProcessSnapshot')) {
+        Update-OwnedProcessIdentityRegistry $script:runStarted.ToUniversalTime() $ProcessSnapshot | Out-Null
+    } else {
+        Update-OwnedProcessIdentityRegistry $script:runStarted.ToUniversalTime() | Out-Null
+    }
 }
 
 function Register-OwnedProcessRoot([int]$processId, [datetime]$MinimumCreationUtc, [string]$ExpectedCommandSignature) {
@@ -705,8 +723,26 @@ if ($ProcessOwnershipSelfTest) {
     $missingMetadataRow = [pscustomobject]@{ ProcessId = 600; ParentProcessId = 1; Name = 'missing.exe'; CreationUtc = $now.AddSeconds(22); ExecutablePath = ''; CommandLine = 'missing'; Depth = 0 }
     $missingMetadataRejected = $null -eq (New-ProcessIdentity $missingMetadataRow 'missing') -and
         $null -eq (New-ProcessIdentity $fixture[2] 'wrong-command-signature')
+
+    $savedRoots = $script:ownedProcessRootIdentities
+    $savedIdentities = $script:ownedProcessIdentities
+    $script:ownedProcessRootIdentities = New-Object System.Collections.ArrayList
+    $script:ownedProcessIdentities = New-Object System.Collections.ArrayList
+    $backgroundRootRow = [pscustomobject]@{ ProcessId = 700; ParentProcessId = 1; Name = 'background-backend.exe'; CreationUtc = $now.AddSeconds(30); ExecutablePath = 'C:\fixture\background-backend.exe'; CommandLine = 'background-backend'; Depth = 0 }
+    $midPollChildRow = [pscustomobject]@{ ProcessId = 701; ParentProcessId = 700; Name = 'mid-poll-child.exe'; CreationUtc = $now.AddSeconds(31); ExecutablePath = 'C:\fixture\mid-poll-child.exe'; CommandLine = 'mid-poll-child'; Depth = 0 }
+    $backgroundRootIdentity = New-ProcessIdentity $backgroundRootRow 'background-backend'
+    [void]$script:ownedProcessRootIdentities.Add($backgroundRootIdentity)
+    Add-OwnedProcessIdentity $backgroundRootIdentity
+    Update-AllRegisteredRoots @($backgroundRootRow, $midPollChildRow) | Out-Null
+    $midPollCaptured = $script:ownedProcessIdentities | Where-Object ProcessId -eq 701 | Select-Object -First 1
+    $reparentedChildRow = [pscustomobject]@{ ProcessId = 701; ParentProcessId = 1; Name = 'mid-poll-child.exe'; CreationUtc = $now.AddSeconds(31); ExecutablePath = 'C:\fixture\mid-poll-child.exe'; CommandLine = 'mid-poll-child'; Depth = 0 }
+    $reparentedAuthorization = @(Get-ValidatedStoredProcessIdentities @($script:ownedProcessIdentities) @($reparentedChildRow) $minimum)
+    $allRegisteredRootsRefreshedDuringUnrelatedStage = $null -ne $midPollCaptured -and @($reparentedAuthorization.ProcessId) -contains 701
+    $script:ownedProcessRootIdentities = $savedRoots
+    $script:ownedProcessIdentities = $savedIdentities
     if (-not $staleChildRejected -or -not $multiLevelChronologyEnforced -or -not $capturedOrphanAuthorized -or
-        -not $uncapturedOrphanRejected -or -not $missingMetadataRejected) { throw 'Process ownership self-test failed review-round-one safety fixtures.' }
+        -not $uncapturedOrphanRejected -or -not $missingMetadataRejected -or
+        -not $allRegisteredRootsRefreshedDuringUnrelatedStage) { throw 'Process ownership self-test failed review-round safety fixtures.' }
     [pscustomobject]@{
         mode = 'ProcessOwnershipSelfTest'
         mutationPerformed = $false
@@ -722,6 +758,7 @@ if ($ProcessOwnershipSelfTest) {
         capturedOrphanAuthorized = $capturedOrphanAuthorized
         uncapturedOrphanRejected = $uncapturedOrphanRejected
         missingMetadataRejected = $missingMetadataRejected
+        allRegisteredRootsRefreshedDuringUnrelatedStage = $allRegisteredRootsRefreshedDuringUnrelatedStage
         deepestFirstDepth = 1
     } | ConvertTo-Json -Depth 4
     exit 0

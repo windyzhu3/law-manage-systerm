@@ -265,7 +265,8 @@ The follow-on implementation now closes the remaining safety review findings:
 - Every root and child requires exact creation identity plus nonblank name,
   executable, command line and authorization signature. Each child creation
   time must be at or after its current parent's creation time at every depth.
-- Backend and Playwright descendants are captured continuously, not only at
+- Backend and Playwright descendants are sampled at all recorded-stage
+  boundaries and every 100 ms poll of any external process stage, not only at
   final cleanup. Captured orphans remain identity-authorized after root exit or
   reparenting; uncaptured or stale/PID-reused processes are refused.
 - Run ownership is an OS-atomic persistent `CreateNew` claim made before bundle
@@ -299,3 +300,43 @@ Persistent and in-bundle claims match each manifest's run ID and lease token.
 Both disposable databases independently count 0, ports 8080 and 4173 have no
 listeners, and every captured PID is absent. The two ignored bundles coexist;
 no runtime evidence was staged.
+
+## Safety rereview round 2 closure
+
+The final remaining finding was valid: the earlier external-process loop only
+updated the identity registry when that current stage had registered its own
+root. After backend readiness, unrelated Redis/MySQL/npm stages therefore did
+not poll the already registered backend tree. The fix introduces the common
+no-output `Update-AllRegisteredRoots` operation and removes that conditional.
+
+Every recorded in-process stage now refreshes all roots at entry and in
+`finally`. Every external-process stage refreshes all roots before launch,
+after optional registration, every 100 ms while waiting, after exit and in
+`finally`. Readiness loops retain their explicit refresh. This is precise
+whole-backend-lifetime sampling at harness scheduling points, not a claim of an
+independent watcher inside arbitrary in-process action code.
+
+The executable source contract requires the common function, unconditional
+generic polling, no output pollution and both pure-stage boundaries. The pure
+self-test registers background root 700, observes child 701 during an unrelated
+poll, then verifies that the recorded immutable identity remains authorized
+after reparenting. Existing stale-child, multi-level chronology, reused-PID,
+missing-metadata and uncaptured-orphan refusals still pass.
+
+The controlled run `20260806-r2-postbind-proof` returned harness status 1 only
+at the intended injection; cleanup, fallback database drop/absence and both
+listener proofs returned 0. The final run `20260806-r2-guided-final` returned 0
+with all 32 stages at 0. Backend launcher PID 27388 resolved application PID
+11680; Playwright launcher PID 18708 was the second root. It captured 71
+immutable identities and had no cleanup mismatch.
+
+Chrome passed 2/2 in 1.5 minutes (34.4 and 51.8 seconds), and independent
+runtime proof remained:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Persistent claims match both manifests and bundle claims. Both disposable
+schemas, every captured identity and listeners on ports 8080/4173 were absent
+afterward. Runtime bundles remain ignored and unstaged.

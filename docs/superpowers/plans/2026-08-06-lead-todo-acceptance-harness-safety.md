@@ -108,3 +108,29 @@
   are all 0, then a separate final-code Chrome 2/2 success bundle.
 - [x] Prove both schemas, both listeners and all recorded identities absent;
   update documentation and commit only owned source/docs.
+
+### Task 7: Review round 2 whole-lifetime descendant capture
+
+**Files:**
+- Modify: `scripts/run-lead-todo-guided-acceptance.ps1`
+- Modify: `ruoyi-ui/scripts/check-lead-todo-guided-acceptance-harness.js`
+- Modify: `docs/superpowers/runbooks/lead-todo-guided-acceptance.md`
+- Modify: `docs/superpowers/reports/2026-07-31-lead-todo-guided-configuration-acceptance.md`
+- Modify: `docs/superpowers/reports/2026-08-06-lead-todo-final-review-round-two.md`
+
+**Interfaces:**
+- Consumes: every registered immutable root and either a live
+  `Win32_Process` snapshot or a pure fixture snapshot.
+- Produces: `Update-AllRegisteredRoots`, a no-output refresh used at every
+  recorded-stage boundary and every generic external-process polling interval.
+
+- [x] Add a RED source contract proving the generic polling loop refreshes all
+  registered roots independently of `RegisterOwnedRoot`, without output
+  pollution, and add a pure mid-poll child/reparent fixture.
+- [x] Implement `Update-AllRegisteredRoots`; invoke it before and after both
+  recorded-operation and external-process stages and on every external-process
+  poll, preserving captured identities after root exit.
+- [x] Run parser, ownership/validation and Node contracts, then preserve a new
+  post-bind controlled failure and a separate final-code Chrome 2/2 bundle.
+- [x] Prove claims, schemas, listeners and captured identities clean; update
+  wording to whole-backend-lifetime capture and commit only owned source/docs.

@@ -25,12 +25,16 @@ harness is intended for release evidence, not for development data.
   run began and its immutable identity still matches. Every parent-child edge
   must satisfy child creation time greater than or equal to the current parent,
   and every accepted identity requires nonblank name, executable path, command
-  line and authorization signature. Descendants are captured continuously
-  while a registered launcher runs. Cleanup may therefore stop an already
-  captured child after its launcher exits or Windows reparents it, but it never
-  authorizes a previously uncaptured orphan. Cleanup rereads each identity
-  immediately before stopping it deepest-first. A missing PID is already
-  stopped; a reused PID is refused and never killed.
+  line and authorization signature. All registered roots are refreshed before
+  and after each recorded stage, and every 100 ms while any external process
+  stage is running, regardless of whether that current stage registered a new
+  root. Backend readiness loops also refresh the same registry. This is the
+  harness's explicit whole-lifetime sampling contract; it does not claim an
+  unscheduled background watcher inside arbitrary in-process code. Cleanup may
+  stop an already captured child after its launcher exits or Windows reparents
+  it, but it never authorizes a previously uncaptured orphan. Cleanup rereads
+  each identity immediately before stopping it deepest-first. A missing PID is
+  already stopped; a reused PID is refused and never killed.
 - Both the configured backend and frontend ports must be unused before the
   run. Final durable evidence records each port and requires both listener
   counts to be zero. A remaining unowned listener fails closed with
@@ -200,3 +204,30 @@ identities across the backend and Playwright trees. After cleanup, every
 recorded identity was absent, both disposable schemas were absent, and ports
 8080 and 4173 had zero listeners. These ignored bundles are local diagnostic
 evidence and must not be committed.
+
+## Review-round-2 whole-lifetime sampling proof (2026-08-06)
+
+Round 2 supersedes the earlier sampling claim. `Update-AllRegisteredRoots` is
+the common no-output boundary: every recorded operation calls it before and in
+`finally`, and every generic external-process stage calls it before launch,
+after optional root registration, on every 100 ms wait poll, after process exit
+and in `finally`. The poll is not conditional on the current stage's
+`RegisterOwnedRoot` switch, so an already registered backend is refreshed while
+bootstrap, proof, Redis, login-adjacent, MySQL, npm and Playwright work runs.
+
+The pure ownership self-test registers a background root, introduces its child
+during an unrelated-stage poll and then reparents the child. It proves the
+immutable child was captured and remains cleanup-authorized; the same test
+continues to reject uncaptured or stale identities.
+
+- `20260806-r2-postbind-proof` intentionally exited 1 only at the injected
+  post-bind stage. Its process stop, fallback drop, independent schema absence,
+  dual-port absence and sanitized failure evidence exited 0.
+- `20260806-r2-guided-final` exited 0 with all 32 stages at 0. Chrome passed
+  2/2 in one invocation (`34.4s`, `51.8s`, `1.5m` total), and independent
+  requery returned
+  `10 COMPLETED 92 11 CREATED 92 10 1 1 1 1 432000`.
+
+The final run recorded two roots and 71 immutable identities. Both claims
+match their bundle and manifest lease token. After verification, both schemas,
+every recorded identity and listeners on ports 8080/4173 were absent.

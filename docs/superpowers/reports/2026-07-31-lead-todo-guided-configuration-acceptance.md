@@ -322,9 +322,10 @@ shared-root and nested paths fail closed in both local and CI contracts.
 
 Process authorization now checks every ancestry edge chronologically and
 requires nonblank captured name, executable path, command line and expected
-signature. Descendants are captured continuously while backend and Playwright
-launchers run. An immutable captured child remains cleanup-authorized if its
-root exits or it is reparented, while an uncaptured orphan remains unauthorized.
+signature. Registered roots are sampled at every recorded-stage boundary and
+every 100 ms poll of any external-process stage. An immutable captured child
+remains cleanup-authorized if its root exits or it is reparented, while an
+uncaptured orphan remains unauthorized.
 The process self-test proves stale-child and multi-level rejection, captured
 orphan authorization, uncaptured-orphan refusal, missing-metadata refusal,
 reused-PID refusal and stop-time identity mismatch refusal.
@@ -349,3 +350,40 @@ Both run claims match their bundle claim and manifest lease token. After each
 run, every recorded identity was absent. Both disposable schemas were absent,
 and ports 8080 and 4173 had zero listeners. Runtime bundles remain ignored and
 were not committed.
+
+## Review round 2 all-registered-root polling - 2026-08-06
+
+Round 2 corrects the scope of the previous continuous-capture wording. The
+harness does not run an unscheduled watcher inside arbitrary PowerShell code.
+Instead, one `Update-AllRegisteredRoots` boundary refreshes every immutable
+root before and after each recorded operation, and before, during every 100 ms
+wait poll, after exit and in `finally` for every generic external-process
+stage. That polling is independent of the current stage's registration flag,
+so the backend tree remains sampled while unrelated MySQL, Redis, npm and
+Playwright commands execute. Readiness loops use the same registry directly.
+
+The RED source contract failed because this common boundary did not exist and
+the generic poll was guarded by `RegisterOwnedRoot`. GREEN requires the common
+function, unconditional no-output polling, both pure-stage boundaries and a
+behavioral fixture that captures a mid-poll child of a background root and
+still authorizes it after reparenting.
+
+The new controlled bundle `runs/20260806-r2-postbind-proof/` has status
+`FAILED` only for the injected post-bind stage. It captured three immutable
+backend identities; cleanup stopped both remaining live identities with no
+mismatch. Process stop, guarded fallback drop, schema absence and both listener
+checks all exited 0.
+
+The controlling success bundle is now `runs/20260806-r2-guided-final/`.
+Harness PID 33060 registered backend launcher PID 27388/application PID 11680
+and Playwright root PID 18708. All 32 stages exited 0 and 71 immutable
+identities were captured. Chrome passed exactly 2/2 in 1.5 minutes (34.4 and
+51.8 seconds); independent MySQL proof returned:
+
+```text
+10  COMPLETED  92  11  CREATED  92  10  1  1  1  1  432000
+```
+
+Both run claims match their bundle/manifest tokens. Independent checks found
+zero remaining schemas, zero listeners on 8080/4173 and no live recorded PID.
+The bundles remain ignored runtime evidence.
