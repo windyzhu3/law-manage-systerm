@@ -6,9 +6,11 @@ Branch: `runtime/startup-wiring-fix`
 
 Reviewed Task 11 head: `6685e8ff9030be72067fa07ec9723d7f8138e114`
 
-Review-fix and final verified implementation head: `2a7bf8c2697f08640691b8b84b5474fc1ef16395`
+Review-round-1 implementation head: `2a7bf8c2697f08640691b8b84b5474fc1ef16395`
 
-Review-fix commit message: `fix(todo): close governed lead review findings`
+Review-round-2 final verified implementation head: `94c6688e7ec1e2cedb504956edcd2ba78d041245`
+
+Review-round-2 commit message: `fix(todo): close lead template review gaps`
 
 Decision: **PASS**. The governed TD-001 through TD-004 configuration, simulation,
 publication, coordinated activation, runtime branching and five-day recurrence are ready as
@@ -21,8 +23,8 @@ one verified flow.
 | Backend | `http://127.0.0.1:18083` |
 | UI | `http://127.0.0.1:4173` |
 | Browser | Google Chrome via Playwright Chromium project |
-| Runtime database | Fresh `law_task11_review_final_e2e` on MySQL 8.0, host port `13319`; automatically dropped by Playwright global teardown |
-| External migration gate | Fresh `law_task11_review_external_e2e`, initialized from the repository v0.15 SQL baseline and dropped after verification |
+| Runtime database | Fresh `law_task11_round2_browser_e2e` on MySQL 8.0, host port `13319`; automatically dropped by Playwright global teardown |
+| External migration gate | Fresh `law_task11_round2_external`, initialized from the repository v0.15 SQL baseline and dropped after verification |
 | Redis | `lead-todo-task12-redis`, host port `16381`; flushed before the final run |
 | Latest migration | `0.20.80` |
 
@@ -51,20 +53,20 @@ before runtime execution.
 
 The final real-browser run created three independent business scenarios:
 
-1. Lead 9920527: TD-001 `SUSPECT_INVALID` -> TD-002 `TRUE_INVALID`; the lead moved to the dead pool.
-2. Lead 9920528: TD-001 `SUSPECT_INVALID` -> TD-002 `MISJUDGED_VALID` -> a new current-version TD-001.
-3. Lead 9920529: TD-001 `UNREACHABLE` -> scheduled TD-003 `CONNECTED` -> TD-004.
+1. Lead 9920548: TD-001 `SUSPECT_INVALID` -> TD-002 `TRUE_INVALID`; the lead moved to the dead pool.
+2. Lead 9920549: TD-001 `SUSPECT_INVALID` -> TD-002 `MISJUDGED_VALID` -> a new current-version TD-001.
+3. Lead 9920550: TD-001 `UNREACHABLE` -> scheduled TD-003 `CONNECTED` -> TD-004.
 
-For lead 9920529 the authoritative database rows were:
+For lead 9920550 the authoritative database rows were:
 
 | ID | Template / object | State | Identity |
 |---:|---|---|---|
-| Todo 8 | TD-001 v88 | COMPLETED | runtime root |
-| Todo 9 | TD-003 v91 | COMPLETED | retry plan 1, occurrence 1 (`T0`) |
-| Todo 10 | TD-004 v92 | COMPLETED | routed from Todo 9; terminal state re-queried after actions |
-| Todo 11 | TD-004 v92 | CREATED | materialized from plan 2, occurrence 2 (`P5D`) |
-| Plan 1 | `LEAD_RETRY` | CONTACTED | completion reason `CONTACTED` |
-| Plan 2 | `LEAD_PROGRESS_5D` | ACTIVE | next occurrence due in 432000 seconds |
+| Todo 30 | TD-001 v88 | COMPLETED | runtime root |
+| Todo 31 | TD-003 v91 | COMPLETED | retry occurrence completed with `CONNECTED` |
+| Todo 32 | TD-004 v92 | COMPLETED | routed from Todo 31; terminal state re-queried after actions |
+| Todo 33 | TD-004 v92 | CREATED | materialized from the next `P5D` occurrence |
+| Plan 4 | `LEAD_PROGRESS_5D` | ACTIVE | next occurrence due in 432000 seconds |
+| Occurrence 5 | TD-004 v92 | MATERIALIZED | exactly one next Todo for the action identity |
 
 The final evidence JSON was generated from terminal database re-queries, not pre-action snapshots.
 It proves exactly one progress fact, one five-day plan, one occurrence and one next Todo for the
@@ -85,21 +87,54 @@ same action identity; the next due offset is 432000 seconds.
   mismatches. Both were reproduced, fixed with focused regression tests, and the fresh final run
   then passed 2/2.
 
+Review round 2 closed the remaining adversarial gaps:
+
+- `schedule` is now fail-closed whenever the property is present: a non-object schedule, missing,
+  empty or malformed windows, and mixed scalar plus window timing are rejected. The same central
+  resolver is used by save, journey/preflight, simulation and runtime; valid scalar and valid
+  window schedules remain accepted.
+- TD-002 now rejects a graph that contains the correct `MISJUDGED_VALID` return edge plus any
+  additional review-decision edge back to the current TD-001 task. Exactly one return edge and
+  exactly one correct predicate are required.
+- Chrome verifies the exact TD-002/TD-003/TD-004 DoD fields, proof catalogs, result labels,
+  effects and immutable targets after recommendation, save and a step switch. Open dropdowns
+  expose Chinese labels and the guarded technical codes do not appear.
+- The browser found and closed a real TD-003 recipe-normalization defect: a grouped
+  `requiredFields` condition is now expanded into four canonical runtime requirements with an
+  `EQ` condition converted to `equals`. This prevents an undefined conditional field from being
+  persisted by the guided editor.
+- Backend readiness now follows the CI contract (`/captchaImage` reports
+  `captchaEnabled=false`) before Playwright starts. The earlier port-only wait was the cause of
+  the first login timeout; teardown deleting the database afterward caused the secondary
+  `Unknown database` log noise.
+
 ## Verification matrix
 
 | Layer | Command | Result |
 |---|---|---|
-| Backend reactor | `mvn clean test '-DskipTests=false'` | PASS, all 10 reactor modules; admin suite 215 tests, 0 failed |
-| Release validator | `mvn -pl law-todo -am '-Dtest=LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | PASS, 19/19 |
-| Retry routing regression | `mvn -pl ruoyi-system -am '-Dtest=LeadRetryTodoHandlerTest,LeadRetryTodoCommandFlowTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | PASS, 6/6 |
-| External MySQL | `mvn -pl ruoyi-admin -am '-Dtest=LeadTodoGuidedConfigurationExternalMysqlIT,LeadTodoFlowEndToEndTest,FlywayMigrationTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | PASS, 9/9, 0 skipped; 93 migrations validated through V0.20.80 |
-| Frontend Todo contracts | `npm run test:todo`; `npm run test:todo-config` | PASS |
-| Journey model and UX | `npm run test:todo-phase-two` | PASS, 62 model and 43 UX checks |
-| Schema and encoding | `npm run test:todo-schema`; `npm run test:encoding` | PASS |
-| E2E source/report contracts | `npm run test:e2e:contract` | PASS |
-| Production frontend | `npm run build:prod` | PASS; four pre-existing CSS-order/bundle-size warnings |
-| Real browser | `npx playwright test tests/e2e/todo-config-journey.spec.js -g 'GUIDED_LEAD_' --project=chromium` | PASS, fresh database, 2/2 in 1.4 minutes; publication/activation 31.3 s, runtime 45.9 s |
-| Disposable DB teardown | Playwright global teardown plus `information_schema.schemata` query | PASS; teardown logged the dropped database and the follow-up query returned no row |
+| Backend reactor | `mvn clean test '-DskipTests=false'` | exit 0, all 10 reactor modules; admin suite 215 tests, 0 failed |
+| Review-round-2 focused RED | `mvn -pl law-todo -am '-Dtest=TodoScheduleServiceTest,TodoDefinitionServiceTest,TodoConfigurationJourneyEvaluatorTest,TodoDefinitionSimulationServiceTest,LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 1 before implementation; the initial compile also reported the intentionally missing central API/helper methods |
+| Review-round-2 focused GREEN | same focused Maven command | exit 0, 127/127, 0 skipped |
+| Release validator | `mvn -pl law-todo -am '-Dtest=LeadTodoReleaseServiceTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, included in the 127-test focused gate |
+| Retry routing regression | `mvn -pl ruoyi-system -am '-Dtest=LeadRetryTodoHandlerTest,LeadRetryTodoCommandFlowTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, 6/6 |
+| External MySQL | `mvn -pl ruoyi-admin -am '-Dtest=LeadTodoGuidedConfigurationExternalMysqlIT,LeadTodoFlowEndToEndTest,FlywayMigrationTest' '-Dsurefire.failIfNoSpecifiedTests=false' test` | exit 0, 9/9, 0 skipped; 93 migrations validated through V0.20.80 |
+| Backend package | `mvn -pl ruoyi-admin -am package -DskipTests` | exit 0 |
+| Frontend Todo contracts | `npm run test:todo`; `npm run test:todo-config` | exit 0; exit 0 |
+| Journey grouped-condition RED/GREEN | `npm run test:todo-phase-two` | exit 1 before normalization; final exit 0, 63 model and 43 UX checks |
+| Schema and encoding | `npm run test:todo-schema`; `npm run test:encoding` | exit 0; exit 0 |
+| E2E source/report contracts | `npm run test:e2e:contract` | initial exit 1 after the evidence contract changed; final exit 0 |
+| Production frontend | `npm run build:prod` | exit 0; four pre-existing CSS-order/bundle-size warnings |
+| Readiness/login probe | `Invoke-RestMethod http://127.0.0.1:18083/captchaImage`; `POST /login` | exit 0; `captchaEnabled=false`, login code 200, token present in 2850 ms |
+| Real browser exploratory reruns | `npx playwright test tests/e2e/todo-config-journey.spec.js -g GUIDED_LEAD_ --project=chromium` | four exit-1 runs exposed, in order, startup readiness race, unstable dropdown targeting, the canonical material label, and grouped-condition normalization |
+| Real browser final | same Playwright command with `TODO_E2E_BROWSER=chrome` | exit 0, fresh database, 2/2 in 92.6 s; publication/activation 34.8 s, runtime 50.8 s |
+| Disposable DB teardown | Playwright global teardown plus schema-existence query | exit 0; teardown logged the dropped database and the follow-up query returned no row |
+| Patch whitespace | `git diff --check` | exit 0 |
+| Worktree inventory | `git status --short` | exit 0; intentionally non-empty and reported separately below |
+
+The worktree inventory remained non-empty because the user-owned
+`.superpowers/sdd/task-7-report.md` and `ruoyi-ui/vue.config.js`, plus existing untracked browser,
+runtime-log, output and `test-results` artifacts, were preserved. They were not staged in either
+Task 11 commit. This dirty-state disclosure is separate from the passing product gates.
 
 ## Visual and machine-readable evidence
 
