@@ -27,6 +27,12 @@ public class LeadProgressHandoffTodoHandler implements TodoCompletionHandler
     @Override public boolean supports(TodoInstance todo)
     {return todo!=null&&"TD-004".equals(todo.getTemplateCode());}
 
+    @Override
+    public void prepare(CompletionContext context)
+    {
+        cycles.prepareAfterDodValidation(parse(context.todo(),context.payload()),context.todo());
+    }
+
     @Override public String catalogCode(){return "TD-004_COMPLETE";}
 
     @Override public boolean supportsSimulation(){return true;}

@@ -163,7 +163,8 @@ class TodoConfigurationJourneyServiceTest
     {
         when(query.template(42L)).thenReturn(fixtureTemplate());
         when(outcomes.resolve(org.mockito.ArgumentMatchers.eq("TODO-42"),
-                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.any()))
+                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.eq(101L),
+                org.mockito.ArgumentMatchers.any()))
                 .thenReturn(new TodoBusinessOutcomeCatalogService.BusinessOutcomeSet(
                         "contactResult","首联结果","首联后的联系结论",
                         List.of(new TodoBusinessOutcomeCatalogService.BusinessOutcomeOption(

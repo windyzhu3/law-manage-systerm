@@ -155,7 +155,8 @@ public class TodoConfigurationJourneyService
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
                 templates.listTemplateCalendarCatalog(),routingTargets(businessType),
                 outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
-                        outcomes.resolve(detail.templateCode(),businessType,definition));
+                        outcomes.resolve(detail.templateCode(),businessType,
+                                detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition));
     }
 
     private List<RoutingTargetCatalogEntry> routingTargets(String businessType)

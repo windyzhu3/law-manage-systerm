@@ -51,6 +51,7 @@ class TodoDefinitionServiceTest
 {
     @Mock TodoMapper mapper;
     @Mock TodoSimulationReadinessService simulationReadiness;
+    @Mock TodoBusinessOutcomeCatalogService businessOutcomes;
     private final Actor actor=new Actor(7L,"alice",3L);
 
     @BeforeEach void lockedVersionUsesTheExistingVersionStub()
@@ -203,6 +204,31 @@ class TodoDefinitionServiceTest
         assertTrue(String.valueOf(value.get("ownerRuleJson")).contains("ownerId"));
         assertTrue(String.valueOf(value.get("uiSchemaJson")).contains("TD-001"));
         assertEquals("alice",value.get("updateBy"));
+    }
+
+    @Test void updateDraftRejectsBusinessOutcomeThatDoesNotTargetTheExactEditableVersion()
+    {
+        Map<String,Object> current=draft(null,null);current.put("template_code","TD-004");
+        current.put("business_type","LEAD");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        when(businessOutcomes.validate(org.mockito.ArgumentMatchers.eq("TD-004"),
+                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.eq(9L),
+                org.mockito.ArgumentMatchers.any())).thenReturn(List.of(
+                        new TodoBusinessOutcomeCatalogService.OutcomeIssue(
+                                "TODO_ROUTING_TARGET_VERSION_INVALID",
+                                "routing.businessOutcomes[0].targetVersionId",
+                                "Self schedule must target the editable version")));
+        TodoDefinitionService service=new TodoDefinitionService(mapper,compiler(),null,
+                (type,value)->true,null,businessOutcomes);
+
+        TodoException error=assertThrows(TodoException.class,()->service.updateDraft(
+                new UpdateDraftCommand("edit-td004",9L,canonical("TD-004")),actor));
+
+        assertEquals("TODO_ROUTING_TARGET_VERSION_INVALID",error.getBusinessCode());
+        verify(businessOutcomes).validate(org.mockito.ArgumentMatchers.eq("TD-004"),
+                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.eq(9L),
+                org.mockito.ArgumentMatchers.any());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
     @Test void updateDraftAcceptsWindowScheduledSlaWithoutScalarMinutes()
@@ -461,6 +487,36 @@ class TodoDefinitionServiceTest
         assertFalse(result.publishable());
         assertTrue(result.report().errors().stream().anyMatch(issue->
                 "TODO_REQUIRED_SIMULATION_SCENARIOS_INCOMPLETE".equals(issue.code())));
+    }
+
+    @Test void preflightAndSimulationGateUseTheExactEditableVersionForBusinessOutcomes()
+    {
+        Map<String,Object> current=draft(null,null);current.put("template_code","TD-004");
+        current.put("business_type","LEAD");current.put("definition_json",canonical("TD-004"));
+        current.put("definition_hash","a".repeat(64));
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        registeredEvent();when(mapper.updateDefinitionCompilation(anyMap())).thenReturn(1);
+        var issue=new TodoBusinessOutcomeCatalogService.OutcomeIssue(
+                "TODO_ROUTING_TARGET_VERSION_INVALID",
+                "routing.businessOutcomes[0].targetVersionId",
+                "Self schedule must target the editable version");
+        when(businessOutcomes.validate(org.mockito.ArgumentMatchers.eq("TD-004"),
+                org.mockito.ArgumentMatchers.eq("LEAD"),org.mockito.ArgumentMatchers.eq(9L),
+                org.mockito.ArgumentMatchers.any())).thenReturn(List.of(issue));
+        TodoDefinitionService service=new TodoDefinitionService(mapper,compiler(),null,
+                (type,value)->true,null,businessOutcomes);
+
+        TodoDefinitionService.PreflightResult preflight=service.preflight(9L);
+        TodoException simulation=assertThrows(TodoException.class,
+                ()->service.assertSimulationGate(9L,"a".repeat(64)));
+
+        assertFalse(preflight.publishable());
+        assertTrue(preflight.report().errors().stream().anyMatch(error->
+                "TODO_ROUTING_TARGET_VERSION_INVALID".equals(error.code())));
+        assertEquals("TODO_ROUTING_TARGET_VERSION_INVALID",simulation.getBusinessCode());
+        verify(businessOutcomes,org.mockito.Mockito.atLeast(2)).validate(
+                org.mockito.ArgumentMatchers.eq("TD-004"),org.mockito.ArgumentMatchers.eq("LEAD"),
+                org.mockito.ArgumentMatchers.eq(9L),org.mockito.ArgumentMatchers.any());
     }
 
     @Test void draftPublishPreflightAllowsItsOwnStartTaskVersion()

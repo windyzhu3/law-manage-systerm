@@ -43,13 +43,17 @@ public class TodoBusinessOutcomeCatalogService
     {this.resources=resources;this.mapper=mapper;}
 
     public BusinessOutcomeSet resolve(String templateCode,String businessType,TodoDefinitionDocument definition)
+    {return resolve(templateCode,businessType,null,definition);}
+
+    public BusinessOutcomeSet resolve(String templateCode,String businessType,Long candidateVersionId,
+            TodoDefinitionDocument definition)
     {
         Map<String,RoutingTargetCatalogEntry> targetsByCode=targetsByCode(businessType);
         GovernedOutcomeSpec governed=GOVERNED_OUTCOMES.get(templateCode);
         if(governed!=null)
         {
             List<BusinessOutcomeOption> options=governed.options().stream()
-                    .map(option->option(option,targetsByCode)).toList();
+                    .map(option->option(templateCode,candidateVersionId,option,targetsByCode)).toList();
             return new BusinessOutcomeSet(governed.resultField(),governed.resultFieldName(),governed.description(),
                     options,governed.recommendationCode());
         }
@@ -72,8 +76,12 @@ public class TodoBusinessOutcomeCatalogService
     }
 
     public List<OutcomeIssue> validate(String templateCode,String businessType,TodoDefinitionDocument definition)
+    {return validate(templateCode,businessType,null,definition);}
+
+    public List<OutcomeIssue> validate(String templateCode,String businessType,Long candidateVersionId,
+            TodoDefinitionDocument definition)
     {
-        BusinessOutcomeSet outcomeSet=resolve(templateCode,businessType,definition);
+        BusinessOutcomeSet outcomeSet=resolve(templateCode,businessType,candidateVersionId,definition);
         if(!outcomeSet.available())return List.of();
         Map<String,BusinessOutcomeOption> expected=new LinkedHashMap<>();
         outcomeSet.options().forEach(option->expected.put(option.value(),option));
@@ -168,12 +176,16 @@ public class TodoBusinessOutcomeCatalogService
         return result;
     }
 
-    private BusinessOutcomeOption option(GovernedOutcome option,Map<String,RoutingTargetCatalogEntry> targetsByCode)
+    private BusinessOutcomeOption option(String templateCode,Long candidateVersionId,GovernedOutcome option,
+            Map<String,RoutingTargetCatalogEntry> targetsByCode)
     {
         RoutingTargetCatalogEntry target=option.targetTemplateCode()==null?null:
                 targetsByCode.get(option.targetTemplateCode());
+        boolean selfSchedule="SCHEDULE_SELF".equals(option.effectKind())
+                &&templateCode.equals(option.targetTemplateCode());
         return new BusinessOutcomeOption(option.value(),option.label(),option.effectKind(),option.targetTemplateCode(),
-                target==null?null:target.templateName(),target==null?null:target.versionId());
+                target==null?null:target.templateName(),selfSchedule?candidateVersionId:
+                        target==null?null:target.versionId());
     }
 
     private FieldResource resultField(List<FieldResource> fields,TodoDefinitionDocument definition)

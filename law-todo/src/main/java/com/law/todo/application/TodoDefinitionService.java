@@ -53,27 +53,34 @@ public class TodoDefinitionService
     private final TodoConfigurationMapper configurationMapper;
     private final TodoDictionaryValidationPort dictionaries;
     private final TodoSimulationReadinessService simulationReadiness;
+    private final TodoBusinessOutcomeCatalogService businessOutcomes;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
     @Autowired
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
-            TodoSimulationReadinessService simulationReadiness)
+            TodoSimulationReadinessService simulationReadiness,
+            TodoBusinessOutcomeCatalogService businessOutcomes)
     {
         this.mapper = mapper;
         this.compiler = compiler;
         this.configurationMapper=configurationMapper;this.dictionaries=dictionaries;
         this.simulationReadiness=simulationReadiness;
+        this.businessOutcomes=businessOutcomes;
     }
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
+            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
+            TodoSimulationReadinessService simulationReadiness)
+    {this(mapper,compiler,configurationMapper,dictionaries,simulationReadiness,null);}
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
-    {this(mapper,compiler,configurationMapper,dictionaries,null);}
+    {this(mapper,compiler,configurationMapper,dictionaries,null,null);}
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,TodoConfigurationMapper configurationMapper)
-    {this(mapper,compiler,configurationMapper,(type,value)->true,null);}
+    {this(mapper,compiler,configurationMapper,(type,value)->true,null,null);}
 
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
-    {this(mapper,compiler,null,(type,value)->true,null);}
+    {this(mapper,compiler,null,(type,value)->true,null,null);}
 
     public TodoDefinitionService(TodoMapper mapper)
     {
@@ -84,7 +91,7 @@ public class TodoDefinitionService
     public TodoDefinitionService(TodoMapper mapper,TodoAutoActionCapabilityRegistry autoActions)
     {
         this(mapper,new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
-                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true,null);
+                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true,null,null);
     }
 
     public List<Map<String, Object>> versions(Long templateId)
@@ -334,6 +341,7 @@ public class TodoDefinitionService
             definition=legacyAdapter.fromLegacy(legacy);
         }
         validateDefinition(definition,text(value(current,"business_type","businessType")));
+        requireBusinessOutcomes(current,command.versionId(),definition);
         String canonical=codec.canonicalJson(definition);
         String fingerprint=updateFingerprint(command,actor,canonical,command.expectedDefinitionJson());
         Long repeated=claimUpdateDraft(command,actor,fingerprint);
@@ -555,8 +563,13 @@ public class TodoDefinitionService
         Map<String,Object> current=requireVersion(versionId);
         String persistedHash=text(value(current,"definition_hash","definitionHash"));
         if(expectedDefinitionHash==null||!expectedDefinitionHash.equals(persistedHash))throw stalePreflight();
-        if(!DRAFT.equals(text(value(current,"status","status"))))return;
-        TodoDefinitionDocument persisted=definition(current);RuleBinding rebound;
+        TodoDefinitionDocument persisted=definition(current);
+        if(!DRAFT.equals(text(value(current,"status","status"))))
+        {
+            requireBusinessOutcomes(current,versionId,persisted);
+            return;
+        }
+        RuleBinding rebound;
         try{rebound=bindReferencedRules(versionId,persisted);}
         catch(TodoException changed){throw stalePreflight();}
         Object persistedSla=persisted.sla().config().get("ruleSnapshots");Object persistedDod=persisted.dod().config().get("ruleSnapshots");
@@ -564,6 +577,7 @@ public class TodoDefinitionService
         Object currentDod=rebound.bound()?rebound.definition().dod().config().get("ruleSnapshots"):null;
         if(!canonicalRuleSnapshot(persistedSla).equals(canonicalRuleSnapshot(currentSla))
                 ||!canonicalRuleSnapshot(persistedDod).equals(canonicalRuleSnapshot(currentDod)))throw stalePreflight();
+        requireBusinessOutcomes(current,versionId,rebound.definition());
     }
 
     private String canonicalRuleSnapshot(Object value)
@@ -596,6 +610,7 @@ public class TodoDefinitionService
         });
         DefinitionValidationReport report = applyPrdCatalogueGate(compiler.compile(definition, context), current,
                 prdBlocked);
+        report=applyBusinessOutcomeGate(report,current,versionId,definition);
         if(simulationReadiness!=null)report=simulationReadiness.applyPreflightGate(versionId,report);
         Map<String, Object> persisted = new HashMap<>();
         persisted.put("versionId", versionId);
@@ -795,6 +810,39 @@ public class TodoDefinitionService
     private abstract static class PublishGateException extends TodoException
     {
         private PublishGateException(String code,String message){super(code,message);}
+    }
+
+    private DefinitionValidationReport applyBusinessOutcomeGate(DefinitionValidationReport report,
+            Map<String,Object> current,long candidateVersionId,TodoDefinitionDocument definition)
+    {
+        List<TodoBusinessOutcomeCatalogService.OutcomeIssue> issues=businessOutcomeIssues(
+                current,candidateVersionId,definition);
+        if(issues.isEmpty())return report;
+        List<ValidationIssue> errors=new java.util.ArrayList<>(report.errors());
+        issues.forEach(issue->errors.add(new ValidationIssue(issue.code(),issue.path(),issue.message())));
+        return new DefinitionValidationReport(errors,report.warnings(),report.compiledJson(),report.definitionHash());
+    }
+
+    private void requireBusinessOutcomes(Map<String,Object> current,long candidateVersionId,
+            TodoDefinitionDocument definition)
+    {
+        List<TodoBusinessOutcomeCatalogService.OutcomeIssue> issues=businessOutcomeIssues(
+                current,candidateVersionId,definition);
+        if(!issues.isEmpty())
+        {
+            TodoBusinessOutcomeCatalogService.OutcomeIssue issue=issues.get(0);
+            throw new TodoException(issue.code(),issue.message());
+        }
+    }
+
+    private List<TodoBusinessOutcomeCatalogService.OutcomeIssue> businessOutcomeIssues(
+            Map<String,Object> current,long candidateVersionId,TodoDefinitionDocument definition)
+    {
+        if(businessOutcomes==null)return List.of();
+        String templateCode=text(value(current,"template_code","templateCode"));
+        String businessType=text(value(current,"business_type","businessType"));
+        if(templateCode==null||templateCode.isBlank()||businessType==null||businessType.isBlank())return List.of();
+        return businessOutcomes.validate(templateCode,businessType,candidateVersionId,definition);
     }
 
     private static final class PreflightFailedException extends PublishGateException

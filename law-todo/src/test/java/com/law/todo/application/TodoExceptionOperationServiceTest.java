@@ -12,6 +12,8 @@ import com.law.todo.application.command.TodoOperationCommands.*;
 import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
+import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
 
 class TodoExceptionOperationServiceTest
 {
@@ -25,6 +27,26 @@ class TodoExceptionOperationServiceTest
         when(mapper.insertExceptionLogIfAbsent(anyMap())).thenReturn(1);when(mapper.forceTerminalConditionally(9L,"SUBMITTED","COMPLETED","admin")).thenReturn(1);
         TodoExceptionOperationService service=service();service.forceComplete(9L,new ForceCommand("act-1","经负责人审批",Map.of()),admin);
         verify(dod).validateBusiness(eq(todo),eq(Map.of()));verify(mapper).insertExceptionLogIfAbsent(argThat(row->"FORCE_COMPLETE".equals(row.get("operationType"))));
+    }
+
+    @Test void forceCompletePreparesBusinessLockBeforeExceptionOrTodoMutation()
+    {
+        TodoInstance todo=todo("SUBMITTED",7L);todo.setTemplateCode("TD-004");
+        TodoCompletionHandler handler=mock(TodoCompletionHandler.class);
+        when(mapper.selectById(9L)).thenReturn(todo);
+        when(mapper.insertExceptionLogIfAbsent(anyMap())).thenReturn(1);
+        when(mapper.forceTerminalConditionally(9L,"SUBMITTED","COMPLETED","admin")).thenReturn(1);
+        when(handler.supports(todo)).thenReturn(true);
+        when(handler.handle(any())).thenReturn(CompletionResult.completeTodo(Map.of()));
+
+        new TodoExceptionOperationService(mapper,dod,List.of(handler)).forceComplete(9L,
+                new ForceCommand("act-lock","approved",Map.of()),admin);
+
+        var order=inOrder(handler,mapper);
+        order.verify(handler).prepare(any());
+        order.verify(mapper).insertExceptionLogIfAbsent(anyMap());
+        order.verify(mapper).forceTerminalConditionally(9L,"SUBMITTED","COMPLETED","admin");
+        order.verify(handler).handle(any());
     }
 
     @Test void rejectsTerminalAndDuplicateActionConflict()

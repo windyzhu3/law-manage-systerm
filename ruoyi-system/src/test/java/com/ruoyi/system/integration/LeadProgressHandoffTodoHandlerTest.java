@@ -81,6 +81,21 @@ class LeadProgressHandoffTodoHandlerTest
     }
 
     @Test
+    void preparationLocksAndRevalidatesTheLeadWithoutCompletingTheBusinessCycle()
+    {
+        TodoInstance todo=new TodoInstance();todo.setTodoId(7001L);todo.setTemplateCode("TD-004");
+        todo.setTemplateVersionId(88L);todo.setBusinessType("LEAD");todo.setBusinessId(91L);
+        LeadProgressCycleService cycles=org.mockito.Mockito.mock(LeadProgressCycleService.class);
+        LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(cycles);
+
+        handler.prepare(CompletionContext.human(todo,Map.of(
+                "progressType","PHONE","progressAt","2026-07-31T10:00:00"),8L,"alice"));
+
+        verify(cycles).prepareAfterDodValidation(any(),same(todo));
+        verify(cycles,org.mockito.Mockito.never()).completeAfterDodValidation(any(),any());
+    }
+
+    @Test
     void readonlySampleCanValidateTheRecurringEffectWithoutPersistedBusinessIdentity()
     {
         TodoInstance sample=new TodoInstance();

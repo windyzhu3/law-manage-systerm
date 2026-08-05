@@ -90,7 +90,7 @@ class LeadFlowMapperExternalMysqlIT
                     "com.mysql.cj.jdbc.Driver",schemaUrl,user,password);
             LegacyScheduleIds ids=insertPre049Schedule(dataSource);
 
-            migrate(schemaUrl,user,password,"0.20.50");
+            migrate(schemaUrl,user,password,"0.20.80");
 
             SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
             try(SqlSession session=sessions.openSession(false))
@@ -140,7 +140,7 @@ class LeadFlowMapperExternalMysqlIT
             assertPublishedV049Checksum(dataSource);
             LegacyScheduleIds ids=insertPublished049Schedule(dataSource);
 
-            migrate(schemaUrl,user,password,"0.20.50");
+            migrate(schemaUrl,user,password,"0.20.80");
 
             SqlSessionFactory sessions=new SqlSessionFactoryBuilder().build(myBatis(dataSource));
             try(SqlSession session=sessions.openSession(false))
@@ -727,11 +727,11 @@ class LeadFlowMapperExternalMysqlIT
                     +"'COMPLETED','UNREACHABLE','T1_AM'),("+leadB+",'RB-"+leadB
                     +"','Retry B','2','0','ACTIVE','0',1,0,'COMPLETED','UNREACHABLE','T1_AM')");
             statement.executeUpdate("insert into todo_schedule_plan(previous_todo_id,template_version_id,"
-                    +"business_type,business_id,timezone,rule_version_id,assignment_policy_id,"
+                    +"business_type,business_id,schedule_purpose,idempotency_key,timezone,rule_version_id,assignment_policy_id,"
                     +"assignment_policy_version,assignment_policy_snapshot_source,"
                     +"first_contact_at,status,create_time,"
                     +"update_time,version) values("+todoId+",1,'LEAD',"+leadA
-                    +",'Asia/Shanghai',11,1,0,'RESOLVED_POLICY','2026-07-25 09:00:00',"
+                    +",'LEAD_RETRY','TASK6-RETRY-"+leadA+"','Asia/Shanghai',11,1,0,'RESOLVED_POLICY','2026-07-25 09:00:00',"
                     +"'ACTIVE',sysdate(),sysdate(),0)",
                     Statement.RETURN_GENERATED_KEYS);
             long planId=generated(statement);

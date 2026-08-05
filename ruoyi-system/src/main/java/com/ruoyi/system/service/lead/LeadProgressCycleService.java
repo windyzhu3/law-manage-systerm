@@ -77,23 +77,24 @@ public class LeadProgressCycleService
         return complete(command,todo,true);
     }
 
+    /**
+     * Establishes the global TD-004 lock fence before an outer application service mutates Todo.
+     * This phase validates only; facts and schedules remain owned by {@link #completeAfterDodValidation}.
+     */
+    @Transactional
+    public void prepareAfterDodValidation(LeadProgressCompleteCommand command,TodoInstance todo)
+    {
+        validateIdentity(command,todo);
+        lockAndValidateLead(command,todo);
+    }
+
     private ProgressCycleOutcome complete(LeadProgressCompleteCommand command,TodoInstance todo,
             boolean dodMaterialsValidated)
     {
         validateIdentity(command,todo);
-        // Global TD-004 lock order: authoritative lead -> progress fact -> schedule rows ->
-        // the outer Todo conditional transition/action. TodoCommandService only performs
-        // unlocked reads before this handler, so no fact/schedule/Todo lock may precede this row lock.
-        BizLead lead=leads.selectLeadForProgressCycleForUpdate(command.getLeadId());
-        require(lead!=null,BusinessErrorCode.DATA_NOT_FOUND,"Lead does not exist");
-        BusinessActor actor=actors.current();
-        require(actor.administrator()||actor.userId().equals(lead.getOwnerId()),
-                BusinessErrorCode.ACCESS_DENIED,"Only the current lead owner may record progress");
-        require(Objects.equals(lead.getOwnerId(),todo.getOwnerId()),BusinessErrorCode.STATE_CONFLICT,
-                "Todo owner no longer matches the current lead owner");
-        require("0".equals(lead.getDelFlag())&&"0".equals(lead.getPoolStatus())
-                &&"ACTIVE".equals(lead.getDisposition())&&lead.getOwnerId()!=null,
-                BusinessErrorCode.STATE_CONFLICT,"Lead is no longer active");
+        CompletionGuard guard=lockAndValidateLead(command,todo);
+        BizLead lead=guard.lead();
+        BusinessActor actor=guard.actor();
 
         String progressType=trim(command.getProgressType());
         requireDict(progressType);
@@ -121,6 +122,23 @@ public class LeadProgressCycleService
         require(locked!=null&&locked.getFollowupId()!=null,BusinessErrorCode.CONCURRENT_MODIFICATION,
                 "Progress fact could not be locked after insert");
         return replayOrRecover(locked,lead,todo,actor,progressType,progressAt,remark,inserted==0);
+    }
+
+    private CompletionGuard lockAndValidateLead(LeadProgressCompleteCommand command,TodoInstance todo)
+    {
+        // Global TD-004 order for normal, force and automatic completion starts here:
+        // authoritative lead -> any Todo mutation / progress fact / schedule rows.
+        BizLead lead=leads.selectLeadForProgressCycleForUpdate(command.getLeadId());
+        require(lead!=null,BusinessErrorCode.DATA_NOT_FOUND,"Lead does not exist");
+        BusinessActor actor=actors.current();
+        require(actor.administrator()||actor.userId().equals(lead.getOwnerId()),
+                BusinessErrorCode.ACCESS_DENIED,"Only the current lead owner may record progress");
+        require(Objects.equals(lead.getOwnerId(),todo.getOwnerId()),BusinessErrorCode.STATE_CONFLICT,
+                "Todo owner no longer matches the current lead owner");
+        require("0".equals(lead.getDelFlag())&&"0".equals(lead.getPoolStatus())
+                &&"ACTIVE".equals(lead.getDisposition())&&lead.getOwnerId()!=null,
+                BusinessErrorCode.STATE_CONFLICT,"Lead is no longer active");
+        return new CompletionGuard(lead,actor);
     }
 
     private ProgressCycleOutcome replayOrRecover(BizLeadFollowup fact,BizLead lead,TodoInstance todo,
@@ -300,4 +318,5 @@ public class LeadProgressCycleService
 
     public record ProgressCycleOutcome(long followupId,long schedulePlanId,
             LocalDateTime nextDueAt,boolean replayed) { }
+    private record CompletionGuard(BizLead lead,BusinessActor actor) { }
 }

@@ -5,7 +5,9 @@ const reportDir = path.resolve(process.argv[2] || path.join(__dirname, '../../ru
 const packageName = 'com.ruoyi.web.migration'
 const requiredClasses = [
   'FlywayMigrationTest',
+  'LeadTemplateConfigurationMySqlIT',
   'FileMaterialEndToEndTest',
+  'FileObjectLockOrderExternalMysqlIT',
   'HistoricalMigrationPreflightEndToEndTest',
   'FoundationCollationMigrationTest',
   'PhaseTwoDatabaseInvariantTest',
@@ -13,6 +15,8 @@ const requiredClasses = [
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
+  'TodoAssignmentDelegationMapperExternalMysqlIT',
+  'TodoScheduleLockOrderExternalMysqlIT',
   'NavigationMenuEncodingExternalMysqlIT',
   'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
@@ -29,7 +33,7 @@ const requiredClasses = [
 const exactTestCounts = new Map([
   ['LeadTodoFlowEndToEndTest', 7],
   ['LeadTodoScheduleEndToEndTest', 4],
-  ['LeadProgressCycleRuntimeMySqlTest', 4],
+  ['LeadProgressCycleRuntimeMySqlTest', 6],
   ['LeadTodoReleaseVersionLockExternalMysqlIT', 3]
 ])
 
@@ -42,7 +46,10 @@ function suiteAttributes(xml, className) {
 }
 
 for (const className of requiredClasses) {
-  const report = path.join(reportDir, `TEST-${packageName}.${className}.xml`)
+  const reportPackage = className === 'LeadTemplateConfigurationMySqlIT'
+    ? 'com.ruoyi.web.todo'
+    : packageName
+  const report = path.join(reportDir, `TEST-${reportPackage}.${className}.xml`)
   if (!fs.existsSync(report)) throw new Error(`${className}: required Surefire report is missing`)
   const attributes = suiteAttributes(fs.readFileSync(report, 'utf8'), className)
   const tests = Number(attributes.tests)

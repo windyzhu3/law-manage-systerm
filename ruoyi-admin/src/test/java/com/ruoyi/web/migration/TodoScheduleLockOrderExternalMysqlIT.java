@@ -167,11 +167,14 @@ class TodoScheduleLockOrderExternalMysqlIT
                       template_version_id bigint not null,
                       business_type varchar(32) not null,
                       business_id bigint not null,
+                      schedule_purpose varchar(32) not null,
+                      idempotency_key varchar(192) not null,
                       timezone varchar(64) not null,
                       rule_version_id bigint not null,
                       assignment_policy_id bigint null,
                       assignment_policy_version int null,
                       assignment_policy_snapshot_source varchar(32) not null,
+                      first_contact_at datetime null,
                       status varchar(20) not null,
                       completion_reason varchar(64) null,
                       completed_at datetime null,
@@ -234,9 +237,9 @@ class TodoScheduleLockOrderExternalMysqlIT
             statement.executeUpdate("""
                     insert into todo_schedule_plan(
                       plan_id,previous_todo_id,template_version_id,business_type,business_id,
-                      timezone,rule_version_id,assignment_policy_id,assignment_policy_version,
+                      schedule_purpose,idempotency_key,timezone,rule_version_id,assignment_policy_id,assignment_policy_version,
                       assignment_policy_snapshot_source,status,update_time,version
-                    ) values(3,44,22,'LEAD',7,'Asia/Shanghai',99,101,4,
+                    ) values(3,44,22,'LEAD',7,'LEAD_RETRY','LOCK-ORDER-3','Asia/Shanghai',99,101,4,
                       'RESOLVED_POLICY','ACTIVE',now(),0)
                     """);
             statement.executeUpdate("""

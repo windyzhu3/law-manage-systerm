@@ -93,7 +93,7 @@ class HistoricalMigrationPreflightEndToEndTest
         Flyway flyway=Flyway.configure().dataSource(url,user,password).baselineOnMigrate(true).baselineVersion("0.15.0")
                 .locations("classpath:db/migration").load();
         assertTrue(flyway.migrate().success);
-        assertEquals("0.20.51",flyway.info().current().getVersion().getVersion());
+        assertEquals("0.20.80",flyway.info().current().getVersion().getVersion());
 
         DataSource dataSource=new UnpooledDataSource("com.mysql.cj.jdbc.Driver",url,user,password);
         Configuration configuration=myBatis(dataSource);

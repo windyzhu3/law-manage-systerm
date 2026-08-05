@@ -410,13 +410,13 @@ class LeadTodoReadModelExternalMysqlIT
                     +"candidate_id,policy_id,user_id,sort_order,status) values "
                     +"(9911002,9911001,"+SELLER+",0,'ACTIVE')");
             sql.executeUpdate("insert into todo_schedule_plan(plan_id,previous_todo_id,template_version_id,"
-                    +"business_type,business_id,timezone,rule_version_id,assignment_policy_id,"
+                    +"business_type,business_id,schedule_purpose,idempotency_key,timezone,rule_version_id,assignment_policy_id,"
                     +"assignment_policy_version,assignment_policy_snapshot_source,first_contact_at,"
                     +"current_window_code,status,create_time,update_time,version) values "
                     +"("+PLAN+","+SOURCE_TODO+",(select v.version_id from todo_template t "
                     +"join todo_template_version v on v.template_id=t.template_id "
                     +"and v.version_no=t.current_version where t.template_code='TD-003'),"
-                    +"'LEAD',"+ACTIVE_LEAD+",'Asia/Shanghai',501,9911001,0,'RESOLVED_POLICY',"
+                    +"'LEAD',"+ACTIVE_LEAD+",'LEAD_RETRY','TASK9-PLAN-"+PLAN+"','Asia/Shanghai',501,9911001,0,'RESOLVED_POLICY',"
                     +"sysdate(),'T0','ACTIVE',sysdate(),sysdate(),0)");
             sql.executeUpdate("insert into todo_schedule_window(window_id,plan_id,window_code,window_order,"
                     +"day_offset,start_time,end_time,materialize_at,due_at,max_attempts,occurrence_no,status,"

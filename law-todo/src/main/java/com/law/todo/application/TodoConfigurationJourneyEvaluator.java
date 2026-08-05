@@ -191,7 +191,8 @@ public class TodoConfigurationJourneyEvaluator
             local.add(blocker("TODO_JOURNEY_ROUTING_INVALID","ROUTING","routing",
                     "The routing path is incomplete or invalid","Repair the routing path"));
         if(outcomes!=null&&detail!=null)
-            for(var issue:outcomes.validate(detail.templateCode(),detail.businessType(),definition))
+            for(var issue:outcomes.validate(detail.templateCode(),detail.businessType(),
+                    detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition))
                 local.add(blocker(issue.code(),"ROUTING",issue.path(),issue.message(),
                         "返回后续路由并修复“"+issue.message()+"”"));
         append(issues,local);return step("ROUTING","Routing",local,true,local.isEmpty(),fieldValue("config",routing));

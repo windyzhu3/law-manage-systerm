@@ -7,7 +7,9 @@ const gate = path.join(__dirname, 'assert-external-db-reports.js')
 const packageName = 'com.ruoyi.web.migration'
 const classes = [
   'FlywayMigrationTest',
+  'LeadTemplateConfigurationMySqlIT',
   'FileMaterialEndToEndTest',
+  'FileObjectLockOrderExternalMysqlIT',
   'HistoricalMigrationPreflightEndToEndTest',
   'FoundationCollationMigrationTest',
   'PhaseTwoDatabaseInvariantTest',
@@ -15,6 +17,8 @@ const classes = [
   'TodoRoutingJoinConcurrencyTest',
   'TodoAutoActionFencingConcurrencyTest',
   'TodoDefinitionLedgerConcurrencyTest',
+  'TodoAssignmentDelegationMapperExternalMysqlIT',
+  'TodoScheduleLockOrderExternalMysqlIT',
   'NavigationMenuEncodingExternalMysqlIT',
   'SystemManagementEncodingExternalMysqlIT',
   'TodoScenarioSimulationExternalMysqlIT',
@@ -30,7 +34,12 @@ const classes = [
 ]
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'todo-external-reports-'))
 
-function reportPath(className) { return path.join(root, `TEST-${packageName}.${className}.xml`) }
+function reportPath(className) {
+  const reportPackage = className === 'LeadTemplateConfigurationMySqlIT'
+    ? 'com.ruoyi.web.todo'
+    : packageName
+  return path.join(root, `TEST-${reportPackage}.${className}.xml`)
+}
 function writeReport(className, values = {}) {
   const attributes = { tests: 1, skipped: 0, failures: 0, errors: 0, ...values }
   fs.writeFileSync(reportPath(className), `<?xml version="1.0"?><testsuite name="${className}" tests="${attributes.tests}" skipped="${attributes.skipped}" failures="${attributes.failures}" errors="${attributes.errors}"><testcase name="contract"/></testsuite>`)
@@ -43,7 +52,7 @@ try {
   classes.forEach(className => writeReport(className))
   writeReport('LeadTodoFlowEndToEndTest', { tests: 7 })
   writeReport('LeadTodoScheduleEndToEndTest', { tests: 4 })
-  writeReport('LeadProgressCycleRuntimeMySqlTest', { tests: 4 })
+  writeReport('LeadProgressCycleRuntimeMySqlTest', { tests: 6 })
   writeReport('LeadTodoReleaseVersionLockExternalMysqlIT', { tests: 3 })
   requirePass('complete reports')
 

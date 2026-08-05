@@ -10,6 +10,8 @@ import com.law.todo.domain.model.TodoInstance;
 public interface TodoCompletionHandler
 {
     boolean supports(TodoInstance todo);
+    /** Acquire and revalidate authoritative business locks before any Todo mutation. */
+    default void prepare(CompletionContext context) { }
     void complete(TodoInstance todo,Map<String,Object> payload,Long operatorId,String operatorName);
     default CompletionResult handle(CompletionContext context)
     {

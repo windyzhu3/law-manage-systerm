@@ -90,6 +90,40 @@ class TodoBusinessOutcomeCatalogServiceTest
                 .containsExactly(List.of("PROGRESS_RECORDED","已记录实质进展","SCHEDULE_SELF","TD-004"));
     }
 
+    @Test void td004SelfScheduleUsesOnlyTheExactEditableCandidateVersion()
+    {
+        TodoDefinitionDocument exact=definition("TD-004","progressType",Map.of(
+                "businessOutcomes",List.of(outcome("result","PROGRESS_RECORDED",
+                        null,"SCHEDULE_SELF","TD-004",188L))));
+
+        var catalog=service.resolve("TD-004","LEAD",188L,exact);
+
+        assertThat(catalog.options()).singleElement().satisfies(option->{
+            assertThat(option.targetTemplateCode()).isEqualTo("TD-004");
+            assertThat(option.targetVersionId()).isEqualTo(188L);
+        });
+        assertThat(service.validate("TD-004","LEAD",188L,exact)).isEmpty();
+    }
+
+    @Test void td004SelfScheduleRejectsMissingStaleWrongAndPublishedSubstituteVersions()
+    {
+        for(Long configuredVersion:List.of(187L,999L,104L))
+        {
+            TodoDefinitionDocument configured=definition("TD-004","progressType",Map.of(
+                    "businessOutcomes",List.of(outcome("result","PROGRESS_RECORDED",
+                            null,"SCHEDULE_SELF","TD-004",configuredVersion))));
+            assertThat(service.validate("TD-004","LEAD",188L,configured))
+                    .extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
+                    .containsExactly("TODO_ROUTING_TARGET_VERSION_INVALID");
+        }
+        TodoDefinitionDocument missing=definition("TD-004","progressType",Map.of(
+                "businessOutcomes",List.of(outcome("result","PROGRESS_RECORDED",
+                        null,"SCHEDULE_SELF","TD-004",null))));
+        assertThat(service.validate("TD-004","LEAD",188L,missing))
+                .extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
+                .containsExactly("TODO_ROUTING_TARGET_VERSION_INVALID");
+    }
+
     @Test void reportsMissingDuplicateAndStaleFirstContactRoutes()
     {
         TodoDefinitionDocument definition=definition("TD-001","contactResult",Map.of(

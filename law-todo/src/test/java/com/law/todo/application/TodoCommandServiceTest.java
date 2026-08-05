@@ -271,6 +271,29 @@ class TodoCommandServiceTest
                 TodoAutoActionService.SERVICE_ACTOR.userName());
     }
 
+    @Test void automaticCompletionPreparesBusinessLockBeforeAnyTodoMutation()
+    {
+        TodoInstance todo=todo(20L,"CREATED",7L);
+        when(mapper.selectAutoActionExecutionForUpdate("AUTO:20:due")).thenReturn(
+                execution("AUTO:20:due",20L,"COMPLETE_DEFAULT","CLAIMED"));
+        when(mapper.selectById(20L)).thenReturn(todo);
+        when(mapper.updateStatusConditionally(any(),any(),any(),any(),any())).thenReturn(1);
+        when(mapper.insertActionIfAbsent(anyMap())).thenReturn(1);
+        when(completionHandler.supports(todo)).thenReturn(true);
+        when(completionHandler.handle(any())).thenReturn(CompletionResult.completeTodo(Map.of()));
+        TodoCommandService guarded=new TodoCommandService(mapper,access,new TodoDodService(List.of()),
+                List.of(completionHandler),null);
+
+        guarded.autoComplete(20L,new ActionCommand("AUTO:20:due",null,Map.of()),
+                TodoAutoActionService.SERVICE_ACTOR);
+
+        InOrder order=org.mockito.Mockito.inOrder(completionHandler,mapper);
+        order.verify(completionHandler).prepare(any());
+        order.verify(mapper).updateStatusConditionally(20L,"CREATED","CLAIMED",7L,
+                TodoAutoActionService.SERVICE_ACTOR.userName());
+        order.verify(completionHandler).handle(any());
+    }
+
     @Test void nonReviewerCannotReturnTodo(){TodoInstance todo=todo(3L,"SUBMITTED",8L);when(mapper.selectById(3L)).thenReturn(todo);when(access.canReview(todo,7L)).thenReturn(false);TodoException e=assertThrows(TodoException.class,()->service.returnTodo(3L,new ActionCommand("back-1",null,Map.of()),new Actor(7L,"alice",3L)));assertEquals("TODO_ACCESS_DENIED",e.getBusinessCode());}
     @Test void returnValidatesActionSpecificRule()
     {

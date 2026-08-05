@@ -263,6 +263,7 @@ class LeadTodoScheduleEndToEndTest
     {
         Map<String,Object> fields=new LinkedHashMap<>();
         fields.put("contactResult","CONNECTED");
+        fields.put("contactedAt",LocalDateTime.now().withNano(0).toString());
         fields.put("name","Connected production client");
         fields.put("city","Shanghai");
         fields.put("demand","Connected during the governed retry window");

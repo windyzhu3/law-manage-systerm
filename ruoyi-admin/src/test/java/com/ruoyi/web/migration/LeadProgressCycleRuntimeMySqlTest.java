@@ -50,9 +50,20 @@ import com.law.business.lead.dto.LeadProgressCompleteCommand;
 import com.law.business.security.BusinessActor;
 import com.law.business.security.BusinessActorProvider;
 import com.law.todo.application.TodoRoutingService;
+import com.law.todo.application.TodoAutoActionService;
+import com.law.todo.application.TodoCommandService;
+import com.law.todo.application.TodoCompletionOrchestrator;
+import com.law.todo.application.TodoDodService;
+import com.law.todo.application.TodoExceptionOperationService;
+import com.law.todo.application.command.TodoActionCommands.ActionCommand;
+import com.law.todo.application.command.TodoActionCommands.Actor;
+import com.law.todo.application.command.TodoOperationCommands.ForceCommand;
+import com.law.todo.domain.TodoAccessPolicy;
+import com.law.todo.domain.TodoException;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.schedule.TodoScheduleService;
+import com.law.todo.spi.NoOpTodoCompletionLifecyclePort;
 import com.ruoyi.common.core.domain.entity.SysDictData;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.system.domain.BizLead;
@@ -62,6 +73,7 @@ import com.ruoyi.system.mapper.BizLeadMapper;
 import com.ruoyi.system.service.ISysDictTypeService;
 import com.ruoyi.system.service.lead.LeadAssignmentPolicyService;
 import com.ruoyi.system.service.lead.LeadProgressCycleService;
+import com.ruoyi.system.service.event.LeadProgressHandoffTodoHandler;
 
 class LeadProgressCycleRuntimeMySqlTest
 {
@@ -142,6 +154,24 @@ class LeadProgressCycleRuntimeMySqlTest
         }
     }
 
+    @Test
+    void normalAndForceCompletionSerializeWithoutDeadlockOrPartialLoserWrites() throws Exception
+    {
+        try(Harness harness=new Harness("normal_force"))
+        {
+            harness.assertNormalWinsAgainst("FORCE");
+        }
+    }
+
+    @Test
+    void normalAndAutomaticCompletionSerializeWithoutDeadlockOrPartialLoserWrites() throws Exception
+    {
+        try(Harness harness=new Harness("normal_auto"))
+        {
+            harness.assertNormalWinsAgainst("AUTO");
+        }
+    }
+
     private record Outcome(LeadProgressCycleService.ProgressCycleOutcome value,Throwable failure) { }
 
     private final class Harness implements AutoCloseable
@@ -213,6 +243,111 @@ class LeadProgressCycleRuntimeMySqlTest
                     });
         }
 
+        private BizLeadMapper leadPort(CountDownLatch firstLeadLocked,CountDownLatch releaseFirst)
+        {
+            AtomicInteger locks=new AtomicInteger();
+            return (BizLeadMapper)Proxy.newProxyInstance(BizLeadMapper.class.getClassLoader(),
+                    new Class<?>[]{BizLeadMapper.class},(proxy,method,args)->{
+                        try
+                        {
+                            Object result=method.invoke(leadDelegate,args);
+                            if("selectLeadForProgressCycleForUpdate".equals(method.getName())
+                                    &&locks.incrementAndGet()==1)
+                            {
+                                firstLeadLocked.countDown();
+                                if(!releaseFirst.await(10,TimeUnit.SECONDS))
+                                    throw new IllegalStateException("Timed out releasing first lead lock");
+                            }
+                            return result;
+                        }
+                        catch(InvocationTargetException wrapped){throw wrapped.getCause();}
+                    });
+        }
+
+        private TodoMapper todoPort()
+        {
+            return (TodoMapper)Proxy.newProxyInstance(TodoMapper.class.getClassLoader(),
+                    new Class<?>[]{TodoMapper.class},(proxy,method,args)->{
+                        if("selectTemplateVersionById".equals(method.getName()))
+                            return Map.of("status","PUBLISHED","templateCode","TD-004",
+                                    "businessType","LEAD");
+                        try{return method.invoke(todos,args);}
+                        catch(InvocationTargetException wrapped){throw wrapped.getCause();}
+                    });
+        }
+
+        private CompletionPorts completionPorts(BizLeadMapper leads)
+        {
+            TodoMapper todoPort=todoPort();
+            LeadProgressHandoffTodoHandler handler=new LeadProgressHandoffTodoHandler(
+                    service(leads,new TodoScheduleService(todoPort,new TodoRoutingService(todoPort))));
+            TodoCompletionOrchestrator completion=new TodoCompletionOrchestrator(List.of(handler));
+            TodoAccessPolicy access=mock(TodoAccessPolicy.class);
+            when(access.canOperate(any(),any())).thenReturn(true);
+            TodoDodService dod=new TodoDodService(List.of());
+            TodoCommandService commands=new TodoCommandService(todoPort,access,dod,completion,null,
+                    new NoOpTodoCompletionLifecyclePort());
+            TodoExceptionOperationService exceptions=new TodoExceptionOperationService(
+                    todoPort,dod,completion);
+            return new CompletionPorts(commands,exceptions);
+        }
+
+        private void assertNormalWinsAgainst(String competitor) throws Exception
+        {
+            CountDownLatch firstLeadLocked=new CountDownLatch(1);
+            CountDownLatch releaseFirst=new CountDownLatch(1);
+            CompletionPorts ports=completionPorts(leadPort(firstLeadLocked,releaseFirst));
+            LocalDateTime progressAt=LocalDateTime.now().minusMinutes(1).withNano(0);
+            Map<String,Object> payload=Map.of("progressType","PHONE",
+                    "progressAt",progressAt.toString(),"remark","substantive progress");
+            Actor owner=new Actor(8L,"alice",3L);
+            Future<EntryOutcome> normal=workers.submit(()->entry(()->ports.commands().complete(
+                    7001L,new ActionCommand("NORMAL:7001",null,payload,List.of()),owner)));
+            assertTrue(firstLeadLocked.await(5,TimeUnit.SECONDS));
+            Future<EntryOutcome> competing=workers.submit(()->"FORCE".equals(competitor)
+                    ?entry(()->ports.exceptions().forceComplete(7001L,
+                            new ForceCommand("FORCE:7001","approved",payload),
+                            new Actor(1L,"admin",3L)))
+                    :entry(()->ports.commands().autoComplete(7001L,
+                            new ActionCommand("AUTO:7001:RACE",null,payload,List.of()),
+                            TodoAutoActionService.SERVICE_ACTOR)));
+            assertThrows(TimeoutException.class,()->competing.get(300,TimeUnit.MILLISECONDS),
+                    "Competing completion must wait behind the authoritative lead lock");
+            releaseFirst.countDown();
+
+            EntryOutcome winner=normal.get(10,TimeUnit.SECONDS);
+            EntryOutcome loser=competing.get(10,TimeUnit.SECONDS);
+            assertNull(winner.failure(),String.valueOf(winner.failure()));
+            assertEquals("COMPLETED",winner.value().getStatus());
+            TodoException conflict=assertInstanceOf(TodoException.class,loser.failure());
+            assertEquals("TODO_CONCURRENT_MODIFICATION",conflict.getBusinessCode());
+            assertEquals(1,count("select count(*) from todo_instance where todo_id=7001 "
+                    +"and status='COMPLETED'"));
+            assertEquals(1,count("select count(*) from todo_action_log where todo_id=7001 "
+                    +"and action_type='COMPLETE'"));
+            assertEquals(0,count("select count(*) from todo_exception_log where todo_id=7001"));
+            assertEquals(0,count("select count(*) from todo_action_log where todo_id=7001 "
+                    +"and action_source='SYSTEM'"));
+            assertEquals(1,count("select count(*) from biz_lead_followup "
+                    +"where idempotency_key='LEAD_PROGRESS:7001'"));
+            assertEquals(1,count("select count(*) from todo_schedule_plan "
+                    +"where idempotency_key='LEAD_PROGRESS_5D:91:7001'"));
+            assertEquals(1,count("select count(*) from todo_schedule_window window_row "
+                    +"join todo_schedule_plan plan on plan.plan_id=window_row.plan_id "
+                    +"where plan.idempotency_key='LEAD_PROGRESS_5D:91:7001'"));
+            assertEquals(1,count("select count(*) from todo_instance"));
+        }
+
+        private EntryOutcome entry(java.util.concurrent.Callable<TodoInstance> action)
+        {
+            try{return new EntryOutcome(transaction.execute(ignored->{
+                try{return action.call();}
+                catch(RuntimeException failure){throw failure;}
+                catch(Exception failure){throw new RuntimeException(failure);}
+            }),null);}
+            catch(Throwable failure){return new EntryOutcome(null,failure);}
+        }
+
         private void assertMutationWinsBeforeCompletion(String mutationSql,String expectedCode)
                 throws Exception
         {
@@ -248,7 +383,8 @@ class LeadProgressCycleRuntimeMySqlTest
             assertEquals(0,count("select count(*) from biz_lead_followup"));
             assertEquals(0,count("select count(*) from todo_schedule_plan"));
             assertEquals(0,count("select count(*) from todo_schedule_window"));
-            assertEquals(0,count("select count(*) from todo_instance"));
+            assertEquals(1,count("select count(*) from todo_instance where todo_id=7001 "
+                    +"and status='SUBMITTED'"));
         }
 
         private List<Outcome> completeConcurrently(LeadProgressCycleService service,
@@ -327,6 +463,12 @@ class LeadProgressCycleRuntimeMySqlTest
             Statement statement=connection.createStatement())
         {
             statement.execute("""
+                    create table sys_user(
+                      user_id bigint primary key,dept_id bigint null,status char(1) not null,
+                      del_flag char(1) not null
+                    ) engine=innodb
+                    """);
+            statement.execute("""
                     create table biz_lead(
                       lead_id bigint not null,lead_no varchar(64) not null,status varchar(20) not null,
                       del_flag char(1) not null,pool_status char(1) not null,
@@ -375,9 +517,48 @@ class LeadProgressCycleRuntimeMySqlTest
                     """);
             statement.execute("""
                     create table todo_instance(
-                      todo_id bigint not null auto_increment,previous_todo_id bigint null,
-                      template_code varchar(64) not null,business_id bigint not null,
+                      todo_id bigint not null auto_increment,todo_no varchar(64) null,
+                      template_id bigint null,template_version_id bigint null,
+                      template_code varchar(64) not null,title varchar(255) null,
+                      business_type varchar(64) null,business_id bigint not null,business_no varchar(64) null,
+                      owner_id bigint null,owner_dept_id bigint null,status varchar(20) not null,
+                      priority varchar(20) null,sla_status varchar(20) null,created_at datetime null,
+                      due_at datetime null,completed_at datetime null,claimed_at datetime null,
+                      started_at datetime null,submitted_at datetime null,cancelled_at datetime null,
+                      previous_todo_id bigint null,root_todo_id bigint null,trigger_event_id varchar(64) null,
+                      trigger_idempotency_key varchar(192) null,next_idempotency_key varchar(192) null,
+                      dod_snapshot_json json null,definition_hash varchar(128) null,
+                      route_definition_version_id bigint null,ui_schema_snapshot json null,
+                      sla_snapshot json null,route_node_key varchar(64) null,route_token json null,
+                      occurrence_key varchar(192) null,payload_schema_version int null,
+                      version int not null default 0,update_by varchar(64) null,update_time datetime null,
                       primary key(todo_id)
+                    ) engine=innodb
+                    """);
+            statement.execute("""
+                    create table todo_action_log(
+                      action_log_id bigint not null auto_increment,todo_id bigint not null,
+                      action_id varchar(128) not null,action_type varchar(64) not null,
+                      action_source varchar(20) null,from_status varchar(20) null,to_status varchar(20) null,
+                      operator_id bigint null,operator_name varchar(64) null,opinion varchar(500) null,
+                      payload_json json null,primary key(action_log_id),unique key uk_action_id(action_id)
+                    ) engine=innodb
+                    """);
+            statement.execute("""
+                    create table todo_exception_log(
+                      exception_log_id bigint not null auto_increment,todo_id bigint not null,
+                      action_id varchar(128) not null,operation_type varchar(64) not null,
+                      from_status varchar(20) null,operator_id bigint null,operator_name varchar(64) null,
+                      operator_dept_id bigint null,reason varchar(500) null,payload_json json null,
+                      primary key(exception_log_id),unique key uk_exception_action(action_id)
+                    ) engine=innodb
+                    """);
+            statement.execute("""
+                    create table todo_auto_action_execution(
+                      execution_key varchar(192) primary key,todo_id bigint not null,
+                      rule_key varchar(128) null,action_type varchar(64) not null,status varchar(20) not null,
+                      attempt_count int not null default 1,claimed_at datetime null,create_time datetime null,
+                      update_time datetime null
                     ) engine=innodb
                     """);
             statement.execute("""
@@ -410,12 +591,22 @@ class LeadProgressCycleRuntimeMySqlTest
                     """);
             statement.executeUpdate("insert into biz_lead values("+
                     "91,'L-91','2','0','0','ACTIVE',8,3,'WEB',0)");
+            statement.executeUpdate("insert into sys_user values(8,3,'0','0')");
             statement.executeUpdate("insert into todo_template values(10,'TD-004','Progress','LEAD',1,'0')");
             statement.executeUpdate("insert into todo_template_version values(88,10,1,'PUBLISHED')");
             statement.executeUpdate("insert into todo_prd_definition_catalog values("+
                     "'TD-004','READY','READY','READY',json_array())");
             statement.executeUpdate("insert into todo_attachment(todo_id,attachment_type) "
                     +"values(7001,'FOLLOWUP_PROOF')");
+            statement.executeUpdate("insert into todo_instance(todo_id,todo_no,template_id,"
+                    +"template_version_id,template_code,title,business_type,business_id,business_no,"
+                    +"owner_id,owner_dept_id,status,priority,sla_status,created_at,submitted_at,version) "
+                    +"values(7001,'TD004-7001',10,88,'TD-004','Progress','LEAD',91,'L-91',"
+                    +"8,3,'SUBMITTED','NORMAL','NORMAL',sysdate(),sysdate(),0)");
+            statement.executeUpdate("insert into todo_auto_action_execution(execution_key,todo_id,"
+                    +"rule_key,action_type,status,attempt_count,claimed_at,create_time,update_time) "
+                    +"values('AUTO:7001:RACE',7001,'RACE','COMPLETE_DEFAULT','CLAIMED',1,"
+                    +"sysdate(),sysdate(),sysdate())");
         }
     }
 
@@ -446,4 +637,8 @@ class LeadProgressCycleRuntimeMySqlTest
         if(value==null||value.isBlank())throw new IllegalStateException(name+" is required");
         return value;
     }
+
+    private record CompletionPorts(TodoCommandService commands,
+            TodoExceptionOperationService exceptions) { }
+    private record EntryOutcome(TodoInstance value,Throwable failure) { }
 }

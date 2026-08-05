@@ -285,7 +285,7 @@ class TodoConfigurationJourneyEvaluatorTest
     @Test void mapsTypedOutcomeCompletenessIssuesToTheRoutingStep()
     {
         TodoDefinitionDocument definition=definition("LEAD_ASSIGNED",Map.of("simulationStatus","SUCCESS"));
-        when(outcomes.validate("TODO-42","LEAD",definition)).thenReturn(List.of(
+        when(outcomes.validate("TODO-42","LEAD",101L,definition)).thenReturn(List.of(
                 new TodoBusinessOutcomeCatalogService.OutcomeIssue(
                         "TODO_ROUTING_OUTCOME_INCOMPLETE","routing.businessOutcomes",
                         "请为每个首联结果配置唯一的后续待办")));

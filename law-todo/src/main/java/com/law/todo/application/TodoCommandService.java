@@ -28,8 +28,8 @@ import com.law.todo.domain.TodoStatus;
 import com.law.todo.domain.TodoStatusTransitions;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
-import com.law.todo.spi.TodoCompletionHandler;
 import com.law.todo.spi.TodoCompletionHandler.CompletionResult;
+import com.law.todo.application.TodoCompletionOrchestrator.PreparedCompletion;
 import com.law.todo.spi.NoOpTodoCompletionLifecyclePort;
 import com.law.todo.spi.TodoCompletionLifecyclePort;
 
@@ -39,30 +39,38 @@ public class TodoCommandService
     private final TodoMapper mapper;
     private final TodoAccessPolicy access;
     private final TodoDodService dod;
-    private final List<TodoCompletionHandler> completionHandlers;
+    private final TodoCompletionOrchestrator completion;
     private final TodoRoutingService routing;
     private final TodoCompletionLifecyclePort completionLifecycle;
 
     public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access)
     {
-        this(mapper,access,new TodoDodService(List.of()),List.of(),null,
+        this(mapper,access,new TodoDodService(List.of()),new TodoCompletionOrchestrator(List.of()),null,
                 new NoOpTodoCompletionLifecyclePort());
     }
 
     public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access,TodoDodService dod,
-            List<TodoCompletionHandler> completionHandlers,TodoRoutingService routing)
+            List<com.law.todo.spi.TodoCompletionHandler> completionHandlers,TodoRoutingService routing)
     {
-        this(mapper,access,dod,completionHandlers,routing,
+        this(mapper,access,dod,new TodoCompletionOrchestrator(completionHandlers),routing,
                 new NoOpTodoCompletionLifecyclePort());
+    }
+
+    public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access,TodoDodService dod,
+            List<com.law.todo.spi.TodoCompletionHandler> completionHandlers,TodoRoutingService routing,
+            TodoCompletionLifecyclePort completionLifecycle)
+    {
+        this(mapper,access,dod,new TodoCompletionOrchestrator(completionHandlers),routing,
+                completionLifecycle);
     }
 
     @Autowired
     public TodoCommandService(TodoMapper mapper,TodoAccessPolicy access,TodoDodService dod,
-            List<TodoCompletionHandler> completionHandlers,TodoRoutingService routing,
+            TodoCompletionOrchestrator completion,TodoRoutingService routing,
             TodoCompletionLifecyclePort completionLifecycle)
     {
         this.mapper=mapper;this.access=access;this.dod=dod;
-        this.completionHandlers=completionHandlers==null?List.of():completionHandlers;this.routing=routing;
+        this.completion=completion==null?new TodoCompletionOrchestrator(List.of()):completion;this.routing=routing;
         this.completionLifecycle=completionLifecycle==null
                 ?new NoOpTodoCompletionLifecyclePort():completionLifecycle;
     }
@@ -111,7 +119,12 @@ public class TodoCommandService
     @Transactional public TodoInstance autoComplete(Long id,ActionCommand command,Actor actor)
     {
         requireServiceActor(actor);fenceAutoExecution(id,command,"COMPLETE_DEFAULT");if(repeatedAuto(id,command,"COMPLETE_DEFAULT"))return mapper.selectById(id);
-        return complete(prepareAutomaticCompletion(require(id),command,actor),command,actor,"COMPLETE_DEFAULT");
+        TodoInstance todo=require(id);
+        PreparedCompletion prepared=completion.prepareAutomatic(todo,command.payload(),
+                actor.userId(),actor.userName());
+        todo=prepareAutomaticCompletion(todo,command,actor);
+        validateAction(todo,command,"COMPLETE",actor);
+        return completePrepared(todo,command,actor,"COMPLETE_DEFAULT",prepared);
     }
     @Transactional public TodoInstance autoReturn(Long id,ActionCommand command,Actor actor)
     {
@@ -143,22 +156,15 @@ public class TodoCommandService
     private TodoInstance complete(TodoInstance todo,ActionCommand command,Actor actor,String actionType)
     {
         validateAction(todo,command,"COMPLETE",actor);
-        boolean controlledAutomatic="COMPLETE_DEFAULT".equals(actionType)
-                &&actor==TodoAutoActionService.SERVICE_ACTOR;
-        CompletionContext context=controlledAutomatic
-                ?CompletionContext.controlledAutomatic(todo,command.payload(),actor.userId(),actor.userName())
-                :CompletionContext.human(todo,command.payload(),actor.userId(),actor.userName());
-        List<TodoCompletionHandler> supported=completionHandlers.stream()
-                .filter(handler->handler.supports(todo)).toList();
-        if(supported.size()>1)
-            throw new TodoException("TODO_COMPLETION_HANDLER_AMBIGUOUS",
-                    "More than one completion handler supports this Todo");
-        CompletionResult result=supported.isEmpty()
-                ?CompletionResult.completeTodo(command.payload())
-                :supported.get(0).handle(context);
-        if(result==null)
-            throw new TodoException("TODO_COMPLETION_RESULT_REQUIRED",
-                    "Completion handler did not return an authoritative result");
+        PreparedCompletion prepared=completion.prepareHuman(todo,command.payload(),
+                actor.userId(),actor.userName());
+        return completePrepared(todo,command,actor,actionType,prepared);
+    }
+
+    private TodoInstance completePrepared(TodoInstance todo,ActionCommand command,Actor actor,
+            String actionType,PreparedCompletion prepared)
+    {
+        CompletionResult result=completion.handle(prepared);
         completionLifecycle.afterBusinessCompletion(todo,result.routingPayload());
         if(!result.completeTodo())
         {

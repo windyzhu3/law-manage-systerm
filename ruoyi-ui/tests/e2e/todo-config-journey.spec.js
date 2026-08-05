@@ -557,6 +557,11 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
     await page.screenshot({ path: path.join(GUIDED_SCREENSHOT_DIR, metadata.screenshot), fullPage: true })
   }
 
+  // A newly published downstream template retires the previous version. Refresh
+  // governed routing before saving any other step so stale targets remain
+  // fail-closed instead of being silently accepted by an unrelated save.
+  await refreshGovernedRouteTargets(page, steps, fixture)
+
   await steps.nth(3).click()
   const recommendedRecipe = page.locator('.recipe-card').filter({ hasText: metadata.recipe }).first()
   await expect(recommendedRecipe).toBeVisible()
@@ -574,7 +579,6 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
   await expect(page.locator('.recipe-card.is-selected')).toContainText(metadata.recipe)
   assertGuidedDodPersistence(fixture, metadata)
 
-  await refreshGovernedRouteTargets(page, steps, fixture)
   await steps.nth(0).click()
   await steps.nth(5).click()
   await expect(page.locator('.routing-step .routing-outcomes')).toBeVisible()
@@ -583,6 +587,14 @@ async function assertSevenStepPersistence(page, fixture, metadata) {
   await steps.nth(0).click()
   await steps.nth(5).click()
   await assertGuidedRouteUi(page, metadata)
+  if (metadata.code === 'TD-004') {
+    await page.reload()
+    await expect(page.locator('.journey-step-nav')).toBeVisible()
+    await page.locator('.journey-step-nav__item').nth(5).click()
+    await expect(page.locator('.routing-step .routing-outcomes')).toBeVisible()
+    await assertGuidedRouteUi(page, metadata)
+    assertGuidedRoutePersistence(fixture, metadata)
+  }
   await expect(page.locator('.journey-page')).not.toContainText(/undefined|业务字段\s*\d+|用户\s*ID/i)
 }
 

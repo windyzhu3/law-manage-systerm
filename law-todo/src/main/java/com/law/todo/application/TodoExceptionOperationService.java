@@ -16,22 +16,28 @@ import com.law.todo.domain.TodoExceptionPolicy;
 import com.law.todo.domain.model.TodoInstance;
 import com.law.todo.mapper.TodoMapper;
 import com.law.todo.spi.TodoCompletionHandler;
+import com.law.todo.application.TodoCompletionOrchestrator.PreparedCompletion;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class TodoExceptionOperationService
 {
-    private final TodoMapper mapper;private final TodoDodService dod;private final List<TodoCompletionHandler> handlers;private final TodoExceptionPolicy policy=new TodoExceptionPolicy();
-    public TodoExceptionOperationService(TodoMapper mapper,TodoDodService dod,List<TodoCompletionHandler> handlers){this.mapper=mapper;this.dod=dod;this.handlers=handlers==null?List.of():handlers;}
+    private final TodoMapper mapper;private final TodoDodService dod;private final TodoCompletionOrchestrator completion;private final TodoExceptionPolicy policy=new TodoExceptionPolicy();
+    public TodoExceptionOperationService(TodoMapper mapper,TodoDodService dod,List<TodoCompletionHandler> handlers)
+    {this(mapper,dod,new TodoCompletionOrchestrator(handlers));}
+    @Autowired public TodoExceptionOperationService(TodoMapper mapper,TodoDodService dod,
+            TodoCompletionOrchestrator completion)
+    {this.mapper=mapper;this.dod=dod;this.completion=completion;}
 
     @Transactional public TodoInstance forceComplete(Long id,ForceCommand command,Actor actor)
     {
         if(repeated(id,command.actionId()))return mapper.selectById(id);
         TodoInstance todo=prepare(id,command.actionId());dod.validateBusiness(todo,command.payload());
+        PreparedCompletion prepared=completion.prepareHuman(todo,command.payload(),
+                actor.userId(),actor.userName());
         writeException(todo,command.actionId(),"FORCE_COMPLETE",command.reason(),command.payload(),actor);
         terminal(todo,"COMPLETED",actor);
-        CompletionContext context=CompletionContext.human(todo,command.payload(),
-                actor.userId(),actor.userName());
-        for(TodoCompletionHandler handler:handlers)if(handler.supports(todo))handler.handle(context);
+        completion.handle(prepared);
         return todo;
     }
     @Transactional public TodoInstance forceCancel(Long id,ForceCommand command,Actor actor)
