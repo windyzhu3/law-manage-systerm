@@ -29,7 +29,9 @@ function loadScenarioWorkbenchModel() {
       journeySimulationReadiness,
       mergeJourneySimulationReadiness,
       shouldInvalidateSimulationForTemplateHashChange,
-      persistedScenarioResults
+      persistedScenarioResults,
+      simulationInteractionState,
+      scenarioBlockerPresentation
     }`
   )()
 }
@@ -315,6 +317,30 @@ check('restores exact-hash scenario evidence after reopening the simulation step
     ...readiness,
     definitionHash: 'old-hash'
   }, 'hash-88'), {})
+})
+
+check('keeps published definitions immutable while allowing authorized simulation', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.deepStrictEqual(model.simulationInteractionState(true, {
+    canSimulate: true, canPublish: true
+  }), { canEditDefinition: false, canRunSimulation: true, canPublishDraft: false })
+})
+
+check('explains upgraded scenario evidence with both versions', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.deepStrictEqual(model.scenarioBlockerPresentation({
+    scenarioCode: 'TD001_VALID', reason: 'SCENARIO_UPDATED',
+    scenarioVersion: 2, evidenceScenarioVersion: 1
+  }, [{ scenarioCode: 'TD001_VALID', scenarioName: '有效首联', scenarioVersion: 2 }]), {
+    scenarioCode: 'TD001_VALID', scenarioName: '有效首联',
+    reason: 'SCENARIO_UPDATED', reasonLabel: '测试场景已升级，请重新验证',
+    versionText: '当前 v2 · 上次证据 v1'
+  })
+  const step = read('src/views/todo/config/journey/steps/SimulationPublishStep.vue')
+  const gate = read('src/views/todo/config/journey/components/BatchScenarioGate.vue')
+  assert(step.includes('当前为已发布不可变版本'), 'published revalidation must explain immutable definitions')
+  assert(step.includes('runAllRequiredValidation'), 'missing one-click revalidation orchestration')
+  assert(gate.includes('一键重新验证'), 'scenario gate must expose one-click revalidation')
 })
 
 check('renders the task-centered template workbench', () => {
@@ -812,7 +838,7 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
     'reopening the step must restore exact-hash server scenario evidence')
   assert(step.includes('@sample-load="loadReadOnlySample"'),
     'sample loading must be a one-click search, select and hydrate action')
-  assert(step.includes('await this.hydratePayload()'),
+  assert(step.includes('this.hydratePayload(options)'),
     'one-click sample loading must hydrate the selected sample')
   assert(selector.includes('scenarioTargetLabel'),
     'scenario target codes must be rendered with the governed template name')

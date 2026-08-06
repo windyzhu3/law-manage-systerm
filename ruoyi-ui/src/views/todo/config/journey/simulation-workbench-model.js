@@ -32,6 +32,41 @@ export function scenarioGate(scenarios, results, definitionHash) {
   }
 }
 
+export function simulationInteractionState(readonly, capabilities) {
+  const source = capabilities || {}
+  return {
+    canEditDefinition: !readonly,
+    canRunSimulation: Boolean(source.canSimulate),
+    canPublishDraft: !readonly && Boolean(source.canPublish)
+  }
+}
+
+export function scenarioBlockerPresentation(blocker, scenarios) {
+  const source = blocker || {}
+  const scenario = (scenarios || []).find(item => item.scenarioCode === source.scenarioCode) || {}
+  const reason = String(source.reason || 'MISSING')
+  const labels = {
+    SCENARIO_UPDATED: '测试场景已升级，请重新验证',
+    DEFINITION_CHANGED: '模板配置已变化，请重新验证',
+    LAST_RUN_FAILED: '最近一次验证未通过',
+    EVIDENCE_EXPIRED: '验证结果已过期，请重新验证',
+    EVIDENCE_UNAVAILABLE: '验证结果不可用，请重新验证',
+    MISSING: '尚未验证'
+  }
+  const current = Number(source.scenarioVersion || scenario.scenarioVersion)
+  const previous = Number(source.evidenceScenarioVersion)
+  const versions = []
+  if (Number.isInteger(current) && current > 0) versions.push(`当前 v${current}`)
+  if (Number.isInteger(previous) && previous > 0) versions.push(`上次证据 v${previous}`)
+  return {
+    scenarioCode: source.scenarioCode || '',
+    scenarioName: scenario.scenarioName || source.scenarioCode || '未命名场景',
+    reason,
+    reasonLabel: labels[reason] || labels.MISSING,
+    versionText: versions.join(' · ')
+  }
+}
+
 export function failedScenarioResult(scenario, error) {
   const source = scenario || {}
   const failure = error || {}

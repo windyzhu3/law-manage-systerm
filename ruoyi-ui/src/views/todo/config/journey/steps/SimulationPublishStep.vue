@@ -11,6 +11,14 @@
     </header>
 
     <el-alert v-if="!capabilities.canSimulate" title="当前角色仅可查看，不能运行模拟。" type="info" :closable="false" show-icon />
+    <el-alert
+      v-else-if="readonly && interaction.canRunSimulation"
+      title="当前为已发布不可变版本"
+      description="模板定义不可修改，但可以重新运行模拟验证并生成当前场景版本的有效证据。"
+      type="info"
+      :closable="false"
+      show-icon
+    />
 
     <business-object-payload-editor
       :objects="objects"
@@ -20,7 +28,7 @@
       :manual-overrides="manualOverrides"
       :loading="objectLoading"
       :hydrating="hydrating"
-      :readonly="readonly"
+      :readonly="!interaction.canRunSimulation"
       :template-name="template.templateName"
       @search="searchObjects"
       @sample-load="loadReadOnlySample"
@@ -45,6 +53,7 @@
       :effective-at="effectiveAt || localDateTimeNow()"
       :loading="simulatingScenario"
       :business-selected="Boolean(selectedObject)"
+      :readonly="!interaction.canRunSimulation"
       @override="changeScenarioOverride"
       @run="runSelectedScenario"
     />
@@ -53,8 +62,11 @@
       :gate="scenarioGateState"
       :scenarios="scenarios"
       :loading="batchSimulating"
-      :disabled="!selectedObject || dirty || saving"
+      :revalidating="revalidating"
+      :batch-disabled="!interaction.canRunSimulation || !selectedObject || dirty || saving || revalidating"
+      :run-all-disabled="!interaction.canRunSimulation || dirty || saving || revalidating"
       @run-batch="runScenarioBatch"
+      @run-all="runAllRequiredValidation"
     />
 
     <div
@@ -71,16 +83,17 @@
       />
       <div class="simulation-publish-step__actions">
         <el-date-picker
-          v-if="!readonly"
+          v-if="interaction.canRunSimulation"
           v-model="effectiveAt"
           type="datetime"
           value-format="yyyy-MM-dd'T'HH:mm:ss"
           placeholder="试运行时间（默认现在）"
+          :disabled="dirty || saving || revalidating"
         />
         <el-button
-          v-if="canOperate && capabilities.canSimulate"
+          v-if="interaction.canRunSimulation"
           type="primary"
-          :disabled="!selectedObject || dirty || saving"
+          :disabled="!selectedObject || dirty || saving || revalidating"
           :loading="simulating"
           data-testid="run-journey-simulation"
           @click="runSimulation"
@@ -106,7 +119,7 @@
     />
 
     <publish-preflight-panel
-      v-if="canOperate && (capabilities.canPublish || preflight)"
+      v-if="interaction.canPublishDraft || preflight"
       :preflight="preflight"
       :gate="publishGate"
       :warning-reason.sync="warningReason"
@@ -117,7 +130,7 @@
       @repair="repairPreflight"
     />
 
-    <div v-if="canOperate && capabilities.canPublish" class="simulation-publish-step__publish">
+    <div v-if="interaction.canPublishDraft" class="simulation-publish-step__publish">
       <div>
         <strong>不可变发布</strong>
         <p>{{ publishGate.message || '发布后该版本永久保留，可复制为新草稿继续调整。' }}</p>
@@ -212,6 +225,7 @@ import {
   persistedScenarioResults,
   scenarioGate,
   readinessRepairTarget,
+  simulationInteractionState,
   simulationCompletionMessage,
   shouldInvalidateSimulationForTemplateHashChange,
   versionDiffPlan
@@ -267,6 +281,7 @@ export default {
       scenarioResults: {},
       simulatingScenario: false,
       batchSimulating: false,
+      revalidating: false,
       serverScenarioGate: null,
       releaseReadiness: null,
       releaseLoading: false,
@@ -276,7 +291,7 @@ export default {
   },
   computed: {
     capabilities() { return simulationPublishCapabilities(this.permissions) },
-    canOperate() { return !this.readonly },
+    interaction() { return simulationInteractionState(this.readonly, this.capabilities) },
     draftHash() { return String(this.authoritativeDraftHash || this.template.definitionHash || '') },
     simulationState() {
       if (!this.readiness) return {}
@@ -298,7 +313,17 @@ export default {
       return (this.hydration && this.hydration.completionFields) || []
     },
     scenarioGateState() {
-      if (this.serverScenarioGate && this.serverScenarioGate.publicationReady) return this.serverScenarioGate
+      if (this.serverScenarioGate) return this.serverScenarioGate
+      const state = this.readiness
+      if (state && String(state.definitionHash || '') === this.draftHash) {
+        const blockers = state.blockingScenarios || []
+        return {
+          publicationReady: blockers.length === 0 &&
+            Number(state.passedScenarioCount || 0) >= Number(state.requiredScenarioCount || 0),
+          blockingScenarioCodes: blockers.map(item => item.scenarioCode).filter(Boolean),
+          blockingScenarios: blockers
+        }
+      }
       return scenarioGate(this.scenarios, this.scenarioResults, this.draftHash)
     },
     leadReleaseApplicable() {
@@ -368,10 +393,10 @@ export default {
     }
   },
   mounted() {
-    if (this.canOperate && this.capabilities.canSimulate) {
+    if (this.interaction.canRunSimulation) {
       this.searchObjects('')
       this.loadScenarios()
-      if (this.capabilities.canPublish) this.runPreflight({ quiet: true })
+      this.runPreflight({ quiet: true })
     }
     this.loadLeadReleaseReadiness()
   },
@@ -462,7 +487,7 @@ export default {
       }
     },
     async searchObjects(keyword) {
-      if (!this.canOperate || !this.capabilities.canSimulate) return
+      if (!this.interaction.canRunSimulation) return
       this.objectLoading = true
       try {
         const response = await listBusinessObjects({
@@ -476,15 +501,15 @@ export default {
         this.objectLoading = false
       }
     },
-    async loadReadOnlySample() {
+    async loadReadOnlySample(options) {
       await this.searchObjects('示例')
       const sample = this.objects.find(item => item.sample)
       if (!sample) {
-        this.$modal.msgWarning('当前业务类型没有可用的只读样例')
-        return
+        if (!options || !options.quiet) this.$modal.msgWarning('当前业务类型没有可用的只读样例')
+        return false
       }
       this.selectObject(sample.businessId)
-      await this.hydratePayload()
+      return this.hydratePayload(options)
     },
     selectObject(id) {
       this.selectedId = id
@@ -555,7 +580,7 @@ export default {
         requestId: this.actionId(action)
       }
     },
-    async prepareScenarioRun() {
+    async prepareScenarioRun(options) {
       if (!this.selectedObject || !this.requireSavedDraft()) return false
       if (!this.preflight || !this.draftHash) {
         if (!(await this.runPreflight({ includeDiff: false, quiet: true }))) return false
@@ -563,14 +588,14 @@ export default {
       const configurationErrors = ((this.preflight && this.preflight.errors) || [])
         .filter(issue => !this.isSimulationReadinessIssue(issue))
       if (configurationErrors.length) {
-        this.$modal.msgWarning('请先修复场景证据以外的配置阻塞项')
+        if (!options || !options.quiet) this.$modal.msgWarning('请先修复场景证据以外的配置阻塞项')
         return false
       }
-      if (!this.hydration && !(await this.hydratePayload())) return false
+      if (!this.hydration && !(await this.hydratePayload(options))) return false
       return true
     },
     async runSelectedScenario() {
-      if (!this.selectedScenario || !(await this.prepareScenarioRun())) return
+      if (!this.interaction.canRunSimulation || !this.selectedScenario || !(await this.prepareScenarioRun())) return
       this.simulatingScenario = true
       try {
         const response = await simulateJourneyScenario(this.template.templateId,
@@ -591,45 +616,54 @@ export default {
         this.simulatingScenario = false
       }
     },
-    async runScenarioBatch() {
-      if (!(await this.prepareScenarioRun())) return
+    async runScenarioBatch(options) {
+      if (!this.interaction.canRunSimulation || !(await this.prepareScenarioRun(options))) return false
       this.batchSimulating = true
       try {
         const response = await batchSimulateJourneyScenarios(
           this.template.templateId, this.scenarioCommand('scenario-batch'))
         const result = response.data || {}
         for (const item of result.results || []) this.$set(this.scenarioResults, item.scenarioCode, item)
+        const localGate = scenarioGate(this.scenarios, this.scenarioResults, this.draftHash)
         this.serverScenarioGate = {
           publicationReady: Boolean(result.publicationReady),
-          blockingScenarioCodes: result.blockingScenarioCodes || []
+          blockingScenarioCodes: result.blockingScenarioCodes || [],
+          blockingScenarios: (result.blockingScenarios || localGate.blockingScenarios || [])
+            .filter(item => (result.blockingScenarioCodes || []).includes(item.scenarioCode))
         }
         const last = (result.results || []).slice(-1)[0]
         this.simulation = (last && last.simulation) || this.simulation
         await this.runPreflight({ includeDiff: false, quiet: true })
+        return Boolean(result.publicationReady)
       } catch (error) {
-        this.$modal.msgError((error && (error.msg || error.message)) || '批量场景验证失败')
+        if (!options || !options.quiet) {
+          this.$modal.msgError((error && (error.msg || error.message)) || '批量场景验证失败')
+        }
+        return false
       } finally {
         this.batchSimulating = false
       }
     },
-    async runSimulation() {
-      if (!this.canOperate || !this.capabilities.canSimulate || !this.selectedObject || !this.requireSavedDraft()) return
+    async runSimulation(options) {
+      if (!this.interaction.canRunSimulation || !this.selectedObject || !this.requireSavedDraft()) return false
       this.simulating = true
       try {
         const preflightReady = await this.runPreflight({ includeDiff: false, quiet: true })
         if (!preflightReady) {
-          this.$modal.msgError('发布预检失败，未执行完整试运行')
-          return
+          if (!options || !options.quiet) this.$modal.msgError('发布预检失败，未执行完整试运行')
+          return false
         }
         const configurationErrors = ((this.preflight && this.preflight.errors) || [])
           .filter(issue => !this.isSimulationReadinessIssue(issue))
         if (configurationErrors.length) {
-          this.$modal.msgWarning(configurationErrors[0].message || '请先修复发布预检中的配置阻塞项')
-          return
+          if (!options || !options.quiet) {
+            this.$modal.msgWarning(configurationErrors[0].message || '请先修复发布预检中的配置阻塞项')
+          }
+          return false
         }
         if (!(await this.hydratePayload({ quiet: true }))) {
-          this.$modal.msgError('载荷加载失败，未执行完整试运行')
-          return
+          if (!options || !options.quiet) this.$modal.msgError('载荷加载失败，未执行完整试运行')
+          return false
         }
         const response = await simulateTodoJourney(this.template.templateId, {
           ...this.payloadCommand(),
@@ -642,19 +676,46 @@ export default {
         if (this.readiness) this.$emit('readiness-change', this.readiness)
         const refreshed = await this.runPreflight({ includeDiff: true, quiet: true })
         if (!refreshed) {
-          this.$modal.msgError('完整试运行已执行，但发布预检刷新失败，请重试')
-          return
+          if (!options || !options.quiet) this.$modal.msgError('完整试运行已执行，但发布预检刷新失败，请重试')
+          return false
         }
         const completionMessage = simulationCompletionMessage(this.readiness)
-        if (completionMessage) this.$modal.msgSuccess(completionMessage)
-        else {
+        if (completionMessage) {
+          if (!options || !options.quiet) this.$modal.msgSuccess(completionMessage)
+          return true
+        } else {
           const issue = this.readiness && (this.readiness.issues || [])[0]
-          this.$modal.msgWarning((issue && issue.message) || '模拟发布验证尚未全部通过，请按页面提示修复')
+          if (!options || !options.quiet) {
+            this.$modal.msgWarning((issue && issue.message) || '模拟发布验证尚未全部通过，请按页面提示修复')
+          }
+          return false
         }
       } catch (error) {
-        this.$modal.msgError((error && (error.msg || error.message)) || '试运行失败')
+        if (!options || !options.quiet) {
+          this.$modal.msgError((error && (error.msg || error.message)) || '试运行失败')
+        }
+        return false
       } finally {
         this.simulating = false
+      }
+    },
+    async runAllRequiredValidation() {
+      if (!this.interaction.canRunSimulation || this.revalidating) return
+      this.revalidating = true
+      try {
+        if (!this.selectedObject) await this.loadReadOnlySample({ quiet: true })
+        if (!this.selectedObject) throw new Error('没有可用的测试对象或只读样例')
+        if (!(await this.runScenarioBatch({ quiet: true }))) {
+          throw new Error('必测场景验证未全部通过，请查看场景结果')
+        }
+        if (!(await this.runSimulation({ quiet: true }))) {
+          throw new Error('完整试运行未通过，请查看模拟轨迹')
+        }
+        this.$modal.msgSuccess('模拟发布验证已全部通过')
+      } catch (error) {
+        this.$modal.msgError((error && error.message) || '重新验证失败')
+      } finally {
+        this.revalidating = false
       }
     },
     normalizePreflight(data) {
@@ -754,7 +815,7 @@ export default {
       }
     },
     async publish() {
-      if (!this.canOperate || !this.requireSavedDraft()) return
+      if (!this.interaction.canPublishDraft || !this.requireSavedDraft()) return
       if (!(await this.runPreflight())) return
       if (!this.publishGate.allowed) return
       try {
