@@ -153,6 +153,10 @@ test('partial setup failure still runs exact-ownership cleanup from a pre-create
     /injected setup failure/
   )
 
+  const setup = calls.find(sql => sql.includes('insert into biz_lead_setting'))
+  const roleName = setup.match(/select '([^']+)',@policy_admin_role_key,98/)[1]
+  assert.ok(roleName.length <= 30, 'the disposable role name must fit sys_role.role_name')
+
   const cleanup = calls.find(sql => sql.includes('delete from biz_lead where'))
   assert.ok(cleanup, 'cleanup must execute even when setup throws before manifest is returned')
   assert.doesNotMatch(cleanup, /\blike\b/i)
