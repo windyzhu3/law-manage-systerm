@@ -627,6 +627,9 @@ async function completeRetry(page, leadNo, resultLabel, fileName, connected) {
   await uploadMaterial(dialog, fileName, `RETRY ${resultLabel}`)
   await dialog.getByTestId('todo-action-submit').click()
   await expect(page.getByText('处理成功')).toBeVisible()
+  await expect(dialog).toBeHidden()
+  await drawer.locator('.el-drawer__close-btn').click()
+  await expect(drawer).toBeHidden()
 }
 
 async function openPolicy(page, policyCode) {

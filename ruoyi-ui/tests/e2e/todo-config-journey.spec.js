@@ -153,7 +153,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     await expect(repairedOption).toBeVisible()
     const templateSave = page.waitForResponse(response =>
       response.request().method() === 'PUT' &&
-      new URL(response.url()).pathname === `/prod-api/todo/config/template-versions/${fixtures.repair.versionId}`
+      new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixtures.repair.templateId}/journey`
     )
     await repairedOption.click()
     await page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true }).click()
@@ -193,7 +193,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     await expect(page.locator('.condition-row')).toHaveCount(1)
     const templateSave = page.waitForResponse(response =>
       response.request().method() === 'PUT' &&
-      new URL(response.url()).pathname === `/prod-api/todo/config/template-versions/${fixtures.failed.versionId}`
+      new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixtures.failed.templateId}/journey`
     )
     await page.locator('.condition-row .is-danger').click()
     await page.locator('.journey-footer__actions').getByRole('button', { name: '保存', exact: true }).click()

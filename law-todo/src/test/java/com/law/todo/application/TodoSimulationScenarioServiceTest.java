@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,6 +19,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.law.todo.application.command.TodoActionCommands.Actor;
 import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeOption;
@@ -53,6 +56,16 @@ class TodoSimulationScenarioServiceTest
     @Mock TodoJourneySimulationService simulations;
     @Mock TodoSimulationEvidenceService evidence;
     @Mock TodoConfigurationMapper mapper;
+
+    @Test
+    void scenarioSimulationSuspendsAnyCallerTransaction()
+    {
+        assertThat(java.util.Arrays.stream(TodoSimulationScenarioService.class.getDeclaredMethods())
+                .filter(method->Set.of("simulate","simulateRequired").contains(method.getName()))
+                .map(method->method.getAnnotation(Transactional.class))
+                .map(Transactional::propagation))
+                .containsOnly(Propagation.NOT_SUPPORTED);
+    }
 
     @Test
     void materializesTheScenarioCompletionAndMatchesTheActualRoute()
