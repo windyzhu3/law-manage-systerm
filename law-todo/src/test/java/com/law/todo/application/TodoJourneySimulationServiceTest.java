@@ -19,6 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.alibaba.fastjson2.JSON;
 import com.law.todo.application.command.TodoActionCommands.Actor;
@@ -54,6 +56,16 @@ class TodoJourneySimulationServiceTest
     @Mock private TodoConfigurationMapper sampleMapper;
     @Mock private TodoSimulationEvidenceService evidence;
     @Mock private TodoSimulationReadinessService readiness;
+
+    @Test void suspendsAmbientTransactionsSoCommittedEvidenceIsVisibleToReadiness() throws Exception
+    {
+        Transactional transaction=TodoJourneySimulationService.class
+                .getMethod("simulate",JourneySimulationCommand.class,Actor.class)
+                .getAnnotation(Transactional.class);
+
+        assertEquals(Propagation.NOT_SUPPORTED,transaction.propagation());
+        assertFalse(transaction.readOnly());
+    }
 
     @Test void returnsHydratedPayloadCoverageAndOrderedRedactedTrace()
     {
