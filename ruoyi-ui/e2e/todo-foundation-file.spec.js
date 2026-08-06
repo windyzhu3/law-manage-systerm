@@ -39,14 +39,14 @@ test('authorized material supports tokenized preview download and versions while
   await expect(versions.getByText('v1')).toBeVisible(); await expect(versions.getByText('evidence.pdf')).toBeVisible()
   await versions.getByRole('button', { name: '关闭' }).click()
 
-  await authorized.getByRole('button', { name: '预览' }).click()
+  await authorized.getByRole('button', { name: '预览', exact: true }).click()
   await expect.poll(() => state.previewTokens).toBe(1); await expect.poll(() => state.previewAccesses).toBe(1)
   await authorized.getByRole('button', { name: '下载' }).click()
   await expect.poll(() => state.downloadTokens).toBe(1); await expect.poll(() => state.downloadAccesses).toBe(1)
 
   const blocked = drawer.locator('.file-row').filter({ hasText: 'orphan.txt' })
   await expect(blocked.getByText('未授权')).toBeVisible()
-  await expect(blocked.getByRole('button', { name: '预览' })).toHaveCount(0)
+  await expect(blocked.getByRole('button', { name: '预览', exact: true })).toHaveCount(0)
   await expect(blocked.getByRole('button', { name: '下载' })).toHaveCount(0)
 })
 

@@ -161,7 +161,7 @@ class FoundationTestIdentityEndToEndTest
 
         FoundationTestIdentityProvisioningResult result = service.provision(database.password());
 
-        assertEquals(new FoundationTestIdentityProvisioningResult(0, 28, 2), result);
+        assertEquals(new FoundationTestIdentityProvisioningResult(0, 30, 2), result);
         Map<String, FoundationTestIdentityTestSupport.UserIdentitySnapshot> testAfter =
             database.activeTestIdentities(jdbc);
         Set<String> unaffected = expectedUserNames();
@@ -218,7 +218,7 @@ class FoundationTestIdentityEndToEndTest
 
         FoundationTestIdentityProvisioningResult result = service.provision(database.password());
 
-        assertEquals(new FoundationTestIdentityProvisioningResult(2, 28, 0), result);
+        assertEquals(new FoundationTestIdentityProvisioningResult(2, 30, 0), result);
         assertEquals(historicalBeforeProvision, database.userIdentityById(jdbc, activeBeforeDelete.userId()),
             "Recreation must preserve the complete historical row and all its relationships");
 
@@ -240,8 +240,9 @@ class FoundationTestIdentityEndToEndTest
         assertTrue(recreated.userId() > 0, "MyBatis must return the real generated user key");
         assertEquals("0", recreated.row().get("del_flag"));
         assertTrue(encoder.matches(database.password(), recreated.row().get("password")));
-        assertEquals(withoutKeys(activeBeforeDelete.row(), Set.of("user_id", "password", "create_time", "del_flag")),
-            withoutKeys(recreated.row(), Set.of("user_id", "password", "create_time", "del_flag")),
+        Set<String> recreatedFields = Set.of("user_id", "password", "pwd_update_date", "create_time", "del_flag");
+        assertEquals(withoutKeys(activeBeforeDelete.row(), recreatedFields),
+            withoutKeys(recreated.row(), recreatedFields),
             "The new active identity must reproduce every stable field from its deleted predecessor");
         assertEquals(activeBeforeDelete.roleIds(), recreated.roleIds());
         assertEquals(activeBeforeDelete.postIds(), recreated.postIds());

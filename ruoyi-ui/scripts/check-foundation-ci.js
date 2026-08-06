@@ -30,12 +30,19 @@ const todoConfigE2eJob = workflowSection(workflow, 'todo-config-real-e2e', 'lead
 if (!/Install runtime clients[\s\S]*?apt-get install -y[^\r\n]*\bredis-tools\b/.test(todoConfigE2eJob)) {
   throw new Error('Todo configuration E2E must install redis-cli before resetting Redis')
 }
+if (!todoConfigE2eJob.includes('redis-cli -h 127.0.0.1 -p 6379 FLUSHDB')) {
+  throw new Error('Todo configuration E2E must invoke redis-cli with portable option syntax')
+}
 if (!/-Dtest=FlywayRuntimeMigrationTest\b/.test(todoConfigE2eJob) || /-Dtest=FlywayMigrationTest\b/.test(todoConfigE2eJob)) {
   throw new Error('Todo configuration E2E must apply migrations without contract-test fixtures')
 }
 const leadTodoE2eJob = workflowSection(workflow, 'lead-todo-real-e2e')
 if (!/-Dtest=FlywayRuntimeMigrationTest\b/.test(leadTodoE2eJob) || /-Dtest=FlywayMigrationTest\b/.test(leadTodoE2eJob)) {
   throw new Error('Lead Todo E2E must apply migrations without contract-test fixtures')
+}
+if (!leadTodoE2eJob.includes('Disable captcha only in the isolated Lead Todo E2E database') ||
+    !leadTodoE2eJob.includes("where config_key='sys.account.captchaEnabled'")) {
+  throw new Error('Lead Todo E2E must explicitly disable captcha only in its isolated database')
 }
 if (!logback.includes('<property name="log.path" value="${LOG_PATH:-/home/ruoyi/logs}" />')) {
   throw new Error('Logback must allow a writable environment-specific log directory')

@@ -262,7 +262,7 @@ jobs:
             -e "select lead_id from biz_lead where lead_no='$lead_no' and create_by='$run_marker' limit 1")"
           echo "TODO_CONFIG_E2E_BUSINESS_ID=$lead_id" >> "$GITHUB_ENV"
       - name: Reset dedicated Todo configuration Redis
-        run: test "$(redis-cli -h127.0.0.1 -p6379 FLUSHDB)" = OK
+        run: test "$(redis-cli -h 127.0.0.1 -p 6379 FLUSHDB)" = OK
       - name: Build backend
         run: mvn --batch-mode --no-transfer-progress -DskipTests package
       - name: Start real backend
@@ -402,6 +402,12 @@ jobs:
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
         run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayRuntimeMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
+      - name: Disable captcha only in the isolated Lead Todo E2E database
+        run: |
+          mysql --protocol=tcp -h127.0.0.1 -uroot -proot law_lead_todo_e2e \
+            -e "update sys_config set config_value='false' where config_key='sys.account.captchaEnabled'"
+          test "$(mysql --batch --skip-column-names --protocol=tcp -h127.0.0.1 -uroot -proot law_lead_todo_e2e \
+            -e "select config_value from sys_config where config_key='sys.account.captchaEnabled'")" = false
       - name: Generate profile-gated test identity password and run marker
         shell: bash
         run: |
