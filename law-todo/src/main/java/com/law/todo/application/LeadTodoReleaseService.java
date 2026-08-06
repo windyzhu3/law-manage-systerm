@@ -197,7 +197,7 @@ public class LeadTodoReleaseService
             routing=routing==null?null:routing.getJSONObject("config");
             if(routing==null)throw routingMismatch();
             Map<String,Long> expected=immediateDownstream(command);
-            Map<String,Long> outcomes=targets(routing.getJSONArray("businessOutcomes"),"targetTemplateCode","targetVersionId",false);
+            Map<String,Long> outcomes=immediateTargets(routing.getJSONArray("businessOutcomes"));
             Map<String,Long> dependencies=releaseDependencies(routing.getJSONObject("releaseDependencies"));
             Set<Long> expectedNodes=new LinkedHashSet<>();
             expectedNodes.add(command.td001VersionId());
@@ -212,16 +212,25 @@ public class LeadTodoReleaseService
         catch(Exception invalid){throw routingMismatch();}
     }
 
-    private Map<String,Long> targets(JSONArray values,String codeKey,String idKey,boolean allowCurrent)
+    private Map<String,Long> immediateTargets(JSONArray values)
     {
         if(values==null)throw routingMismatch();
         Map<String,Long> result=new LinkedHashMap<>();
         for(Object raw:values)
         {
             if(!(raw instanceof JSONObject value))throw routingMismatch();
-            if(allowCurrent&&!"TASK".equals(value.getString("type")))continue;
-            String code=value.getString(codeKey);Long id=value.getLong(idKey);
-            if(allowCurrent&&"TD-001".equals(code))continue;
+            String code=value.getString("targetTemplateCode");
+            Long id=value.getLong("targetVersionId");
+            if(code==null&&id==null)
+            {
+                String resultValue=value.getString("resultValue");
+                if(resultValue==null)resultValue=value.getString("value");
+                if(!"END".equals(value.getString("effectKind"))||!"UNREACHABLE".equals(resultValue))
+                    throw routingMismatch();
+                continue;
+            }
+            String effect=value.getString("effectKind");
+            if(effect!=null&&!"NEXT_TEMPLATE".equals(effect))throw routingMismatch();
             if(!Set.of("TD-002","TD-003","TD-004").contains(code)||id==null||result.put(code,id)!=null)
                 throw routingMismatch();
         }
@@ -479,8 +488,8 @@ public class LeadTodoReleaseService
             JSONObject routing=root==null?null:root.getJSONObject("routing");
             routing=routing==null?null:routing.getJSONObject("config");
             if(routing==null)return Map.of();
-            Map<String,Long> result=new LinkedHashMap<>(targets(routing.getJSONArray("businessOutcomes"),
-                    "targetTemplateCode","targetVersionId",false));
+            Map<String,Long> result=new LinkedHashMap<>(immediateTargets(
+                    routing.getJSONArray("businessOutcomes")));
             result.putAll(releaseDependencies(routing.getJSONObject("releaseDependencies")));
             return result;
         }

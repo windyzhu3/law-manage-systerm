@@ -1630,6 +1630,30 @@ function simulationPublishCapabilities(permissions) {
   }
 }
 
+function leadReleaseVersions(currentVersionId, definition) {
+  const versions = {}
+  const current = Number(currentVersionId)
+  if (current > 0) versions['TD-001'] = current
+
+  const routing = object(object(object(definition).routing).config)
+  const downstreamCodes = new Set(['TD-002', 'TD-003', 'TD-004'])
+  ;(Array.isArray(routing.businessOutcomes) ? routing.businessOutcomes : []).forEach(outcome => {
+    const code = String((outcome && outcome.targetTemplateCode) || '')
+    const versionId = Number(outcome && outcome.targetVersionId)
+    if (downstreamCodes.has(code) && versionId > 0) versions[code] = versionId
+  })
+  Object.entries(object(routing.releaseDependencies)).forEach(([code, rawVersionId]) => {
+    const versionId = Number(rawVersionId)
+    if (downstreamCodes.has(code) && versionId > 0) versions[code] = versionId
+  })
+  return versions
+}
+
+function canActivateLeadRelease(permissions) {
+  const granted = Array.isArray(permissions) ? permissions : []
+  return granted.includes('*:*:*') || granted.includes('todo:definition:publish')
+}
+
 module.exports = {
   MAX_CONDITION_GROUP_DEPTH,
   operatorsForField,
@@ -1687,5 +1711,7 @@ module.exports = {
   creationCoverage,
   orderedSimulationTrace,
   publishPreflightGate,
-  simulationPublishCapabilities
+  simulationPublishCapabilities,
+  leadReleaseVersions,
+  canActivateLeadRelease
 }

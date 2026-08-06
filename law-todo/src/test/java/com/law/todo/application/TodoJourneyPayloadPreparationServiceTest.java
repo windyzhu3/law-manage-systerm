@@ -75,6 +75,41 @@ class TodoJourneyPayloadPreparationServiceTest
         assertThat(view.blockingIssues()).isEmpty();
     }
 
+    @Test void labelsTheSelectedReadOnlySampleWithoutResolvingItsSyntheticBusinessId()
+    {
+        String definition="""
+                {"schemaVersion":1,"templateCode":"TD-002",
+                 "event":{"eventType":"LEAD_SUSPECT_INVALID_MARKED","payloadVersion":1,"condition":{}},
+                 "owner":{"config":{"type":"ROLE","roleKey":"lead_supervisor"}},
+                 "dod":{"config":{"requiredFields":["reviewResult"]}},
+                 "ui":{"config":{"fields":[{"key":"reviewResult"}]}},
+                 "routing":{"config":{}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+        when(journeys.load(42L,actor())).thenReturn(journey(definition));
+        when(journeys.canonicalDefinition(42L,actor())).thenReturn(definition);
+        FieldResource leadId=new FieldResource("leadId","线索","integer",true,null,false,List.of(),
+                List.of("LEAD_SUSPECT_INVALID_MARKED"),List.of(),null,0,"EVENT_SCHEMA",null,"LEAD","ACTIVE",0,
+                List.of("LEAD_SUSPECT_INVALID_MARKED@1"),"BUSINESS_REF","LEAD_DIRECTORY",null,null);
+        when(resources.fields("LEAD","LEAD_SUSPECT_INVALID_MARKED")).thenReturn(List.of(leadId));
+        Map<String,Object> values=Map.of("leadId",-1001L,"businessNo","DEMO-L-001",
+                "businessName","示例线索－劳动争议咨询");
+        when(payloads.hydrate("LEAD_SUSPECT_INVALID_MARKED",1,"LEAD",-1001L,actor(),Map.of()))
+                .thenReturn(new PayloadHydration(values,List.of(source("leadId",-1001L,true)),true));
+        TodoJourneyPayloadPreparationService service=new TodoJourneyPayloadPreparationService(
+                journeys,payloads,resources,new TodoTemplateFieldUsageService(),
+                new TodoFieldDisplayResolutionService(List.of()));
+
+        var view=service.prepare(new JourneyPayloadCommand(42L,9L,"LEAD_SUSPECT_INVALID_MARKED",1,
+                "LEAD",-1001L,Map.of(),"hash-1"),actor());
+
+        var displayedLead=view.eventInput().stream().filter(field->field.path().equals("leadId"))
+                .findFirst().orElseThrow();
+        assertThat(displayedLead.displayValue()).isEqualTo("示例线索－劳动争议咨询");
+        assertThat(displayedLead.displayMeta()).containsEntry("businessNo","DEMO-L-001")
+                .containsEntry("businessType","LEAD");
+        assertThat(view.businessObject().sample()).isTrue();
+    }
+
     private JourneyPayloadCommand command()
     {return new JourneyPayloadCommand(42L,9L,"LEAD_ASSIGNED",1,"LEAD",-1001L,Map.of(),"hash-1");}
     private Actor actor(){return new Actor(1L,"admin",103L);}

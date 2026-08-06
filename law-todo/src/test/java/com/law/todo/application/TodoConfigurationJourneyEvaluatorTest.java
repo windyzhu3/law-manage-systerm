@@ -70,6 +70,18 @@ class TodoConfigurationJourneyEvaluatorTest
                 .contains("TODO_TEMPLATE_EVENT_INCOMPATIBLE");
     }
 
+    @Test void doesNotRecommendAnExtraConditionForAGovernedEntryEvent()
+    {
+        TemplateConfigurationDetail td001=new TemplateConfigurationDetail(42L,"TD-001","首联待办",
+                "LEAD","0",4,4,101L,"PUBLISHED",91L,3,detail().editableVersion(),List.of());
+
+        var result=evaluator.evaluate(td001,definition("LEAD_ASSIGNED",Map.of()),ready());
+
+        assertThat(result.step("TRIGGER").state()).isEqualTo("COMPLETED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_TRIGGER_RECOMMENDATION");
+    }
+
     @Test void appliesBlockerBeforeWarningAndKeepsSevenStepOrder()
     {
         var result=evaluator.evaluate(detail(),definition("LEAD_ASSIGNED",Map.of("simulationStatus","FAILED")),blocked());

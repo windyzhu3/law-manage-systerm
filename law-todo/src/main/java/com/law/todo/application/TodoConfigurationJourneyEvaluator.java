@@ -107,9 +107,14 @@ public class TodoConfigurationJourneyEvaluator
         if(definition==null||definition.event()==null||blank(definition.event().eventType()))
             return step("TRIGGER","Trigger",List.of(),false,false,value);
         List<JourneyIssue> local=new ArrayList<>();
+        boolean governedEntry=eventPolicy!=null&&detail!=null
+                &&eventPolicy.view(detail.templateCode(),detail.businessType()).locked();
         if(definition.event().condition().isEmpty())
-            local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
-                    "This todo will start for every matching event","Add a business condition if this should be more selective"));
+        {
+            if(!governedEntry)
+                local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
+                        "This todo will start for every matching event","Add a business condition if this should be more selective"));
+        }
         else if(resources!=null)
             validateCondition(detail,definition,local);
         append(issues,local);return step("TRIGGER","Trigger",local,true,local.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())),value);

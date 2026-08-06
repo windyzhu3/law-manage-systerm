@@ -115,6 +115,32 @@ check('presents unreachable first contact as a retry plan instead of a fake next
   })
 })
 
+check('includes non-route lead release dependencies in the coordinated version set', () => {
+  assert.deepStrictEqual(steps.leadReleaseVersions(99, {
+    routing: {
+      config: {
+        businessOutcomes: [
+          { resultValue: 'VALID', targetTemplateCode: 'TD-004', targetVersionId: 95 },
+          { resultValue: 'SUSPECT_INVALID', targetTemplateCode: 'TD-002', targetVersionId: 100 },
+          { resultValue: 'UNREACHABLE', effectKind: 'END', businessAction: 'START_RETRY' }
+        ],
+        releaseDependencies: { 'TD-003': 94 }
+      }
+    }
+  }), {
+    'TD-001': 99,
+    'TD-002': 100,
+    'TD-003': 94,
+    'TD-004': 95
+  })
+})
+
+check('allows coordinated lead release for wildcard and exact publish permissions', () => {
+  assert.strictEqual(steps.canActivateLeadRelease(['*:*:*']), true)
+  assert.strictEqual(steps.canActivateLeadRelease(['todo:definition:publish']), true)
+  assert.strictEqual(steps.canActivateLeadRelease(['todo:release:publish']), false)
+})
+
 check('locks governed lead templates to their compatible event version', () => {
   const events = steps.filterEventsByPolicy([
     { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 },

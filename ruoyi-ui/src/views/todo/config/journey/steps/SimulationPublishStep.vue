@@ -218,7 +218,9 @@ import {
 import {
   updateManualOverrides,
   publishPreflightGate,
-  simulationPublishCapabilities
+  simulationPublishCapabilities,
+  leadReleaseVersions,
+  canActivateLeadRelease as canActivateLeadReleasePermission
 } from '../journey-step-model'
 import {
   failedScenarioResult,
@@ -331,17 +333,10 @@ export default {
         String(this.template.publishStatus || '') === 'PUBLISHED'
     },
     canActivateLeadRelease() {
-      return this.permissions.includes('todo:definition:publish')
+      return canActivateLeadReleasePermission(this.permissions)
     },
     releaseVersions() {
-      const versions = { 'TD-001': Number(this.currentVersionId) }
-      const routing = (((this.definition || {}).routing || {}).config || {})
-      for (const outcome of routing.businessOutcomes || []) {
-        if (['TD-002', 'TD-003', 'TD-004'].includes(outcome.targetTemplateCode)) {
-          versions[outcome.targetTemplateCode] = Number(outcome.targetVersionId)
-        }
-      }
-      return versions
+      return leadReleaseVersions(this.currentVersionId, this.definition)
     },
     releaseQuery() {
       const values = this.releaseVersions

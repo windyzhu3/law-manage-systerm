@@ -115,6 +115,22 @@ class LeadTodoReleaseServiceTest
         assertThat(state.triggerExpectedVersion()).isEqualTo(3);
     }
 
+    @Test void releaseReadinessAcceptsTerminalUnreachableOutcomeWithLockedRetryDependency()
+    {
+        List<Map<String,Object>> rows=versions();
+        rows.get(0).put("compiled_json",compiledWithTerminalRetry(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)));
+        when(mapper.selectLeadEntrySlotBindings("LEAD_FIRST_CONTACT_ENTRY")).thenReturn(List.of(activeBinding()));
+        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectSimulationReadinessBatch(List.of(88L,80L,89L,79L))).thenReturn(readyReadiness());
+        when(mapper.selectLeadReleaseTrigger("LEAD_FIRST_CONTACT_ENTRY",88L)).thenReturn(trigger(52L,3,"N"));
+
+        var state=service.readiness(new LeadReleaseReadinessQuery(88L,"hash-88",80L,89L,79L));
+
+        assertThat(state.activationReady()).isTrue();
+        assertThat(state.evidenceReady()).allSatisfy((code,ready)->assertThat(ready).as(code).isTrue());
+    }
+
     @Test void releaseReadinessReturnsPerVersionBlockersInsteadOfFabricatingClientEvidence()
     {
         when(mapper.selectLeadEntrySlotBindings("LEAD_FIRST_CONTACT_ENTRY")).thenReturn(List.of(activeBinding()));
@@ -550,6 +566,12 @@ class LeadTodoReleaseServiceTest
         return compiledWithReopenedTd001(immediateTargets)
                 .replace("\"businessOutcomes\":[","\"releaseDependencies\":{\"TD-003\":"
                         +retryVersionId+"},\"businessOutcomes\":[");
+    }
+    private String compiledWithTerminalRetry(Map<String,Long> targets)
+    {
+        return compiledWithReopenedTd001(targets)
+                .replace("],\"nodes\":[",",{\"effectKind\":\"END\",\"businessAction\":\"START_RETRY\","+
+                        "\"resultValue\":\"UNREACHABLE\"}],\"nodes\":[");
     }
     private String compiled(Map<String,Long> targets,Map<String,Long> nodeTargets)
     {
