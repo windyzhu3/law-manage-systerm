@@ -3,6 +3,7 @@ package com.law.todo.application;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -177,11 +178,47 @@ public class TodoEventResourceService
     }
 
     private EventResourceListItem listItem(Map<String,Object> row)
-    {return new EventResourceListItem(number(value(row,"event_catalog_id","eventCatalogId")),text(row,"event_type","eventType"),
-            text(row,"event_name","eventName"),text(row,"description","description"),
-            integer(row,"payload_version","payloadVersion"),text(row,"business_object_type","businessObjectType"),
-            text(row,"source_module","sourceModule"),text(row,"schema_status","schemaStatus"),text(row,"status","status"),
-            integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")));}
+    {
+        SchemaGovernance governance=governance(row);
+        return new EventResourceListItem(number(value(row,"event_catalog_id","eventCatalogId")),text(row,"event_type","eventType"),
+                text(row,"event_name","eventName"),text(row,"description","description"),
+                integer(row,"payload_version","payloadVersion"),text(row,"business_object_type","businessObjectType"),
+                text(row,"source_module","sourceModule"),text(row,"schema_status","schemaStatus"),text(row,"status","status"),
+                integer(row,"version","version"),longNumber(value(row,"reference_count","referenceCount")),date(value(row,"update_time","updateTime")),
+                governance.ready(),governance.issueCodes());
+    }
+
+    private SchemaGovernance governance(Map<String,Object> row)
+    {
+        Set<String> issues=new LinkedHashSet<>();
+        if(!"READY".equals(text(row,"schema_status","schemaStatus")))
+            issues.add("TODO_EVENT_SCHEMA_NOT_READY");
+        JSONObject schema;
+        try{schema=JSON.parseObject(text(row,"payload_schema_json","payloadSchemaJson"));}
+        catch(RuntimeException invalid){schema=null;}
+        JSONObject properties=schema==null?null:schema.getJSONObject("properties");
+        if(properties==null||properties.isEmpty())issues.add("TODO_EVENT_SCHEMA_PROPERTIES_REQUIRED");
+        else for(String name:properties.keySet())
+        {
+            JSONObject property=properties.getJSONObject(name);
+            if(property==null)continue;
+            if(!meaningfulBusinessLabel(property.getString("title")))
+                issues.add("TODO_EVENT_FIELD_LABEL_REQUIRED");
+            if(blank(property.getString("description")))
+                issues.add("TODO_EVENT_FIELD_DESCRIPTION_REQUIRED");
+            if(blank(property.getString("x-semantic-type")))
+                issues.add("TODO_EVENT_FIELD_SEMANTIC_TYPE_REQUIRED");
+        }
+        return new SchemaGovernance(issues.isEmpty(),List.copyOf(issues));
+    }
+
+    private boolean meaningfulBusinessLabel(String value)
+    {
+        if(blank(value))return false;
+        String label=value.trim();
+        return !"业务字段".equals(label)&&!"未命名字段".equals(label)
+                &&!label.matches("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*");
+    }
     private EventResourceDetail detail(Map<String,Object> row,List<EventResourceReference> references)
     {return new EventResourceDetail(number(value(row,"event_catalog_id","eventCatalogId")),text(row,"event_type","eventType"),
             text(row,"event_name","eventName"),text(row,"description","description"),integer(row,"payload_version","payloadVersion"),
@@ -223,4 +260,5 @@ public class TodoEventResourceService
     private Integer integer(Map<String,Object> row,String snake,String camel){Object value=value(row,snake,camel);return value==null?null:Integer.valueOf(String.valueOf(value));}
     private LocalDateTime date(Object value){if(value instanceof LocalDateTime time)return time;if(value instanceof Timestamp timestamp)return timestamp.toLocalDateTime();return null;}
     private boolean blank(String value){return value==null||value.isBlank();}
+    private record SchemaGovernance(boolean ready,List<String> issueCodes) { }
 }

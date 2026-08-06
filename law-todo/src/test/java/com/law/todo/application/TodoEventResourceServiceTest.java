@@ -1,7 +1,9 @@
 package com.law.todo.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
@@ -129,6 +131,19 @@ class TodoEventResourceServiceTest
 
         assertEquals("线索已分配",detail.eventName());
         assertEquals("TR-5",detail.references().get(0).referenceCode());
+    }
+
+    @Test void activeSchemaWithoutBusinessGovernanceMetadataIsNotConfigurationReady()
+    {
+        when(mapper.selectEventResources(Map.of("businessObjectType","LEAD")))
+                .thenReturn(List.of(row(9L,"ACTIVE",3,1)));
+        when(mapper.countEventResources(Map.of("businessObjectType","LEAD"))).thenReturn(1L);
+
+        var event=service.list(Map.of("businessObjectType","LEAD")).rows().get(0);
+
+        assertFalse(event.configurationReady());
+        assertTrue(event.governanceIssueCodes().contains("TODO_EVENT_FIELD_DESCRIPTION_REQUIRED"));
+        assertTrue(event.governanceIssueCodes().contains("TODO_EVENT_FIELD_SEMANTIC_TYPE_REQUIRED"));
     }
 
     private EventResourceCommand command(Long id,String schema,String sample,String status,int version)
