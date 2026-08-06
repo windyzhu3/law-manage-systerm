@@ -159,6 +159,32 @@ class TodoConfigurationJourneyServiceTest
         verifyNoInteractions(query,resources,templates);
     }
 
+    @Test void projectsRuntimeStateAndReplacementWithoutConfusingConfigurationProgress()
+    {
+        Map<String,Object> active=new java.util.LinkedHashMap<>(
+                workbenchRow(17L,"TD-001","PUBLISHED","hash-td001",
+                        definition("hash-td001",false,false,true,true),"{}"));
+        active.put("template_status","0");
+
+        Map<String,Object> replaced=new java.util.LinkedHashMap<>(
+                workbenchRow(1L,"LEAD_FIRST_CONTACT","PUBLISHED","hash-legacy",
+                        definition("hash-legacy",false,false,true,true),"{}"));
+        replaced.put("template_status","1");
+        replaced.put("replacement_template_id",17L);
+        replaced.put("replacement_template_code","TD-001");
+        replaced.put("replacement_template_name","首联待办");
+        when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(List.of(active,replaced));
+
+        TemplateWorkbenchPage page=service.workbench(Map.of("offset",0,"limit",20),actor);
+
+        assertThat(page.rows()).extracting(
+                TodoConfigurationJourneyView.TemplateWorkbenchItem::runtimeState)
+                .containsExactly("ACTIVE","REPLACED");
+        assertThat(page.rows().get(1).primaryAction()).isEqualTo("OPEN_REPLACEMENT");
+        assertThat(page.rows().get(1).replacementTemplateId()).isEqualTo(17L);
+        assertThat(page.rows().get(1).completedSteps()).isEqualTo(7);
+    }
+
     @Test void exposesTypedBusinessOutcomesWithTheCurrentJourneyResources()
     {
         when(query.template(42L)).thenReturn(fixtureTemplate());

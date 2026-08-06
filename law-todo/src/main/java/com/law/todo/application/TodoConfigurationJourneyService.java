@@ -189,14 +189,22 @@ public class TodoConfigurationJourneyService
         JourneyStep nextStep=evaluation.steps().stream().filter(step->!completed(step)).findFirst().orElse(null);
         String publishStatus=text(row,"publish_status","publishStatus");
         boolean published="PUBLISHED".equals(publishStatus);
+        String templateStatus=text(row,"template_status","templateStatus");
+        String replacementCode=text(row,"replacement_template_code","replacementTemplateCode");
+        String runtimeState="0".equals(templateStatus)?"ACTIVE":replacementCode!=null?"REPLACED":"INACTIVE";
+        String primaryAction="REPLACED".equals(runtimeState)?"OPEN_REPLACEMENT":
+                published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION";
         String journeyState=published?"PUBLISHED":blockers>0?"BLOCKED":warnings>0?"WARNING":
                 completed==STEP_COUNT?"READY":"IN_PROGRESS";
         return new TemplateWorkbenchItem(requiredId(row),text(row,"template_code","templateCode"),
                 text(row,"template_name","templateName"),
                 text(row,"business_type","businessType"),text(row,"business_stage","businessStage"),
                 journeyState,completed,STEP_COUNT,blockers,warnings,text(row,"last_editor","lastEditor"),
-                time(row,"update_time","updateTime"),published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION",
-                nextStep==null?null:nextStep.code(),nextStep==null?null:nextStep.title());
+                time(row,"update_time","updateTime"),primaryAction,
+                nextStep==null?null:nextStep.code(),nextStep==null?null:nextStep.title(),templateStatus,
+                integer(value(row,"lock_version","lockVersion"),0),runtimeState,
+                longNumber(value(row,"replacement_template_id","replacementTemplateId")),replacementCode,
+                text(row,"replacement_template_name","replacementTemplateName"));
     }
 
     private TemplateConfigurationDetail workbenchDetail(Map<String,Object> row,String definitionJson)

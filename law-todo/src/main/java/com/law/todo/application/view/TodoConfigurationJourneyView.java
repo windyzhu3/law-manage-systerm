@@ -68,8 +68,16 @@ public record TodoConfigurationJourneyView(
     public record TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
             String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
             int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction,
-            String nextStepCode,String nextStepTitle)
+            String nextStepCode,String nextStepTitle,String templateStatus,int lockVersion,String runtimeState,
+            Long replacementTemplateId,String replacementTemplateCode,String replacementTemplateName)
     {
+        public TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
+                String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
+                int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction,
+                String nextStepCode,String nextStepTitle)
+        {this(templateId,templateCode,templateName,businessType,businessStage,journeyState,completedSteps,totalSteps,
+                blockerCount,warningCount,lastEditor,updateTime,primaryAction,nextStepCode,nextStepTitle,
+                "0",0,"ACTIVE",null,null,null);}
         public TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
                 String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
                 int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction)
