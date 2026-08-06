@@ -191,6 +191,8 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
 
     await openJourney(page, fixtures.failed, 'TRIGGER')
     await expect(page.locator('.condition-row')).toHaveCount(1)
+    await page.locator('.trigger-step__advanced .el-collapse-item__header').click()
+    await expect(page.locator('.condition-row .is-danger')).toBeVisible()
     const templateSave = page.waitForResponse(response =>
       response.request().method() === 'PUT' &&
       new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixtures.failed.templateId}/journey`
@@ -443,6 +445,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
 async function openJourney(page, fixture, step) {
   await page.goto(`/todo-engine/todo-template-journey?templateId=${fixture.templateId}&step=${step}`)
   await expect(page.getByTestId('template-journey-shell')).toBeVisible()
+  await expect(page.locator('.journey-page > .el-loading-mask')).toBeHidden()
 }
 
 function parseMysqlRows(output, columns) {
