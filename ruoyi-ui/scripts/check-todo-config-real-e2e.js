@@ -183,6 +183,10 @@ const bootstrap = read(bootstrapPath)
 forbidText(bootstrap, 'E2E_MISSING_CALENDAR_', 'Deterministic failed-simulation fixture')
 requireText(bootstrap, "'$.event.condition',json_object('$expression'", 'Deterministic failed-simulation fixture')
 requireText(bootstrap, "where t.template_code='TD-001'", 'Governed Todo journey fixture source')
+requireText(bootstrap, "json_length(json_extract(v.definition_json,'$.routing.config.businessOutcomes'))=3",
+  'Governed Todo journey fixture source')
+forbidText(bootstrap, "where t.template_code='TD-001' and v.status='PUBLISHED'",
+  'Governed Todo journey fixture source')
 requireText(bootstrap, "@todo_config_user_id,@runtime_dept_id,'0'", 'Todo configuration business-object data scope')
 for (const required of [
   'todo_config_admin',

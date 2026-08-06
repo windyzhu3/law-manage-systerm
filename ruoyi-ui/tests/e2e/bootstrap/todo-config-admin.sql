@@ -220,7 +220,8 @@ where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark;
 
 -- Deterministic journey fixtures. Source definitions remain immutable; every fixture is a disposable draft.
 set @source_version_id=(select v.version_id from todo_template t join todo_template_version v on v.template_id=t.template_id
-  where t.template_code='TD-001' and v.status='PUBLISHED'
+  where t.template_code='TD-001'
+    and json_length(json_extract(v.definition_json,'$.routing.config.businessOutcomes'))=3
   order by v.version_no desc,v.version_id desc limit 1);
 
 insert into todo_event_catalog(event_type,event_name,description,payload_version,business_object_type,payload_schema_json,
