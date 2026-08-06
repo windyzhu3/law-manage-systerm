@@ -708,6 +708,18 @@ check('edits ordered business routing and keeps the topology graph advanced-only
   assert(!routing.includes('type="textarea"'), 'normal routing journey must not expose raw JSON')
 })
 
+check('keeps routing result effect and target controls responsive without overlap', () => {
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  assert(routing.includes('class="routing-outcome__result"'), 'business result control needs a sizing hook')
+  assert(routing.includes('class="routing-outcome__target"'), 'routing target control needs a sizing hook')
+  assert(/\.routing-effect-card\s*\{[\s\S]*?min-width:\s*0;/.test(routing),
+    'the effect card must be allowed to shrink within its grid track')
+  assert(routing.includes('.routing-outcome__result,') && routing.includes('.routing-outcome__target { width: 100%; }'),
+    'result and target controls must fill their available tracks')
+  assert(!routing.includes('grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr)'),
+    'the fixed 150px effect column causes overlap and must be removed')
+})
+
 check('keeps backend routing issues authoritative in the normal journey', () => {
   const step = read('src/views/todo/config/journey/steps/RoutingStep.vue')
   for (const forbidden of [

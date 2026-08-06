@@ -67,6 +67,7 @@
           <div class="routing-outcome__main">
             <el-select
               v-if="typedMode"
+              class="routing-outcome__result"
               :ref="`businessOutcomes-${index}`"
               v-model="row.resultValue"
               :disabled="readonly"
@@ -82,6 +83,7 @@
             </el-select>
             <el-input
               v-else
+              class="routing-outcome__result"
               :ref="`businessOutcomes-${index}`"
               v-model="row.label"
               :disabled="readonly"
@@ -115,6 +117,7 @@
 
             <el-select
               v-if="effectFor(row).needsTarget"
+              class="routing-outcome__target"
               :ref="`targetVersionId-${index}`"
               v-model="row.targetVersionId"
               :disabled="readonly"
@@ -477,7 +480,7 @@ export default {
   display: flex;
   gap: 9px;
   align-items: center;
-  min-width: 220px;
+  min-width: 0;
   padding: 10px 12px;
   color: #0B2A55;
   background: #F5F8FC;
@@ -544,10 +547,17 @@ export default {
 
 .routing-outcome__main {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr);
-  gap: 9px;
-  align-items: center;
+  grid-template-columns: minmax(160px, .9fr) minmax(180px, 1fr) minmax(220px, 1.2fr);
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
 }
+
+.routing-outcome__body,
+.routing-outcome__main > * { min-width: 0; }
+
+.routing-outcome__result,
+.routing-outcome__target { width: 100%; }
 
 .routing-outcome__next-label {
   padding: 10px 12px;
@@ -593,6 +603,11 @@ export default {
   color: #8A98A8;
 }
 
+@media (max-width: 1280px) {
+  .routing-outcome__main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .routing-outcome__target { grid-column: 1 / -1; }
+}
+
 @media (max-width: 760px) {
   .business-routing > header {
     align-items: stretch;
@@ -603,5 +618,6 @@ export default {
   .routing-outcome { grid-template-columns: 38px minmax(0, 1fr); }
   .routing-outcome > .is-danger { grid-column: 2; }
   .routing-outcome__main { grid-template-columns: 1fr; }
+  .routing-outcome__target { grid-column: auto; }
 }
 </style>
