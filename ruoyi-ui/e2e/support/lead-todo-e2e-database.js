@@ -330,7 +330,7 @@ insert into sys_role(
   role_name,role_key,role_sort,data_scope,menu_check_strictly,dept_check_strictly,
   status,del_flag,create_by,create_time,remark
 )
-select ${quote(`Lead E2E policy admin ${ctx.marker}`)},@policy_admin_role_key,98,'1',1,1,
+select 'Lead E2E policy admin',@policy_admin_role_key,98,'1',1,1,
   '0','0','lead-e2e',sysdate(),${quote(ctx.marker)}
 where not exists(select 1 from sys_role where role_key=@policy_admin_role_key);
 set @policy_admin_role_id=(select role_id from sys_role
