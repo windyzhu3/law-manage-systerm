@@ -601,6 +601,22 @@ check('keeps existing incomplete event resources actionable during repair', () =
     'context repair must hydrate only after the replacement request prop has rendered')
 })
 
+check('locks governed template events and exposes only purpose-specific business fields', () => {
+  const event = read('src/views/todo/config/journey/steps/EventStep.vue')
+  const trigger = read('src/views/todo/config/journey/steps/TriggerStep.vue')
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  assert(event.includes('filterEventsByPolicy') && event.includes('resources.eventPolicy'),
+    'the event picker must consume the governed template-event compatibility policy')
+  assert(event.includes("scopeEventFields(this.resources.fields || [], this.selected, 'OVERVIEW')"),
+    'event details must hide technical identifiers that have no configuration purpose')
+  assert(trigger.includes("scopeEventFields(this.resources.fields || [], this.event, 'CONDITION')"),
+    'trigger conditions must expose only the selected event version condition whitelist')
+  assert(trigger.includes('staleCondition') && trigger.includes('清除旧条件'),
+    'a stale condition must be explained and repairable instead of rendering undefined')
+  assert(owner.includes('scopeOwnerFields'),
+    'owner choices must remain scoped to the exact event owner whitelist')
+})
+
 check('keeps event sample JSON behind an explicit advanced section', () => {
   const drawer = read('src/views/todo/config/resource/EventResourceDrawer.vue')
   const designer = read('src/views/todo/config/resource/PayloadSchemaDesigner.vue')
@@ -718,6 +734,23 @@ check('keeps routing result effect and target controls responsive without overla
     'result and target controls must fill their available tracks')
   assert(!routing.includes('grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr)'),
     'the fixed 150px effect column causes overlap and must be removed')
+  assert(routing.includes('routing-outcome__target-wrap'),
+    'the next-todo label and selector need a dedicated full-width row')
+  assert(/\.routing-outcome__target-wrap\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1;/.test(routing),
+    'the next-todo selector must span the row to prevent overlap in a narrow journey editor')
+  assert(routing.includes('businessAction: row.businessAction'),
+    'hydration must preserve the governed business action used to explain retry-plan effects')
+})
+
+check('retains named historical routing targets during resource refresh', () => {
+  const page = read('src/views/todo/config/journey/index.vue')
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  assert(page.includes('mergeRoutingTargets'),
+    'resource refresh must merge current targets without discarding referenced historical identities')
+  assert(routing.includes('displayRoutingTargets'),
+    'the route selector must always have a named option for the configured historical version')
+  assert(routing.includes('historicalTargetName'),
+    'a missing catalog identity must fall back to a Chinese template name rather than a raw numeric ID')
 })
 
 check('keeps backend routing issues authoritative in the normal journey', () => {

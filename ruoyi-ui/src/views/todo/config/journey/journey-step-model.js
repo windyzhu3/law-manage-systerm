@@ -472,6 +472,43 @@ function scopeOwnerFields(fields, event) {
   )
 }
 
+function filterEventsByPolicy(events, policy) {
+  const rows = Array.isArray(events) ? events : []
+  const value = object(policy)
+  if (value.locked !== true) return rows.slice()
+  const allowed = new Set(list(value.allowedEventTypes).map(item => String(item)))
+  const payloadVersion = Number(value.payloadVersion || 0)
+  return rows.filter(event =>
+    allowed.has(String(object(event).eventType || '')) &&
+    (!payloadVersion || Number(object(event).payloadVersion || 0) === payloadVersion)
+  )
+}
+
+function scopeEventFields(fields, event, purpose) {
+  const selected = object(event)
+  const eventType = String(selected.eventType || '')
+  const payloadVersion = Number(selected.payloadVersion || 0)
+  if (!eventType || payloadVersion <= 0) return []
+  const sourceKey = `${eventType}@${payloadVersion}`
+  const targetPurpose = String(purpose || 'OVERVIEW').toUpperCase()
+  return (Array.isArray(fields) ? fields : []).filter(field => {
+    const value = object(field)
+    const exactSources = list(value.sourceEventVersions)
+    const matches = exactSources.length
+      ? exactSources.includes(sourceKey)
+      : list(value.sourceEvents).includes(eventType)
+    if (!matches) return false
+    const configurable = Object.prototype.hasOwnProperty.call(value, 'businessConfigurable')
+      ? value.businessConfigurable === true
+      : true
+    if (!configurable) return false
+    if (targetPurpose === 'CONDITION') return value.conditionEligible === true
+    if (targetPurpose === 'DEFAULT_VALUE') return value.defaultValueEligible === true
+    if (targetPurpose === 'OWNER') return isOwnerField(value)
+    return true
+  })
+}
+
 function ownerSelectionStillValid(selection, fields) {
   return Boolean(selection) && (Array.isArray(fields) ? fields : [])
     .some(field => String(field.code) === String(selection))
@@ -1581,6 +1618,8 @@ module.exports = {
   ownerStrategy,
   isOwnerField,
   scopeOwnerFields,
+  filterEventsByPolicy,
+  scopeEventFields,
   ownerSelectionStillValid,
   repairFocusTarget,
   fixLocation,

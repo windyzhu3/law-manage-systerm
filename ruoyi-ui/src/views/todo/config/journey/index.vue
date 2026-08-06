@@ -198,6 +198,7 @@ import {
   completeResourceRepair as completeRepair,
   fixLocation
 } from './journey-step-model'
+import { mergeRoutingTargets } from './business-effect-model'
 import {
   resolveJourneyCapabilities,
   snapshotReadPlan,
@@ -1000,9 +1001,15 @@ export default {
                 businessObjectType: event.businessObjectType || event.business_object_type,
                 sourceModule: event.sourceModule || event.source_module || '业务系统',
                 schemaStatus: hasFields ? 'READY' : 'INCOMPLETE',
-                status: event.status || 'ACTIVE'
+                status: event.status || 'ACTIVE',
+                configurationReady: event.configurationReady === undefined
+                  ? hasFields
+                  : event.configurationReady,
+                governanceIssueCodes: event.governanceIssueCodes || []
               }
             })
+          } else if (name === 'routingTargets') {
+            resources.routingTargets = mergeRoutingTargets(current.routingTargets || [], values)
           } else resources[name] = values
         })
         if (resources.events) {

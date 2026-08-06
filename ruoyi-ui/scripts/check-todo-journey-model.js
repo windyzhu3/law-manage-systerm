@@ -93,6 +93,72 @@ check('filters route targets to the current business domain', () => {
   assert.strictEqual(targets[0].templateCode, 'TD-004')
 })
 
+check('keeps historical route identities while refreshing current targets', () => {
+  const effects = effectModel()
+  const targets = effects.mergeRoutingTargets([
+    { templateCode: 'TD-002', templateName: '疑似无效主管复核', businessType: 'LEAD', versionId: 79, versionNo: 6 }
+  ], [
+    { templateCode: 'TD-002', templateName: '疑似无效主管复核', businessType: 'LEAD', versionId: 89, versionNo: 7 }
+  ])
+  assert.deepStrictEqual(targets.map(item => item.versionId), [79, 89])
+})
+
+check('presents unreachable first contact as a retry plan instead of a fake next todo', () => {
+  const effects = effectModel()
+  assert.deepStrictEqual(effects.effectPresentation({
+    effectKind: 'END',
+    businessAction: 'START_RETRY'
+  }), {
+    label: '结束当前待办并建立重试计划',
+    needsTarget: false,
+    tone: 'primary'
+  })
+})
+
+check('locks governed lead templates to their compatible event version', () => {
+  const events = steps.filterEventsByPolicy([
+    { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 },
+    { eventType: 'LEAD_FIRST_CONTACT_UNREACHABLE', payloadVersion: 1 }
+  ], {
+    locked: true,
+    recommendedEventType: 'LEAD_ASSIGNED',
+    payloadVersion: 1,
+    allowedEventTypes: ['LEAD_ASSIGNED']
+  })
+  assert.deepStrictEqual(events.map(item => item.eventType), ['LEAD_ASSIGNED'])
+})
+
+check('scopes event fields by exact version and configuration purpose', () => {
+  const fields = [
+    {
+      code: 'assignmentId',
+      sourceEventVersions: ['LEAD_ASSIGNED@1'],
+      businessConfigurable: false,
+      ownerEligible: false,
+      conditionEligible: false
+    },
+    {
+      code: 'ownerId',
+      sourceEventVersions: ['LEAD_ASSIGNED@1'],
+      businessConfigurable: true,
+      ownerEligible: true,
+      conditionEligible: false
+    },
+    {
+      code: 'reasonCode',
+      sourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
+      businessConfigurable: true,
+      ownerEligible: false,
+      conditionEligible: true
+    }
+  ]
+  const assigned = { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 }
+  const suspect = { eventType: 'LEAD_SUSPECT_INVALID_MARKED', payloadVersion: 1 }
+  assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'OVERVIEW').map(item => item.code), ['ownerId'])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'CONDITION'), [])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'CONDITION').map(item => item.code), ['reasonCode'])
+})
+
 check('maps readiness coordinates to the exact journey control', () => {
   assert.deepStrictEqual(steps.fixLocation({
     stepKey: 'ROUTING',

@@ -30,12 +30,16 @@ function effectKind(effect) {
 function effectPresentation(effect) {
   const source = effect || {}
   const kind = effectKind(source)
+  const startsRetryPlan = kind === 'END' &&
+    String(source.businessAction || '').toUpperCase() === 'START_RETRY'
   const isFiveDayCycle = kind === 'SCHEDULE_SELF' &&
     String(source.targetTemplateCode || '') === 'TD-004'
   return {
-    label: isFiveDayCycle ? '完成后开启下一轮5天待办' : (EFFECT_LABELS[kind] || '执行系统动作'),
+    label: startsRetryPlan
+      ? '结束当前待办并建立重试计划'
+      : isFiveDayCycle ? '完成后开启下一轮5天待办' : (EFFECT_LABELS[kind] || '执行系统动作'),
     needsTarget: kind === 'NEXT_TEMPLATE',
-    tone: EFFECT_TONES[kind] || 'info'
+    tone: startsRetryPlan ? 'primary' : (EFFECT_TONES[kind] || 'info')
   }
 }
 
@@ -77,11 +81,21 @@ function routeTargetsFor(businessType, targets) {
   )
 }
 
+function mergeRoutingTargets(existing, latest) {
+  const merged = new Map()
+  ;[...(existing || []), ...(latest || [])].forEach(target => {
+    const versionId = Number(target && (target.versionId || target.version_id))
+    if (versionId > 0) merged.set(versionId, { ...(merged.get(versionId) || {}), ...target })
+  })
+  return Array.from(merged.values())
+}
+
 module.exports = {
   EFFECT_LABELS,
   effectKind,
   effectPresentation,
   renderSemantic,
   technicalValue,
-  routeTargetsFor
+  routeTargetsFor,
+  mergeRoutingTargets
 }
