@@ -209,7 +209,7 @@ select @dod_code,concat('E2E first contact completion - ',@run_marker),'TASK',js
 where not exists(select 1 from todo_dod_rule where rule_code=@dod_code and create_by=@run_marker);
 
 insert into biz_lead(lead_no,lead_name,contact_name,status,pool_status,priority,owner_id,dept_id,del_flag,create_by,create_time,update_time,remark)
-select @lead_no,concat('Todo configuration E2E lead - ',@run_marker),'E2E contact','1','0','2',@todo_config_user_id,103,'0',@run_marker,sysdate(),sysdate(),@test_remark
+select @lead_no,concat('Todo configuration E2E lead - ',@run_marker),'E2E contact','1','0','2',@todo_config_user_id,@runtime_dept_id,'0',@run_marker,sysdate(),sysdate(),@test_remark
 where not exists(select 1 from biz_lead where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark);
 update todo_sla_rule set rule_name=concat('E2E first contact 30 minutes - ',@run_marker)
 where rule_code=@sla_code and create_by=@run_marker;
@@ -220,7 +220,7 @@ where lead_no=@lead_no and create_by=@run_marker and remark=@test_remark;
 
 -- Deterministic journey fixtures. Source definitions remain immutable; every fixture is a disposable draft.
 set @source_version_id=(select v.version_id from todo_template t join todo_template_version v on v.template_id=t.template_id
-  where t.template_code='LEAD_FIRST_CONTACT' and v.status='PUBLISHED'
+  where t.template_code='TD-001' and v.status='PUBLISHED'
   order by v.version_no desc,v.version_id desc limit 1);
 
 insert into todo_event_catalog(event_type,event_name,description,payload_version,business_object_type,payload_schema_json,
