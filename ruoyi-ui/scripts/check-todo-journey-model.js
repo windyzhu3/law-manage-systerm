@@ -139,9 +139,19 @@ check('scopes event fields by exact version and configuration purpose', () => {
     },
     {
       code: 'ownerId',
-      sourceEventVersions: ['LEAD_ASSIGNED@1'],
+      sourceEventVersions: ['LEAD_ASSIGNED@1', 'LEAD_SUSPECT_INVALID_MARKED@1'],
       businessConfigurable: true,
       ownerEligible: true,
+      ownerSourceEventVersions: ['LEAD_ASSIGNED@1'],
+      conditionEligible: false
+    },
+    {
+      code: 'reviewerId',
+      type: 'integer',
+      sourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
+      businessConfigurable: true,
+      ownerEligible: true,
+      ownerSourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
       conditionEligible: false
     },
     {
@@ -149,14 +159,20 @@ check('scopes event fields by exact version and configuration purpose', () => {
       sourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
       businessConfigurable: true,
       ownerEligible: false,
-      conditionEligible: true
+      ownerSourceEventVersions: [],
+      conditionEligible: true,
+      conditionSourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1']
     }
   ]
   const assigned = { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 }
   const suspect = { eventType: 'LEAD_SUSPECT_INVALID_MARKED', payloadVersion: 1 }
   assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'OVERVIEW').map(item => item.code), ['ownerId'])
   assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'CONDITION'), [])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW').map(item => item.code), ['reviewerId', 'reasonCode'])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'OWNER').map(item => item.code), ['reviewerId'])
   assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'CONDITION').map(item => item.code), ['reasonCode'])
+  assert.strictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW')[0].ownerEligible, true)
+  assert.strictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW')[1].ownerEligible, false)
 })
 
 check('maps readiness coordinates to the exact journey control', () => {
@@ -1887,6 +1903,32 @@ check('materializes the governed first-contact outcomes without free-text busine
     }),
     null
   )
+})
+
+check('accepts legacy value and field aliases while a governed routing draft is hydrated', () => {
+  const outcomeSet = {
+    resultField: 'contactResult',
+    resultFieldName: 'First contact result',
+    recommendationCode: 'TD001_STANDARD_ROUTE',
+    options: [
+      { value: 'VALID', label: 'Valid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-004' },
+      { value: 'SUSPECT_INVALID', label: 'Suspect invalid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-002' },
+      { value: 'UNREACHABLE', label: 'Unreachable', effectKind: 'END' }
+    ]
+  }
+  const targets = [
+    { templateCode: 'TD-004', templateName: 'Five day progress', versionId: 104, businessType: 'LEAD', status: 'PUBLISHED' },
+    { templateCode: 'TD-002', templateName: 'Supervisor review', versionId: 102, businessType: 'LEAD', status: 'PUBLISHED' }
+  ]
+  const legacy = [
+    { field: 'contactResult', value: 'VALID', label: 'Valid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-004', targetVersionId: 104 },
+    { field: 'contactResult', value: 'SUSPECT_INVALID', label: 'Suspect invalid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-002', targetVersionId: 102 },
+    { field: 'contactResult', value: 'UNREACHABLE', label: 'Unreachable', effectKind: 'END' }
+  ]
+
+  assert.strictEqual(steps.routingDraftBlocker(legacy, {
+    mode: 'SEQUENTIAL', outcomeSet, routingTargets: targets, businessType: 'LEAD', currentVersionId: 101
+  }), null)
 })
 
 check('explains semantic scenario evidence and target templates in business language', () => {

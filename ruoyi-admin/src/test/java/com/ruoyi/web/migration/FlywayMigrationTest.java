@@ -104,7 +104,7 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.82", current.getVersion().getVersion());
+        assertEquals("0.20.83", current.getVersion().getVersion());
         assertEquals(1L, count(url, "select count(*) from sys_job "
             + "where invoke_target='todoScheduleTask.scan'"));
         verifyTodoSchedulePolicySnapshotSchema(url);
@@ -1551,13 +1551,27 @@ class FlywayMigrationTest
                     +"and json_extract(v.definition_json,'$.routing.config.releaseDependencies.\"TD-003\"') is not null "
                     +"and json_extract(v.definition_json,'$.routing.config.businessOutcomes[2].targetVersionId') is null "
                     +"and json_unquote(json_extract(v.definition_json,"
-                    +"'$.routing.config.businessOutcomes[2].effectKind'))='END'"));
+                    +"'$.routing.config.businessOutcomes[2].effectKind'))='END' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultField'))='contactResult' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultValue'))='UNREACHABLE' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultLabel'))='未接通' "
+                    +"and json_contains_path(v.definition_json,'one',"
+                    +"'$.routing.config.businessOutcomes[2].value')=0 "
+                    +"and v.update_by='flyway-v0.20.83'"));
             assertEquals(1L,count(connection,
                     "select count(*) from todo_template_version v join todo_template t "
                     +"on t.template_id=v.template_id where t.template_code='TD-002' "
                     +"and v.change_summary='V0.20.82 TD-002 event governance draft' "
                     +"and json_unquote(json_extract(v.definition_json,'$.event.eventType'))="
-                    +"'LEAD_SUSPECT_INVALID_MARKED'"));
+                    +"'LEAD_SUSPECT_INVALID_MARKED' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[1].resultField'))='reviewResult' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[1].resultLabel'))='误判有效' "
+                    +"and v.update_by='flyway-v0.20.83'"));
             assertEquals(1L,count(connection,
                     "select count(*) from todo_trigger_rule r join todo_template t "
                     +"on t.template_id=r.template_id where r.enabled='Y' "

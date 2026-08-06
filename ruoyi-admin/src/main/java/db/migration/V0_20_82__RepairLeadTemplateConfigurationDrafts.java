@@ -71,7 +71,7 @@ public class V0_20_82__RepairLeadTemplateConfigurationDrafts extends BaseJavaMig
         for(Object raw:outcomes)
         {
             if(!(raw instanceof JSONObject outcome))continue;
-            switch(String.valueOf(outcome.getString("value")))
+            switch(outcomeValue(outcome))
             {
                 case "VALID" ->
                 {
@@ -92,6 +92,7 @@ public class V0_20_82__RepairLeadTemplateConfigurationDrafts extends BaseJavaMig
         }
         if(valid!=1||suspect!=1||unreachable!=1)throw new IllegalStateException(
                 "TD-001 must contain VALID, SUSPECT_INVALID and UNREACHABLE outcomes");
+        normalizeTd001OutcomeContract(definition);
         JSONObject dependencies=new JSONObject();dependencies.put("TD-003",td003VersionId);
         routing.put("releaseDependencies",dependencies);
         bindTaskNodes(routing,"TD-001",draftVersionId,"TD-002",td002VersionId,
@@ -108,19 +109,88 @@ public class V0_20_82__RepairLeadTemplateConfigurationDrafts extends BaseJavaMig
         for(Object raw:outcomes)
         {
             if(!(raw instanceof JSONObject outcome))continue;
-            if("TRUE_INVALID".equals(outcome.getString("value")))
+            if("TRUE_INVALID".equals(outcomeValue(outcome)))
             {
                 outcome.put("effectKind","END");outcome.remove("targetTemplateCode");
                 outcome.remove("targetVersionId");terminal++;
             }
-            if("MISJUDGED_VALID".equals(outcome.getString("value")))
+            if("MISJUDGED_VALID".equals(outcomeValue(outcome)))
             {
                 next(outcome,"TD-001",td001VersionId);reopened++;
             }
         }
         if(terminal!=1||reopened!=1)throw new IllegalStateException(
                 "TD-002 must contain TRUE_INVALID and MISJUDGED_VALID outcomes");
+        normalizeTd002OutcomeContract(definition);
         bindTaskNodes(routing,"TD-002",draftVersionId,"TD-001",td001VersionId);
+    }
+
+    static void normalizeTd001OutcomeContract(JSONObject definition)
+    {
+        JSONObject routing=requiredConfig(definition,"routing");
+        JSONArray outcomes=requiredArray(routing,"businessOutcomes");
+        for(Object raw:outcomes)
+        {
+            if(!(raw instanceof JSONObject outcome))continue;
+            String value=outcomeValue(outcome);
+            String label=switch(value)
+            {
+                case "VALID" -> "有效";
+                case "SUSPECT_INVALID" -> "疑似无效";
+                case "UNREACHABLE" -> "未接通";
+                default -> null;
+            };
+            if(label!=null)normalizeOutcome(outcome,"contactResult","首联结果",value,label);
+        }
+    }
+
+    static void normalizeTd002OutcomeContract(JSONObject definition)
+    {
+        JSONObject routing=requiredConfig(definition,"routing");
+        JSONArray outcomes=requiredArray(routing,"businessOutcomes");
+        for(Object raw:outcomes)
+        {
+            if(!(raw instanceof JSONObject outcome))continue;
+            String value=outcomeValue(outcome);
+            String label=switch(value)
+            {
+                case "TRUE_INVALID" -> "确认无效";
+                case "MISJUDGED_VALID" -> "误判有效";
+                default -> null;
+            };
+            if(label!=null)normalizeOutcome(outcome,"reviewResult","复核结果",value,label);
+        }
+    }
+
+    private static void normalizeOutcome(JSONObject outcome,String field,String fieldName,
+            String value,String label)
+    {
+        String effect=outcome.getString("effectKind");
+        outcome.put("id",field+"_"+value);
+        outcome.put("label","当"+fieldName+"为"+label+"时");
+        outcome.put("resultField",field);
+        outcome.put("resultValue",value);
+        outcome.put("resultLabel",label);
+        outcome.put("resultType","NEXT_TEMPLATE".equals(effect)?"NEXT":"END");
+        outcome.put("condition",literalCondition(field,value));
+        outcome.remove("field");
+        outcome.remove("value");
+    }
+
+    private static JSONObject literalCondition(String field,String value)
+    {
+        JSONObject predicate=new JSONObject();
+        predicate.put("field",field);predicate.put("operator","EQ");predicate.put("value",value);
+        JSONArray conditions=new JSONArray();conditions.add(predicate);
+        JSONObject root=new JSONObject();root.put("type","AND");root.put("conditions",conditions);
+        JSONObject expression=new JSONObject();expression.put("version",1);expression.put("root",root);
+        JSONObject result=new JSONObject();result.put("$expression",expression);return result;
+    }
+
+    private static String outcomeValue(JSONObject outcome)
+    {
+        String value=outcome.getString("resultValue");
+        return value==null||value.isBlank()?String.valueOf(outcome.getString("value")):value;
     }
 
     private static void next(JSONObject outcome,String templateCode,long versionId)

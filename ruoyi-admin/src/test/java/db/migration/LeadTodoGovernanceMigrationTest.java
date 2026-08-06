@@ -60,6 +60,13 @@ class LeadTodoGovernanceMigrationTest
         JSONObject routing=definition.getJSONObject("routing").getJSONObject("config");
         JSONArray outcomes=routing.getJSONArray("businessOutcomes");
         JSONObject unreachable=outcomes.getJSONObject(2);
+        assertEquals("contactResult",unreachable.getString("resultField"));
+        assertEquals("UNREACHABLE",unreachable.getString("resultValue"));
+        assertEquals("未接通",unreachable.getString("resultLabel"));
+        assertFalse(unreachable.containsKey("field"));
+        assertFalse(unreachable.containsKey("value"));
+        assertEquals("contactResult",singlePredicate(unreachable).getString("field"));
+        assertEquals("UNREACHABLE",singlePredicate(unreachable).getString("value"));
         assertEquals("END",unreachable.getString("effectKind"));
         assertNull(unreachable.get("targetVersionId"));
         assertNull(unreachable.get("targetTemplateCode"));
@@ -81,8 +88,13 @@ class LeadTodoGovernanceMigrationTest
         JSONObject routing=definition.getJSONObject("routing").getJSONObject("config");
         assertEquals(202L,taskVersion(routing,"TD-002"));
         assertEquals(102L,taskVersion(routing,"TD-001"));
-        assertEquals(102L,routing.getJSONArray("businessOutcomes").getJSONObject(1)
-                .getLongValue("targetVersionId"));
+        JSONObject reopened=routing.getJSONArray("businessOutcomes").getJSONObject(1);
+        assertEquals("reviewResult",reopened.getString("resultField"));
+        assertEquals("MISJUDGED_VALID",reopened.getString("resultValue"));
+        assertEquals("误判有效",reopened.getString("resultLabel"));
+        assertFalse(reopened.containsKey("field"));
+        assertFalse(reopened.containsKey("value"));
+        assertEquals(102L,reopened.getLongValue("targetVersionId"));
     }
 
     private JSONObject schema(String... fields)
@@ -150,5 +162,11 @@ class LeadTodoGovernanceMigrationTest
                 return node.getLongValue("templateVersionId");
         }
         return 0L;
+    }
+
+    private JSONObject singlePredicate(JSONObject outcome)
+    {
+        return outcome.getJSONObject("condition").getJSONObject("$expression")
+                .getJSONObject("root").getJSONArray("conditions").getJSONObject(0);
     }
 }

@@ -289,12 +289,12 @@ export default {
   methods: {
     hydrate() {
       this.draftRows = clone(this.rows).map((row, index) => {
-        const resultValue = row.resultValue || this.conditionResult(row.condition)
+        const resultValue = row.resultValue || row.value || this.conditionResult(row.condition)
         const option = this.outcomeOptions.find(item => String(item.value) === String(resultValue))
         return {
           id: row.id || `result_${index + 1}`,
           label: row.label || '',
-          resultField: row.resultField || (option && this.outcomeSet.resultField) || null,
+          resultField: row.resultField || row.field || (option && this.outcomeSet.resultField) || null,
           resultValue: resultValue == null ? null : String(resultValue),
           resultLabel: row.resultLabel || (option && option.label) || null,
           effectKind: effectKind(row.effectKind ? row : (option || row)),
@@ -313,6 +313,7 @@ export default {
     },
     conditionResult(condition) {
       const root = condition && condition.$expression && condition.$expression.root
+      if (root && root.field && root.operator === 'EQ') return root.value
       const predicate = root && Array.isArray(root.conditions) && root.conditions[0]
       return predicate && predicate.operator === 'EQ' ? predicate.value : null
     },

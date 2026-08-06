@@ -466,10 +466,10 @@ function scopeOwnerFields(fields, event) {
   const payloadVersion = Number(selected.payloadVersion || 0)
   if (!eventType || payloadVersion <= 0) return []
   const sourceKey = `${eventType}@${payloadVersion}`
-  return (Array.isArray(fields) ? fields : []).filter(field =>
-    isOwnerField(field) &&
-    (Array.isArray(field.sourceEventVersions) ? field.sourceEventVersions : []).includes(sourceKey)
+  const exactVersionFields = (Array.isArray(fields) ? fields : []).filter(field =>
+    list(object(field).sourceEventVersions).includes(sourceKey)
   )
+  return scopeEventFields(exactVersionFields, event, 'OWNER')
 }
 
 function filterEventsByPolicy(events, policy) {
@@ -491,22 +491,52 @@ function scopeEventFields(fields, event, purpose) {
   if (!eventType || payloadVersion <= 0) return []
   const sourceKey = `${eventType}@${payloadVersion}`
   const targetPurpose = String(purpose || 'OVERVIEW').toUpperCase()
-  return (Array.isArray(fields) ? fields : []).filter(field => {
+  return (Array.isArray(fields) ? fields : []).reduce((scoped, field) => {
     const value = object(field)
     const exactSources = list(value.sourceEventVersions)
     const matches = exactSources.length
       ? exactSources.includes(sourceKey)
       : list(value.sourceEvents).includes(eventType)
-    if (!matches) return false
+    if (!matches) return scoped
     const configurable = Object.prototype.hasOwnProperty.call(value, 'businessConfigurable')
       ? value.businessConfigurable === true
       : true
-    if (!configurable) return false
-    if (targetPurpose === 'CONDITION') return value.conditionEligible === true
-    if (targetPurpose === 'DEFAULT_VALUE') return value.defaultValueEligible === true
-    if (targetPurpose === 'OWNER') return isOwnerField(value)
-    return true
-  })
+    if (!configurable) return scoped
+
+    const purposeScopes = {
+      OWNER: 'ownerSourceEventVersions',
+      CONDITION: 'conditionSourceEventVersions',
+      DEFAULT_VALUE: 'defaultValueSourceEventVersions'
+    }
+    const purposeFlags = {
+      OWNER: 'ownerEligible',
+      CONDITION: 'conditionEligible',
+      DEFAULT_VALUE: 'defaultValueEligible'
+    }
+    const exactEligibility = purposeName => {
+      const sourceProperty = purposeScopes[purposeName]
+      if (Object.prototype.hasOwnProperty.call(value, sourceProperty)) {
+        return list(value[sourceProperty]).includes(sourceKey)
+      }
+      if (purposeName === 'OWNER') return isOwnerField(value)
+      return value[purposeFlags[purposeName]] === true
+    }
+    const projected = {
+      ...value,
+      ownerEligible: exactEligibility('OWNER'),
+      conditionEligible: exactEligibility('CONDITION'),
+      defaultValueEligible: exactEligibility('DEFAULT_VALUE')
+    }
+    const hasExactPurposeScopes = Object.values(purposeScopes)
+      .some(property => Object.prototype.hasOwnProperty.call(value, property))
+    const eligibleForOverview = projected.ownerEligible ||
+      projected.conditionEligible || projected.defaultValueEligible
+    const include = targetPurpose === 'OVERVIEW'
+      ? (!hasExactPurposeScopes || eligibleForOverview)
+      : projected[purposeFlags[targetPurpose]] === true
+    if (include) scoped.push(projected)
+    return scoped
+  }, [])
 }
 
 function ownerSelectionStillValid(selection, fields) {
@@ -1092,13 +1122,18 @@ function routeKey(value, index) {
 function normalizedOutcome(row, index) {
   const value = object(row)
   const kind = effectKind(value)
+  const legacyResult = (value.resultValue === null || value.resultValue === undefined) &&
+    value.value !== null && value.value !== undefined
+  const resultValue = legacyResult ? value.value : value.resultValue
   return {
     ...clone(value),
     id: routeKey(value.id, index),
     label: String(value.label || `业务结果 ${index + 1}`),
-    resultField: value.resultField ? String(value.resultField) : null,
-    resultValue: value.resultValue === null || value.resultValue === undefined ? null : String(value.resultValue),
-    resultLabel: value.resultLabel ? String(value.resultLabel) : null,
+    resultField: value.resultField || value.field ? String(value.resultField || value.field) : null,
+    resultValue: resultValue === null || resultValue === undefined ? null : String(resultValue),
+    resultLabel: value.resultLabel
+      ? String(value.resultLabel)
+      : (legacyResult && value.label ? String(value.label) : null),
     effectKind: kind,
     resultType: kind === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
     targetVersionId: Number(value.targetVersionId) || null,
