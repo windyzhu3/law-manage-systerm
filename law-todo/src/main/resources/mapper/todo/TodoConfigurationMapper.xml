@@ -414,7 +414,8 @@
     where v.version_id=#{versionId}
   </select>
   <select id="selectTemplateIdentityByVersionId" resultType="java.util.Map">
-    select t.template_id,t.template_code,t.business_type
+    select t.template_id,t.template_code,t.template_name,t.business_type,
+      v.version_id,v.version_no,v.status
     from todo_template_version v join todo_template t on t.template_id=v.template_id
     where v.version_id=#{versionId}
   </select>

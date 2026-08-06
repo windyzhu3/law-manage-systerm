@@ -153,25 +153,56 @@ public class TodoConfigurationJourneyService
         var events=eventResources.list(Map.of("businessObjectType",businessType,"offset",0,"limit",500)).rows();
         return new CurrentResources(events,fields,query.ownerCatalog(),
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
-                templates.listTemplateCalendarCatalog(),routingTargets(businessType),
+                templates.listTemplateCalendarCatalog(),routingTargets(businessType,definition),
                 outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
                         outcomes.resolve(detail.templateCode(),businessType,
                                 detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition));
     }
 
-    private List<RoutingTargetCatalogEntry> routingTargets(String businessType)
+    private List<RoutingTargetCatalogEntry> routingTargets(String businessType,TodoDefinitionDocument definition)
     {
         List<Map<String,Object>> rows=mapper.selectPublishedRoutingTargetCatalog(businessType);
-        if(rows==null)return List.of();
-        return rows.stream()
-                .filter(row->businessType.equals(text(row,"business_type","businessType")))
-                .filter(row->"PUBLISHED".equals(text(row,"status","status")))
-                .map(row->new RoutingTargetCatalogEntry(
-                        longNumber(value(row,"template_id","templateId")),text(row,"template_code","templateCode"),
-                        text(row,"template_name","templateName"),text(row,"business_type","businessType"),
-                        longNumber(value(row,"version_id","versionId")),
-                        integer(value(row,"version_no","versionNo"),0),text(row,"status","status")))
-                .toList();
+        Map<Long,RoutingTargetCatalogEntry> targets=new LinkedHashMap<>();
+        for(Map<String,Object> row:rows==null?List.<Map<String,Object>>of():rows)
+            appendRoutingTarget(targets,businessType,row);
+        for(Long versionId:referencedRoutingVersions(definition))
+        {
+            if(targets.containsKey(versionId))continue;
+            appendRoutingTarget(targets,businessType,mapper.selectTemplateIdentityByVersionId(versionId));
+        }
+        return List.copyOf(targets.values());
+    }
+
+    private void appendRoutingTarget(Map<Long,RoutingTargetCatalogEntry> targets,String businessType,
+            Map<String,Object> row)
+    {
+        if(row==null||!businessType.equals(text(row,"business_type","businessType"))
+                ||!"PUBLISHED".equals(text(row,"status","status")))return;
+        Long versionId=longNumber(value(row,"version_id","versionId"));if(versionId==null)return;
+        targets.putIfAbsent(versionId,new RoutingTargetCatalogEntry(
+                longNumber(value(row,"template_id","templateId")),text(row,"template_code","templateCode"),
+                text(row,"template_name","templateName"),text(row,"business_type","businessType"),versionId,
+                integer(value(row,"version_no","versionNo"),0),text(row,"status","status")));
+    }
+
+    private List<Long> referencedRoutingVersions(TodoDefinitionDocument definition)
+    {
+        if(definition==null||definition.routing()==null)return List.of();
+        Map<Long,Boolean> result=new LinkedHashMap<>();
+        collectVersionIds(definition.routing().config().get("businessOutcomes"),"targetVersionId",result);
+        collectVersionIds(definition.routing().config().get("nodes"),"templateVersionId",result);
+        return List.copyOf(result.keySet());
+    }
+
+    private void collectVersionIds(Object source,String key,Map<Long,Boolean> result)
+    {
+        if(!(source instanceof List<?> rows))return;
+        for(Object item:rows)
+        {
+            if(!(item instanceof Map<?,?> row))continue;
+            Object raw=row.get(key);Long versionId=longNumber(raw);
+            if(versionId!=null)result.putIfAbsent(versionId,Boolean.TRUE);
+        }
     }
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row,TodoSimulationReadinessView readiness)

@@ -132,6 +132,29 @@ class TodoConfigurationJourneyServiceTest
                 .containsExactly("TD-004");
     }
 
+    @Test void publishedJourneyIncludesTheNamedHistoricalTargetReferencedByItsDefinition()
+    {
+        TemplateVersionDetail published=new TemplateVersionDetail(101L,3,"PUBLISHED",82L,1,
+                definitionWithHistoricalTarget(),"{}","{}","{}","{}","{}","hash-42",
+                "{}",null,null,null,"admin",LocalDateTime.of(2026,7,30,9,0),
+                LocalDateTime.of(2026,7,30,9,0));
+        when(query.template(42L)).thenReturn(new TemplateConfigurationDetail(
+                42L,"TD-001","首联待办","LEAD","0",4,3,null,null,101L,3,published,List.of()));
+        when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(
+                routingTarget(4L,"TD-004","5天实质进展","LEAD",95L,"PUBLISHED")));
+        when(mapper.selectTemplateIdentityByVersionId(79L)).thenReturn(Map.ofEntries(
+                Map.entry("template_id",4L),Map.entry("template_code","TD-004"),
+                Map.entry("template_name","5天实质进展"),Map.entry("business_type","LEAD"),
+                Map.entry("version_id",79L),Map.entry("version_no",2),Map.entry("status","PUBLISHED")));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().routingTargets())
+                .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::versionId)
+                .containsExactly(95L,79L);
+        assertThat(view.resources().routingTargets().get(1).templateName()).isEqualTo("5天实质进展");
+    }
+
     @Test void returnsTruthfulProgressHealthStateAndTemplateCodeWithoutPerRowQueries()
     {
         when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(fixtureWorkbenchRows());
@@ -354,6 +377,21 @@ class TodoConfigurationJourneyServiceTest
                 "ui":{"config":{"businessStage":"QUALIFY","panels":[{"code":"summary"}]}},
                 "routing":{"config":{"start":"review","nodes":[{"key":"review"}],"edges":[]}},
                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+    }
+
+    private String definitionWithHistoricalTarget()
+    {
+        return """
+                {"schemaVersion":1,"templateCode":"TD-001","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                "owner":{"config":{"type":"PAYLOAD","field":"ownerId"}},
+                "dod":{"config":{"requiredFields":["contactResult"]}},
+                "sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},
+                "ui":{"config":{"businessStage":"LEAD_FIRST_CONTACT"}},
+                "routing":{"config":{"businessOutcomes":[
+                  {"resultField":"contactResult","resultValue":"VALID","effectKind":"NEXT_TEMPLATE",
+                   "targetTemplateCode":"TD-004","targetVersionId":79}
+                ]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """;
     }
 
