@@ -273,11 +273,12 @@ insert into todo_schedule_window(
   return `
 ${todoInsert(ctx, `${key}_RETRY`, code, 'TD-003', 'td003', 'SUBMITTED', ctx.seller, null, null, `OCC_${code}`)}
 insert into todo_schedule_plan(
-  previous_todo_id,template_version_id,business_type,business_id,timezone,rule_version_id,
+  previous_todo_id,template_version_id,business_type,business_id,schedule_purpose,idempotency_key,timezone,rule_version_id,
   assignment_policy_id,assignment_policy_version,assignment_policy_snapshot_source,
   first_contact_at,current_window_code,status,create_time,update_time,version
 )
-select @${key}_RETRY,t.template_version_id,'LEAD',t.business_id,'Asia/Shanghai',920053,
+select @${key}_RETRY,t.template_version_id,'LEAD',t.business_id,'LEAD_RETRY',
+  concat('LEAD_RETRY:',t.business_id,':',@${key}_RETRY),'Asia/Shanghai',920053,
   p.policy_id,p.row_version,'RESOLVED_POLICY',sysdate(),'T0','ACTIVE',sysdate(),sysdate(),0
 from todo_instance t
 join biz_lead_assignment_policy p on p.policy_code=${quote(ctx.policyCode)}
