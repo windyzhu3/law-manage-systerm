@@ -57,6 +57,8 @@ jobs:
 
   frontend-e2e:
     runs-on: ubuntu-latest
+    env:
+      TODO_E2E_ARTIFACT_DIR: ${{ github.workspace }}/ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/phase-two-${{ github.run_id }}-${{ github.run_attempt }}
     defaults:
       run:
         working-directory: ruoyi-ui
@@ -206,7 +208,7 @@ jobs:
             exit 1
           }
       - name: Install runtime clients
-        run: sudo apt-get update -qq && sudo apt-get install -y mysql-client apache2-utils
+        run: sudo apt-get update -qq && sudo apt-get install -y mysql-client apache2-utils redis-tools
       - name: Create utf8mb4 E2E database
         run: mysql --protocol=tcp -h127.0.0.1 -uroot -proot -e "create database law_todo_config_e2e character set utf8mb4 collate utf8mb4_unicode_ci"
       - name: Initialize v0.15 baseline schema
@@ -231,7 +233,7 @@ jobs:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_todo_config_e2e?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayRuntimeMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Create isolated Todo configuration test identity
         shell: bash
         run: |
@@ -399,7 +401,7 @@ jobs:
           TODO_MIGRATION_DB_URL: jdbc:mysql://127.0.0.1:3306/law_lead_todo_e2e?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&connectionCollation=utf8mb4_unicode_ci
           TODO_MIGRATION_DB_USER: root
           TODO_MIGRATION_DB_PASSWORD: root
-        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
+        run: mvn --batch-mode --no-transfer-progress -pl ruoyi-admin -am -Dtest=FlywayRuntimeMigrationTest -Dsurefire.failIfNoSpecifiedTests=false test
       - name: Generate profile-gated test identity password and run marker
         shell: bash
         run: |

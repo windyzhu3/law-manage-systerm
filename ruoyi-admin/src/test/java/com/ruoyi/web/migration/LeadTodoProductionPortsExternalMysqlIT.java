@@ -760,7 +760,7 @@ class LeadTodoProductionPortsExternalMysqlIT
             try(ResultSet row=query.executeQuery())
             {
                 assertTrue(row.next(),sql);
-                LocalDateTime result=row.getTimestamp(1).toLocalDateTime();
+                LocalDateTime result=row.getObject(1,LocalDateTime.class);
                 assertFalse(row.next(),sql);
                 return result;
             }

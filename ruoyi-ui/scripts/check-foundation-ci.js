@@ -22,6 +22,21 @@ if (!workflow.includes('npm run test:foundation-identities')) throw new Error('C
 if (!workflow.includes("TODO_E2E_BROWSER: ${{ vars.TODO_E2E_BROWSER || 'chrome' }}")) {
   throw new Error('Todo configuration E2E must default to the user-selected Chrome browser')
 }
+const frontendE2eJob = workflowSection(workflow, 'frontend-e2e', 'migration')
+if (!frontendE2eJob.includes('TODO_E2E_ARTIFACT_DIR: ${{ github.workspace }}/ruoyi-ui/output/playwright/lead-todo-guided-configuration/runs/phase-two-${{ github.run_id }}-${{ github.run_attempt }}')) {
+  throw new Error('Generic frontend E2E must use a governed per-run guided evidence directory')
+}
+const todoConfigE2eJob = workflowSection(workflow, 'todo-config-real-e2e', 'lead-todo-real-e2e')
+if (!/Install runtime clients[\s\S]*?apt-get install -y[^\r\n]*\bredis-tools\b/.test(todoConfigE2eJob)) {
+  throw new Error('Todo configuration E2E must install redis-cli before resetting Redis')
+}
+if (!/-Dtest=FlywayRuntimeMigrationTest\b/.test(todoConfigE2eJob) || /-Dtest=FlywayMigrationTest\b/.test(todoConfigE2eJob)) {
+  throw new Error('Todo configuration E2E must apply migrations without contract-test fixtures')
+}
+const leadTodoE2eJob = workflowSection(workflow, 'lead-todo-real-e2e')
+if (!/-Dtest=FlywayRuntimeMigrationTest\b/.test(leadTodoE2eJob) || /-Dtest=FlywayMigrationTest\b/.test(leadTodoE2eJob)) {
+  throw new Error('Lead Todo E2E must apply migrations without contract-test fixtures')
+}
 if (!logback.includes('<property name="log.path" value="${LOG_PATH:-/home/ruoyi/logs}" />')) {
   throw new Error('Logback must allow a writable environment-specific log directory')
 }
@@ -159,4 +174,14 @@ function workflowStep(source, name) {
   if (index < 0) throw new Error(`Missing workflow step: ${name}`)
   const next = source.indexOf('\n      - name:', index + marker.length)
   return { index, text: source.slice(index, next < 0 ? source.length : next) }
+}
+
+function workflowSection(source, startName, endName) {
+  const startMarker = `  ${startName}:`
+  const start = source.indexOf(startMarker)
+  if (start < 0) throw new Error(`Missing workflow job: ${startName}`)
+  if (!endName) return source.slice(start)
+  const end = source.indexOf(`  ${endName}:`, start + startMarker.length)
+  if (end < 0) throw new Error(`Missing workflow job: ${endName}`)
+  return source.slice(start, end)
 }
