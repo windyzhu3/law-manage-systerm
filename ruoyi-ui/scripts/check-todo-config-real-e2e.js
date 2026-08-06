@@ -187,6 +187,11 @@ requireText(bootstrap, "json_length(json_extract(v.definition_json,'$.routing.co
   'Governed Todo journey fixture source')
 forbidText(bootstrap, "where t.template_code='TD-001' and v.status='PUBLISHED'",
   'Governed Todo journey fixture source')
+requireText(bootstrap, 'TODO_CONFIG_REPAIR_END_ONLY', 'Schema-repair journey fixture isolation')
+requireText(bootstrap, "'$.routing.config.businessOutcomes[0].effectKind','END'",
+  'Schema-repair journey fixture isolation')
+requireText(bootstrap, "'templateVersionId',version.version_id",
+  'Schema-repair journey fixture current-version binding')
 requireText(bootstrap, "@todo_config_user_id,@runtime_dept_id,'0'", 'Todo configuration business-object data scope')
 for (const required of [
   'todo_config_admin',

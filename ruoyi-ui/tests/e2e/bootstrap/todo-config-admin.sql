@@ -280,6 +280,46 @@ from todo_template target join todo_template_version source on source.version_id
 where target.template_code in (@repair_template_code,@failed_template_code,@warning_template_code)
   and not exists(select 1 from todo_template_version existing where existing.template_id=target.template_id);
 
+-- TODO_CONFIG_REPAIR_END_ONLY: this disposable template verifies event-schema repair,
+-- not TD-001 cross-template routing. Bind its start node to its own draft and terminate
+-- each governed completion result so the fixture remains internally consistent.
+update todo_template_version version
+join todo_template template on template.template_id=version.template_id
+set version.definition_json=json_remove(json_set(version.definition_json,
+  '$.routing.config.businessOutcomes[0].effectKind','END',
+  '$.routing.config.businessOutcomes[0].resultType','END',
+  '$.routing.config.businessOutcomes[1].effectKind','END',
+  '$.routing.config.businessOutcomes[1].resultType','END',
+  '$.routing.config.businessOutcomes[2].effectKind','END',
+  '$.routing.config.businessOutcomes[2].resultType','END',
+  '$.routing.config.start','current_task',
+  '$.routing.config.nodes',json_array(
+    json_object('key','current_task','type','TASK','templateCode',template.template_code,
+      'templateVersionId',version.version_id),
+    json_object('key','business_result','type','DECISION'),
+    json_object('key','route_end','type','END')
+  ),
+  '$.routing.config.edges',json_array(
+    json_object('key','edge_current_result','from','current_task','to','business_result','priority',0),
+    json_object('key','edge_result_valid','from','business_result','to','route_end','priority',30,
+      'condition',json_object('$expression',json_object('version',1,'root',
+        json_object('field','contactResult','operator','EQ','value','VALID')))),
+    json_object('key','edge_result_suspect_invalid','from','business_result','to','route_end','priority',20,
+      'condition',json_object('$expression',json_object('version',1,'root',
+        json_object('field','contactResult','operator','EQ','value','SUSPECT_INVALID')))),
+    json_object('key','edge_result_unreachable','from','business_result','to','route_end','priority',10,
+      'condition',json_object('$expression',json_object('version',1,'root',
+        json_object('field','contactResult','operator','EQ','value','UNREACHABLE')))),
+    json_object('key','edge_result_default','from','business_result','to','route_end','default',true,'priority',-1)
+  )),
+  '$.routing.config.businessOutcomes[0].targetVersionId',
+  '$.routing.config.businessOutcomes[0].targetTemplateCode',
+  '$.routing.config.businessOutcomes[1].targetVersionId',
+  '$.routing.config.businessOutcomes[1].targetTemplateCode',
+  '$.routing.config.businessOutcomes[2].targetVersionId',
+  '$.routing.config.businessOutcomes[2].targetTemplateCode')
+where template.template_code=@repair_template_code and version.status='DRAFT';
+
 -- Disable captcha only in this guarded disposable E2E database.
 insert into sys_config(config_name,config_key,config_value,config_type,create_by,create_time,remark)
 select 'Todo E2E captcha restore',@captcha_restore_key,config_value,'N',@run_marker,sysdate(),@test_remark
