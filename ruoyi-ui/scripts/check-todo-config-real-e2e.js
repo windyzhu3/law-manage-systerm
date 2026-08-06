@@ -40,6 +40,8 @@ function requireBefore(source, first, second, label) {
 
 const spec = read(specPath)
 const journeySpec = read(journeySpecPath)
+requireText(journeySpec, ".trigger-step__advanced .el-collapse-item__header", 'Todo trigger repair visibility')
+requireText(journeySpec, ".journey-page > .el-loading-mask", 'Todo journey loading boundary')
 const mysqlRunner = read(mysqlRunnerPath)
 const databaseFixture = read(databaseFixturePath)
 const globalTeardown = read(globalTeardownPath)
