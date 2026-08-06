@@ -323,6 +323,29 @@ select
 drop temporary table tmp_lead_e2e_identity_guard;
 
 start transaction;
+-- LEAD_E2E_POLICY_ADMIN_NAVIGATION: the disposable policy administrator needs
+-- the parent route, page route and only the two assignment-policy operations.
+set @policy_admin_role_key=concat('lead_e2e_policy_admin_',${quote(ctx.runId)});
+insert into sys_role(
+  role_name,role_key,role_sort,data_scope,menu_check_strictly,dept_check_strictly,
+  status,del_flag,create_by,create_time,remark
+)
+select ${quote(`Lead E2E policy admin ${ctx.marker}`)},@policy_admin_role_key,98,'1',1,1,
+  '0','0','lead-e2e',sysdate(),${quote(ctx.marker)}
+where not exists(select 1 from sys_role where role_key=@policy_admin_role_key);
+set @policy_admin_role_id=(select role_id from sys_role
+  where role_key=@policy_admin_role_key and create_by='lead-e2e' and remark=${quote(ctx.marker)} limit 1);
+insert ignore into sys_user_role(user_id,role_id)
+select user_id,@policy_admin_role_id from sys_user
+where user_name=${quote(ctx.policyAdmin)} and @policy_admin_role_id is not null;
+insert ignore into sys_role_menu(role_id,menu_id)
+select @policy_admin_role_id,m.menu_id from sys_menu m
+where @policy_admin_role_id is not null
+  and (
+    (m.menu_type='M' and m.path='lead')
+    or m.component='lead/policy/index'
+    or m.perms in('lead:assignment-policy:list','lead:assignment-policy:edit')
+  );
 insert into biz_lead_setting(
   setting_type,setting_code,setting_name,color,order_num,status,create_by,create_time
 ) values('source',${quote(ctx.sourceCode)},${quote(`E2E ${ctx.marker}`)},'#0369a1',999,'0','lead-e2e',sysdate());
@@ -783,6 +806,9 @@ async function cleanupLeadTodoFixtures(capability, options = {}) {
   const cleanup = `
 set names utf8mb4 collate utf8mb4_unicode_ci;
 start transaction;
+set @policy_admin_role_key=concat('lead_e2e_policy_admin_',${quote(ctx.runId)});
+set @policy_admin_role_id=(select role_id from sys_role
+  where role_key=@policy_admin_role_key and create_by='lead-e2e' and remark=${quote(ctx.marker)} limit 1);
 create temporary table tmp_lead_e2e_leads as
 select lead_id from biz_lead where lead_no in(${exactList(ctx.leadNos)});
 create temporary table tmp_lead_e2e_todos as
@@ -839,6 +865,10 @@ where seller.user_name=${quote(ctx.seller)}
   and sales_dept.update_by=concat('lead-e2e-',${quote(ctx.runId)});
 delete from biz_business_tag where tag_code=${quote(`LEAD_E2E_TAG_${ctx.runId}`)}
   and create_by='lead-e2e';
+delete from sys_role_menu where role_id=@policy_admin_role_id;
+delete from sys_user_role where role_id=@policy_admin_role_id;
+delete from sys_role where role_key=@policy_admin_role_key
+  and create_by='lead-e2e' and remark=${quote(ctx.marker)};
 drop temporary table tmp_lead_e2e_plans;
 drop temporary table tmp_lead_e2e_todos;
 drop temporary table tmp_lead_e2e_leads;
@@ -905,6 +935,9 @@ select
     where create_by=concat('lead-e2e-',${quote(ctx.runId)})),
   (select count(*) from biz_business_tag
     where tag_code=${quote(`LEAD_E2E_TAG_${ctx.runId}`)} and create_by='lead-e2e'),
+  (select count(*) from sys_role
+    where role_key=concat('lead_e2e_policy_admin_',${quote(ctx.runId)})
+      and create_by='lead-e2e' and remark=${quote(ctx.marker)}),
   (select count(*) from sys_dept
     where update_by=concat('lead-e2e-',${quote(ctx.runId)})),
   (select count(*) from file_business_relation where relation_id in(${relationIds}) and active=1),
