@@ -628,7 +628,7 @@ async function completeRetry(page, leadNo, resultLabel, fileName, connected) {
   await dialog.getByTestId('todo-action-submit').click()
   await expect(page.getByText('处理成功')).toBeVisible()
   await expect(dialog).toBeHidden()
-  await drawer.locator('.el-drawer__close-btn').click()
+  await drawer.getByRole('button', { name: 'close 业务待办', exact: true }).click()
   await expect(drawer).toBeHidden()
 }
 
