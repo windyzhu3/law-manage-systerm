@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.law.todo.application.TodoSimulationEffectResolver.EffectKind;
@@ -62,7 +63,7 @@ public class TodoSimulationScenarioService
         return catalog.scenarios(journey.template().templateCode(),journey.template().businessType());
     }
 
-    @Transactional
+    @Transactional(propagation=Propagation.NOT_SUPPORTED)
     public ScenarioSimulationResult simulate(long templateId,String scenarioCode,
             ScenarioSimulationCommand command,Actor actor)
     {
@@ -76,7 +77,7 @@ public class TodoSimulationScenarioService
         return simulateWithJourney(templateId,scenario,command,actor,journey);
     }
 
-    @Transactional
+    @Transactional(propagation=Propagation.NOT_SUPPORTED)
     public BatchScenarioResult simulateRequired(long templateId,ScenarioSimulationCommand command,Actor actor)
     {
         TodoConfigurationJourneyView journey=journeys.load(templateId,actor);

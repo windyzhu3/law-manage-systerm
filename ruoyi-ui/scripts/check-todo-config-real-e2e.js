@@ -57,6 +57,12 @@ forbidText(journeySpec, 'if (await', 'Todo journey deterministic E2E scenarios')
 forbidText(journeySpec, 'TODO_CONFIG_E2E_JOURNEY_TEMPLATE_ID', 'Todo journey deterministic E2E fixtures')
 forbidText(journeySpec, 'TODO_CONFIG_E2E_AUDITOR_USER', 'Todo journey deterministic E2E identities')
 forbidText(journeySpec, 'SCENARIO_SCHEMA_REPAIR_RERUN', 'Todo journey exact-version repair scenario')
+requireText(journeySpec,
+  '/prod-api/todo/config/templates/${fixtures.repair.templateId}/journey',
+  'Todo journey repaired event save endpoint')
+requireText(journeySpec,
+  '/prod-api/todo/config/templates/${fixtures.failed.templateId}/journey',
+  'Todo journey failed-simulation repair save endpoint')
 forbidText(journeySpec, 'SCENARIO_FAILED_SIMULATION_BLOCKS_PUBLISH', 'Todo journey repair-and-rerun scenario')
 const journeySkips = journeySpec.match(/test\.skip\(/g) || []
 if (journeySkips.length !== 1 || !journeySpec.includes("test.skip(!realBackend, 'requires the disposable real-backend E2E environment')")) {
