@@ -93,7 +93,7 @@ public class TodoConfigurationJourneyService
                 detail.templateCode(),detail.businessType());
         TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluate(detail,definition,state);
         return new TodoConfigurationJourneyView(summary(detail,version),evaluation.steps(),resources(detail,definition),
-                preview.project(detail,definition),evaluation.issues(),permissions(actor));
+                preview.project(detail,definition),evaluation.issues(),permissions(actor),state);
     }
 
     /** Internal canonical source; deliberately excluded from the HTTP journey view. */

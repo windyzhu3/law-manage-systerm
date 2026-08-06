@@ -19,8 +19,14 @@ public record TodoConfigurationJourneyView(
         CurrentResources resources,
         EmployeeTodoPreview employeePreview,
         List<JourneyIssue> issues,
-        JourneyPermissions permissions)
+        JourneyPermissions permissions,
+        TodoSimulationReadinessView simulationReadiness)
 {
+    public TodoConfigurationJourneyView(TemplateSummary template,List<JourneyStep> steps,
+            CurrentResources resources,EmployeeTodoPreview employeePreview,List<JourneyIssue> issues,
+            JourneyPermissions permissions)
+    {this(template,steps,resources,employeePreview,issues,permissions,null);}
+
     public TodoConfigurationJourneyView
     {
         steps=steps==null?List.of():List.copyOf(steps);

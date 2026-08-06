@@ -82,6 +82,7 @@ class TodoConfigurationJourneyServiceTest
         assertThat(view.template().templateId()).isEqualTo(42L);
         assertThat(view.template().templateCode()).isEqualTo("TODO-42");
         assertThat(view.template().lockVersion()).isEqualTo(4);
+        assertThat(view.simulationReadiness()).isEqualTo(ready(42L,101L,"hash-42"));
         assertThat(Arrays.stream(TodoConfigurationJourneyView.TemplateSummary.class.getRecordComponents())
                 .map(component->component.getName())).doesNotContain("definitionJson");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::code)

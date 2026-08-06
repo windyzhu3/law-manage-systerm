@@ -159,6 +159,18 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(batch.contains("case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end validation_report_json"));
     }
 
+    @Test void latestScenarioEvidenceLookupCrossesScenarioVersionsWithoutCrossingTemplateVersion() throws Exception
+    {
+        String latest=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select",
+                "selectLatestSimulationEvidenceForScenario");
+
+        assertTrue(latest.contains("template_id=#{templateId}")
+                && latest.contains("version_id=#{versionId}")
+                && latest.contains("scenario_code=#{scenarioCode}"));
+        assertFalse(latest.contains("scenario_version=#{scenarioVersion}"));
+        assertTrue(latest.contains("order by executed_time desc,evidence_id desc limit 1"));
+    }
+
     @Test void routingTargetsAreActivePublishedAndBoundToTheRequestedBusinessType() throws Exception
     {
         String routing=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select",

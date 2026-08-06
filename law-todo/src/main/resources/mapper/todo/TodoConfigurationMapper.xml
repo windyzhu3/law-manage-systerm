@@ -438,6 +438,12 @@
       and scenario_code=#{scenarioCode} and scenario_version=#{scenarioVersion}
     order by executed_time desc,evidence_id desc limit 1
   </select>
+  <select id="selectLatestSimulationEvidenceForScenario" resultType="java.util.Map">
+    select * from todo_simulation_evidence
+    where template_id=#{templateId} and version_id=#{versionId}
+      and scenario_code=#{scenarioCode}
+    order by executed_time desc,evidence_id desc limit 1
+  </select>
   <select id="selectSimulationReadinessBatch" resultType="java.util.Map">
     select v.version_id,v.definition_hash,
       count(s.resource_item_id) required_scenario_count,

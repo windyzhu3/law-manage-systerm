@@ -144,6 +144,25 @@ class TodoSimulationEvidenceServiceTest
         });
     }
 
+    @Test
+    void oldScenarioVersionEvidenceRequiresRealRevalidation()
+    {
+        SimulationScenario current=new SimulationScenario(11L,"TD001_VALID","TD-001","有效首联",2,
+                Map.of("contactResult","VALID","contactedAt","${SIMULATION_NOW}"),
+                List.of("contactResult","contactedAt"),List.of(),"TD-001",1,"TD-004",true,"ACTIVE",10);
+        when(mapper.selectPassingSimulationEvidence(anyMap())).thenReturn(null);
+        when(mapper.selectLatestSimulationEvidence(anyMap())).thenReturn(null);
+        when(mapper.selectLatestSimulationEvidenceForScenario(anyMap())).thenReturn(Map.of(
+                "scenario_version",1,"definition_hash","definition-hash","result_status","PASSED"));
+
+        var gate=new TodoSimulationEvidenceService(mapper).gate(
+                17L,88L,"definition-hash",List.of(current));
+
+        assertThat(gate.blockers()).containsExactly(
+                new TodoSimulationEvidenceService.SimulationGateBlocker(
+                        "TD001_VALID","SCENARIO_UPDATED",2,1));
+    }
+
     private SimulationScenario scenario()
     {
         return new SimulationScenario(11L,"TD001_VALID","TD-001","有效首联",1,
