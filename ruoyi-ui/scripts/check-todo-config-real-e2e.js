@@ -282,7 +282,7 @@ for (const required of [
   'TODO_E2E_DROP_DATABASE_AFTER: true',
   'todo-config-center.spec.js',
   'Reset dedicated Todo configuration Redis',
-  'redis-cli -h127.0.0.1 -p6379 FLUSHDB',
+  'redis-cli -h 127.0.0.1 -p 6379 FLUSHDB',
   '"captchaEnabled":false'
 ]) requireText(workflow, required, 'CI workflow')
 requireText(workflow, 'ruoyi-ui/output/playwright', 'CI guided Todo artifact path')
