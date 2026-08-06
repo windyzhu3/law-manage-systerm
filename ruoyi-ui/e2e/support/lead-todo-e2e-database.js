@@ -55,7 +55,8 @@ function createRunContext(options = {}) {
     informationOfficer: required('LEAD_INFORMATION_USER', env),
     seller: required('LEAD_SALES_USER', env),
     supervisor: required('LEAD_SUPERVISOR_USER', env),
-    alternateSales: required('LEAD_ALTERNATE_SALES_USER', env),
+    alternateSalesPrototype: required('LEAD_ALTERNATE_SALES_USER', env),
+    alternateSales: `lead_e2e_alt_${runId}`,
     policyAdmin: required('LEAD_POLICY_ADMIN_USER', env),
     storageRoot: path.resolve(env.TODO_E2E_FILE_STORAGE_ROOT ||
       path.join(env.RUOYI_PROFILE || '/tmp/law-manage/uploads', 'file-center'))
@@ -317,12 +318,27 @@ insert into tmp_lead_e2e_identity_guard
 select
   (select count(*) from sys_user where user_name=${quote(ctx.informationOfficer)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.seller)} and status='0' and del_flag='0'),
-  (select count(*) from sys_user where user_name=${quote(ctx.alternateSales)} and status='0' and del_flag='0'),
+  (select count(*) from sys_user where user_name=${quote(ctx.alternateSalesPrototype)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.supervisor)} and status='0' and del_flag='0'),
   (select count(*) from sys_user where user_name=${quote(ctx.policyAdmin)} and status='0' and del_flag='0');
 drop temporary table tmp_lead_e2e_identity_guard;
 
 start transaction;
+-- LEAD_E2E_DISPOSABLE_ALTERNATE: clone only the minimum account attributes
+-- needed by the assignment policy and place the disposable user in the
+-- seller's department so the fixture exercises the production validator.
+insert into sys_user(
+  dept_id,user_name,nick_name,user_type,email,phonenumber,sex,avatar,password,
+  status,del_flag,pwd_update_date,create_by,create_time,remark
+)
+select seller.dept_id,${quote(ctx.alternateSales)},'Lead E2E alternate',prototype.user_type,
+  '', '',prototype.sex,prototype.avatar,prototype.password,
+  '0','0',sysdate(),'lead-e2e',sysdate(),${quote(ctx.marker)}
+from sys_user seller
+join sys_user prototype on prototype.user_name=${quote(ctx.alternateSalesPrototype)}
+  and prototype.status='0' and prototype.del_flag='0'
+where seller.user_name=${quote(ctx.seller)} and seller.status='0' and seller.del_flag='0'
+  and not exists(select 1 from sys_user existing where existing.user_name=${quote(ctx.alternateSales)});
 -- LEAD_E2E_POLICY_ADMIN_NAVIGATION: the disposable policy administrator needs
 -- the parent route, page route and only the two assignment-policy operations.
 set @policy_admin_role_key=concat('lead_e2e_policy_admin_',${quote(ctx.runId)});
@@ -457,15 +473,22 @@ where l.lead_no=${quote(ctx.prefix + 'DEAD_POOL')};
 
 create temporary table tmp_lead_e2e_manifest_guard(
   lead_count int not null,policy_count int not null,source_count int not null,
+  alternate_count int not null,
   constraint chk_lead_e2e_leads check(lead_count=${FIXTURE_CODES.length}),
   constraint chk_lead_e2e_policy check(policy_count=1),
-  constraint chk_lead_e2e_source check(source_count=1)
+  constraint chk_lead_e2e_source check(source_count=1),
+  constraint chk_lead_e2e_disposable_alternate check(alternate_count=1)
 ) engine=innodb;
 insert into tmp_lead_e2e_manifest_guard
 select
   (select count(*) from biz_lead where lead_no in(${exactList(ctx.leadNos)})),
   (select count(*) from biz_lead_assignment_policy where policy_code=${quote(ctx.policyCode)}),
-  (select count(*) from biz_lead_setting where setting_type='source' and setting_code=${quote(ctx.sourceCode)});
+  (select count(*) from biz_lead_setting where setting_type='source' and setting_code=${quote(ctx.sourceCode)}),
+  (select count(*) from sys_user alternate_user
+    join sys_user seller on seller.user_name=${quote(ctx.seller)}
+    where alternate_user.user_name=${quote(ctx.alternateSales)}
+      and alternate_user.dept_id=seller.dept_id
+      and alternate_user.create_by='lead-e2e' and alternate_user.remark=${quote(ctx.marker)});
 drop temporary table tmp_lead_e2e_manifest_guard;
 commit;
 `
@@ -869,6 +892,8 @@ delete from sys_role_menu where role_id=@policy_admin_role_id;
 delete from sys_user_role where role_id=@policy_admin_role_id;
 delete from sys_role where role_key=@policy_admin_role_key
   and create_by='lead-e2e' and remark=${quote(ctx.marker)};
+delete from sys_user where user_name=${quote(ctx.alternateSales)}
+  and create_by='lead-e2e' and remark=${quote(ctx.marker)};
 drop temporary table tmp_lead_e2e_plans;
 drop temporary table tmp_lead_e2e_todos;
 drop temporary table tmp_lead_e2e_leads;
@@ -938,6 +963,8 @@ select
   (select count(*) from sys_role
     where role_key=concat('lead_e2e_policy_admin_',${quote(ctx.runId)})
       and create_by='lead-e2e' and remark=${quote(ctx.marker)}),
+  (select count(*) from sys_user where user_name=${quote(ctx.alternateSales)}
+    and create_by='lead-e2e' and remark=${quote(ctx.marker)}),
   (select count(*) from sys_dept
     where update_by=concat('lead-e2e-',${quote(ctx.runId)})),
   (select count(*) from file_business_relation where relation_id in(${relationIds}) and active=1),

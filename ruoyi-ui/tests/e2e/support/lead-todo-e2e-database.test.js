@@ -154,6 +154,11 @@ test('partial setup failure still runs exact-ownership cleanup from a pre-create
   )
 
   const setup = calls.find(sql => sql.includes('insert into biz_lead_setting'))
+  assert.notEqual(ctx.alternateSales, ctx.alternateSalesPrototype,
+    'the policy candidate must be a disposable run-specific identity')
+  assert.match(setup, /LEAD_E2E_DISPOSABLE_ALTERNATE/)
+  assert.ok(setup.includes(`'${ctx.alternateSales}'`))
+  assert.ok(setup.includes(`'${ctx.alternateSalesPrototype}'`))
   const roleName = setup.match(/select '([^']+)',@policy_admin_role_key,98/)[1]
   assert.ok(roleName.length <= 30, 'the disposable role name must fit sys_role.role_name')
 
@@ -161,6 +166,7 @@ test('partial setup failure still runs exact-ownership cleanup from a pre-create
   assert.ok(cleanup, 'cleanup must execute even when setup throws before manifest is returned')
   assert.doesNotMatch(cleanup, /\blike\b/i)
   ctx.leadNos.forEach(leadNo => assert.ok(cleanup.includes(`'${leadNo}'`)))
+  assert.ok(cleanup.includes(`delete from sys_user where user_name='${ctx.alternateSales}'`))
 })
 
 test('overlapping run markers clean only their exact manifest and never the neighbouring run', async () => {

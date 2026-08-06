@@ -187,11 +187,14 @@ requireText(bootstrap, "json_length(json_extract(v.definition_json,'$.routing.co
   'Governed Todo journey fixture source')
 forbidText(bootstrap, "where t.template_code='TD-001' and v.status='PUBLISHED'",
   'Governed Todo journey fixture source')
-requireText(bootstrap, 'TODO_CONFIG_REPAIR_END_ONLY', 'Schema-repair journey fixture isolation')
+requireText(bootstrap, 'TODO_CONFIG_DISPOSABLE_END_ONLY', 'Disposable journey fixture isolation')
 requireText(bootstrap, "'$.routing.config.businessOutcomes[0].effectKind','END'",
   'Schema-repair journey fixture isolation')
 requireText(bootstrap, "'templateVersionId',version.version_id",
-  'Schema-repair journey fixture current-version binding')
+  'Disposable journey fixture current-version binding')
+requireText(bootstrap,
+  'where template.template_code in (@repair_template_code,@failed_template_code,@warning_template_code)',
+  'All disposable journey fixtures must use isolated terminal routing')
 requireText(bootstrap, "@todo_config_user_id,@runtime_dept_id,'0'", 'Todo configuration business-object data scope')
 for (const required of [
   'todo_config_admin',

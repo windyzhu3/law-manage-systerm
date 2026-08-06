@@ -280,9 +280,10 @@ from todo_template target join todo_template_version source on source.version_id
 where target.template_code in (@repair_template_code,@failed_template_code,@warning_template_code)
   and not exists(select 1 from todo_template_version existing where existing.template_id=target.template_id);
 
--- TODO_CONFIG_REPAIR_END_ONLY: this disposable template verifies event-schema repair,
--- not TD-001 cross-template routing. Bind its start node to its own draft and terminate
--- each governed completion result so the fixture remains internally consistent.
+-- TODO_CONFIG_DISPOSABLE_END_ONLY: these disposable templates verify event-schema
+-- repair, trigger repair and warning review rather than TD-001 cross-template routing.
+-- Bind each start node to its own draft and terminate each governed completion result
+-- so preflight exposes only the behavior under test.
 update todo_template_version version
 join todo_template template on template.template_id=version.template_id
 set version.definition_json=json_remove(json_set(version.definition_json,
@@ -318,7 +319,8 @@ set version.definition_json=json_remove(json_set(version.definition_json,
   '$.routing.config.businessOutcomes[1].targetTemplateCode',
   '$.routing.config.businessOutcomes[2].targetVersionId',
   '$.routing.config.businessOutcomes[2].targetTemplateCode')
-where template.template_code=@repair_template_code and version.status='DRAFT';
+where template.template_code in (@repair_template_code,@failed_template_code,@warning_template_code)
+  and version.status='DRAFT';
 
 -- Disable captcha only in this guarded disposable E2E database.
 insert into sys_config(config_name,config_key,config_value,config_type,create_by,create_time,remark)
