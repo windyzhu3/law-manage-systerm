@@ -155,10 +155,12 @@ function run() {
     '/files/${file.fileObjectId}/retire', 'relationId', 'retireObjectIfUnreferenced',
     'verifyBackendIdentity', 'FOUNDATION_E2E_IDENTITY_SECRET', 'todo_sla_waiver',
     'LEAD_E2E_POLICY_ADMIN_NAVIGATION', 'lead_e2e_policy_admin_',
+    'LEAD_E2E_DISPOSABLE_ALTERNATE', 'alternateSalesPrototype', 'lead_e2e_alt_',
     "m.component='lead/policy/index'",
     "m.perms in('lead:assignment-policy:list','lead:assignment-policy:edit','lead:setting:options'," +
       "'system:user:list','todo:definition:list')",
-    'delete from sys_role where role_key=@policy_admin_role_key'].forEach(fragment =>
+    'delete from sys_role where role_key=@policy_admin_role_key',
+    'delete from sys_user where user_name='].forEach(fragment =>
     assertIncludes(e2eDatabase, fragment, 'lead E2E cleanable database fixture'))
   assert(!/\blike\b/i.test(e2eDatabase),
     'lead E2E ownership must use exact manifest membership, never wildcard matching')

@@ -335,8 +335,8 @@ test.describe.serial('Lead Todo flow with real browser, API and cleanable MySQL 
     await expect.poll(() => leadState(lead.leadNo, runContext), { timeout: 20000 }).toMatchObject({
       tagConfirmStatus: 'CONFIRMED',
       assignedEventStatus: 'PROCESSED',
-      ownerName: process.env.LEAD_ALTERNATE_SALES_USER,
-      td001Owner: process.env.LEAD_ALTERNATE_SALES_USER
+      ownerName: runContext.alternateSales,
+      td001Owner: runContext.alternateSales
     })
   })
 
