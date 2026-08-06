@@ -110,11 +110,29 @@ class TodoConfigurationJourneyServiceTest
         assertThat(event.description()).isEqualTo("在线索录入完成后触发");
         assertThat(event.sourceModule()).isEqualTo("线索中心");
         assertThat(view.resources().calendars()).extracting(row->row.get("calendarCode")).containsExactly("DEFAULT");
+        assertThat(view.resources().eventPolicy().locked()).isFalse();
         assertThat(view.resources().routingTargets())
                 .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateName)
                 .containsExactly("下一步办理");
         verify(readiness).readiness(42L,101L,"hash-42","TODO-42","LEAD");
         verify(mapper).selectPublishedRoutingTargetCatalog("LEAD");
+    }
+
+    @Test void exposesTheLockedCanonicalEventForAGovernedLeadTemplate()
+    {
+        TemplateConfigurationDetail source=fixtureTemplate();
+        when(query.template(42L)).thenReturn(new TemplateConfigurationDetail(
+                source.templateId(),"TD-002","疑似无效主管复核",source.businessType(),source.status(),
+                source.version(),source.currentVersion(),source.draftVersionId(),source.draftStatus(),
+                source.publishedVersionId(),source.publishedVersionNo(),source.editableVersion(),source.ruleReferences()));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().eventPolicy().locked()).isTrue();
+        assertThat(view.resources().eventPolicy().recommendedEventType())
+                .isEqualTo("LEAD_SUSPECT_INVALID_MARKED");
+        assertThat(view.resources().eventPolicy().allowedEventTypes())
+                .containsExactly("LEAD_SUSPECT_INVALID_MARKED");
     }
 
     @Test void leadJourneyDoesNotExposeCrossBusinessOrInactiveRoutingTargets()

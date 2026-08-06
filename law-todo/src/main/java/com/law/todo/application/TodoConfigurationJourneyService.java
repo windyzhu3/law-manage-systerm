@@ -50,6 +50,7 @@ public class TodoConfigurationJourneyService
     private final TodoEventResourceService eventResources;
     private final TodoBusinessOutcomeCatalogService outcomes;
     private final TodoSimulationReadinessService readiness;
+    private final TodoTemplateEventPolicy eventPolicy;
     private final TodoJourneyDependencyService dependencies=new TodoJourneyDependencyService();
 
     @Autowired
@@ -57,30 +58,42 @@ public class TodoConfigurationJourneyService
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
-            TodoSimulationReadinessService readiness)
-    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,readiness);}
+            TodoSimulationReadinessService readiness,TodoTemplateEventPolicy eventPolicy)
+    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,
+            outcomes,readiness,eventPolicy);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources)
-    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null,null);}
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null,null,
+            new TodoTemplateEventPolicy());}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
-    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,null);}
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,null,
+            new TodoTemplateEventPolicy());}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
             TodoSimulationReadinessService readiness)
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,readiness,
+            new TodoTemplateEventPolicy());}
+
+    TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,
+            TodoConfigurationMapper mapper,TodoConfigurationResourceCatalogService resourceCatalog,
+            TodoConfigurationJourneyEvaluator evaluator,TodoEmployeeTodoPreviewProjector preview,
+            TodoTemplateService templates,TodoEventResourceService eventResources,
+            TodoBusinessOutcomeCatalogService outcomes,TodoSimulationReadinessService readiness,
+            TodoTemplateEventPolicy eventPolicy)
     {
         this.query=query;this.codec=codec;this.mapper=mapper;this.resourceCatalog=resourceCatalog;
         this.evaluator=evaluator;this.preview=preview;this.templates=templates;this.eventResources=eventResources;
-        this.outcomes=outcomes;this.readiness=readiness;
+        this.outcomes=outcomes;this.readiness=readiness;this.eventPolicy=eventPolicy;
     }
 
     public TodoConfigurationJourneyView load(long templateId,Actor actor)
@@ -156,7 +169,9 @@ public class TodoConfigurationJourneyService
                 templates.listTemplateCalendarCatalog(),routingTargets(businessType,definition),
                 outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
                         outcomes.resolve(detail.templateCode(),businessType,
-                                detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition));
+                                detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition),
+                eventPolicy==null?TodoTemplateEventPolicy.TemplateEventPolicyView.unrestricted():
+                        eventPolicy.view(detail.templateCode(),businessType));
     }
 
     private List<RoutingTargetCatalogEntry> routingTargets(String businessType,TodoDefinitionDocument definition)

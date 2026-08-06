@@ -9,6 +9,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldRes
 import com.law.todo.application.TodoConfigurationResourceCatalogService.MaterialResource;
 import com.law.todo.application.TodoConfigurationResourceCatalogService.ValidatorResource;
 import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeSet;
+import com.law.todo.application.TodoTemplateEventPolicy.TemplateEventPolicyView;
 import com.law.todo.application.view.TodoConfigurationViews.OwnerCatalogEntry;
 import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 import com.law.todo.application.view.TodoResourceViews.EventResourceListItem;
@@ -39,13 +40,21 @@ public record TodoConfigurationJourneyView(
     public record CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
             List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
             List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
-            List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet)
+            List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet,
+            TemplateEventPolicyView eventPolicy)
     {
         public CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
                 List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
                 List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
+                List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet)
+        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,businessOutcomeSet,
+                TemplateEventPolicyView.unrestricted());}
+        public CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
+                List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
+                List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
                 List<RoutingTargetCatalogEntry> routingTargets)
-        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,BusinessOutcomeSet.empty());}
+        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,
+                BusinessOutcomeSet.empty(),TemplateEventPolicyView.unrestricted());}
     }
     public record EmployeeTodoPreview(String title,String assigneeSummary,List<PreviewField> fields,
             List<PreviewMaterial> materials,List<String> completionInstructions,String dueSummary) { }

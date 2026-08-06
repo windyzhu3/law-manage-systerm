@@ -54,6 +54,7 @@ public class TodoDefinitionService
     private final TodoDictionaryValidationPort dictionaries;
     private final TodoSimulationReadinessService simulationReadiness;
     private final TodoBusinessOutcomeCatalogService businessOutcomes;
+    private final TodoTemplateEventPolicy eventPolicy;
     private final TodoDefinitionCodec codec = new TodoDefinitionCodec();
     private final LegacyDefinitionAdapter legacyAdapter = new LegacyDefinitionAdapter();
 
@@ -61,26 +62,32 @@ public class TodoDefinitionService
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
             TodoSimulationReadinessService simulationReadiness,
-            TodoBusinessOutcomeCatalogService businessOutcomes)
+            TodoBusinessOutcomeCatalogService businessOutcomes,TodoTemplateEventPolicy eventPolicy)
     {
         this.mapper = mapper;
         this.compiler = compiler;
         this.configurationMapper=configurationMapper;this.dictionaries=dictionaries;
         this.simulationReadiness=simulationReadiness;
         this.businessOutcomes=businessOutcomes;
+        this.eventPolicy=eventPolicy;
     }
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
+            TodoSimulationReadinessService simulationReadiness,
+            TodoBusinessOutcomeCatalogService businessOutcomes)
+    {this(mapper,compiler,configurationMapper,dictionaries,simulationReadiness,businessOutcomes,null);}
+    public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
+            TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries,
             TodoSimulationReadinessService simulationReadiness)
-    {this(mapper,compiler,configurationMapper,dictionaries,simulationReadiness,null);}
+    {this(mapper,compiler,configurationMapper,dictionaries,simulationReadiness,null,null);}
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,
             TodoConfigurationMapper configurationMapper,TodoDictionaryValidationPort dictionaries)
-    {this(mapper,compiler,configurationMapper,dictionaries,null,null);}
+    {this(mapper,compiler,configurationMapper,dictionaries,null,null,null);}
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler,TodoConfigurationMapper configurationMapper)
-    {this(mapper,compiler,configurationMapper,(type,value)->true,null,null);}
+    {this(mapper,compiler,configurationMapper,(type,value)->true,null,null,null);}
 
     public TodoDefinitionService(TodoMapper mapper, TodoDefinitionCompiler compiler)
-    {this(mapper,compiler,null,(type,value)->true,null,null);}
+    {this(mapper,compiler,null,(type,value)->true,null,null,null);}
 
     public TodoDefinitionService(TodoMapper mapper)
     {
@@ -91,7 +98,7 @@ public class TodoDefinitionService
     public TodoDefinitionService(TodoMapper mapper,TodoAutoActionCapabilityRegistry autoActions)
     {
         this(mapper,new TodoDefinitionCompiler(new TodoDefinitionCodec(),new TodoEventCatalogService(mapper),
-                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true,null,null);
+                new TodoDecisionService(mapper),new com.law.todo.expression.ConditionValidator(),autoActions),null,(type,value)->true,null,null,null);
     }
 
     public List<Map<String, Object>> versions(Long templateId)
@@ -371,6 +378,7 @@ public class TodoDefinitionService
     private void validateDefinition(TodoDefinitionDocument definition,String businessType)
     {
         validateDefinitionStructure(definition);
+        requireCompatibleEvent(definition.templateCode(),businessType,definition);
         validateDefinitionEvent(definition,businessType);
         validateStableOwnerReferences(definition.owner().config());
         validate(JSON.toJSONString(definition.owner().config()),JSON.toJSONString(definition.dod().config()),
@@ -382,6 +390,14 @@ public class TodoDefinitionService
         if (definition == null || definition.event() == null || definition.owner() == null || definition.dod() == null
                 || definition.sla() == null || definition.ui() == null || definition.routing() == null)
             throw new TodoException("TODO_TEMPLATE_JSON_INVALID","Canonical definition contains required missing sections");
+    }
+
+    private void requireCompatibleEvent(String templateCode,String businessType,
+            TodoDefinitionDocument definition)
+    {
+        if(eventPolicy==null)return;
+        eventPolicy.requireCompatible(templateCode,businessType,definition.event().eventType(),
+                definition.event().payloadVersion());
     }
 
     @SuppressWarnings("unchecked")
@@ -600,6 +616,8 @@ public class TodoDefinitionService
             TodoDefinitionDocument definition,boolean persistCompilation)
     {
         validateDefinitionStructure(definition);
+        requireCompatibleEvent(text(value(current,"template_code","templateCode")),
+                text(value(current,"business_type","businessType")),definition);
         boolean prdBlocked = isPrdBlocked(current);
         if (!prdBlocked)
             validateStableOwnerReferences(definition.owner().config());
