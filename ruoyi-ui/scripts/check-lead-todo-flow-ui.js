@@ -157,6 +157,8 @@ function run() {
     assertIncludes(e2eDatabase, fragment, 'lead E2E cleanable database fixture'))
   assert(!/\blike\b/i.test(e2eDatabase),
     'lead E2E ownership must use exact manifest membership, never wildcard matching')
+  assert(/insert into todo_schedule_plan\([\s\S]*?schedule_purpose,idempotency_key,timezone[\s\S]*?concat\('LEAD_RETRY:',t\.business_id,':',@\$\{key\}_RETRY\)/.test(e2eDatabase),
+    'lead E2E retry fixtures must provide the governed schedule purpose and semantic idempotency key')
   assert(!/page\.route|route\.fulfill|mock/i.test(e2e),
     'lead E2E must not intercept or mock production business routes')
 
