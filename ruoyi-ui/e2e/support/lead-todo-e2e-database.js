@@ -344,7 +344,7 @@ where @policy_admin_role_id is not null
   and (
     (m.menu_type='M' and m.path='lead')
     or m.component='lead/policy/index'
-    or m.perms in('lead:assignment-policy:list','lead:assignment-policy:edit')
+    or m.perms in('lead:assignment-policy:list','lead:assignment-policy:edit','lead:setting:options','system:user:list','todo:definition:list')
   );
 insert into biz_lead_setting(
   setting_type,setting_code,setting_name,color,order_num,status,create_by,create_time
