@@ -180,6 +180,36 @@
       "config": {
         "identityBinding": "MIGRATION_DYNAMIC",
         "start": "td001",
+        "releaseDependencies": {
+          "TD-003": 3
+        },
+        "businessOutcomes": [
+          {
+            "field": "contactResult",
+            "value": "VALID",
+            "label": "有效",
+            "effectKind": "NEXT_TEMPLATE",
+            "targetTemplateCode": "TD-004",
+            "targetVersionId": 4,
+            "businessAction": "WRITE_LEAD_VALID"
+          },
+          {
+            "field": "contactResult",
+            "value": "SUSPECT_INVALID",
+            "label": "疑似无效",
+            "effectKind": "NEXT_TEMPLATE",
+            "targetTemplateCode": "TD-002",
+            "targetVersionId": 2,
+            "businessAction": "MARK_SUSPECT_INVALID"
+          },
+          {
+            "field": "contactResult",
+            "value": "UNREACHABLE",
+            "label": "无法联系",
+            "effectKind": "END",
+            "businessAction": "START_RETRY"
+          }
+        ],
         "nodes": [
           {
             "key": "td001",

@@ -21,8 +21,7 @@ public class TodoBusinessOutcomeCatalogService
 {
     private static final Map<String,String> TD001_TARGETS=Map.of(
             "VALID","TD-004",
-            "SUSPECT_INVALID","TD-002",
-            "UNREACHABLE","TD-003");
+            "SUSPECT_INVALID","TD-002");
     private static final Map<String,GovernedOutcomeSpec> GOVERNED_OUTCOMES=Map.of(
             "TD-002",new GovernedOutcomeSpec("reviewResult","复核结果","主管复核结论","TD002_GOVERNED_OUTCOMES",
                     List.of(outcome("TRUE_INVALID","确认无效","END",null),

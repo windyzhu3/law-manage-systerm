@@ -76,6 +76,15 @@ class LeadTodoPublishedTemplateContractTest
     {
         JSONObject routing=definition("TD-001").getJSONObject("definition")
                 .getJSONObject("routing").getJSONObject("config");
+        JSONArray outcomes=routing.getJSONArray("businessOutcomes");
+        assertNotNull(outcomes);
+        assertEquals(3,outcomes.size());
+        assertEquals("TD-004",outcome(outcomes,"VALID").getString("targetTemplateCode"));
+        assertEquals("TD-002",outcome(outcomes,"SUSPECT_INVALID").getString("targetTemplateCode"));
+        JSONObject unreachable=outcome(outcomes,"UNREACHABLE");
+        assertEquals("END",unreachable.getString("effectKind"));
+        assertFalse(unreachable.containsKey("targetTemplateCode"));
+        assertEquals(3L,routing.getJSONObject("releaseDependencies").getLongValue("TD-003"));
         Set<String> targetCodes=routing.getJSONArray("nodes").stream()
                 .map(JSONObject.class::cast)
                 .filter(node->"TASK".equals(node.getString("type")))

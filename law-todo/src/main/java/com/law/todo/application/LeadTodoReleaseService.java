@@ -196,14 +196,17 @@ public class LeadTodoReleaseService
             JSONObject routing=root.getJSONObject("routing");
             routing=routing==null?null:routing.getJSONObject("config");
             if(routing==null)throw routingMismatch();
-            Map<String,Long> expected=downstream(command);
+            Map<String,Long> expected=immediateDownstream(command);
             Map<String,Long> outcomes=targets(routing.getJSONArray("businessOutcomes"),"targetTemplateCode","targetVersionId",false);
+            Map<String,Long> dependencies=releaseDependencies(routing.getJSONObject("releaseDependencies"));
             Set<Long> expectedNodes=new LinkedHashSet<>();
             expectedNodes.add(command.td001VersionId());
             expectedNodes.add(command.td002VersionId());
             expectedNodes.add(command.td004VersionId());
             Set<Long> nodes=taskVersionIds(routing.getJSONArray("nodes"));
-            if(!expected.equals(outcomes)||!expectedNodes.equals(nodes))throw routingMismatch();
+            if(!expected.equals(outcomes)
+                    ||!Map.of("TD-003",command.td003VersionId()).equals(dependencies)
+                    ||!expectedNodes.equals(nodes))throw routingMismatch();
         }
         catch(TodoException expected){throw expected;}
         catch(Exception invalid){throw routingMismatch();}
@@ -223,6 +226,14 @@ public class LeadTodoReleaseService
                 throw routingMismatch();
         }
         return result;
+    }
+
+    private Map<String,Long> releaseDependencies(JSONObject values)
+    {
+        if(values==null||values.size()!=1)throw routingMismatch();
+        Long retryVersion=values.getLong("TD-003");
+        if(retryVersion==null)throw routingMismatch();
+        return Map.of("TD-003",retryVersion);
     }
 
     private void validateCoordinatedRouting(LeadReleaseCommand command,
@@ -458,6 +469,8 @@ public class LeadTodoReleaseService
     {Map<String,Long> values=new LinkedHashMap<>();values.put("TD-001",command.td001VersionId());values.putAll(downstream(command));return values;}
     private Map<String,Long> downstream(LeadReleaseCommand command)
     {Map<String,Long> values=new LinkedHashMap<>();values.put("TD-002",command.td002VersionId());values.put("TD-003",command.td003VersionId());values.put("TD-004",command.td004VersionId());return values;}
+    private Map<String,Long> immediateDownstream(LeadReleaseCommand command)
+    {Map<String,Long> values=new LinkedHashMap<>();values.put("TD-002",command.td002VersionId());values.put("TD-004",command.td004VersionId());return values;}
     private Map<String,Long> activeDownstream(Map<String,Object> active)
     {
         try
@@ -465,8 +478,11 @@ public class LeadTodoReleaseService
             JSONObject root=JSON.parseObject(text(value(active,"compiled_json","compiledJson")));
             JSONObject routing=root==null?null:root.getJSONObject("routing");
             routing=routing==null?null:routing.getJSONObject("config");
-            return routing==null?Map.of():targets(routing.getJSONArray("businessOutcomes"),
-                    "targetTemplateCode","targetVersionId",false);
+            if(routing==null)return Map.of();
+            Map<String,Long> result=new LinkedHashMap<>(targets(routing.getJSONArray("businessOutcomes"),
+                    "targetTemplateCode","targetVersionId",false));
+            result.putAll(releaseDependencies(routing.getJSONObject("releaseDependencies")));
+            return result;
         }
         catch(Exception ignored){return Map.of();}
     }

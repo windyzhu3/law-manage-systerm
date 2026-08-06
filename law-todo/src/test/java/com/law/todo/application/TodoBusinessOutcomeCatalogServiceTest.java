@@ -61,11 +61,11 @@ class TodoBusinessOutcomeCatalogServiceTest
         assertThat(result.options()).extracting(option->option.label())
                 .containsExactly("有效","疑似无效","无法联系");
         assertThat(result.options()).extracting(option->option.effectKind())
-                .containsOnly("NEXT_TEMPLATE");
+                .containsExactly("NEXT_TEMPLATE","NEXT_TEMPLATE","END");
         assertThat(result.options()).extracting(option->option.targetTemplateCode())
-                .containsExactly("TD-004","TD-002","TD-003");
+                .containsExactly("TD-004","TD-002",null);
         assertThat(result.options()).extracting(option->option.targetVersionId())
-                .containsExactly(104L,102L,103L);
+                .containsExactly(104L,102L,null);
     }
 
     @Test void returnsExactGovernedOutcomeEffectsForTheThreeLeadTemplates()
