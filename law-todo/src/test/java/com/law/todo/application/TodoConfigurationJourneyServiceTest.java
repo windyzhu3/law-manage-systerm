@@ -82,6 +82,7 @@ class TodoConfigurationJourneyServiceTest
         assertThat(view.template().templateId()).isEqualTo(42L);
         assertThat(view.template().templateCode()).isEqualTo("TODO-42");
         assertThat(view.template().lockVersion()).isEqualTo(4);
+        assertThat(view.simulationReadiness()).isEqualTo(ready(42L,101L,"hash-42"));
         assertThat(Arrays.stream(TodoConfigurationJourneyView.TemplateSummary.class.getRecordComponents())
                 .map(component->component.getName())).doesNotContain("definitionJson");
         assertThat(view.steps()).extracting(TodoConfigurationJourneyView.JourneyStep::code)
@@ -109,11 +110,29 @@ class TodoConfigurationJourneyServiceTest
         assertThat(event.description()).isEqualTo("在线索录入完成后触发");
         assertThat(event.sourceModule()).isEqualTo("线索中心");
         assertThat(view.resources().calendars()).extracting(row->row.get("calendarCode")).containsExactly("DEFAULT");
+        assertThat(view.resources().eventPolicy().locked()).isFalse();
         assertThat(view.resources().routingTargets())
                 .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateName)
                 .containsExactly("下一步办理");
         verify(readiness).readiness(42L,101L,"hash-42","TODO-42","LEAD");
         verify(mapper).selectPublishedRoutingTargetCatalog("LEAD");
+    }
+
+    @Test void exposesTheLockedCanonicalEventForAGovernedLeadTemplate()
+    {
+        TemplateConfigurationDetail source=fixtureTemplate();
+        when(query.template(42L)).thenReturn(new TemplateConfigurationDetail(
+                source.templateId(),"TD-002","疑似无效主管复核",source.businessType(),source.status(),
+                source.version(),source.currentVersion(),source.draftVersionId(),source.draftStatus(),
+                source.publishedVersionId(),source.publishedVersionNo(),source.editableVersion(),source.ruleReferences()));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().eventPolicy().locked()).isTrue();
+        assertThat(view.resources().eventPolicy().recommendedEventType())
+                .isEqualTo("LEAD_SUSPECT_INVALID_MARKED");
+        assertThat(view.resources().eventPolicy().allowedEventTypes())
+                .containsExactly("LEAD_SUSPECT_INVALID_MARKED");
     }
 
     @Test void leadJourneyDoesNotExposeCrossBusinessOrInactiveRoutingTargets()
@@ -129,6 +148,29 @@ class TodoConfigurationJourneyServiceTest
         assertThat(view.resources().routingTargets())
                 .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::templateCode)
                 .containsExactly("TD-004");
+    }
+
+    @Test void publishedJourneyIncludesTheNamedHistoricalTargetReferencedByItsDefinition()
+    {
+        TemplateVersionDetail published=new TemplateVersionDetail(101L,3,"PUBLISHED",82L,1,
+                definitionWithHistoricalTarget(),"{}","{}","{}","{}","{}","hash-42",
+                "{}",null,null,null,"admin",LocalDateTime.of(2026,7,30,9,0),
+                LocalDateTime.of(2026,7,30,9,0));
+        when(query.template(42L)).thenReturn(new TemplateConfigurationDetail(
+                42L,"TD-001","首联待办","LEAD","0",4,3,null,null,101L,3,published,List.of()));
+        when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(
+                routingTarget(4L,"TD-004","5天实质进展","LEAD",95L,"PUBLISHED")));
+        when(mapper.selectTemplateIdentityByVersionId(79L)).thenReturn(Map.ofEntries(
+                Map.entry("template_id",4L),Map.entry("template_code","TD-004"),
+                Map.entry("template_name","5天实质进展"),Map.entry("business_type","LEAD"),
+                Map.entry("version_id",79L),Map.entry("version_no",2),Map.entry("status","PUBLISHED")));
+
+        TodoConfigurationJourneyView view=service.load(42L,actor);
+
+        assertThat(view.resources().routingTargets())
+                .extracting(com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry::versionId)
+                .containsExactly(95L,79L);
+        assertThat(view.resources().routingTargets().get(1).templateName()).isEqualTo("5天实质进展");
     }
 
     @Test void returnsTruthfulProgressHealthStateAndTemplateCodeWithoutPerRowQueries()
@@ -157,6 +199,32 @@ class TodoConfigurationJourneyServiceTest
         verify(mapper,times(1)).selectTemplateJourneySummaries(anyMap());
         verify(mapper,never()).countTemplateJourneySummaries(anyMap());
         verifyNoInteractions(query,resources,templates);
+    }
+
+    @Test void projectsRuntimeStateAndReplacementWithoutConfusingConfigurationProgress()
+    {
+        Map<String,Object> active=new java.util.LinkedHashMap<>(
+                workbenchRow(17L,"TD-001","PUBLISHED","hash-td001",
+                        definition("hash-td001",false,false,true,true),"{}"));
+        active.put("template_status","0");
+
+        Map<String,Object> replaced=new java.util.LinkedHashMap<>(
+                workbenchRow(1L,"LEAD_FIRST_CONTACT","PUBLISHED","hash-legacy",
+                        definition("hash-legacy",false,false,true,true),"{}"));
+        replaced.put("template_status","1");
+        replaced.put("replacement_template_id",17L);
+        replaced.put("replacement_template_code","TD-001");
+        replaced.put("replacement_template_name","首联待办");
+        when(mapper.selectTemplateJourneySummaries(anyMap())).thenReturn(List.of(active,replaced));
+
+        TemplateWorkbenchPage page=service.workbench(Map.of("offset",0,"limit",20),actor);
+
+        assertThat(page.rows()).extracting(
+                TodoConfigurationJourneyView.TemplateWorkbenchItem::runtimeState)
+                .containsExactly("ACTIVE","REPLACED");
+        assertThat(page.rows().get(1).primaryAction()).isEqualTo("OPEN_REPLACEMENT");
+        assertThat(page.rows().get(1).replacementTemplateId()).isEqualTo(17L);
+        assertThat(page.rows().get(1).completedSteps()).isEqualTo(7);
     }
 
     @Test void exposesTypedBusinessOutcomesWithTheCurrentJourneyResources()
@@ -327,6 +395,21 @@ class TodoConfigurationJourneyServiceTest
                 "ui":{"config":{"businessStage":"QUALIFY","panels":[{"code":"summary"}]}},
                 "routing":{"config":{"start":"review","nodes":[{"key":"review"}],"edges":[]}},
                 "autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
+                """;
+    }
+
+    private String definitionWithHistoricalTarget()
+    {
+        return """
+                {"schemaVersion":1,"templateCode":"TD-001","event":{"eventType":"LEAD_ASSIGNED","payloadVersion":1,"condition":{}},
+                "owner":{"config":{"type":"PAYLOAD","field":"ownerId"}},
+                "dod":{"config":{"requiredFields":["contactResult"]}},
+                "sla":{"config":{"calendarCode":"DEFAULT","minutes":30}},
+                "ui":{"config":{"businessStage":"LEAD_FIRST_CONTACT"}},
+                "routing":{"config":{"businessOutcomes":[
+                  {"resultField":"contactResult","resultValue":"VALID","effectKind":"NEXT_TEMPLATE",
+                   "targetTemplateCode":"TD-004","targetVersionId":79}
+                ]}},"autoActions":[],"decisionRefs":[],"acceptanceRefs":[]}
                 """;
     }
 

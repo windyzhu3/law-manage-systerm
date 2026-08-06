@@ -9,6 +9,7 @@ import com.law.todo.application.TodoConfigurationResourceCatalogService.FieldRes
 import com.law.todo.application.TodoConfigurationResourceCatalogService.MaterialResource;
 import com.law.todo.application.TodoConfigurationResourceCatalogService.ValidatorResource;
 import com.law.todo.application.TodoBusinessOutcomeCatalogService.BusinessOutcomeSet;
+import com.law.todo.application.TodoTemplateEventPolicy.TemplateEventPolicyView;
 import com.law.todo.application.view.TodoConfigurationViews.OwnerCatalogEntry;
 import com.law.todo.application.view.TodoConfigurationViews.RoutingTargetCatalogEntry;
 import com.law.todo.application.view.TodoResourceViews.EventResourceListItem;
@@ -19,8 +20,14 @@ public record TodoConfigurationJourneyView(
         CurrentResources resources,
         EmployeeTodoPreview employeePreview,
         List<JourneyIssue> issues,
-        JourneyPermissions permissions)
+        JourneyPermissions permissions,
+        TodoSimulationReadinessView simulationReadiness)
 {
+    public TodoConfigurationJourneyView(TemplateSummary template,List<JourneyStep> steps,
+            CurrentResources resources,EmployeeTodoPreview employeePreview,List<JourneyIssue> issues,
+            JourneyPermissions permissions)
+    {this(template,steps,resources,employeePreview,issues,permissions,null);}
+
     public TodoConfigurationJourneyView
     {
         steps=steps==null?List.of():List.copyOf(steps);
@@ -33,13 +40,21 @@ public record TodoConfigurationJourneyView(
     public record CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
             List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
             List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
-            List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet)
+            List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet,
+            TemplateEventPolicyView eventPolicy)
     {
         public CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
                 List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
                 List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
+                List<RoutingTargetCatalogEntry> routingTargets,BusinessOutcomeSet businessOutcomeSet)
+        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,businessOutcomeSet,
+                TemplateEventPolicyView.unrestricted());}
+        public CurrentResources(List<EventResourceListItem> events,List<FieldResource> fields,
+                List<OwnerCatalogEntry> owners,List<MaterialResource> materials,List<ValidatorResource> validators,
+                List<DodRecipeResource> recipes,List<Map<String,Object>> calendars,
                 List<RoutingTargetCatalogEntry> routingTargets)
-        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,BusinessOutcomeSet.empty());}
+        {this(events,fields,owners,materials,validators,recipes,calendars,routingTargets,
+                BusinessOutcomeSet.empty(),TemplateEventPolicyView.unrestricted());}
     }
     public record EmployeeTodoPreview(String title,String assigneeSummary,List<PreviewField> fields,
             List<PreviewMaterial> materials,List<String> completionInstructions,String dueSummary) { }
@@ -68,8 +83,16 @@ public record TodoConfigurationJourneyView(
     public record TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
             String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
             int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction,
-            String nextStepCode,String nextStepTitle)
+            String nextStepCode,String nextStepTitle,String templateStatus,int lockVersion,String runtimeState,
+            Long replacementTemplateId,String replacementTemplateCode,String replacementTemplateName)
     {
+        public TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
+                String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
+                int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction,
+                String nextStepCode,String nextStepTitle)
+        {this(templateId,templateCode,templateName,businessType,businessStage,journeyState,completedSteps,totalSteps,
+                blockerCount,warningCount,lastEditor,updateTime,primaryAction,nextStepCode,nextStepTitle,
+                "0",0,"ACTIVE",null,null,null);}
         public TemplateWorkbenchItem(long templateId,String templateCode,String templateName,String businessType,
                 String businessStage,String journeyState,int completedSteps,int totalSteps,int blockerCount,
                 int warningCount,String lastEditor,LocalDateTime updateTime,String primaryAction)

@@ -187,6 +187,38 @@ class TodoConfigurationResourceCatalogServiceTest
         assertTrue(operator.ownerSourceEventVersions().isEmpty());
     }
 
+    @Test void exposesPurposeSpecificAllowlistsWithoutMakingTechnicalIdsConfigurable()
+    {
+        when(mapper.selectActiveEventResourceSchemas("LEAD")).thenReturn(List.of(Map.of(
+                "event_type","LEAD_SUSPECT_INVALID_MARKED","payload_version",1,
+                "owner_field_paths_json","[\"ownerId\"]",
+                "condition_field_paths_json","[\"reasonCode\"]",
+                "default_value_field_paths_json","[\"reasonCode\"]",
+                "payload_schema_json","""
+                {"type":"object","properties":{
+                  "schemaVersion":{"type":"integer","title":"载荷版本","x-semantic-type":"SYSTEM_VERSION"},
+                  "leadId":{"type":"integer","title":"线索","x-semantic-type":"BUSINESS_ID"},
+                  "ownerId":{"type":"integer","title":"线索负责人","x-semantic-type":"USER_ID"},
+                  "reasonCode":{"type":"string","title":"疑似无效原因","x-semantic-type":"DICT"},
+                  "reviewId":{"type":"integer","title":"复核记录","x-semantic-type":"SYSTEM_ID"}
+                }}
+                """)));
+
+        var fields=service.fields("LEAD","LEAD_SUSPECT_INVALID_MARKED");
+        var owner=fields.stream().filter(field->field.code().equals("ownerId")).findFirst().orElseThrow();
+        var reason=fields.stream().filter(field->field.code().equals("reasonCode")).findFirst().orElseThrow();
+        var version=fields.stream().filter(field->field.code().equals("schemaVersion")).findFirst().orElseThrow();
+        var review=fields.stream().filter(field->field.code().equals("reviewId")).findFirst().orElseThrow();
+
+        assertTrue(owner.ownerEligible());
+        assertFalse(owner.conditionEligible());
+        assertTrue(reason.conditionEligible());
+        assertEquals(List.of("LEAD_SUSPECT_INVALID_MARKED@1"),reason.conditionSourceEventVersions());
+        assertTrue(reason.defaultValueEligible());
+        assertFalse(version.businessConfigurable());
+        assertFalse(review.businessConfigurable());
+    }
+
     @Test void exposesSemanticMetadataFromGovernedFieldsAndEventSchemas()
     {
         when(mapper.selectConfigurationResourceItems("FIELD","LEAD")).thenReturn(List.of(

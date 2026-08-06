@@ -15,9 +15,20 @@
       show-icon
     />
     <el-alert
-      v-else-if="!fields.length"
-      title="所选事件没有可用字段"
-      description="当前步骤会阻塞发布，请维护事件字段后再配置业务条件。"
+      v-else-if="staleCondition"
+      title="当前草稿保留了已停用的旧条件"
+      description="该字段已不再允许作为触发条件。请清除旧条件后使用当前事件的业务预设。"
+      type="error"
+      :closable="false"
+      show-icon
+    >
+      <el-button v-if="!readonly" slot="default" type="text" @click="clearStaleCondition">清除旧条件</el-button>
+    </el-alert>
+
+    <el-alert
+      v-else-if="selectedEvent.configurationReady === false"
+      title="所选事件的字段治理尚未完成"
+      description="请先维护事件字段的中文名称、业务说明和配置用途。"
       type="error"
       :closable="false"
       show-icon
@@ -54,7 +65,7 @@
 
 <script>
 import TypedConditionBuilder from '../components/TypedConditionBuilder'
-import { buildTriggerPatch } from '../journey-step-model'
+import { buildTriggerPatch, scopeEventFields } from '../journey-step-model'
 
 export default {
   name: 'TriggerStep',
@@ -68,11 +79,7 @@ export default {
   computed: {
     condition() { return this.value.condition || {} },
     fields() {
-      const eventType = this.event.eventType
-      return (this.resources.fields || []).filter(field => {
-        const sources = field.sourceEvents || []
-        return !sources.length || sources.includes(eventType)
-      })
+      return scopeEventFields(this.resources.fields || [], this.event, 'CONDITION')
     },
     selectedEvent() {
       return (this.resources.events || []).find(item =>
@@ -81,14 +88,33 @@ export default {
       ) || {}
     },
     eventName() { return this.selectedEvent.eventName || this.event.eventType || '所选事件' },
-    governedWithoutCondition() {
+    hasCondition() {
       const root = this.condition && this.condition.$expression && this.condition.$expression.root
-      const conditions = root && Array.isArray(root.conditions) ? root.conditions : []
-      return Boolean(this.event.eventType) && (!Object.keys(this.condition).length || !conditions.length)
+      if (root && Array.isArray(root.conditions)) return root.conditions.length > 0
+      return Boolean(this.condition && Object.keys(this.condition).length)
+    },
+    conditionFieldCodes() {
+      const result = new Set()
+      const visit = value => {
+        if (!value || typeof value !== 'object') return
+        if (!Array.isArray(value) && typeof value.field === 'string') result.add(value.field)
+        Object.keys(value).forEach(key => visit(value[key]))
+      }
+      visit(this.condition)
+      return Array.from(result)
+    },
+    staleCondition() {
+      if (!this.event.eventType || !this.hasCondition) return false
+      const allowed = new Set(this.fields.map(field => String(field.code)))
+      return !this.fields.length || this.conditionFieldCodes.some(field => !allowed.has(String(field)))
+    },
+    governedWithoutCondition() {
+      return Boolean(this.event.eventType) && !this.hasCondition
     }
   },
   methods: {
     change(document) { this.$emit('patch', { trigger: buildTriggerPatch(document) }) },
+    clearStaleCondition() { this.change({}) },
     repairFields() {
       this.$emit('repair-resource', {
         type: 'EVENT',

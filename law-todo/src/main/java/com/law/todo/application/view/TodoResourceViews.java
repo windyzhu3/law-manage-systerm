@@ -9,13 +9,20 @@ public final class TodoResourceViews
 
     public record EventResourceListItem(long eventCatalogId,String eventType,String eventName,String description,Integer payloadVersion,
             String businessObjectType,String sourceModule,String schemaStatus,String status,Integer version,
-            long referenceCount,LocalDateTime updateTime)
+            long referenceCount,LocalDateTime updateTime,boolean configurationReady,List<String> governanceIssueCodes)
     {
+        public EventResourceListItem
+        {governanceIssueCodes=governanceIssueCodes==null?List.of():List.copyOf(governanceIssueCodes);}
+        public EventResourceListItem(long eventCatalogId,String eventType,String eventName,String description,Integer payloadVersion,
+                String businessObjectType,String sourceModule,String schemaStatus,String status,Integer version,
+                long referenceCount,LocalDateTime updateTime)
+        {this(eventCatalogId,eventType,eventName,description,payloadVersion,businessObjectType,sourceModule,schemaStatus,
+                status,version,referenceCount,updateTime,false,List.of());}
         public EventResourceListItem(long eventCatalogId,String eventType,String eventName,Integer payloadVersion,
                 String businessObjectType,String sourceModule,String schemaStatus,String status,Integer version,
                 long referenceCount,LocalDateTime updateTime)
         {this(eventCatalogId,eventType,eventName,null,payloadVersion,businessObjectType,sourceModule,schemaStatus,
-                status,version,referenceCount,updateTime);}
+                status,version,referenceCount,updateTime,false,List.of());}
     }
 
     public record EventResourceReference(String referenceType,Long referenceId,String referenceCode,

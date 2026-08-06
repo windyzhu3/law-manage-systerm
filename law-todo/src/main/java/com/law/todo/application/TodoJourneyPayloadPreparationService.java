@@ -62,10 +62,17 @@ public class TodoJourneyPayloadPreparationService
         descriptors.forEach(field->
         {
             PayloadFieldSource source=sourceByPath.get(field.code());
-            if(source!=null&&!source.missing()&&!"PLAIN_VALUE".equals(field.semanticType()))
+            if(source!=null&&!source.missing()&&!"PLAIN_VALUE".equals(field.semanticType())&&
+                    !selectedSampleReference(field,source,hydration,command))
                 semanticValues.add(new FieldValue(field,source.value()));
         });
-        Map<String,DisplayReference> resolved=displays.resolve(semanticValues,actor);
+        Map<String,DisplayReference> resolved=new LinkedHashMap<>(displays.resolve(semanticValues,actor));
+        descriptors.forEach(field->
+        {
+            PayloadFieldSource source=sourceByPath.get(field.code());
+            if(selectedSampleReference(field,source,hydration,command))
+                resolved.put(field.code(),sampleReference(source.value(),hydration,command));
+        });
 
         Set<String> eventPaths=new LinkedHashSet<>();
         descriptors.stream().filter(field->field.sourceEvents().contains(command.eventType()))
@@ -129,4 +136,23 @@ public class TodoJourneyPayloadPreparationService
     }
 
     private String text(Object value){return value==null?null:String.valueOf(value);}
+
+    private boolean selectedSampleReference(FieldResource field,PayloadFieldSource source,PayloadHydration hydration,
+            JourneyPayloadCommand command)
+    {
+        return hydration.sample()&&source!=null&&!source.missing()&&"BUSINESS_REF".equals(field.semanticType())&&
+                String.valueOf(command.businessId()).equals(String.valueOf(source.value()));
+    }
+
+    private DisplayReference sampleReference(Object rawValue,PayloadHydration hydration,JourneyPayloadCommand command)
+    {
+        String businessNo=text(hydration.payload().get("businessNo"));
+        String businessName=text(hydration.payload().get("businessName"));
+        String displayValue=businessName==null||businessName.isBlank()?businessNo:businessName;
+        if(displayValue==null||displayValue.isBlank())displayValue=String.valueOf(rawValue);
+        Map<String,Object> meta=new LinkedHashMap<>();
+        if(businessNo!=null)meta.put("businessNo",businessNo);
+        meta.put("businessType",command.businessType());
+        return new DisplayReference(rawValue,displayValue,meta,true,false,null);
+    }
 }

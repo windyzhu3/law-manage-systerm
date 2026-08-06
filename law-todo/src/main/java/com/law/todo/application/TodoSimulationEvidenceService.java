@@ -116,8 +116,19 @@ public class TodoSimulationEvidenceService
             if(mapper.selectPassingSimulationEvidence(query)==null)
             {
                 Map<String,Object> latest=mapper.selectLatestSimulationEvidence(query);
-                blockers.add(new SimulationGateBlocker(scenario.scenarioCode(),
-                        evidenceReason(latest,definitionHash)));
+                if(latest!=null&&!latest.isEmpty())
+                {
+                    blockers.add(new SimulationGateBlocker(scenario.scenarioCode(),
+                            evidenceReason(latest,definitionHash)));
+                    continue;
+                }
+                Map<String,Object> previous=mapper.selectLatestSimulationEvidenceForScenario(query);
+                Integer evidenceVersion=integer(previous==null?null:
+                        value(previous,"scenario_version","scenarioVersion"));
+                String reason=evidenceVersion!=null&&evidenceVersion!=scenario.scenarioVersion()
+                        ?"SCENARIO_UPDATED":evidenceReason(previous,definitionHash);
+                blockers.add(new SimulationGateBlocker(scenario.scenarioCode(),reason,
+                        scenario.scenarioVersion(),evidenceVersion));
             }
         }
         return new PublicationGate(blockers.isEmpty(),
@@ -190,6 +201,14 @@ public class TodoSimulationEvidenceService
     private Object value(Map<String,Object> row,String snake,String camel)
     {return row.containsKey(snake)?row.get(snake):row.get(camel);}
 
+    private Integer integer(Object value)
+    {
+        if(value==null)return null;
+        if(value instanceof Number number)return number.intValue();
+        try{return Integer.valueOf(String.valueOf(value));}
+        catch(NumberFormatException invalid){return null;}
+    }
+
     private String evidenceReason(Map<String,Object> latest,String definitionHash)
     {
         if(latest==null||latest.isEmpty())return "MISSING";
@@ -207,6 +226,7 @@ public class TodoSimulationEvidenceService
     {
         return switch(reason)
         {
+            case "SCENARIO_UPDATED" -> "测试场景规则已升级，请重新验证";
             case "DEFINITION_CHANGED" -> "配置已变更，请重新验证";
             case "LAST_RUN_FAILED" -> "最近一次验证未通过";
             case "EVIDENCE_EXPIRED" -> "验证结果已过期，请重新验证";
@@ -215,7 +235,12 @@ public class TodoSimulationEvidenceService
         };
     }
 
-    public record SimulationGateBlocker(String scenarioCode,String reason) { }
+    public record SimulationGateBlocker(String scenarioCode,String reason,
+            Integer scenarioVersion,Integer evidenceScenarioVersion)
+    {
+        public SimulationGateBlocker(String scenarioCode,String reason)
+        {this(scenarioCode,reason,null,null);}
+    }
 
     public record PublicationGate(boolean publicationReady,List<String> blockingScenarioCodes,
             List<SimulationGateBlocker> blockers)

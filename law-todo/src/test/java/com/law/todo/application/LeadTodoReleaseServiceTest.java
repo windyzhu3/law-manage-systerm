@@ -115,6 +115,22 @@ class LeadTodoReleaseServiceTest
         assertThat(state.triggerExpectedVersion()).isEqualTo(3);
     }
 
+    @Test void releaseReadinessAcceptsTerminalUnreachableOutcomeWithLockedRetryDependency()
+    {
+        List<Map<String,Object>> rows=versions();
+        rows.get(0).put("compiled_json",compiledWithTerminalRetry(
+                Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)));
+        when(mapper.selectLeadEntrySlotBindings("LEAD_FIRST_CONTACT_ENTRY")).thenReturn(List.of(activeBinding()));
+        when(mapper.selectLeadReleaseVersions(List.of(88L,80L,89L,79L))).thenReturn(rows);
+        when(mapper.selectSimulationReadinessBatch(List.of(88L,80L,89L,79L))).thenReturn(readyReadiness());
+        when(mapper.selectLeadReleaseTrigger("LEAD_FIRST_CONTACT_ENTRY",88L)).thenReturn(trigger(52L,3,"N"));
+
+        var state=service.readiness(new LeadReleaseReadinessQuery(88L,"hash-88",80L,89L,79L));
+
+        assertThat(state.activationReady()).isTrue();
+        assertThat(state.evidenceReady()).allSatisfy((code,ready)->assertThat(ready).as(code).isTrue());
+    }
+
     @Test void releaseReadinessReturnsPerVersionBlockersInsteadOfFabricatingClientEvidence()
     {
         when(mapper.selectLeadEntrySlotBindings("LEAD_FIRST_CONTACT_ENTRY")).thenReturn(List.of(activeBinding()));
@@ -199,12 +215,12 @@ class LeadTodoReleaseServiceTest
         verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
-    @Test void acceptsDeferredRetryMetadataWithoutAnImmediateTd003TaskNode()
+    @Test void acceptsDeferredRetryDependencyWithoutAnImmediateTd003OutcomeOrTaskNode()
     {
         arrangeReadyRelease();
         List<Map<String,Object>> rows=versions();
         rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",
-                compiledWithReopenedTd001(Map.of("TD-002",80L,"TD-003",89L,"TD-004",79L)),5));
+                scheduleDrivenTd001(Map.of("TD-002",80L,"TD-004",79L),89L),5));
         when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
         when(mapper.selectLeadReleaseTriggerForUpdate("LEAD_FIRST_CONTACT_ENTRY",88L))
                 .thenReturn(trigger(52L,3,"N"));
@@ -212,7 +228,10 @@ class LeadTodoReleaseServiceTest
                 .thenReturn(new EntrySlotBinding("LEAD_FIRST_CONTACT_ENTRY",52L,88L,"TD-001"));
         when(mapper.completeLeadReleaseAction("release-20260731",fingerprint(),52L)).thenReturn(1);
 
-        assertThat(service.activate(command(),ACTOR).activeTd001VersionId()).isEqualTo(88L);
+        var activated=service.activate(command(),ACTOR);
+
+        assertThat(activated.activeTd001VersionId()).isEqualTo(88L);
+        assertThat(activated.downstreamVersions()).containsEntry("TD-003",89L);
     }
 
     @Test void acceptsTd002LogicalReopenTargetWithoutLockingAFutureTd001Version()
@@ -230,6 +249,22 @@ class LeadTodoReleaseServiceTest
 
         assertThat(service.activate(command(),ACTOR).activeTd001VersionId()).isEqualTo(88L);
         verify(templates).switchEntrySlot("LEAD_FIRST_CONTACT_ENTRY",52L,3,ACTOR);
+    }
+
+    @Test void rejectsAnImmediateTd003OutcomeEvenWhenTheScheduledDependencyIsCorrect()
+    {
+        arrangeReadyRelease();
+        List<Map<String,Object>> rows=versions();
+        String invalid=scheduleDrivenTd001(Map.of("TD-002",80L,"TD-004",79L),89L)
+                .replace("\"businessOutcomes\":[","\"businessOutcomes\":[{\"targetTemplateCode\":"
+                        +"\"TD-003\",\"targetVersionId\":89},");
+        rows.set(0,version(88L,"TD-001","LEAD","PUBLISHED","hash-88",invalid,5));
+        when(mapper.selectTemplateVersionsForUpdate(List.of(88L,80L,89L,79L))).thenReturn(rows);
+
+        assertThatThrownBy(()->service.activate(command(),ACTOR))
+                .isInstanceOfSatisfying(TodoException.class,error->assertThat(error.getBusinessCode())
+                        .isEqualTo("TODO_LEAD_RELEASE_ROUTING_MISMATCH"));
+        verify(templates,never()).switchEntrySlot(any(),any(Long.class),any(Integer.class),eq(ACTOR));
     }
 
     @Test void rejectsMasterGraphWithoutMisjudgedValidReopenEdge()
@@ -497,9 +532,12 @@ class LeadTodoReleaseServiceTest
     }
     private String compiledWithReopenedTd001(Map<String,Long> targets)
     {
-        String outcomes=targets.entrySet().stream().map(entry->"{\"targetTemplateCode\":\""+entry.getKey()
+        Map<String,Long> immediateTargets=new LinkedHashMap<>(targets);
+        Long retryVersion=immediateTargets.remove("TD-003");
+        String outcomes=immediateTargets.entrySet().stream().map(entry->"{\"targetTemplateCode\":\""+entry.getKey()
                 +"\",\"targetVersionId\":"+entry.getValue()+"}").collect(java.util.stream.Collectors.joining(","));
-        return "{\"templateCode\":\"TD-001\",\"routing\":{\"config\":{\"businessOutcomes\":["+outcomes
+        String dependency=retryVersion==null?"":"\"releaseDependencies\":{\"TD-003\":"+retryVersion+"},";
+        return "{\"templateCode\":\"TD-001\",\"routing\":{\"config\":{"+dependency+"\"businessOutcomes\":["+outcomes
                 +"],\"nodes\":["
                 +"{\"key\":\"td001\",\"type\":\"TASK\",\"templateCode\":\"TD-001\",\"templateVersionId\":88},"
                 +"{\"key\":\"firstResult\",\"type\":\"DECISION\"},"
@@ -522,6 +560,18 @@ class LeadTodoReleaseServiceTest
                 +"{\"to\":\"end\",\"key\":\"review-default\",\"from\":\"reviewResult\","
                 +"\"priority\":-1,\"default\":true},"
                 +"{\"to\":\"end\",\"key\":\"reopened-end\",\"from\":\"reopenedTd001\",\"priority\":0}]}}}";
+    }
+    private String scheduleDrivenTd001(Map<String,Long> immediateTargets,long retryVersionId)
+    {
+        return compiledWithReopenedTd001(immediateTargets)
+                .replace("\"businessOutcomes\":[","\"releaseDependencies\":{\"TD-003\":"
+                        +retryVersionId+"},\"businessOutcomes\":[");
+    }
+    private String compiledWithTerminalRetry(Map<String,Long> targets)
+    {
+        return compiledWithReopenedTd001(targets)
+                .replace("],\"nodes\":[",",{\"effectKind\":\"END\",\"businessAction\":\"START_RETRY\","+
+                        "\"resultValue\":\"UNREACHABLE\"}],\"nodes\":[");
     }
     private String compiled(Map<String,Long> targets,Map<String,Long> nodeTargets)
     {

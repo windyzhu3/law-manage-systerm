@@ -231,6 +231,21 @@ class TodoDefinitionServiceTest
         verify(mapper,never()).updateTemplateVersionDraft(anyMap());
     }
 
+    @Test void updateDraftRejectsAnEventThatIsIncompatibleWithTheGovernedTemplate()
+    {
+        Map<String,Object> current=draft(null,null);current.put("template_code","TD-002");
+        current.put("business_type","LEAD");
+        when(mapper.selectTemplateVersionById(9L)).thenReturn(current);
+        TodoDefinitionService service=new TodoDefinitionService(mapper,compiler(),null,
+                (type,value)->true,null,businessOutcomes,new TodoTemplateEventPolicy());
+
+        TodoException error=assertThrows(TodoException.class,()->service.updateDraft(
+                new UpdateDraftCommand("edit-td002-wrong-event",9L,canonical("TD-002")),actor));
+
+        assertEquals("TODO_TEMPLATE_EVENT_INCOMPATIBLE",error.getBusinessCode());
+        verify(mapper,never()).updateTemplateVersionDraft(anyMap());
+    }
+
     @Test void updateDraftAcceptsWindowScheduledSlaWithoutScalarMinutes()
     {
         String document="""

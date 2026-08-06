@@ -93,6 +93,114 @@ check('filters route targets to the current business domain', () => {
   assert.strictEqual(targets[0].templateCode, 'TD-004')
 })
 
+check('keeps historical route identities while refreshing current targets', () => {
+  const effects = effectModel()
+  const targets = effects.mergeRoutingTargets([
+    { templateCode: 'TD-002', templateName: '疑似无效主管复核', businessType: 'LEAD', versionId: 79, versionNo: 6 }
+  ], [
+    { templateCode: 'TD-002', templateName: '疑似无效主管复核', businessType: 'LEAD', versionId: 89, versionNo: 7 }
+  ])
+  assert.deepStrictEqual(targets.map(item => item.versionId), [79, 89])
+})
+
+check('presents unreachable first contact as a retry plan instead of a fake next todo', () => {
+  const effects = effectModel()
+  assert.deepStrictEqual(effects.effectPresentation({
+    effectKind: 'END',
+    businessAction: 'START_RETRY'
+  }), {
+    label: '结束当前待办并建立重试计划',
+    needsTarget: false,
+    tone: 'primary'
+  })
+})
+
+check('includes non-route lead release dependencies in the coordinated version set', () => {
+  assert.deepStrictEqual(steps.leadReleaseVersions(99, {
+    routing: {
+      config: {
+        businessOutcomes: [
+          { resultValue: 'VALID', targetTemplateCode: 'TD-004', targetVersionId: 95 },
+          { resultValue: 'SUSPECT_INVALID', targetTemplateCode: 'TD-002', targetVersionId: 100 },
+          { resultValue: 'UNREACHABLE', effectKind: 'END', businessAction: 'START_RETRY' }
+        ],
+        releaseDependencies: { 'TD-003': 94 }
+      }
+    }
+  }), {
+    'TD-001': 99,
+    'TD-002': 100,
+    'TD-003': 94,
+    'TD-004': 95
+  })
+})
+
+check('allows coordinated lead release for wildcard and exact publish permissions', () => {
+  assert.strictEqual(steps.canActivateLeadRelease(['*:*:*']), true)
+  assert.strictEqual(steps.canActivateLeadRelease(['todo:definition:publish']), true)
+  assert.strictEqual(steps.canActivateLeadRelease(['todo:release:publish']), false)
+})
+
+check('locks governed lead templates to their compatible event version', () => {
+  const events = steps.filterEventsByPolicy([
+    { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 },
+    { eventType: 'LEAD_FIRST_CONTACT_UNREACHABLE', payloadVersion: 1 }
+  ], {
+    locked: true,
+    recommendedEventType: 'LEAD_ASSIGNED',
+    payloadVersion: 1,
+    allowedEventTypes: ['LEAD_ASSIGNED']
+  })
+  assert.deepStrictEqual(events.map(item => item.eventType), ['LEAD_ASSIGNED'])
+})
+
+check('scopes event fields by exact version and configuration purpose', () => {
+  const fields = [
+    {
+      code: 'assignmentId',
+      sourceEventVersions: ['LEAD_ASSIGNED@1'],
+      businessConfigurable: false,
+      ownerEligible: false,
+      conditionEligible: false
+    },
+    {
+      code: 'ownerId',
+      sourceEventVersions: ['LEAD_ASSIGNED@1', 'LEAD_SUSPECT_INVALID_MARKED@1'],
+      businessConfigurable: true,
+      ownerEligible: true,
+      ownerSourceEventVersions: ['LEAD_ASSIGNED@1'],
+      conditionEligible: false
+    },
+    {
+      code: 'reviewerId',
+      type: 'integer',
+      sourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
+      businessConfigurable: true,
+      ownerEligible: true,
+      ownerSourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
+      conditionEligible: false
+    },
+    {
+      code: 'reasonCode',
+      sourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1'],
+      businessConfigurable: true,
+      ownerEligible: false,
+      ownerSourceEventVersions: [],
+      conditionEligible: true,
+      conditionSourceEventVersions: ['LEAD_SUSPECT_INVALID_MARKED@1']
+    }
+  ]
+  const assigned = { eventType: 'LEAD_ASSIGNED', payloadVersion: 1 }
+  const suspect = { eventType: 'LEAD_SUSPECT_INVALID_MARKED', payloadVersion: 1 }
+  assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'OVERVIEW').map(item => item.code), ['ownerId'])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, assigned, 'CONDITION'), [])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW').map(item => item.code), ['reviewerId', 'reasonCode'])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'OWNER').map(item => item.code), ['reviewerId'])
+  assert.deepStrictEqual(steps.scopeEventFields(fields, suspect, 'CONDITION').map(item => item.code), ['reasonCode'])
+  assert.strictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW')[0].ownerEligible, true)
+  assert.strictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW')[1].ownerEligible, false)
+})
+
 check('maps readiness coordinates to the exact journey control', () => {
   assert.deepStrictEqual(steps.fixLocation({
     stepKey: 'ROUTING',
@@ -1821,6 +1929,32 @@ check('materializes the governed first-contact outcomes without free-text busine
     }),
     null
   )
+})
+
+check('accepts legacy value and field aliases while a governed routing draft is hydrated', () => {
+  const outcomeSet = {
+    resultField: 'contactResult',
+    resultFieldName: 'First contact result',
+    recommendationCode: 'TD001_STANDARD_ROUTE',
+    options: [
+      { value: 'VALID', label: 'Valid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-004' },
+      { value: 'SUSPECT_INVALID', label: 'Suspect invalid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-002' },
+      { value: 'UNREACHABLE', label: 'Unreachable', effectKind: 'END' }
+    ]
+  }
+  const targets = [
+    { templateCode: 'TD-004', templateName: 'Five day progress', versionId: 104, businessType: 'LEAD', status: 'PUBLISHED' },
+    { templateCode: 'TD-002', templateName: 'Supervisor review', versionId: 102, businessType: 'LEAD', status: 'PUBLISHED' }
+  ]
+  const legacy = [
+    { field: 'contactResult', value: 'VALID', label: 'Valid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-004', targetVersionId: 104 },
+    { field: 'contactResult', value: 'SUSPECT_INVALID', label: 'Suspect invalid', effectKind: 'NEXT_TEMPLATE', targetTemplateCode: 'TD-002', targetVersionId: 102 },
+    { field: 'contactResult', value: 'UNREACHABLE', label: 'Unreachable', effectKind: 'END' }
+  ]
+
+  assert.strictEqual(steps.routingDraftBlocker(legacy, {
+    mode: 'SEQUENTIAL', outcomeSet, routingTargets: targets, businessType: 'LEAD', currentVersionId: 101
+  }), null)
 })
 
 check('explains semantic scenario evidence and target templates in business language', () => {

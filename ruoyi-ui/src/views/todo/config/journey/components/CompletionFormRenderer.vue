@@ -13,6 +13,7 @@
           type="datetime"
           value-format="yyyy-MM-dd'T'HH:mm:ss"
           placeholder="默认使用模拟时间"
+          :disabled="readonly"
           @input="update(field.path, $event)"
         />
         <semantic-option-selector
@@ -20,11 +21,12 @@
           :field="field"
           :value="valueFor(field)"
           :placeholder="field.required ? '请选择' : '可选'"
+          :disabled="readonly"
           @input="update(field.path, $event)"
         />
       </label>
     </div>
-    <el-button type="primary" :loading="loading" :disabled="!businessSelected" @click="$emit('run')">
+    <el-button type="primary" :loading="loading" :disabled="readonly || !businessSelected" @click="$emit('run')">
       运行当前场景
     </el-button>
   </section>
@@ -43,7 +45,8 @@ export default {
     overrides: { type: Object, default: () => ({}) },
     effectiveAt: { type: String, default: '' },
     loading: Boolean,
-    businessSelected: Boolean
+    businessSelected: Boolean,
+    readonly: Boolean
   },
   computed: {
     fields() { return scenarioFormFields(this.scenario, this.completionFields) }

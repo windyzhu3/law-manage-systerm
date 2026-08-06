@@ -26,4 +26,44 @@ function resolveProblemSummary(response, rows) {
   }
 }
 
-module.exports = { resolveProblemSummary }
+function templateRuntimePresentation(row) {
+  const state = String((row && row.runtimeState) || 'INACTIVE')
+  if (state === 'ACTIVE') return { state, label: '运行中', type: 'success', replacementText: '' }
+  if (state === 'REPLACED') {
+    const name = row.replacementTemplateName || row.replacementTemplateCode || '现行模板'
+    const code = row.replacementTemplateCode ? `（${row.replacementTemplateCode}）` : ''
+    return { state, label: '已停用', type: 'info', replacementText: `已由${name}${code}替代` }
+  }
+  return { state: 'INACTIVE', label: '已停用', type: 'info', replacementText: '' }
+}
+
+function templateNavigationTarget(row) {
+  const replacement = Number(row && row.replacementTemplateId)
+  if (row && row.primaryAction === 'OPEN_REPLACEMENT' && replacement > 0) {
+    return { templateId: replacement, view: 'published' }
+  }
+  return {
+    templateId: Number(row && row.templateId),
+    view: row && row.primaryAction === 'VIEW_PUBLISHED' ? 'published' : 'draft'
+  }
+}
+
+function templateTogglePresentation(row) {
+  const presentation = templateRuntimePresentation(row)
+  if (presentation.state === 'REPLACED') return null
+  const active = presentation.state === 'ACTIVE'
+  return {
+    targetStatus: active ? '1' : '0',
+    label: active ? '停用模板' : '启用模板',
+    confirmText: active
+      ? '停用后不会再为新业务生成该模板待办，确认继续？'
+      : '启用后模板可被有效触发规则使用，确认继续？'
+  }
+}
+
+module.exports = {
+  resolveProblemSummary,
+  templateRuntimePresentation,
+  templateNavigationTarget,
+  templateTogglePresentation
+}

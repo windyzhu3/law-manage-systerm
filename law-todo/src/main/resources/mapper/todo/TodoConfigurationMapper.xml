@@ -225,6 +225,7 @@
     left join todo_template_version published on published.version_id=(
       select candidate.version_id from todo_template_version candidate where candidate.template_id=t.template_id
         and candidate.status='PUBLISHED' order by candidate.version_no desc,candidate.version_id desc limit 1)
+    left join todo_template replacement on replacement.template_code=t.replacement_template_code
   </sql>
   <sql id="templateJourneySummaryWhere">
     <where>
@@ -237,6 +238,8 @@
   </sql>
   <select id="selectTemplateJourneySummaries" resultType="java.util.Map">
     select t.template_id,t.template_code,t.template_name,t.business_type,t.status template_status,t.version lock_version,
+      t.replacement_template_code,replacement.template_id replacement_template_id,
+      replacement.template_name replacement_template_name,
       json_unquote(json_extract(coalesce(draft.definition_json,published.definition_json),'$.ui.config.businessStage')) business_stage,
       case when draft.version_id is not null then 'DRAFT' when published.version_id is not null then 'PUBLISHED' else 'DRAFT' end publish_status,
       coalesce(draft.version_id,published.version_id) version_id,
@@ -376,7 +379,8 @@
     from todo_validator_metadata metadata order by metadata.validator_name,metadata.validator_code
   </select>
   <select id="selectActiveEventResourceSchemas" resultType="java.util.Map">
-    select event_type,event_name,business_object_type,payload_version,payload_schema_json,owner_field_paths_json
+    select event_type,event_name,business_object_type,payload_version,payload_schema_json,
+           owner_field_paths_json,condition_field_paths_json,default_value_field_paths_json
     from todo_event_catalog where status='ACTIVE' and schema_status='READY'
       and business_object_type=#{businessType}
     order by event_type,payload_version desc
@@ -411,7 +415,8 @@
     where v.version_id=#{versionId}
   </select>
   <select id="selectTemplateIdentityByVersionId" resultType="java.util.Map">
-    select t.template_id,t.template_code,t.business_type
+    select t.template_id,t.template_code,t.template_name,t.business_type,
+      v.version_id,v.version_no,v.status
     from todo_template_version v join todo_template t on t.template_id=v.template_id
     where v.version_id=#{versionId}
   </select>
@@ -433,6 +438,12 @@
     select * from todo_simulation_evidence
     where template_id=#{templateId} and version_id=#{versionId}
       and scenario_code=#{scenarioCode} and scenario_version=#{scenarioVersion}
+    order by executed_time desc,evidence_id desc limit 1
+  </select>
+  <select id="selectLatestSimulationEvidenceForScenario" resultType="java.util.Map">
+    select * from todo_simulation_evidence
+    where template_id=#{templateId} and version_id=#{versionId}
+      and scenario_code=#{scenarioCode}
     order by executed_time desc,evidence_id desc limit 1
   </select>
   <select id="selectSimulationReadinessBatch" resultType="java.util.Map">

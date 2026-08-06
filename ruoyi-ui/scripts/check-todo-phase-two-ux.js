@@ -29,7 +29,9 @@ function loadScenarioWorkbenchModel() {
       journeySimulationReadiness,
       mergeJourneySimulationReadiness,
       shouldInvalidateSimulationForTemplateHashChange,
-      persistedScenarioResults
+      persistedScenarioResults,
+      simulationInteractionState,
+      scenarioBlockerPresentation
     }`
   )()
 }
@@ -317,6 +319,30 @@ check('restores exact-hash scenario evidence after reopening the simulation step
   }, 'hash-88'), {})
 })
 
+check('keeps published definitions immutable while allowing authorized simulation', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.deepStrictEqual(model.simulationInteractionState(true, {
+    canSimulate: true, canPublish: true
+  }), { canEditDefinition: false, canRunSimulation: true, canPublishDraft: false })
+})
+
+check('explains upgraded scenario evidence with both versions', () => {
+  const model = loadScenarioWorkbenchModel()
+  assert.deepStrictEqual(model.scenarioBlockerPresentation({
+    scenarioCode: 'TD001_VALID', reason: 'SCENARIO_UPDATED',
+    scenarioVersion: 2, evidenceScenarioVersion: 1
+  }, [{ scenarioCode: 'TD001_VALID', scenarioName: '有效首联', scenarioVersion: 2 }]), {
+    scenarioCode: 'TD001_VALID', scenarioName: '有效首联',
+    reason: 'SCENARIO_UPDATED', reasonLabel: '测试场景已升级，请重新验证',
+    versionText: '当前 v2 · 上次证据 v1'
+  })
+  const step = read('src/views/todo/config/journey/steps/SimulationPublishStep.vue')
+  const gate = read('src/views/todo/config/journey/components/BatchScenarioGate.vue')
+  assert(step.includes('当前为已发布不可变版本'), 'published revalidation must explain immutable definitions')
+  assert(step.includes('runAllRequiredValidation'), 'missing one-click revalidation orchestration')
+  assert(gate.includes('一键重新验证'), 'scenario gate must expose one-click revalidation')
+})
+
 check('renders the task-centered template workbench', () => {
   for (const token of [
     'TemplateProblemSummary',
@@ -329,6 +355,26 @@ check('renders the task-centered template workbench', () => {
     'data-testid="template-workbench"'
   ]) {
     assert(workbench.includes(token), `missing workbench token: ${token}`)
+  }
+})
+
+check('separates configuration progress from template runtime state', () => {
+  const model = require(path.join(root, summaryModelPath))
+  assert.deepStrictEqual(model.templateRuntimePresentation({ runtimeState: 'ACTIVE' }), {
+    state: 'ACTIVE', label: '运行中', type: 'success', replacementText: ''
+  })
+  assert.deepStrictEqual(model.templateRuntimePresentation({
+    runtimeState: 'REPLACED', replacementTemplateCode: 'TD-001', replacementTemplateName: '首联待办'
+  }), {
+    state: 'REPLACED', label: '已停用', type: 'info',
+    replacementText: '已由首联待办（TD-001）替代'
+  })
+  assert.deepStrictEqual(model.templateNavigationTarget({
+    templateId: 1, primaryAction: 'OPEN_REPLACEMENT', replacementTemplateId: 17
+  }), { templateId: 17, view: 'published' })
+  assert.strictEqual(model.templateTogglePresentation({ runtimeState: 'REPLACED' }), null)
+  for (const token of ['运行状态', '打开现行模板', '查看历史配置', 'toggleTodoTemplate', 'query.status']) {
+    assert(workbench.includes(token), `workbench runtime governance missing token: ${token}`)
   }
 })
 
@@ -555,6 +601,22 @@ check('keeps existing incomplete event resources actionable during repair', () =
     'context repair must hydrate only after the replacement request prop has rendered')
 })
 
+check('locks governed template events and exposes only purpose-specific business fields', () => {
+  const event = read('src/views/todo/config/journey/steps/EventStep.vue')
+  const trigger = read('src/views/todo/config/journey/steps/TriggerStep.vue')
+  const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
+  assert(event.includes('filterEventsByPolicy') && event.includes('resources.eventPolicy'),
+    'the event picker must consume the governed template-event compatibility policy')
+  assert(event.includes("scopeEventFields(this.resources.fields || [], this.selected, 'OVERVIEW')"),
+    'event details must hide technical identifiers that have no configuration purpose')
+  assert(trigger.includes("scopeEventFields(this.resources.fields || [], this.event, 'CONDITION')"),
+    'trigger conditions must expose only the selected event version condition whitelist')
+  assert(trigger.includes('staleCondition') && trigger.includes('清除旧条件'),
+    'a stale condition must be explained and repairable instead of rendering undefined')
+  assert(owner.includes('scopeOwnerFields'),
+    'owner choices must remain scoped to the exact event owner whitelist')
+})
+
 check('keeps event sample JSON behind an explicit advanced section', () => {
   const drawer = read('src/views/todo/config/resource/EventResourceDrawer.vue')
   const designer = read('src/views/todo/config/resource/PayloadSchemaDesigner.vue')
@@ -660,6 +722,35 @@ check('edits ordered business routing and keeps the topology graph advanced-only
   assert(routing.includes('routingDraftBlocker'), 'incomplete business routing must be flagged before continuing')
   assert(routing.includes('$emit(\'change\''), 'ordered routing changes must patch the journey draft')
   assert(!routing.includes('type="textarea"'), 'normal routing journey must not expose raw JSON')
+})
+
+check('keeps routing result effect and target controls responsive without overlap', () => {
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  assert(routing.includes('class="routing-outcome__result"'), 'business result control needs a sizing hook')
+  assert(routing.includes('class="routing-outcome__target"'), 'routing target control needs a sizing hook')
+  assert(/\.routing-effect-card\s*\{[\s\S]*?min-width:\s*0;/.test(routing),
+    'the effect card must be allowed to shrink within its grid track')
+  assert(routing.includes('.routing-outcome__result,') && routing.includes('.routing-outcome__target { width: 100%; }'),
+    'result and target controls must fill their available tracks')
+  assert(!routing.includes('grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr)'),
+    'the fixed 150px effect column causes overlap and must be removed')
+  assert(routing.includes('routing-outcome__target-wrap'),
+    'the next-todo label and selector need a dedicated full-width row')
+  assert(/\.routing-outcome__target-wrap\s*\{[\s\S]*?grid-column:\s*1\s*\/\s*-1;/.test(routing),
+    'the next-todo selector must span the row to prevent overlap in a narrow journey editor')
+  assert(routing.includes('businessAction: row.businessAction'),
+    'hydration must preserve the governed business action used to explain retry-plan effects')
+})
+
+check('retains named historical routing targets during resource refresh', () => {
+  const page = read('src/views/todo/config/journey/index.vue')
+  const routing = read('src/views/todo/config/journey/components/BusinessRoutingEditor.vue')
+  assert(page.includes('mergeRoutingTargets'),
+    'resource refresh must merge current targets without discarding referenced historical identities')
+  assert(routing.includes('displayRoutingTargets'),
+    'the route selector must always have a named option for the configured historical version')
+  assert(routing.includes('historicalTargetName'),
+    'a missing catalog identity must fall back to a Chinese template name rather than a raw numeric ID')
 })
 
 check('keeps backend routing issues authoritative in the normal journey', () => {
@@ -792,7 +883,7 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
     'reopening the step must restore exact-hash server scenario evidence')
   assert(step.includes('@sample-load="loadReadOnlySample"'),
     'sample loading must be a one-click search, select and hydrate action')
-  assert(step.includes('await this.hydratePayload()'),
+  assert(step.includes('this.hydratePayload(options)'),
     'one-click sample loading must hydrate the selected sample')
   assert(selector.includes('scenarioTargetLabel'),
     'scenario target codes must be rendered with the governed template name')

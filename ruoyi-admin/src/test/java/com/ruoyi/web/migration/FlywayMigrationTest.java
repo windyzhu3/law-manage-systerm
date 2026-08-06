@@ -104,11 +104,12 @@ class FlywayMigrationTest
         MigrationInfo current = flyway.info().current();
 
         assertTrue(result.success);
-        assertEquals("0.20.80", current.getVersion().getVersion());
+        assertEquals("0.20.83", current.getVersion().getVersion());
         assertEquals(1L, count(url, "select count(*) from sys_job "
             + "where invoke_target='todoScheduleTask.scan'"));
         verifyTodoSchedulePolicySnapshotSchema(url);
         verifyPublishedLeadTodoFlow(url);
+        verifyLeadTemplateConfigurationGovernance(url);
         verifyDatabaseInvariants(url);
         verifyV02PrdCatalogue(url);
         verifyDecisionAccountabilitySchema(url);
@@ -1501,6 +1502,84 @@ class FlywayMigrationTest
         catch (SQLException exception)
         {
             throw new AssertionError("Published lead Todo flow invariants failed",exception);
+        }
+    }
+
+    private void verifyLeadTemplateConfigurationGovernance(String url)
+    {
+        try(Connection connection=DriverManager.getConnection(url,
+                System.getenv("TODO_MIGRATION_DB_USER"),
+                System.getenv("TODO_MIGRATION_DB_PASSWORD")))
+        {
+            assertEquals(11L,count(connection,
+                    "select count(*) from todo_event_catalog e "
+                    +"where e.event_type in ('LEAD_ASSIGNED','LEAD_TAG_CONFIRMED',"
+                    +"'LEAD_FIRST_CONTACT_VALID','LEAD_SUSPECT_INVALID_MARKED',"
+                    +"'LEAD_FIRST_CONTACT_UNREACHABLE','LEAD_INVALID_REVIEW_CONFIRMED',"
+                    +"'LEAD_INVALID_REVIEW_MISJUDGED','LEAD_RETRY_WINDOW_DUE',"
+                    +"'LEAD_RETRY_CONNECTED','LEAD_RETRY_EXHAUSTED','LEAD_MOVED_TO_DEAD_POOL') "
+                    +"and e.payload_version=1 and e.status='ACTIVE' and e.schema_status='READY' "
+                    +"and e.update_by='flyway-v0.20.81'"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from todo_event_catalog e "
+                    +"join json_table(e.payload_schema_json,'$.properties.*' columns("
+                    +"title varchar(128) path '$.title',description varchar(512) path '$.description',"
+                    +"semantic_type varchar(64) path '$.\"x-semantic-type\"')) fields "
+                    +"where e.business_object_type='LEAD' and e.status='ACTIVE' "
+                    +"and (fields.title is null or fields.description is null or fields.semantic_type is null)"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_event_catalog where event_type='LEAD_ASSIGNED' "
+                    +"and owner_field_paths_json=json_array('ownerId') "
+                    +"and condition_field_paths_json=json_array() "
+                    +"and default_value_field_paths_json=json_array() "
+                    +"and json_unquote(json_extract(payload_schema_json,"
+                    +"'$.properties.assignmentId.\"x-semantic-type\"'))='SYSTEM_ID'"));
+            assertEquals(2L,count(connection,
+                    "select count(*) from todo_template_version v join todo_template t "
+                    +"on t.template_id=v.template_id where t.template_code in ('TD-001','TD-002') "
+                    +"and v.status='DRAFT' and v.change_summary like 'V0.20.82 % governance draft'"));
+            assertEquals(0L,count(connection,
+                    "select count(*) from todo_template_version v join todo_template t "
+                    +"on t.template_id=v.template_id where t.template_code in ('TD-001','TD-002') "
+                    +"and v.status in ('DRAFT','BLOCKED') "
+                    +"and v.change_summary not like 'V0.20.82 % governance draft'"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_template_version v join todo_template t "
+                    +"on t.template_id=v.template_id where t.template_code='TD-001' "
+                    +"and v.change_summary='V0.20.82 TD-001 routing governance draft' "
+                    +"and json_unquote(json_extract(v.definition_json,'$.event.eventType'))='LEAD_ASSIGNED' "
+                    +"and json_extract(v.definition_json,'$.routing.config.releaseDependencies.\"TD-003\"') is not null "
+                    +"and json_extract(v.definition_json,'$.routing.config.businessOutcomes[2].targetVersionId') is null "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].effectKind'))='END' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultField'))='contactResult' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultValue'))='UNREACHABLE' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[2].resultLabel'))='未接通' "
+                    +"and json_contains_path(v.definition_json,'one',"
+                    +"'$.routing.config.businessOutcomes[2].value')=0 "
+                    +"and v.update_by='flyway-v0.20.83'"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_template_version v join todo_template t "
+                    +"on t.template_id=v.template_id where t.template_code='TD-002' "
+                    +"and v.change_summary='V0.20.82 TD-002 event governance draft' "
+                    +"and json_unquote(json_extract(v.definition_json,'$.event.eventType'))="
+                    +"'LEAD_SUSPECT_INVALID_MARKED' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[1].resultField'))='reviewResult' "
+                    +"and json_unquote(json_extract(v.definition_json,"
+                    +"'$.routing.config.businessOutcomes[1].resultLabel'))='误判有效' "
+                    +"and v.update_by='flyway-v0.20.83'"));
+            assertEquals(1L,count(connection,
+                    "select count(*) from todo_trigger_rule r join todo_template t "
+                    +"on t.template_id=r.template_id where r.enabled='Y' "
+                    +"and r.event_type='LEAD_ASSIGNED' and t.template_code='TD-001'"));
+        }
+        catch(SQLException exception)
+        {
+            throw new AssertionError("Lead template configuration governance invariants failed",exception);
         }
     }
 

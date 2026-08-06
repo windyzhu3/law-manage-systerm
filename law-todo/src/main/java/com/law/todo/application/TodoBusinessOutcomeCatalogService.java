@@ -21,8 +21,7 @@ public class TodoBusinessOutcomeCatalogService
 {
     private static final Map<String,String> TD001_TARGETS=Map.of(
             "VALID","TD-004",
-            "SUSPECT_INVALID","TD-002",
-            "UNREACHABLE","TD-003");
+            "SUSPECT_INVALID","TD-002");
     private static final Map<String,GovernedOutcomeSpec> GOVERNED_OUTCOMES=Map.of(
             "TD-002",new GovernedOutcomeSpec("reviewResult","复核结果","主管复核结论","TD002_GOVERNED_OUTCOMES",
                     List.of(outcome("TRUE_INVALID","确认无效","END",null),
@@ -81,6 +80,7 @@ public class TodoBusinessOutcomeCatalogService
     public List<OutcomeIssue> validate(String templateCode,String businessType,Long candidateVersionId,
             TodoDefinitionDocument definition)
     {
+        if(candidateVersionId==null)return validatePublishedReferences(businessType,definition);
         BusinessOutcomeSet outcomeSet=resolve(templateCode,businessType,candidateVersionId,definition);
         if(!outcomeSet.available())return List.of();
         Map<String,BusinessOutcomeOption> expected=new LinkedHashMap<>();
@@ -134,6 +134,29 @@ public class TodoBusinessOutcomeCatalogService
                     .map(BusinessOutcomeOption::label).toList();
             issues.add(new OutcomeIssue("TODO_ROUTING_OUTCOME_INCOMPLETE","routing.businessOutcomes",
                     "尚未配置这些业务结果："+String.join("、",missing)));
+        }
+        return List.copyOf(issues);
+    }
+
+    private List<OutcomeIssue> validatePublishedReferences(String businessType,
+            TodoDefinitionDocument definition)
+    {
+        List<OutcomeIssue> issues=new ArrayList<>();
+        List<Map<String,Object>> configured=outcomes(definition);
+        for(int index=0;index<configured.size();index++)
+        {
+            Map<String,Object> outcome=configured.get(index);
+            Long versionId=longValue(outcome.get("targetVersionId"));
+            String templateCode=text(outcome.get("targetTemplateCode"));
+            if(versionId==null&& (templateCode==null||templateCode.isBlank()))continue;
+            String path="routing.businessOutcomes["+index+"]";
+            Map<String,Object> identity=versionId==null?null:mapper.selectTemplateIdentityByVersionId(versionId);
+            if(identity==null||identity.isEmpty()
+                    ||!"PUBLISHED".equals(text(value(identity,"status","status")))
+                    ||!businessType.equals(text(value(identity,"businessType","business_type")))
+                    ||templateCode==null||!templateCode.equals(text(value(identity,"templateCode","template_code"))))
+                issues.add(new OutcomeIssue("TODO_ROUTING_TARGET_REFERENCE_INVALID",path+".targetVersionId",
+                        "The published routing target no longer resolves to the recorded template version"));
         }
         return List.copyOf(issues);
     }

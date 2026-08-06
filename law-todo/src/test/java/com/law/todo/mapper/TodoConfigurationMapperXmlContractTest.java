@@ -128,6 +128,7 @@ class TodoConfigurationMapperXmlContractTest
     {
         String xml=resource("mapper/todo/TodoConfigurationMapper.xml");
         String batch=statement(xml,"select","selectTemplateJourneySummaries");
+        String source=fragment(xml,"templateJourneySummaryFrom");
         String filters=fragment(xml,"templateJourneySummaryWhere");
 
         assertTrue(batch.contains("t.template_code") && batch.contains("definition_json")
@@ -139,6 +140,9 @@ class TodoConfigurationMapperXmlContractTest
         assertTrue(batch.contains("coalesce(draft.update_by,t.update_by,published.published_by,t.create_by) last_editor"));
         assertTrue(batch.contains("coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) update_time"));
         assertTrue(batch.contains("order by coalesce(draft.update_time,draft.create_time,published.published_time,t.update_time,t.create_time) desc"));
+        assertTrue(source.contains("left join todo_template replacement on replacement.template_code=t.replacement_template_code"));
+        assertTrue(batch.contains("replacement.template_id replacement_template_id")
+                && batch.contains("replacement.template_name replacement_template_name"));
     }
 
     @Test void editableVersionHashesAndReportsNeverFallBackAcrossVersions() throws Exception
@@ -153,6 +157,18 @@ class TodoConfigurationMapperXmlContractTest
         assertFalse(detail.contains("coalesce(draft.validation_report_json,published.validation_report_json)"));
         assertTrue(batch.contains("case when draft.version_id is not null then draft.definition_hash else published.definition_hash end definition_hash"));
         assertTrue(batch.contains("case when draft.version_id is not null then draft.validation_report_json else published.validation_report_json end validation_report_json"));
+    }
+
+    @Test void latestScenarioEvidenceLookupCrossesScenarioVersionsWithoutCrossingTemplateVersion() throws Exception
+    {
+        String latest=statement(resource("mapper/todo/TodoConfigurationMapper.xml"),"select",
+                "selectLatestSimulationEvidenceForScenario");
+
+        assertTrue(latest.contains("template_id=#{templateId}")
+                && latest.contains("version_id=#{versionId}")
+                && latest.contains("scenario_code=#{scenarioCode}"));
+        assertFalse(latest.contains("scenario_version=#{scenarioVersion}"));
+        assertTrue(latest.contains("order by executed_time desc,evidence_id desc limit 1"));
     }
 
     @Test void routingTargetsAreActivePublishedAndBoundToTheRequestedBusinessType() throws Exception

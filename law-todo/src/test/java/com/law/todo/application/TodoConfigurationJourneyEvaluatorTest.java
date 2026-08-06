@@ -38,7 +38,7 @@ class TodoConfigurationJourneyEvaluatorTest
 
     @BeforeEach void setUp()
     {
-        evaluator=new TodoConfigurationJourneyEvaluator(resources,templates,outcomes);
+        evaluator=new TodoConfigurationJourneyEvaluator(resources,templates,outcomes,new TodoTemplateEventPolicy());
         List<FieldResource> fields=List.of(
                 new FieldResource("leadId","Lead","integer",true,List.of(),List.of("LEAD_ASSIGNED")),
                 new FieldResource("assignmentId","分配记录ID","integer",false,List.of("EQ","NE","NOT_EMPTY"),List.of("LEAD_ASSIGNED")));
@@ -56,6 +56,30 @@ class TodoConfigurationJourneyEvaluatorTest
         assertThat(result.step("EVENT").state()).isEqualTo("BLOCKED");
         assertThat(result.issues()).extracting(JourneyIssue::code)
                 .contains("TODO_JOURNEY_EVENT_SCHEMA_REQUIRED");
+    }
+
+    @Test void blocksAGovernedTemplateWhenItsEventDoesNotMatchTheTemplatePolicy()
+    {
+        TemplateConfigurationDetail td002=new TemplateConfigurationDetail(42L,"TD-002","疑似无效主管复核",
+                "LEAD","0",4,4,101L,"DRAFT",91L,3,detail().editableVersion(),List.of());
+
+        var result=evaluator.evaluate(td002,definition("LEAD_FIRST_CONTACT_UNREACHABLE",Map.of()),ready());
+
+        assertThat(result.step("EVENT").state()).isEqualTo("BLOCKED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .contains("TODO_TEMPLATE_EVENT_INCOMPATIBLE");
+    }
+
+    @Test void doesNotRecommendAnExtraConditionForAGovernedEntryEvent()
+    {
+        TemplateConfigurationDetail td001=new TemplateConfigurationDetail(42L,"TD-001","首联待办",
+                "LEAD","0",4,4,101L,"PUBLISHED",91L,3,detail().editableVersion(),List.of());
+
+        var result=evaluator.evaluate(td001,definition("LEAD_ASSIGNED",Map.of()),ready());
+
+        assertThat(result.step("TRIGGER").state()).isEqualTo("COMPLETED");
+        assertThat(result.issues()).extracting(JourneyIssue::code)
+                .doesNotContain("TODO_JOURNEY_TRIGGER_RECOMMENDATION");
     }
 
     @Test void appliesBlockerBeforeWarningAndKeepsSevenStepOrder()

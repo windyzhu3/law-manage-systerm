@@ -27,6 +27,12 @@ import com.ruoyi.system.service.ISysUserService;
 public class RuoYiTodoFieldReferenceDirectory implements TodoFieldReferenceDirectory
 {
     private static final List<String> SEMANTICS=List.of("USER_ID","DEPT_ID","POST_ID","ROLE_KEY","DICT","BUSINESS_REF");
+    private static final Map<String,String> BUSINESS_DIRECTORY_ALIASES=Map.of(
+            "LEAD_DIRECTORY","LEAD",
+            "CUSTOMER_DIRECTORY","CUSTOMER",
+            "CONTRACT_DIRECTORY","CONTRACT",
+            "CASE_DIRECTORY","CASE",
+            "MATTER_DIRECTORY","MATTER");
     private final ISysUserService users;private final ISysDeptService departments;private final ISysPostService posts;
     private final ISysRoleService roles;private final ISysDictTypeService dictionaries;
     private final List<TodoBusinessDirectoryAccess> businessDirectories;
@@ -42,7 +48,8 @@ public class RuoYiTodoFieldReferenceDirectory implements TodoFieldReferenceDirec
     @Override public boolean supports(String semanticType,String optionSource)
     {
         if(!SEMANTICS.contains(semanticType))return false;
-        return !"BUSINESS_REF".equals(semanticType)||businessDirectories.stream().anyMatch(value->value.supports(optionSource));
+        String businessType=physicalBusinessType(optionSource);
+        return !"BUSINESS_REF".equals(semanticType)||businessDirectories.stream().anyMatch(value->value.supports(businessType));
     }
 
     @Override public Map<Object,DisplayReference> resolve(String semanticType,String optionSource,String dictType,
@@ -83,7 +90,11 @@ public class RuoYiTodoFieldReferenceDirectory implements TodoFieldReferenceDirec
             case "POST_ID" -> posts.selectPostList(new SysPost());
             case "ROLE_KEY" -> roles.selectRoleList(new SysRole());
             case "DICT" -> dictType==null?List.of():dictionaries.selectDictDataByType(dictType);
-            case "BUSINESS_REF" -> business(optionSource).search(optionSource,null,0,100,actor).rows();
+            case "BUSINESS_REF" ->
+            {
+                String businessType=physicalBusinessType(optionSource);
+                yield business(businessType).search(businessType,null,0,100,actor).rows();
+            }
             default -> List.of();
         };
     }
@@ -93,6 +104,9 @@ public class RuoYiTodoFieldReferenceDirectory implements TodoFieldReferenceDirec
         return businessDirectories.stream().filter(value->value.supports(type)).findFirst()
                 .orElseThrow(()->new IllegalStateException("Business reference directory unavailable: "+type));
     }
+
+    private String physicalBusinessType(String optionSource)
+    {return optionSource==null?null:BUSINESS_DIRECTORY_ALIASES.getOrDefault(optionSource,optionSource);}
 
     private DisplayReference resolveOne(String semanticType,Object raw,List<?> candidates)
     {

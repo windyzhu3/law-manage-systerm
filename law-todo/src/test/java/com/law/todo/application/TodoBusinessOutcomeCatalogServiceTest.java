@@ -32,7 +32,7 @@ class TodoBusinessOutcomeCatalogServiceTest
     @BeforeEach void setUp()
     {
         service=new TodoBusinessOutcomeCatalogService(resources,mapper);
-        when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(
+        org.mockito.Mockito.lenient().when(mapper.selectPublishedRoutingTargetCatalog("LEAD")).thenReturn(List.of(
                 target(4L,"TD-004","5天实质进展","LEAD",104L),
                 target(2L,"TD-002","疑似无效复核","LEAD",102L),
                 target(3L,"TD-003","无法联系重试","LEAD",103L),
@@ -61,11 +61,11 @@ class TodoBusinessOutcomeCatalogServiceTest
         assertThat(result.options()).extracting(option->option.label())
                 .containsExactly("有效","疑似无效","无法联系");
         assertThat(result.options()).extracting(option->option.effectKind())
-                .containsOnly("NEXT_TEMPLATE");
+                .containsExactly("NEXT_TEMPLATE","NEXT_TEMPLATE","END");
         assertThat(result.options()).extracting(option->option.targetTemplateCode())
-                .containsExactly("TD-004","TD-002","TD-003");
+                .containsExactly("TD-004","TD-002",null);
         assertThat(result.options()).extracting(option->option.targetVersionId())
-                .containsExactly(104L,102L,103L);
+                .containsExactly(104L,102L,null);
     }
 
     @Test void returnsExactGovernedOutcomeEffectsForTheThreeLeadTemplates()
@@ -124,6 +124,21 @@ class TodoBusinessOutcomeCatalogServiceTest
                 .containsExactly("TODO_ROUTING_TARGET_VERSION_INVALID");
     }
 
+    @Test void publishedDefinitionKeepsItsExactPublishedHistoricalTargetAfterANewerVersionExists()
+    {
+        when(mapper.selectTemplateIdentityByVersionId(79L)).thenReturn(Map.ofEntries(
+                Map.entry("template_id",4L),Map.entry("template_code","TD-004"),
+                Map.entry("template_name","5天实质进展"),Map.entry("business_type","LEAD"),
+                Map.entry("version_id",79L),Map.entry("version_no",2),Map.entry("status","PUBLISHED")));
+        TodoDefinitionDocument published=definition("TD-001","contactResult",Map.of(
+                "businessOutcomes",List.of(
+                        outcome("contactResult","VALID","有效","NEXT_TEMPLATE","TD-004",79L))));
+
+        assertThat(service.validate("TD-001","LEAD",null,published))
+                .extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
+                .doesNotContain("TODO_ROUTING_TARGET_VERSION_INVALID");
+    }
+
     @Test void reportsMissingDuplicateAndStaleFirstContactRoutes()
     {
         TodoDefinitionDocument definition=definition("TD-001","contactResult",Map.of(
@@ -137,7 +152,7 @@ class TodoBusinessOutcomeCatalogServiceTest
                         Map.of("label","无法联系","value","UNREACHABLE")),null,0,"GOVERNED",
                 "首联后的联系结论","LEAD","ACTIVE",10,List.of(),"DICT",null,null,null)));
 
-        var issues=service.validate("TD-001","LEAD",definition);
+        var issues=service.validate("TD-001","LEAD",188L,definition);
 
         assertThat(issues).extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
                 .containsExactly(
@@ -156,7 +171,7 @@ class TodoBusinessOutcomeCatalogServiceTest
                 outcome("contactResult","VALID","当首联结果为有效时","NEXT_TEMPLATE","TD-004",104L));
         configured.put("resultLabel","有效");
 
-        var issues=service.validate("TD-001","LEAD",definition("TD-001","contactResult",
+        var issues=service.validate("TD-001","LEAD",188L,definition("TD-001","contactResult",
                 Map.of("businessOutcomes",List.of(configured))));
 
         assertThat(issues).extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
@@ -170,7 +185,7 @@ class TodoBusinessOutcomeCatalogServiceTest
                         outcome("reviewResult","TRUE_INVALID","随意文本","END",null,null),
                         outcome("reviewResult","MISJUDGED_VALID","误判有效","NEXT_TEMPLATE","CASE_ACCEPT",108L))));
 
-        var issues=service.validate("TD-002","LEAD",definition);
+        var issues=service.validate("TD-002","LEAD",188L,definition);
 
         assertThat(issues).extracting(TodoBusinessOutcomeCatalogService.OutcomeIssue::code)
                 .contains("TODO_ROUTING_OUTCOME_LABEL_INVALID","TODO_ROUTING_TARGET_VERSION_INVALID");

@@ -83,9 +83,12 @@ public class TodoConfigurationResourceCatalogService
             String sourceEvent=text(event,"event_type");
             if(eventType!=null&&!eventType.isBlank()&&!eventType.equals(sourceEvent))continue;
             Set<String> ownerPaths=new LinkedHashSet<>(strings(event.get("owner_field_paths_json")));
+            Set<String> conditionPaths=new LinkedHashSet<>(strings(event.get("condition_field_paths_json")));
+            Set<String> defaultValuePaths=new LinkedHashSet<>(strings(event.get("default_value_field_paths_json")));
             for(PayloadFieldDescriptor descriptor:payloadSchemas.describe(text(event,"payload_schema_json"),businessType))
                 fields.computeIfAbsent(descriptor.path(),MutableField::new)
-                        .merge(descriptor,sourceEvent,integer(event.get("payload_version")),ownerPaths);
+                        .merge(descriptor,sourceEvent,integer(event.get("payload_version")),ownerPaths,
+                                conditionPaths,defaultValuePaths);
         }
         return fields.values().stream().map(MutableField::view).sorted(Comparator.comparing(FieldResource::name).thenComparing(FieldResource::code)).toList();
     }
@@ -147,6 +150,8 @@ public class TodoConfigurationResourceCatalogService
         private final Set<String> events=new LinkedHashSet<>();private final Set<Object> options=new LinkedHashSet<>();
         private final Set<String> eventVersions=new LinkedHashSet<>();
         private final Set<String> ownerEventVersions=new LinkedHashSet<>();
+        private final Set<String> conditionEventVersions=new LinkedHashSet<>();
+        private final Set<String> defaultValueEventVersions=new LinkedHashSet<>();
         private Long resourceItemId;private int version;private String source="EVENT_SCHEMA";
         private String description;private String businessType;private String status;private int sortOrder;
         private String semanticType="PLAIN_VALUE";private String optionSource;private String dictType;private String displayPattern;
@@ -165,7 +170,8 @@ public class TodoConfigurationResourceCatalogService
             dictType=firstText(value,"dictType","x-dict-type",dictType);
             displayPattern=firstText(value,"displayPattern","x-display-pattern",displayPattern);
         }
-        private void merge(PayloadFieldDescriptor descriptor,String event,int payloadVersion,Set<String> ownerPaths)
+        private void merge(PayloadFieldDescriptor descriptor,String event,int payloadVersion,Set<String> ownerPaths,
+                Set<String> conditionPaths,Set<String> defaultValuePaths)
         {
             if(!governedName&&!meaningfulLabel(name)&&meaningfulLabel(descriptor.label()))name=descriptor.label().trim();
             if(descriptor.type()!=null&&!descriptor.type().isBlank())type=descriptor.type();required|=descriptor.required();
@@ -176,6 +182,8 @@ public class TodoConfigurationResourceCatalogService
                 String sourceVersion=payloadVersion>0?event+"@"+payloadVersion:event;
                 eventVersions.add(sourceVersion);
                 if(ownerPaths!=null&&ownerPaths.contains(descriptor.path()))ownerEventVersions.add(sourceVersion);
+                if(conditionPaths!=null&&conditionPaths.contains(descriptor.path()))conditionEventVersions.add(sourceVersion);
+                if(defaultValuePaths!=null&&defaultValuePaths.contains(descriptor.path()))defaultValueEventVersions.add(sourceVersion);
             }
             if(!"PLAIN_VALUE".equals(descriptor.semanticType()))semanticType=descriptor.semanticType();
             if(descriptor.optionSource()!=null)optionSource=descriptor.optionSource();
@@ -187,7 +195,15 @@ public class TodoConfigurationResourceCatalogService
                 operators.isEmpty()?operators(type):List.copyOf(operators),List.copyOf(events),List.copyOf(options),
                 resourceItemId,version,source,description,businessType,status,sortOrder,List.copyOf(eventVersions),
                 semanticType,optionSource,dictType,displayPattern,fieldKey(),eventRole(),!ownerEventVersions.isEmpty(),
-                List.copyOf(ownerEventVersions));}
+                List.copyOf(ownerEventVersions),!conditionEventVersions.isEmpty(),List.copyOf(conditionEventVersions),
+                !defaultValueEventVersions.isEmpty(),List.copyOf(defaultValueEventVersions),businessConfigurable());}
+        private boolean businessConfigurable()
+        {
+            if(!ownerEventVersions.isEmpty()||!conditionEventVersions.isEmpty()||!defaultValueEventVersions.isEmpty())return true;
+            if(!"GOVERNED".equals(source))return false;
+            return !Set.of("SYSTEM_ID","SYSTEM_VERSION","SYSTEM_CODE","SYSTEM_COUNTER","BUSINESS_ID")
+                    .contains(semanticType);
+        }
         private String fieldKey()
         {
             return eventVersions.size()==1?eventVersions.iterator().next()+":"+code
@@ -220,7 +236,9 @@ public class TodoConfigurationResourceCatalogService
             List<String> operators,List<String> sourceEvents,List<Object> options,
             Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder,
             List<String> sourceEventVersions,String semanticType,String optionSource,String dictType,String displayPattern,
-            String fieldKey,String eventRole,boolean ownerEligible,List<String> ownerSourceEventVersions)
+            String fieldKey,String eventRole,boolean ownerEligible,List<String> ownerSourceEventVersions,
+            boolean conditionEligible,List<String> conditionSourceEventVersions,
+            boolean defaultValueEligible,List<String> defaultValueSourceEventVersions,boolean businessConfigurable)
     {
         public FieldResource
         {
@@ -231,6 +249,8 @@ public class TodoConfigurationResourceCatalogService
             fieldKey=fieldKey==null||fieldKey.isBlank()?code:fieldKey.trim();
             eventRole=eventRole==null||eventRole.isBlank()?"DATA":eventRole.trim().toUpperCase();
             ownerSourceEventVersions=ownerSourceEventVersions==null?List.of():List.copyOf(ownerSourceEventVersions);
+            conditionSourceEventVersions=conditionSourceEventVersions==null?List.of():List.copyOf(conditionSourceEventVersions);
+            defaultValueSourceEventVersions=defaultValueSourceEventVersions==null?List.of():List.copyOf(defaultValueSourceEventVersions);
             if(sensitive)example=null;
         }
         public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
@@ -239,14 +259,22 @@ public class TodoConfigurationResourceCatalogService
                 List<String> sourceEventVersions,String semanticType,String optionSource,String dictType,String displayPattern)
         {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,resourceItemId,version,source,
                 description,businessType,status,sortOrder,sourceEventVersions,semanticType,optionSource,dictType,displayPattern,
-                code,"DATA",false,List.of());}
+                code,"DATA",false,List.of(),false,List.of(),false,List.of(),"GOVERNED".equals(source));}
+        public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
+                List<String> operators,List<String> sourceEvents,List<Object> options,
+                Long resourceItemId,int version,String source,String description,String businessType,String status,int sortOrder,
+                List<String> sourceEventVersions,String semanticType,String optionSource,String dictType,String displayPattern,
+                String fieldKey,String eventRole,boolean ownerEligible,List<String> ownerSourceEventVersions)
+        {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,resourceItemId,version,source,
+                description,businessType,status,sortOrder,sourceEventVersions,semanticType,optionSource,dictType,displayPattern,
+                fieldKey,eventRole,ownerEligible,ownerSourceEventVersions,false,List.of(),false,List.of(),ownerEligible);}
         public FieldResource(String code,String name,String type,boolean required,List<String> operators,List<String> sourceEvents)
         {this(code,name,type,required,null,false,operators,sourceEvents,List.of(),null,0,"EVENT_SCHEMA",null,null,null,0,List.of(),
-                "PLAIN_VALUE",null,null,null,code,"DATA",false,List.of());}
+                "PLAIN_VALUE",null,null,null,code,"DATA",false,List.of(),false,List.of(),false,List.of(),false);}
         public FieldResource(String code,String name,String type,boolean required,Object example,boolean sensitive,
                 List<String> operators,List<String> sourceEvents,List<Object> options)
         {this(code,name,type,required,example,sensitive,operators,sourceEvents,options,null,0,"EVENT_SCHEMA",null,null,null,0,List.of(),
-                "PLAIN_VALUE",null,null,null,code,"DATA",false,List.of());}
+                "PLAIN_VALUE",null,null,null,code,"DATA",false,List.of(),false,List.of(),false,List.of(),false);}
     }
     public record MaterialResource(String code,String name,String description,String businessType,String status,int sortOrder,
             Long resourceItemId,int version,String source)

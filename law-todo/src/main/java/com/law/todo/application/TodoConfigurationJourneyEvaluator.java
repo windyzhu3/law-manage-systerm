@@ -25,22 +25,28 @@ import com.law.todo.schedule.TodoScheduleService;
 public class TodoConfigurationJourneyEvaluator
 {
     private static final TodoConfigurationJourneyEvaluator PURE_COMPATIBILITY=
-            new TodoConfigurationJourneyEvaluator(null,null,null);
+            new TodoConfigurationJourneyEvaluator(null,null,null,null);
     private final TodoConfigurationResourceCatalogService resources;
     private final TodoTemplateService templates;
     private final TodoBusinessOutcomeCatalogService outcomes;
+    private final TodoTemplateEventPolicy eventPolicy;
 
     /** Compatibility constructor for focused callers that do not have catalog access. */
     public TodoConfigurationJourneyEvaluator()
-    {this(null,null,null);}
+    {this(null,null,null,null);}
 
     public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,TodoTemplateService templates)
-    {this(resources,templates,null);}
+    {this(resources,templates,null,new TodoTemplateEventPolicy());}
+
+    public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,
+            TodoTemplateService templates,TodoBusinessOutcomeCatalogService outcomes)
+    {this(resources,templates,outcomes,new TodoTemplateEventPolicy());}
 
     @Autowired
     public TodoConfigurationJourneyEvaluator(TodoConfigurationResourceCatalogService resources,
-            TodoTemplateService templates,TodoBusinessOutcomeCatalogService outcomes)
-    {this.resources=resources;this.templates=templates;this.outcomes=outcomes;}
+            TodoTemplateService templates,TodoBusinessOutcomeCatalogService outcomes,
+            TodoTemplateEventPolicy eventPolicy)
+    {this.resources=resources;this.templates=templates;this.outcomes=outcomes;this.eventPolicy=eventPolicy;}
 
     public Evaluation evaluate(TemplateConfigurationDetail detail,TodoDefinitionDocument definition)
     {
@@ -75,6 +81,19 @@ public class TodoConfigurationJourneyEvaluator
         Map<String,Object> value=eventValue(definition);
         if(blank(event))return step("EVENT","Event",List.of(),false,false,value);
         List<JourneyIssue> local=new ArrayList<>();
+        if(eventPolicy!=null&&detail!=null)
+        {
+            try
+            {
+                eventPolicy.requireCompatible(detail.templateCode(),detail.businessType(),event,
+                        definition.event().payloadVersion());
+            }
+            catch(com.law.todo.domain.TodoException incompatible)
+            {
+                local.add(blocker(incompatible.getBusinessCode(),"EVENT","event.eventType",
+                        incompatible.getMessage(),"选择该待办模板规定的业务事件"));
+            }
+        }
         if(definition.event().payloadVersion()<=0)
             local.add(blocker("TODO_JOURNEY_EVENT_VERSION_REQUIRED","EVENT","event.payloadVersion","Select an active event version","Select an active event version"));
         else if(resources!=null&&!hasUsableSchema(detail,event))
@@ -88,9 +107,14 @@ public class TodoConfigurationJourneyEvaluator
         if(definition==null||definition.event()==null||blank(definition.event().eventType()))
             return step("TRIGGER","Trigger",List.of(),false,false,value);
         List<JourneyIssue> local=new ArrayList<>();
+        boolean governedEntry=eventPolicy!=null&&detail!=null
+                &&eventPolicy.view(detail.templateCode(),detail.businessType()).locked();
         if(definition.event().condition().isEmpty())
-            local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
-                    "This todo will start for every matching event","Add a business condition if this should be more selective"));
+        {
+            if(!governedEntry)
+                local.add(warning("TODO_JOURNEY_TRIGGER_RECOMMENDATION","TRIGGER","event.condition",
+                        "This todo will start for every matching event","Add a business condition if this should be more selective"));
+        }
         else if(resources!=null)
             validateCondition(detail,definition,local);
         append(issues,local);return step("TRIGGER","Trigger",local,true,local.stream().noneMatch(issue->"BLOCKER".equals(issue.severity())),value);

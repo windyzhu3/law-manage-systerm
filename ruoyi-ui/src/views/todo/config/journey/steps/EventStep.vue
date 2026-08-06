@@ -6,6 +6,16 @@
       <p>选择一个已治理的业务事件版本。事件字段完整后，后续条件和负责人配置才有可靠的数据来源。</p>
     </header>
 
+    <el-alert
+      v-if="eventPolicy.locked"
+      class="event-step__policy"
+      :title="`该模板的业务入口已锁定为“${policyEventName}”`"
+      description="这是业务流程约定，不需要在多个相似事件中猜选；如需改变入口，请先调整模板业务规则。"
+      type="success"
+      :closable="false"
+      show-icon
+    />
+
     <div class="event-step__filters">
       <el-input
         ref="eventSearch"
@@ -88,11 +98,15 @@
           >
             <strong>可用于后续配置的字段</strong>
             <div v-if="selectedFields.length" class="event-detail__field-list">
-              <span v-for="field in selectedFields.slice(0, 8)" :key="field.code">
-                {{ field.name || '未命名业务字段' }}<small>{{ fieldTypeLabel(field) }}</small>
-              </span>
+              <article v-for="field in selectedFields.slice(0, 8)" :key="field.fieldKey || field.code">
+                <div>
+                  <span>{{ field.name || '未命名业务字段' }}</span>
+                  <small>{{ fieldTypeLabel(field) }} · {{ fieldPurposeLabel(field) }}</small>
+                </div>
+                <p>{{ field.description || '由当前业务事件自动提供。' }}</p>
+              </article>
             </div>
-            <p v-else>尚未形成可用字段目录。</p>
+            <p v-else>该事件没有需要人工配置的业务字段，技术追踪字段已自动隐藏。</p>
           </div>
           <div v-if="!schemaHealth.ready" class="event-detail__repair">
             <el-alert
@@ -121,7 +135,13 @@
 
 <script>
 import { listEventResources, getEventResource } from '@/api/todo-resources'
-import { buildEventPatch, eventSchemaHealth, repairFocusTarget } from '../journey-step-model'
+import {
+  buildEventPatch,
+  eventSchemaHealth,
+  filterEventsByPolicy,
+  repairFocusTarget,
+  scopeEventFields
+} from '../journey-step-model'
 
 export default {
   name: 'EventStep',
@@ -144,18 +164,25 @@ export default {
     }
   },
   computed: {
+    eventPolicy() { return this.resources.eventPolicy || {} },
+    policyEvents() { return filterEventsByPolicy(this.events, this.eventPolicy) },
+    policyEventName() {
+      const type = this.eventPolicy.recommendedEventType
+      const event = this.events.find(item => item.eventType === type &&
+        Number(item.payloadVersion) === Number(this.eventPolicy.payloadVersion || 1))
+      return (event && event.eventName) || type || '指定业务事件'
+    },
     selectedKey() { return this.value.eventType ? `${this.value.eventType}:${Number(this.value.payloadVersion || 1)}` : '' },
     selected() {
-      return this.detail || this.events.find(item => this.eventKey(item) === this.selectedKey) || null
+      return this.detail || this.policyEvents.find(item => this.eventKey(item) === this.selectedKey) || null
     },
     selectedFields() {
-      const eventType = this.selected && this.selected.eventType
-      return (this.resources.fields || []).filter(field => (field.sourceEvents || []).includes(eventType))
+      return scopeEventFields(this.resources.fields || [], this.selected, 'OVERVIEW')
     },
     schemaHealth() { return eventSchemaHealth(this.selected, this.resources.fields || []) },
     filteredEvents() {
       const keyword = this.filters.keyword.toLowerCase()
-      return this.events.filter(event => {
+      return this.policyEvents.filter(event => {
         const matchesKeyword = !keyword || [
           event.eventName, event.eventType, event.description, event.sourceModule
         ].some(value => String(value || '').toLowerCase().includes(keyword))
@@ -174,7 +201,7 @@ export default {
       return Array.from(groups.entries()).map(([name, items]) => ({ name, items }))
     },
     sourceOptions() {
-      return [...new Set(this.events.map(item => item.sourceModule).filter(Boolean))].sort()
+      return [...new Set(this.policyEvents.map(item => item.sourceModule).filter(Boolean))].sort()
     },
     canReadRichCatalog() {
       return this.permissions.includes('*:*:*') || this.permissions.includes('todo:resource:list')
@@ -227,7 +254,7 @@ export default {
       }
     },
     async loadSelectedDetail() {
-      const summary = this.events.find(item => this.eventKey(item) === this.selectedKey)
+      const summary = this.policyEvents.find(item => this.eventKey(item) === this.selectedKey)
       if (!summary || !summary.eventCatalogId) {
         this.detail = null
         return
@@ -241,7 +268,10 @@ export default {
     },
     eventKey(event) { return `${event.eventType}:${Number(event.payloadVersion || 1)}` },
     selectable(event) {
-      return event.status === 'ACTIVE' && event.schemaStatus === 'READY'
+      const compatible = !this.eventPolicy.locked || this.policyEvents.some(item =>
+        this.eventKey(item) === this.eventKey(event))
+      return compatible && event.status === 'ACTIVE' && event.schemaStatus === 'READY' &&
+        event.configurationReady !== false
     },
     async selectEvent(event) {
       if (this.readonly) return
@@ -285,12 +315,19 @@ export default {
     fieldTypeLabel(field) {
       const semantic = String((field && field.semanticType) || '').toUpperCase()
       if (semantic === 'USER_ID') return '人员'
-      if (semantic === 'DEPARTMENT_ID') return '部门'
+      if (semantic === 'DEPT_ID') return '部门'
       if (semantic === 'DICT') return '业务选项'
-      if (semantic === 'BUSINESS_OBJECT_ID') return '业务对象'
+      if (semantic === 'BUSINESS_REF') return '业务对象'
       return ({ string: '文本', integer: '整数', number: '数字', boolean: '是/否', object: '业务对象' })[
         String((field && field.type) || '').toLowerCase()
       ] || '业务信息'
+    },
+    fieldPurposeLabel(field) {
+      const purposes = []
+      if (field.ownerEligible) purposes.push('可作负责人')
+      if (field.conditionEligible) purposes.push('可作触发条件')
+      if (field.defaultValueEligible) purposes.push('可作默认值')
+      return purposes.length ? purposes.join('、') : '只读业务信息'
     },
     focusField(fieldPath) {
       const target = repairFocusTarget(fieldPath)
@@ -343,6 +380,8 @@ export default {
   gap: 10px;
   margin-bottom: 16px;
 }
+
+.event-step__policy { margin-bottom: 14px; }
 
 .event-detail__technical {
   margin-top: 12px;
@@ -517,24 +556,29 @@ export default {
 }
 
 .event-detail__field-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin-top: 8px;
 
-  span {
-    padding: 5px 8px;
-    font-size: 12px;
+  article {
+    min-width: 0;
+    padding: 9px 10px;
     color: #34465B;
     background: #FFFFFF;
     border: 1px solid #D9E1EA;
     border-radius: 8px;
   }
 
+  article > div { display: flex; justify-content: space-between; gap: 8px; }
+  span { font-size: 13px; font-weight: 600; color: #0B2A55; }
   small {
-    margin-left: 5px;
+    flex: 0 0 auto;
+    font-size: 11px;
     color: #7B8898;
   }
+
+  p { margin: 5px 0 0; font-size: 12px; line-height: 18px; color: #65758A; }
 }
 
 .event-detail__repair {
@@ -559,5 +603,6 @@ export default {
   .event-detail__facts {
     grid-template-columns: 1fr;
   }
+  .event-detail__field-list { grid-template-columns: 1fr; }
 }
 </style>

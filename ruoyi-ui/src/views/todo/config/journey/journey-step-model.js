@@ -466,10 +466,77 @@ function scopeOwnerFields(fields, event) {
   const payloadVersion = Number(selected.payloadVersion || 0)
   if (!eventType || payloadVersion <= 0) return []
   const sourceKey = `${eventType}@${payloadVersion}`
-  return (Array.isArray(fields) ? fields : []).filter(field =>
-    isOwnerField(field) &&
-    (Array.isArray(field.sourceEventVersions) ? field.sourceEventVersions : []).includes(sourceKey)
+  const exactVersionFields = (Array.isArray(fields) ? fields : []).filter(field =>
+    list(object(field).sourceEventVersions).includes(sourceKey)
   )
+  return scopeEventFields(exactVersionFields, event, 'OWNER')
+}
+
+function filterEventsByPolicy(events, policy) {
+  const rows = Array.isArray(events) ? events : []
+  const value = object(policy)
+  if (value.locked !== true) return rows.slice()
+  const allowed = new Set(list(value.allowedEventTypes).map(item => String(item)))
+  const payloadVersion = Number(value.payloadVersion || 0)
+  return rows.filter(event =>
+    allowed.has(String(object(event).eventType || '')) &&
+    (!payloadVersion || Number(object(event).payloadVersion || 0) === payloadVersion)
+  )
+}
+
+function scopeEventFields(fields, event, purpose) {
+  const selected = object(event)
+  const eventType = String(selected.eventType || '')
+  const payloadVersion = Number(selected.payloadVersion || 0)
+  if (!eventType || payloadVersion <= 0) return []
+  const sourceKey = `${eventType}@${payloadVersion}`
+  const targetPurpose = String(purpose || 'OVERVIEW').toUpperCase()
+  return (Array.isArray(fields) ? fields : []).reduce((scoped, field) => {
+    const value = object(field)
+    const exactSources = list(value.sourceEventVersions)
+    const matches = exactSources.length
+      ? exactSources.includes(sourceKey)
+      : list(value.sourceEvents).includes(eventType)
+    if (!matches) return scoped
+    const configurable = Object.prototype.hasOwnProperty.call(value, 'businessConfigurable')
+      ? value.businessConfigurable === true
+      : true
+    if (!configurable) return scoped
+
+    const purposeScopes = {
+      OWNER: 'ownerSourceEventVersions',
+      CONDITION: 'conditionSourceEventVersions',
+      DEFAULT_VALUE: 'defaultValueSourceEventVersions'
+    }
+    const purposeFlags = {
+      OWNER: 'ownerEligible',
+      CONDITION: 'conditionEligible',
+      DEFAULT_VALUE: 'defaultValueEligible'
+    }
+    const exactEligibility = purposeName => {
+      const sourceProperty = purposeScopes[purposeName]
+      if (Object.prototype.hasOwnProperty.call(value, sourceProperty)) {
+        return list(value[sourceProperty]).includes(sourceKey)
+      }
+      if (purposeName === 'OWNER') return isOwnerField(value)
+      return value[purposeFlags[purposeName]] === true
+    }
+    const projected = {
+      ...value,
+      ownerEligible: exactEligibility('OWNER'),
+      conditionEligible: exactEligibility('CONDITION'),
+      defaultValueEligible: exactEligibility('DEFAULT_VALUE')
+    }
+    const hasExactPurposeScopes = Object.values(purposeScopes)
+      .some(property => Object.prototype.hasOwnProperty.call(value, property))
+    const eligibleForOverview = projected.ownerEligible ||
+      projected.conditionEligible || projected.defaultValueEligible
+    const include = targetPurpose === 'OVERVIEW'
+      ? (!hasExactPurposeScopes || eligibleForOverview)
+      : projected[purposeFlags[targetPurpose]] === true
+    if (include) scoped.push(projected)
+    return scoped
+  }, [])
 }
 
 function ownerSelectionStillValid(selection, fields) {
@@ -1055,13 +1122,18 @@ function routeKey(value, index) {
 function normalizedOutcome(row, index) {
   const value = object(row)
   const kind = effectKind(value)
+  const legacyResult = (value.resultValue === null || value.resultValue === undefined) &&
+    value.value !== null && value.value !== undefined
+  const resultValue = legacyResult ? value.value : value.resultValue
   return {
     ...clone(value),
     id: routeKey(value.id, index),
     label: String(value.label || `业务结果 ${index + 1}`),
-    resultField: value.resultField ? String(value.resultField) : null,
-    resultValue: value.resultValue === null || value.resultValue === undefined ? null : String(value.resultValue),
-    resultLabel: value.resultLabel ? String(value.resultLabel) : null,
+    resultField: value.resultField || value.field ? String(value.resultField || value.field) : null,
+    resultValue: resultValue === null || resultValue === undefined ? null : String(resultValue),
+    resultLabel: value.resultLabel
+      ? String(value.resultLabel)
+      : (legacyResult && value.label ? String(value.label) : null),
     effectKind: kind,
     resultType: kind === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
     targetVersionId: Number(value.targetVersionId) || null,
@@ -1558,6 +1630,30 @@ function simulationPublishCapabilities(permissions) {
   }
 }
 
+function leadReleaseVersions(currentVersionId, definition) {
+  const versions = {}
+  const current = Number(currentVersionId)
+  if (current > 0) versions['TD-001'] = current
+
+  const routing = object(object(object(definition).routing).config)
+  const downstreamCodes = new Set(['TD-002', 'TD-003', 'TD-004'])
+  ;(Array.isArray(routing.businessOutcomes) ? routing.businessOutcomes : []).forEach(outcome => {
+    const code = String((outcome && outcome.targetTemplateCode) || '')
+    const versionId = Number(outcome && outcome.targetVersionId)
+    if (downstreamCodes.has(code) && versionId > 0) versions[code] = versionId
+  })
+  Object.entries(object(routing.releaseDependencies)).forEach(([code, rawVersionId]) => {
+    const versionId = Number(rawVersionId)
+    if (downstreamCodes.has(code) && versionId > 0) versions[code] = versionId
+  })
+  return versions
+}
+
+function canActivateLeadRelease(permissions) {
+  const granted = Array.isArray(permissions) ? permissions : []
+  return granted.includes('*:*:*') || granted.includes('todo:definition:publish')
+}
+
 module.exports = {
   MAX_CONDITION_GROUP_DEPTH,
   operatorsForField,
@@ -1581,6 +1677,8 @@ module.exports = {
   ownerStrategy,
   isOwnerField,
   scopeOwnerFields,
+  filterEventsByPolicy,
+  scopeEventFields,
   ownerSelectionStillValid,
   repairFocusTarget,
   fixLocation,
@@ -1613,5 +1711,7 @@ module.exports = {
   creationCoverage,
   orderedSimulationTrace,
   publishPreflightGate,
-  simulationPublishCapabilities
+  simulationPublishCapabilities,
+  leadReleaseVersions,
+  canActivateLeadRelease
 }

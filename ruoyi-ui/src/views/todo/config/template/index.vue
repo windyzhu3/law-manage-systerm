@@ -59,6 +59,10 @@
             <el-option label="配置中" value="DRAFT" />
             <el-option label="已发布" value="PUBLISHED" />
           </el-select>
+          <el-select v-model="query.status" clearable placeholder="运行状态" @change="search">
+            <el-option label="运行中" value="0" />
+            <el-option label="已停用" value="1" />
+          </el-select>
           <el-select v-model="query.issueType" clearable placeholder="健康状态" @change="search">
             <el-option label="存在阻塞" value="BLOCKER" />
             <el-option label="存在警告" value="WARNING" />
@@ -94,6 +98,21 @@
             <template-progress-cell :row="row" />
           </template>
         </el-table-column>
+        <el-table-column label="运行状态" min-width="220">
+          <template slot-scope="{ row }">
+            <div class="template-runtime-state">
+              <el-tag :type="runtimePresentation(row).type" size="small">
+                {{ runtimePresentation(row).label }}
+              </el-tag>
+              <small
+                v-if="runtimePresentation(row).replacementText"
+                class="template-replacement"
+              >
+                {{ runtimePresentation(row).replacementText }}
+              </small>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="健康状态" min-width="180">
           <template slot-scope="{ row }">
             <div class="template-health">
@@ -115,7 +134,7 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="170" align="right">
+        <el-table-column label="操作" fixed="right" width="290" align="right">
           <template slot-scope="{ row }">
             <el-button
               v-hasPermi="['todo:template:list']"
@@ -124,7 +143,24 @@
               icon="el-icon-right"
               @click.stop="continueConfiguration(row)"
             >
-              {{ row.primaryAction === 'VIEW_PUBLISHED' ? '查看已发布版本' : '继续配置' }}
+              {{ primaryActionLabel(row) }}
+            </el-button>
+            <el-button
+              v-if="runtimePresentation(row).state === 'REPLACED'"
+              v-hasPermi="['todo:template:list']"
+              type="text"
+              @click.stop="openHistory(row)"
+            >
+              查看历史配置
+            </el-button>
+            <el-button
+              v-else-if="togglePresentation(row)"
+              v-hasPermi="['todo:template:toggle']"
+              type="text"
+              :loading="Boolean(rowToggleLoading[row.templateId])"
+              @click.stop="toggleRow(row)"
+            >
+              {{ togglePresentation(row).label }}
             </el-button>
           </template>
         </el-table-column>
@@ -153,8 +189,13 @@
 import TemplateDrawer from './TemplateDrawer'
 import TemplateProblemSummary from './TemplateProblemSummary'
 import TemplateProgressCell from './TemplateProgressCell'
-import { listTodoTemplateWorkbench } from '@/api/todo-config'
-import { resolveProblemSummary } from './template-workbench-model'
+import { listTodoTemplateWorkbench, toggleTodoTemplate } from '@/api/todo-config'
+import {
+  resolveProblemSummary,
+  templateRuntimePresentation,
+  templateNavigationTarget,
+  templateTogglePresentation
+} from './template-workbench-model'
 
 const emptyQuery = () => ({
   pageNum: 1,
@@ -163,6 +204,7 @@ const emptyQuery = () => ({
   businessType: '',
   businessStage: '',
   publishStatus: '',
+  status: '',
   issueType: ''
 })
 
@@ -181,7 +223,8 @@ export default {
       total: 0,
       serverSummary: {},
       query: emptyQuery(),
-      createDrawerOpen: false
+      createDrawerOpen: false,
+      rowToggleLoading: {}
     }
   },
   computed: {
@@ -196,6 +239,16 @@ export default {
     number(value) {
       const parsed = Number(value)
       return Number.isFinite(parsed) ? parsed : 0
+    },
+    runtimePresentation(row) {
+      return templateRuntimePresentation(row)
+    },
+    togglePresentation(row) {
+      return templateTogglePresentation(row)
+    },
+    primaryActionLabel(row) {
+      if (row && row.primaryAction === 'OPEN_REPLACEMENT') return '打开现行模板'
+      return row && row.primaryAction === 'VIEW_PUBLISHED' ? '查看已发布版本' : '继续配置'
     },
     async load() {
       this.loading = true
@@ -235,23 +288,55 @@ export default {
     afterDraftCreated(templateId) {
       this.createDrawerOpen = false
       if (templateId) {
-        this.openJourney(templateId, 'CONTINUE_CONFIGURATION')
+        this.openJourney(templateId, 'draft')
       } else {
         this.load()
       }
     },
     continueConfiguration(row) {
-      this.openJourney(row && row.templateId, row && row.primaryAction)
+      const target = templateNavigationTarget(row)
+      this.openJourney(target.templateId, target.view)
     },
-    openJourney(templateId, primaryAction) {
+    openHistory(row) {
+      this.openJourney(row && row.templateId, 'published')
+    },
+    openJourney(templateId, view) {
       if (!templateId) return
       this.$router.push({
         path: '/todo-engine/todo-template-journey',
         query: {
           templateId: String(templateId),
-          view: primaryAction === 'VIEW_PUBLISHED' ? 'published' : 'draft'
+          view: view === 'published' ? 'published' : 'draft'
         }
       })
+    },
+    actionId(action) {
+      return `template-${action}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    },
+    async toggleRow(row) {
+      const presentation = templateTogglePresentation(row)
+      const templateId = Number(row && row.templateId)
+      if (!presentation || !templateId || this.rowToggleLoading[templateId]) return
+      this.$set(this.rowToggleLoading, templateId, true)
+      try {
+        await this.$confirm(presentation.confirmText, presentation.label, {
+          type: 'warning',
+          confirmButtonText: `确认${presentation.label}`
+        })
+        await toggleTodoTemplate(templateId, {
+          status: presentation.targetStatus,
+          actionId: this.actionId('toggle'),
+          expectedVersion: Number(row.lockVersion || 0)
+        })
+        this.$modal.msgSuccess(`模板已${presentation.targetStatus === '0' ? '启用' : '停用'}`)
+        await this.load()
+      } catch (error) {
+        if (error !== 'cancel' && error !== 'close') {
+          this.$modal.msgError((error && (error.msg || error.message)) || '模板运行状态更新失败')
+        }
+      } finally {
+        this.$set(this.rowToggleLoading, templateId, false)
+      }
     },
     businessTypeLabel(value) {
       return this.dictLabel(this.dict.type.law_todo_business_type, value, '未设置业务类型')

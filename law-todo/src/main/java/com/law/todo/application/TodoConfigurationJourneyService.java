@@ -50,6 +50,7 @@ public class TodoConfigurationJourneyService
     private final TodoEventResourceService eventResources;
     private final TodoBusinessOutcomeCatalogService outcomes;
     private final TodoSimulationReadinessService readiness;
+    private final TodoTemplateEventPolicy eventPolicy;
     private final TodoJourneyDependencyService dependencies=new TodoJourneyDependencyService();
 
     @Autowired
@@ -57,30 +58,42 @@ public class TodoConfigurationJourneyService
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
-            TodoSimulationReadinessService readiness)
-    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,readiness);}
+            TodoSimulationReadinessService readiness,TodoTemplateEventPolicy eventPolicy)
+    {this(query,new TodoDefinitionCodec(),mapper,resourceCatalog,evaluator,preview,templates,eventResources,
+            outcomes,readiness,eventPolicy);}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources)
-    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null,null);}
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,null,null,
+            new TodoTemplateEventPolicy());}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes)
-    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,null);}
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,null,
+            new TodoTemplateEventPolicy());}
 
     TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,TodoConfigurationMapper mapper,
             TodoConfigurationResourceCatalogService resourceCatalog,TodoConfigurationJourneyEvaluator evaluator,
             TodoEmployeeTodoPreviewProjector preview,TodoTemplateService templates,
             TodoEventResourceService eventResources,TodoBusinessOutcomeCatalogService outcomes,
             TodoSimulationReadinessService readiness)
+    {this(query,codec,mapper,resourceCatalog,evaluator,preview,templates,eventResources,outcomes,readiness,
+            new TodoTemplateEventPolicy());}
+
+    TodoConfigurationJourneyService(TodoConfigurationQueryService query,TodoDefinitionCodec codec,
+            TodoConfigurationMapper mapper,TodoConfigurationResourceCatalogService resourceCatalog,
+            TodoConfigurationJourneyEvaluator evaluator,TodoEmployeeTodoPreviewProjector preview,
+            TodoTemplateService templates,TodoEventResourceService eventResources,
+            TodoBusinessOutcomeCatalogService outcomes,TodoSimulationReadinessService readiness,
+            TodoTemplateEventPolicy eventPolicy)
     {
         this.query=query;this.codec=codec;this.mapper=mapper;this.resourceCatalog=resourceCatalog;
         this.evaluator=evaluator;this.preview=preview;this.templates=templates;this.eventResources=eventResources;
-        this.outcomes=outcomes;this.readiness=readiness;
+        this.outcomes=outcomes;this.readiness=readiness;this.eventPolicy=eventPolicy;
     }
 
     public TodoConfigurationJourneyView load(long templateId,Actor actor)
@@ -93,7 +106,7 @@ public class TodoConfigurationJourneyService
                 detail.templateCode(),detail.businessType());
         TodoConfigurationJourneyEvaluator.Evaluation evaluation=evaluator.evaluate(detail,definition,state);
         return new TodoConfigurationJourneyView(summary(detail,version),evaluation.steps(),resources(detail,definition),
-                preview.project(detail,definition),evaluation.issues(),permissions(actor));
+                preview.project(detail,definition),evaluation.issues(),permissions(actor),state);
     }
 
     /** Internal canonical source; deliberately excluded from the HTTP journey view. */
@@ -153,25 +166,58 @@ public class TodoConfigurationJourneyService
         var events=eventResources.list(Map.of("businessObjectType",businessType,"offset",0,"limit",500)).rows();
         return new CurrentResources(events,fields,query.ownerCatalog(),
                 resourceCatalog.materials(businessType),resourceCatalog.validators(businessType),resourceCatalog.recipes(businessType),
-                templates.listTemplateCalendarCatalog(),routingTargets(businessType),
+                templates.listTemplateCalendarCatalog(),routingTargets(businessType,definition),
                 outcomes==null?TodoBusinessOutcomeCatalogService.BusinessOutcomeSet.empty():
                         outcomes.resolve(detail.templateCode(),businessType,
-                                detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition));
+                                detail.editableVersion()==null?null:detail.editableVersion().versionId(),definition),
+                eventPolicy==null?TodoTemplateEventPolicy.TemplateEventPolicyView.unrestricted():
+                        eventPolicy.view(detail.templateCode(),businessType));
     }
 
-    private List<RoutingTargetCatalogEntry> routingTargets(String businessType)
+    private List<RoutingTargetCatalogEntry> routingTargets(String businessType,TodoDefinitionDocument definition)
     {
         List<Map<String,Object>> rows=mapper.selectPublishedRoutingTargetCatalog(businessType);
-        if(rows==null)return List.of();
-        return rows.stream()
-                .filter(row->businessType.equals(text(row,"business_type","businessType")))
-                .filter(row->"PUBLISHED".equals(text(row,"status","status")))
-                .map(row->new RoutingTargetCatalogEntry(
-                        longNumber(value(row,"template_id","templateId")),text(row,"template_code","templateCode"),
-                        text(row,"template_name","templateName"),text(row,"business_type","businessType"),
-                        longNumber(value(row,"version_id","versionId")),
-                        integer(value(row,"version_no","versionNo"),0),text(row,"status","status")))
-                .toList();
+        Map<Long,RoutingTargetCatalogEntry> targets=new LinkedHashMap<>();
+        for(Map<String,Object> row:rows==null?List.<Map<String,Object>>of():rows)
+            appendRoutingTarget(targets,businessType,row);
+        for(Long versionId:referencedRoutingVersions(definition))
+        {
+            if(targets.containsKey(versionId))continue;
+            appendRoutingTarget(targets,businessType,mapper.selectTemplateIdentityByVersionId(versionId));
+        }
+        return List.copyOf(targets.values());
+    }
+
+    private void appendRoutingTarget(Map<Long,RoutingTargetCatalogEntry> targets,String businessType,
+            Map<String,Object> row)
+    {
+        if(row==null||!businessType.equals(text(row,"business_type","businessType"))
+                ||!"PUBLISHED".equals(text(row,"status","status")))return;
+        Long versionId=longNumber(value(row,"version_id","versionId"));if(versionId==null)return;
+        targets.putIfAbsent(versionId,new RoutingTargetCatalogEntry(
+                longNumber(value(row,"template_id","templateId")),text(row,"template_code","templateCode"),
+                text(row,"template_name","templateName"),text(row,"business_type","businessType"),versionId,
+                integer(value(row,"version_no","versionNo"),0),text(row,"status","status")));
+    }
+
+    private List<Long> referencedRoutingVersions(TodoDefinitionDocument definition)
+    {
+        if(definition==null||definition.routing()==null)return List.of();
+        Map<Long,Boolean> result=new LinkedHashMap<>();
+        collectVersionIds(definition.routing().config().get("businessOutcomes"),"targetVersionId",result);
+        collectVersionIds(definition.routing().config().get("nodes"),"templateVersionId",result);
+        return List.copyOf(result.keySet());
+    }
+
+    private void collectVersionIds(Object source,String key,Map<Long,Boolean> result)
+    {
+        if(!(source instanceof List<?> rows))return;
+        for(Object item:rows)
+        {
+            if(!(item instanceof Map<?,?> row))continue;
+            Object raw=row.get(key);Long versionId=longNumber(raw);
+            if(versionId!=null)result.putIfAbsent(versionId,Boolean.TRUE);
+        }
     }
 
     private TemplateWorkbenchItem workbenchItem(Map<String,Object> row,TodoSimulationReadinessView readiness)
@@ -189,14 +235,22 @@ public class TodoConfigurationJourneyService
         JourneyStep nextStep=evaluation.steps().stream().filter(step->!completed(step)).findFirst().orElse(null);
         String publishStatus=text(row,"publish_status","publishStatus");
         boolean published="PUBLISHED".equals(publishStatus);
+        String templateStatus=text(row,"template_status","templateStatus");
+        String replacementCode=text(row,"replacement_template_code","replacementTemplateCode");
+        String runtimeState="0".equals(templateStatus)?"ACTIVE":replacementCode!=null?"REPLACED":"INACTIVE";
+        String primaryAction="REPLACED".equals(runtimeState)?"OPEN_REPLACEMENT":
+                published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION";
         String journeyState=published?"PUBLISHED":blockers>0?"BLOCKED":warnings>0?"WARNING":
                 completed==STEP_COUNT?"READY":"IN_PROGRESS";
         return new TemplateWorkbenchItem(requiredId(row),text(row,"template_code","templateCode"),
                 text(row,"template_name","templateName"),
                 text(row,"business_type","businessType"),text(row,"business_stage","businessStage"),
                 journeyState,completed,STEP_COUNT,blockers,warnings,text(row,"last_editor","lastEditor"),
-                time(row,"update_time","updateTime"),published?"VIEW_PUBLISHED":"CONTINUE_CONFIGURATION",
-                nextStep==null?null:nextStep.code(),nextStep==null?null:nextStep.title());
+                time(row,"update_time","updateTime"),primaryAction,
+                nextStep==null?null:nextStep.code(),nextStep==null?null:nextStep.title(),templateStatus,
+                integer(value(row,"lock_version","lockVersion"),0),runtimeState,
+                longNumber(value(row,"replacement_template_id","replacementTemplateId")),replacementCode,
+                text(row,"replacement_template_name","replacementTemplateName"));
     }
 
     private TemplateConfigurationDetail workbenchDetail(Map<String,Object> row,String definitionJson)

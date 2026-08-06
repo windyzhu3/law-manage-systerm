@@ -67,6 +67,7 @@
           <div class="routing-outcome__main">
             <el-select
               v-if="typedMode"
+              class="routing-outcome__result"
               :ref="`businessOutcomes-${index}`"
               v-model="row.resultValue"
               :disabled="readonly"
@@ -82,6 +83,7 @@
             </el-select>
             <el-input
               v-else
+              class="routing-outcome__result"
               :ref="`businessOutcomes-${index}`"
               v-model="row.label"
               :disabled="readonly"
@@ -113,25 +115,31 @@
               <el-option label="结束" value="END" />
             </el-select>
 
-            <el-select
+            <div
               v-if="effectFor(row).needsTarget"
-              :ref="`targetVersionId-${index}`"
-              v-model="row.targetVersionId"
-              :disabled="readonly"
-              filterable
-              placeholder="选择下一张待办"
-              @change="targetChanged(row)"
+              class="routing-outcome__target-wrap"
             >
-              <el-option
-                v-for="target in filteredRoutingTargets"
-                :key="versionId(target)"
-                :label="templateName(target)"
-                :value="versionId(target)"
+              <span>下一步待办</span>
+              <el-select
+                class="routing-outcome__target"
+                :ref="`targetVersionId-${index}`"
+                v-model="row.targetVersionId"
+                :disabled="readonly"
+                filterable
+                placeholder="选择下一张待办"
+                @change="targetChanged(row)"
               >
-                <span>{{ templateName(target) }}</span>
-                <small>{{ target.templateCode || target.template_code }} · 已发布 v{{ target.versionNo || target.version_no }}</small>
-              </el-option>
-            </el-select>
+                <el-option
+                  v-for="target in displayRoutingTargets"
+                  :key="versionId(target)"
+                  :label="templateName(target)"
+                  :value="versionId(target)"
+                >
+                  <span>{{ templateName(target) }}</span>
+                  <small>{{ target.templateCode || target.template_code }} · {{ targetVersionLabel(target) }}</small>
+                </el-option>
+              </el-select>
+            </div>
             <div v-else-if="!typedMode" class="routing-outcome__end">
               <i class="el-icon-circle-close" />流程在此结束，不再创建后续待办
             </div>
@@ -236,6 +244,24 @@ export default {
     filteredRoutingTargets() {
       return routeTargetsFor(this.businessType, this.routingTargets)
     },
+    displayRoutingTargets() {
+      const targets = this.filteredRoutingTargets.slice()
+      const known = new Set(targets.map(target => this.versionId(target)))
+      this.draftRows.forEach(row => {
+        const versionId = Number(row.targetVersionId)
+        if (!this.effectFor(row).needsTarget || versionId <= 0 || known.has(versionId)) return
+        targets.push({
+          templateCode: row.targetTemplateCode || '',
+          templateName: this.historicalTargetName(row.targetTemplateCode, versionId),
+          businessType: this.businessType,
+          versionId,
+          versionNo: null,
+          historicalReference: true
+        })
+        known.add(versionId)
+      })
+      return targets
+    },
     blocker() {
       return routingDraftBlocker(this.draftRows, {
         mode: this.mode,
@@ -263,18 +289,19 @@ export default {
   methods: {
     hydrate() {
       this.draftRows = clone(this.rows).map((row, index) => {
-        const resultValue = row.resultValue || this.conditionResult(row.condition)
+        const resultValue = row.resultValue || row.value || this.conditionResult(row.condition)
         const option = this.outcomeOptions.find(item => String(item.value) === String(resultValue))
         return {
           id: row.id || `result_${index + 1}`,
           label: row.label || '',
-          resultField: row.resultField || (option && this.outcomeSet.resultField) || null,
+          resultField: row.resultField || row.field || (option && this.outcomeSet.resultField) || null,
           resultValue: resultValue == null ? null : String(resultValue),
           resultLabel: row.resultLabel || (option && option.label) || null,
           effectKind: effectKind(row.effectKind ? row : (option || row)),
           resultType: effectKind(row.effectKind ? row : (option || row)) === 'NEXT_TEMPLATE' ? 'NEXT' : 'END',
           targetVersionId: Number(row.targetVersionId) || null,
           targetTemplateCode: row.targetTemplateCode || (option && option.targetTemplateCode) || null,
+          businessAction: row.businessAction,
           default: row.default === true,
           condition: clone(row.condition || {})
         }
@@ -286,6 +313,7 @@ export default {
     },
     conditionResult(condition) {
       const root = condition && condition.$expression && condition.$expression.root
+      if (root && root.field && root.operator === 'EQ') return root.value
       const predicate = root && Array.isArray(root.conditions) && root.conditions[0]
       return predicate && predicate.operator === 'EQ' ? predicate.value : null
     },
@@ -339,7 +367,7 @@ export default {
       this.commit()
     },
     targetChanged(row) {
-      const target = this.filteredRoutingTargets.find(item => this.versionId(item) === Number(row.targetVersionId))
+      const target = this.displayRoutingTargets.find(item => this.versionId(item) === Number(row.targetVersionId))
       row.targetTemplateCode = target ? (target.templateCode || target.template_code) : null
       this.commit()
     },
@@ -363,6 +391,9 @@ export default {
       }[effectKind(row)] || 'el-icon-setting'
     },
     effectExplanation(row) {
+      if (String(row.businessAction || '').toUpperCase() === 'START_RETRY') {
+        return '当前首联待办结束，系统按重试策略建立后续联系计划'
+      }
       if (this.effectFor(row).needsTarget) return '选择同一业务域的已发布待办'
       return '由系统按已治理的业务结果自动执行，无需选择虚假的下游模板'
     },
@@ -421,6 +452,19 @@ export default {
     },
     versionId(target) { return Number(target.versionId || target.version_id) },
     templateName(target) { return target.templateName || target.template_name || '未命名待办' },
+    targetVersionLabel(target) {
+      const versionNo = target.versionNo || target.version_no
+      return versionNo ? `已发布 v${versionNo}` : '历史已发布版本'
+    },
+    historicalTargetName(templateCode, versionId) {
+      const names = {
+        'TD-001': '首联待办',
+        'TD-002': '疑似无效主管复核',
+        'TD-003': '无法联系重试',
+        'TD-004': '5天实质进展'
+      }
+      return names[templateCode] || `历史已发布待办（版本 ${versionId}）`
+    },
     templateNameByVersion(versionId) {
       const target = this.filteredRoutingTargets.find(item => this.versionId(item) === Number(versionId))
       return target ? this.templateName(target) : '尚未选择的后续待办'
@@ -477,7 +521,7 @@ export default {
   display: flex;
   gap: 9px;
   align-items: center;
-  min-width: 220px;
+  min-width: 0;
   padding: 10px 12px;
   color: #0B2A55;
   background: #F5F8FC;
@@ -544,9 +588,30 @@ export default {
 
 .routing-outcome__main {
   display: grid;
-  grid-template-columns: minmax(200px, 1fr) 150px minmax(200px, 1fr);
-  gap: 9px;
+  grid-template-columns: minmax(180px, .8fr) minmax(260px, 1.2fr);
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.routing-outcome__body,
+.routing-outcome__main > * { min-width: 0; }
+
+.routing-outcome__result,
+.routing-outcome__target { width: 100%; }
+
+.routing-outcome__target-wrap {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  grid-column: 1 / -1;
+  gap: 10px;
   align-items: center;
+  padding: 10px 12px;
+  background: #F7F9FC;
+  border: 1px solid #E0E6ED;
+  border-radius: 8px;
+
+  > span { font-size: 13px; font-weight: 600; color: #53667C; }
 }
 
 .routing-outcome__next-label {
@@ -593,6 +658,11 @@ export default {
   color: #8A98A8;
 }
 
+@media (max-width: 1280px) {
+  .routing-outcome__main { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .routing-outcome__target-wrap { grid-column: 1 / -1; }
+}
+
 @media (max-width: 760px) {
   .business-routing > header {
     align-items: stretch;
@@ -603,5 +673,6 @@ export default {
   .routing-outcome { grid-template-columns: 38px minmax(0, 1fr); }
   .routing-outcome > .is-danger { grid-column: 2; }
   .routing-outcome__main { grid-template-columns: 1fr; }
+  .routing-outcome__target-wrap { grid-template-columns: 1fr; grid-column: auto; }
 }
 </style>
