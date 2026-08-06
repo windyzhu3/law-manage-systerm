@@ -332,6 +332,26 @@ check('renders the task-centered template workbench', () => {
   }
 })
 
+check('separates configuration progress from template runtime state', () => {
+  const model = require(path.join(root, summaryModelPath))
+  assert.deepStrictEqual(model.templateRuntimePresentation({ runtimeState: 'ACTIVE' }), {
+    state: 'ACTIVE', label: '运行中', type: 'success', replacementText: ''
+  })
+  assert.deepStrictEqual(model.templateRuntimePresentation({
+    runtimeState: 'REPLACED', replacementTemplateCode: 'TD-001', replacementTemplateName: '首联待办'
+  }), {
+    state: 'REPLACED', label: '已停用', type: 'info',
+    replacementText: '已由首联待办（TD-001）替代'
+  })
+  assert.deepStrictEqual(model.templateNavigationTarget({
+    templateId: 1, primaryAction: 'OPEN_REPLACEMENT', replacementTemplateId: 17
+  }), { templateId: 17, view: 'published' })
+  assert.strictEqual(model.templateTogglePresentation({ runtimeState: 'REPLACED' }), null)
+  for (const token of ['运行状态', '打开现行模板', '查看历史配置', 'toggleTodoTemplate', 'query.status']) {
+    assert(workbench.includes(token), `workbench runtime governance missing token: ${token}`)
+  }
+})
+
 check('uses the server-paged workbench endpoint without per-row journey calls', () => {
   assert(workbench.includes('listTodoTemplateWorkbench'), 'workbench endpoint is not used')
   assert(!workbench.includes('listTodoTemplates'), 'legacy template listing must not power the workbench')

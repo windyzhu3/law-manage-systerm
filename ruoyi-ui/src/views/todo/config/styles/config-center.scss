@@ -277,6 +277,23 @@
   border-radius: 8px;
 }
 
+.template-runtime-state {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-runtime-state .el-tag {
+  border-radius: 8px;
+}
+
+.template-replacement {
+  color: #66758A;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .template-updated strong {
   color: #44546A;
   font-size: 13px;
