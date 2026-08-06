@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.law.todo.application.TodoBusinessPayloadHydrationService.ExecutionHydration;
@@ -59,7 +60,7 @@ public class TodoJourneySimulationService
         this.readiness=readiness;
     }
 
-    @Transactional(readOnly=true)
+    @Transactional(propagation=Propagation.NOT_SUPPORTED)
     public TodoJourneySimulationResult simulate(JourneySimulationCommand command,Actor actor)
     {
         if(command.businessId()==0)
