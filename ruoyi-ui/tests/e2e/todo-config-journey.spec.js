@@ -130,7 +130,7 @@ test.describe.serial('Todo journey deterministic real-backend acceptance', () =>
     await drawer.locator('.schema-designer').getByRole('button', { name: '添加第一个字段' }).click()
     const field = drawer.locator('.schema-designer__row:not(.schema-designer__row--header)').first()
     await field.locator('input').nth(0).fill('ownerId')
-    await field.locator('input').nth(1).fill('负责人')
+    await field.locator('input').nth(1).fill('线索负责人')
     await field.locator('.el-select').click()
     await page.locator('.el-select-dropdown:visible .el-select-dropdown__item').nth(1).click()
     await field.locator('.el-input input').last().fill('11')
