@@ -297,9 +297,12 @@ class LeadTodoReleaseVersionLockExternalMysqlIT
                     """);
             String compiledTd001="""
                     {"templateCode":"TD-001","routing":{"config":{"businessOutcomes":[
-                      {"targetTemplateCode":"TD-002","targetVersionId":80},
-                      {"targetTemplateCode":"TD-003","targetVersionId":89},
-                      {"targetTemplateCode":"TD-004","targetVersionId":79}],"start":"td001","nodes":[
+                      {"resultValue":"SUSPECT_INVALID","effectKind":"NEXT_TEMPLATE",
+                       "targetTemplateCode":"TD-002","targetVersionId":80},
+                      {"resultValue":"VALID","effectKind":"NEXT_TEMPLATE",
+                       "targetTemplateCode":"TD-004","targetVersionId":79},
+                      {"resultValue":"UNREACHABLE","effectKind":"END"}],
+                      "releaseDependencies":{"TD-003":89},"start":"td001","nodes":[
                       {"key":"td001","type":"TASK","templateCode":"TD-001","templateVersionId":88},
                       {"key":"firstResult","type":"DECISION"},
                       {"key":"td002","type":"TASK","templateCode":"TD-002","templateVersionId":80},
