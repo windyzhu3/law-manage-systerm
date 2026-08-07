@@ -21,7 +21,7 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-004',
     recipe: '五天实质进展完成',
-    eventName: '首联有效',
+    eventName: '首联结果有效',
     eventFields: ['线索负责人', '首联结果'],
     ownerLabels: ['业务对象负责人', '当前业务对象负责人'],
     scheduleLabels: ['每 5 天循环', '自动开启下一轮'],
@@ -64,7 +64,7 @@ const GUIDED_LEAD_TEMPLATES = Object.freeze([
   {
     code: 'TD-002',
     recipe: '主管复核完成',
-    eventName: '疑似无效线索已标记',
+    eventName: '线索已标记疑似无效',
     eventFields: ['复核主管', '疑似无效原因'],
     ownerLabels: ['事件中的负责人', '复核主管'],
     scheduleLabels: ['办理时长', '工作分钟内'],
