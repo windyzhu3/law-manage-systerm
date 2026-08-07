@@ -747,7 +747,9 @@ async function runGovernedScenarioBatch(page, fixture, expectedScenarioCount) {
     response.request().method() === 'POST' &&
     new URL(response.url()).pathname === `/prod-api/todo/config/templates/${fixture.templateId}/journey/scenarios/batch-simulate`
   )
-  await step.getByTestId('batch-scenario-gate').getByRole('button').click()
+  const batchButton = step.getByTestId('run-scenario-batch')
+  await expect(batchButton).toContainText(String(expectedScenarioCount))
+  await batchButton.click()
   await expectSuccessfulApiResponse(await batchResponse)
   await expect(scenarioCards.locator('.el-tag--success')).toHaveCount(expectedScenarioCount)
 

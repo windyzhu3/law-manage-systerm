@@ -786,7 +786,7 @@ export default {
       })
       this.$modal.msgInfo(target.focusTarget === 'full-simulation'
         ? '已定位到完整试运行，请运行后重新检查发布资格'
-        : '已定位到未通过场景，请运行当前场景或批量验证三个场景')
+        : `已定位到未通过场景，请运行当前场景或批量验证${this.scenarios.length}个场景`)
     },
     async loadDiff() {
       if (!this.capabilities.canDiff) return

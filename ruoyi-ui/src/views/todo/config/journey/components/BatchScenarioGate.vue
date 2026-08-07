@@ -16,12 +16,13 @@
     </div>
     <div class="batch-gate__actions">
       <el-button
+        data-testid="run-scenario-batch"
         plain
         :loading="loading"
         :disabled="batchDisabled"
         @click="$emit('run-batch')"
       >
-        批量验证三个场景
+        批量验证 {{ scenarios.length }} 个场景
       </el-button>
       <el-button
         type="primary"

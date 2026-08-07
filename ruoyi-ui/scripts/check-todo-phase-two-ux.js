@@ -915,7 +915,8 @@ check('runs governed completion scenarios and blocks publish until all pass', ()
   assert(form.includes('SemanticOptionSelector'), 'completion dictionaries must reuse governed semantic selectors')
   assert(form.includes('contactedAt'), 'simulation time must be available as the contactedAt default')
   assert(!form.includes('reviewResult'), 'TD-001 completion form must not hard-code downstream review fields')
-  assert(gate.includes('批量验证三个场景'), 'batch gate must provide one clear action')
+  assert(gate.includes('data-testid="run-scenario-batch"') && gate.includes('scenarios.length'),
+    'batch gate must provide one unambiguous action with the real scenario count')
   const page = read('src/views/todo/config/journey/index.vue')
   const health = read('src/views/todo/config/journey/components/ConfigurationHealthPanel.vue')
   assert(page.includes('@readiness-change="applySimulationReadiness"'),
