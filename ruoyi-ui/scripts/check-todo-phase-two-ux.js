@@ -627,6 +627,31 @@ check('keeps event sample JSON behind an explicit advanced section', () => {
     'a newly added blank field must remain locally editable until it has a schema key')
 })
 
+check('makes event field governance editable without raw JSON', () => {
+  const { buildPayloadSchema, inferSemanticType } = require('../src/views/todo/config/resource/payload-schema-model')
+  const field = {
+    name: 'ownerId', title: '线索负责人', description: '', descriptionAuto: true,
+    type: 'integer', semanticType: '', semanticAuto: true, required: true, exampleText: '11'
+  }
+  const schema = buildPayloadSchema([field])
+  assert.equal(inferSemanticType(field), 'USER_ID', 'ownerId must default to the governed user semantic')
+  assert.deepEqual(schema, {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    properties: {
+      ownerId: {
+        type: 'integer',
+        title: '线索负责人',
+        description: '线索负责人',
+        'x-semantic-type': 'USER_ID',
+        example: 11
+      }
+    },
+    additionalProperties: true,
+    required: ['ownerId']
+  })
+})
+
 check('allows only governed business resources to enter edit mode', () => {
   const panel = read('src/views/todo/config/resource/BusinessResourcePanel.vue')
   assert(panel.includes("item.source === 'GOVERNED'"), 'schema-derived fields must remain read-only')

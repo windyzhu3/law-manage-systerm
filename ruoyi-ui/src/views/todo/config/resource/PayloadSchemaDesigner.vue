@@ -14,13 +14,17 @@
       </el-empty>
       <div v-else class="schema-designer__table">
         <div class="schema-designer__row schema-designer__row--header">
-          <span>字段名称</span><span>显示名称</span><span>字段类型</span><span>是否必填</span><span>示例值</span><span />
+          <span>字段名称</span><span>显示名称</span><span>字段说明</span><span>字段类型</span><span>业务语义</span><span>是否必填</span><span>示例值</span><span />
         </div>
         <div v-for="(field, index) in fields" :key="field.key" class="schema-designer__row">
-          <el-input v-model.trim="field.name" :disabled="readonly" placeholder="如 amount" @input="emitSchema" />
-          <el-input v-model.trim="field.title" :disabled="readonly" placeholder="如 合同金额" @input="emitSchema" />
+          <el-input v-model.trim="field.name" :disabled="readonly" placeholder="如 ownerId" @input="nameChanged(field)" />
+          <el-input v-model.trim="field.title" :disabled="readonly" placeholder="如 线索负责人" @input="titleChanged(field)" />
+          <el-input class="schema-field-description" v-model.trim="field.description" :disabled="readonly" placeholder="说明字段的业务含义" @input="descriptionChanged(field)" />
           <el-select v-model="field.type" :disabled="readonly" @change="typeChanged(field)">
             <el-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+          <el-select class="schema-field-semantic" v-model="field.semanticType" :disabled="readonly" filterable @change="semanticChanged(field)">
+            <el-option v-for="item in semanticOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <el-switch v-model="field.required" :disabled="readonly" @change="emitSchema" />
           <el-input v-model="field.exampleText" :disabled="readonly" :placeholder="examplePlaceholder(field.type)" @input="emitSchema" />
@@ -42,7 +46,14 @@
 </template>
 
 <script>
-const newField = () => ({ key: `field-${Date.now()}-${Math.random()}`, name: '', title: '', type: 'string', required: false, exampleText: '' })
+const { applyFieldDefaults, buildPayloadSchema, inferSemanticType } = require('./payload-schema-model')
+
+const newField = () => ({
+  key: `field-${Date.now()}-${Math.random()}`,
+  name: '', title: '', description: '', descriptionAuto: true,
+  type: 'string', semanticType: '', semanticAuto: true,
+  required: false, exampleText: ''
+})
 
 export default {
   name: 'PayloadSchemaDesigner',
@@ -55,6 +66,13 @@ export default {
         { label: '数字', value: 'number' }, { label: '是/否', value: 'boolean' },
         { label: '日期时间', value: 'string:date-time' }, { label: '数组', value: 'array' },
         { label: '对象', value: 'object' }
+      ],
+      semanticOptions: [
+        { label: '普通业务值', value: 'PLAIN_VALUE' }, { label: '人员', value: 'USER_ID' },
+        { label: '部门', value: 'DEPT_ID' }, { label: '业务对象', value: 'BUSINESS_REF' },
+        { label: '字典选项', value: 'DICT' }, { label: '日期时间', value: 'DATE_TIME' },
+        { label: '系统标识', value: 'SYSTEM_ID' }, { label: '版本号', value: 'SYSTEM_VERSION' },
+        { label: '计数值', value: 'SYSTEM_COUNTER' }
       ]
     }
   },
@@ -72,7 +90,12 @@ export default {
         this.fields = Object.keys(schema.properties || {}).map(name => {
           const item = schema.properties[name] || {}
           const type = item.format === 'date-time' ? 'string:date-time' : (item.type || 'string')
-          return { key: `field-${name}-${Math.random()}`, name, title: item.title || '', type, required: required.has(name), exampleText: this.stringifyExample(item.example) }
+          return {
+            key: `field-${name}-${Math.random()}`, name, title: item.title || '',
+            description: item.description || '', descriptionAuto: !item.description,
+            type, semanticType: item['x-semantic-type'] || '', semanticAuto: !item['x-semantic-type'],
+            required: required.has(name), exampleText: this.stringifyExample(item.example)
+          }
         })
         this.rawJson = JSON.stringify(schema, null, 2)
         this.jsonError = ''
@@ -84,29 +107,8 @@ export default {
       } finally { this.$nextTick(() => { this.hydrating = false }) }
     },
     stringifyExample(value) { return value === undefined ? '' : (typeof value === 'string' ? value : JSON.stringify(value)) },
-    parseExample(text, type) {
-      const value = String(text == null ? '' : text).trim()
-      if (!value) return undefined
-      if (type === 'string' || type === 'string:date-time') return value
-      try { return JSON.parse(value) } catch (error) { return value }
-    },
     buildSchema() {
-      const properties = {}
-      const required = []
-      this.fields.forEach(field => {
-        if (!field.name) return
-        const definition = { type: field.type === 'string:date-time' ? 'string' : field.type }
-        if (field.type === 'string:date-time') definition.format = 'date-time'
-        if (field.title) definition.title = field.title
-        const example = this.parseExample(field.exampleText, field.type)
-        if (example !== undefined) definition.example = example
-        if (field.type === 'array') definition.items = { type: 'string' }
-        properties[field.name] = definition
-        if (field.required) required.push(field.name)
-      })
-      const schema = { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', properties, additionalProperties: true }
-      if (required.length) schema.required = required
-      return schema
+      return buildPayloadSchema(this.fields)
     },
     emitSchema() {
       if (this.hydrating || this.advanced) return
@@ -122,7 +124,22 @@ export default {
       this.$emit('validity-change', false, '请填写字段名称')
     },
     removeField(index) { this.fields.splice(index, 1); this.emitSchema() },
-    typeChanged(field) { field.exampleText = ''; this.emitSchema() },
+    nameChanged(field) {
+      if (field.semanticAuto !== false) field.semanticType = inferSemanticType(field)
+      applyFieldDefaults(field)
+      this.emitSchema()
+    },
+    titleChanged(field) {
+      if (field.descriptionAuto !== false) field.description = field.title || field.name
+      this.emitSchema()
+    },
+    descriptionChanged(field) { field.descriptionAuto = false; this.emitSchema() },
+    semanticChanged(field) { field.semanticAuto = false; this.emitSchema() },
+    typeChanged(field) {
+      field.exampleText = ''
+      if (field.semanticAuto !== false) field.semanticType = inferSemanticType(field)
+      this.emitSchema()
+    },
     examplePlaceholder(type) { return ({ boolean: 'true', integer: '1', number: '99.5', array: '["A","B"]', object: '{"key":"value"}', 'string:date-time': '2026-07-22T10:00:00' })[type] || '示例文本' },
     toggleAdvanced() {
       if (this.advanced) {
@@ -149,7 +166,7 @@ export default {
 .schema-designer__head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
 .schema-designer__head p { margin: 5px 0 0; color: #64748b; font-size: 12px; }
 .schema-designer__table { overflow-x: auto; }
-.schema-designer__row { display: grid; grid-template-columns: 1fr 1.2fr 130px 82px 1.2fr 44px; gap: 8px; align-items: center; min-width: 820px; padding: 7px 0; border-bottom: 1px solid #eef2f7; }
+.schema-designer__row { display: grid; grid-template-columns: 150px 170px 220px 130px 150px 82px 170px 44px; gap: 8px; align-items: center; min-width: 1230px; padding: 7px 0; border-bottom: 1px solid #eef2f7; }
 .schema-designer__row--header { color: #64748b; font-size: 12px; font-weight: 600; }
 .schema-designer__advanced-toggle { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: #94a3b8; font-size: 12px; }
 .schema-designer__advanced .el-alert, .schema-designer__advanced .el-textarea { margin-bottom: 10px; }
