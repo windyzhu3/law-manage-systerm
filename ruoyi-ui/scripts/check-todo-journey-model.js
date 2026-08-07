@@ -1936,10 +1936,15 @@ check('materializes the governed first-contact outcomes without free-text busine
   const targets = [
     { templateCode: 'TD-004', templateName: '5天实质进展', versionId: 104, businessType: 'LEAD', status: 'PUBLISHED' },
     { templateCode: 'TD-002', templateName: '疑似无效复核', versionId: 102, businessType: 'LEAD', status: 'PUBLISHED' },
-    { templateCode: 'TD-003', templateName: '无法联系重试', versionId: 103, businessType: 'LEAD', status: 'PUBLISHED' }
+    { templateCode: 'TD-003', templateName: '无法联系重试', versionId: 103, versionNo: 5,
+      businessType: 'LEAD', status: 'PUBLISHED' },
+    { templateCode: 'TD-003', templateName: '无法联系重试（历史）', versionId: 99, versionNo: 4,
+      businessType: 'LEAD', status: 'PUBLISHED' }
   ]
 
-  const patch = steps.materializeOutcomeRouting(outcomeSet, targets, 101, { config: { preserve: true } })
+  const patch = steps.materializeOutcomeRouting(outcomeSet, targets, 101, {
+    config: { preserve: true, releaseDependencies: { 'TD-003': 99 } }
+  })
   const outcomes = patch.config.businessOutcomes
 
   assert.deepStrictEqual(outcomes.map(row => [row.resultField, row.resultValue, row.resultLabel]), [
@@ -1956,6 +1961,8 @@ check('materializes the governed first-contact outcomes without free-text busine
     edge.condition.$expression.root.conditions[0].value === 'UNREACHABLE'))
   assert(!patch.config.nodes.some(node => node.templateVersionId === 103),
     'TD-003 is materialized only by the persisted retry schedule')
+  assert.deepStrictEqual(patch.config.releaseDependencies, { 'TD-003': 103 },
+    'applying the governed first-contact route must refresh the hidden retry dependency')
   assert.deepStrictEqual(outcomes.map(row =>
     row.condition.$expression.root.conditions[0]
   ), [

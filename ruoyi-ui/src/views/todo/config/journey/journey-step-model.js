@@ -1237,7 +1237,8 @@ function materializeOutcomeRouting(outcomeSet, targets, currentVersionId, curren
     mode: 'SEQUENTIAL',
     joinMode: 'ALL',
     currentVersionId,
-    outcomeSet: catalog
+    outcomeSet: catalog,
+    routingTargets
   }, current)
 }
 
@@ -1374,9 +1375,30 @@ function buildBusinessRoutingPatch(rows, options, current) {
   const graph = governedFirstContact || (mode === 'PARALLEL'
     ? buildParallelRoute(outcomes, settings.currentVersionId, joinMode, currentTaskKey)
     : buildSequentialRoute(outcomes, settings.currentVersionId, currentTaskKey))
+  const currentConfig = clone(object(current && current.config))
+  if (governedFirstContact) {
+    const retryTarget = routeTargetsFor(settings.businessType, list(settings.routingTargets))
+      .filter(target =>
+        String(target.templateCode || target.template_code || '') === 'TD-003' &&
+        String(target.status || 'PUBLISHED').toUpperCase() === 'PUBLISHED'
+      )
+      .sort((left, right) => {
+        const versionOrder = Number(right.versionNo || right.version_no || 0) -
+          Number(left.versionNo || left.version_no || 0)
+        return versionOrder || Number(right.versionId || right.version_id || 0) -
+          Number(left.versionId || left.version_id || 0)
+      })[0]
+    const retryVersionId = Number(retryTarget && (retryTarget.versionId || retryTarget.version_id))
+    if (retryVersionId > 0) {
+      currentConfig.releaseDependencies = {
+        ...object(currentConfig.releaseDependencies),
+        'TD-003': retryVersionId
+      }
+    }
+  }
   return {
     config: {
-      ...clone(object(current && current.config)),
+      ...currentConfig,
       ...graph,
       businessRouting: { mode, joinMode },
       businessOutcomes: clone(outcomes)
