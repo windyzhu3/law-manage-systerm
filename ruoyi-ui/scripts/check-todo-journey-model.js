@@ -201,6 +201,50 @@ check('scopes event fields by exact version and configuration purpose', () => {
   assert.strictEqual(steps.scopeEventFields(fields, suspect, 'OVERVIEW')[1].ownerEligible, false)
 })
 
+check('shows schema business fields in the event overview without granting configuration purposes', () => {
+  const event = {
+    eventType: 'LEAD_ASSIGNED',
+    payloadVersion: 2,
+    payloadSchemaJson: JSON.stringify({
+      type: 'object',
+      properties: {
+        ownerId: {
+          type: 'integer',
+          title: '线索负责人',
+          description: '本次分配后的线索负责人',
+          'x-semantic-type': 'USER_ID'
+        },
+        assignmentId: {
+          type: 'integer',
+          title: '分配记录ID',
+          'x-semantic-type': 'SYSTEM_ID'
+        }
+      }
+    })
+  }
+  const overview = steps.eventOverviewFields([], event)
+
+  assert.deepStrictEqual(overview.map(field => ({
+    code: field.code,
+    name: field.name,
+    description: field.description,
+    semanticType: field.semanticType,
+    ownerEligible: field.ownerEligible,
+    conditionEligible: field.conditionEligible,
+    defaultValueEligible: field.defaultValueEligible
+  })), [{
+    code: 'ownerId',
+    name: '线索负责人',
+    description: '本次分配后的线索负责人',
+    semanticType: 'USER_ID',
+    ownerEligible: false,
+    conditionEligible: false,
+    defaultValueEligible: false
+  }])
+  assert.deepStrictEqual(steps.scopeOwnerFields(overview, event), [])
+  assert.deepStrictEqual(steps.scopeEventFields(overview, event, 'CONDITION'), [])
+})
+
 check('maps readiness coordinates to the exact journey control', () => {
   assert.deepStrictEqual(steps.fixLocation({
     stepKey: 'ROUTING',

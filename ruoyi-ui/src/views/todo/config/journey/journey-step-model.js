@@ -539,6 +539,49 @@ function scopeEventFields(fields, event, purpose) {
   }, [])
 }
 
+function eventOverviewFields(fields, event) {
+  const selected = object(event)
+  const eventType = String(selected.eventType || '')
+  const payloadVersion = Number(selected.payloadVersion || 0)
+  const governed = scopeEventFields(fields, selected, 'OVERVIEW')
+  if (!eventType || payloadVersion <= 0) return governed
+
+  let schema = selected.payloadSchemaJson
+  try {
+    schema = typeof schema === 'string' ? JSON.parse(schema) : object(schema)
+  } catch (_) {
+    return governed
+  }
+
+  const technicalTypes = new Set([
+    'SYSTEM_ID', 'SYSTEM_VERSION', 'SYSTEM_CODE', 'SYSTEM_COUNTER', 'BUSINESS_ID'
+  ])
+  const sourceKey = `${eventType}@${payloadVersion}`
+  const knownCodes = new Set(governed.map(field => String(object(field).code || '')))
+  const schemaFields = Object.entries(object(object(schema).properties)).reduce((result, [code, rawField]) => {
+    if (knownCodes.has(code)) return result
+    const definition = object(rawField)
+    const semanticType = String(definition['x-semantic-type'] || '').toUpperCase()
+    if (technicalTypes.has(semanticType)) return result
+    result.push({
+      code,
+      fieldKey: `${sourceKey}:${code}`,
+      name: definition.title || code,
+      description: definition.description || '',
+      type: definition.format === 'date-time' ? 'date-time' : definition.type,
+      semanticType,
+      businessConfigurable: false,
+      ownerEligible: false,
+      conditionEligible: false,
+      defaultValueEligible: false,
+      sourceEvents: [eventType],
+      sourceEventVersions: [sourceKey]
+    })
+    return result
+  }, [])
+  return governed.concat(schemaFields)
+}
+
 function ownerSelectionStillValid(selection, fields) {
   return Boolean(selection) && (Array.isArray(fields) ? fields : [])
     .some(field => String(field.code) === String(selection))
@@ -1679,6 +1722,7 @@ module.exports = {
   scopeOwnerFields,
   filterEventsByPolicy,
   scopeEventFields,
+  eventOverviewFields,
   ownerSelectionStillValid,
   repairFocusTarget,
   fixLocation,

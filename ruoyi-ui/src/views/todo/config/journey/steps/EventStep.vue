@@ -137,10 +137,10 @@
 import { listEventResources, getEventResource } from '@/api/todo-resources'
 import {
   buildEventPatch,
+  eventOverviewFields,
   eventSchemaHealth,
   filterEventsByPolicy,
-  repairFocusTarget,
-  scopeEventFields
+  repairFocusTarget
 } from '../journey-step-model'
 
 export default {
@@ -177,7 +177,7 @@ export default {
       return this.detail || this.policyEvents.find(item => this.eventKey(item) === this.selectedKey) || null
     },
     selectedFields() {
-      return scopeEventFields(this.resources.fields || [], this.selected, 'OVERVIEW')
+      return eventOverviewFields(this.resources.fields || [], this.selected)
     },
     schemaHealth() { return eventSchemaHealth(this.selected, this.resources.fields || []) },
     filteredEvents() {

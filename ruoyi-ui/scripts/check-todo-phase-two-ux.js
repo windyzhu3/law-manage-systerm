@@ -601,14 +601,12 @@ check('keeps existing incomplete event resources actionable during repair', () =
     'context repair must hydrate only after the replacement request prop has rendered')
 })
 
-check('locks governed template events and exposes only purpose-specific business fields', () => {
+check('locks governed template events and keeps configuration controls purpose-specific', () => {
   const event = read('src/views/todo/config/journey/steps/EventStep.vue')
   const trigger = read('src/views/todo/config/journey/steps/TriggerStep.vue')
   const owner = read('src/views/todo/config/journey/steps/OwnerStep.vue')
   assert(event.includes('filterEventsByPolicy') && event.includes('resources.eventPolicy'),
     'the event picker must consume the governed template-event compatibility policy')
-  assert(event.includes("scopeEventFields(this.resources.fields || [], this.selected, 'OVERVIEW')"),
-    'event details must hide technical identifiers that have no configuration purpose')
   assert(trigger.includes("scopeEventFields(this.resources.fields || [], this.event, 'CONDITION')"),
     'trigger conditions must expose only the selected event version condition whitelist')
   assert(trigger.includes('staleCondition') && trigger.includes('清除旧条件'),
