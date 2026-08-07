@@ -20,7 +20,7 @@
           <el-input v-model.trim="field.name" :disabled="readonly" placeholder="如 ownerId" @input="nameChanged(field)" />
           <el-input v-model.trim="field.title" :disabled="readonly" placeholder="如 线索负责人" @input="titleChanged(field)" />
           <el-input class="schema-field-description" v-model.trim="field.description" :disabled="readonly" placeholder="说明字段的业务含义" @input="descriptionChanged(field)" />
-          <el-select v-model="field.type" :disabled="readonly" @change="typeChanged(field)">
+          <el-select class="schema-field-type" v-model="field.type" :disabled="readonly" @change="typeChanged(field)">
             <el-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
           <el-select class="schema-field-semantic" v-model="field.semanticType" :disabled="readonly" filterable @change="semanticChanged(field)">
