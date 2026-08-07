@@ -46,7 +46,7 @@
       show-icon
     />
 
-    <el-collapse v-if="event.eventType && fields.length" class="trigger-step__advanced">
+    <el-collapse v-if="event.eventType && (fields.length || hasCondition)" class="trigger-step__advanced">
       <el-collapse-item name="conditions">
         <template slot="title"><i class="el-icon-setting" />高级设置：附加业务条件</template>
         <p>仅当同一业务事件还需要二次筛选时使用；系统预设事件通常不需要添加。</p>
