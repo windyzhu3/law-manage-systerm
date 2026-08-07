@@ -29,7 +29,7 @@ import com.law.todo.definition.codec.TodoDefinitionCodec;
 
 class LeadTemplateConfigurationMySqlIT
 {
-    private static final String REPAIR_MARKER="V0.20.65 TD-001 配置易用性修复草稿";
+    private static final String REPAIR_MARKER="V0.20.82 TD-001 routing governance draft";
 
     @Test
     void migrationCreatesOneRepairableDraftWithoutMutatingPublishedHistoryOrEvidence()
@@ -185,6 +185,30 @@ class LeadTemplateConfigurationMySqlIT
             assertTd004GuidedDraft(connection);
             try(Statement statement=connection.createStatement())
             {
+                assertEquals(1,count(statement,"""
+                        select count(*)
+                        from todo_template_version v
+                        join todo_template t on t.template_id=v.template_id
+                        where t.template_code='TD-001'
+                          and v.change_summary='V0.20.65 TD-001 配置易用性修复草稿'
+                          and v.status='RETIRED'
+                        """),"The superseded TD-001 usability draft must remain immutable history");
+                assertEquals(2,count(statement,"""
+                        select count(*)
+                        from todo_template_version v
+                        join todo_template t on t.template_id=v.template_id
+                        where t.template_code in ('TD-001','TD-002')
+                          and v.change_summary like 'V0.20.82 % governance draft'
+                          and v.status='DRAFT'
+                        """),"Exactly one governed mutable draft must remain for TD-001 and TD-002");
+                assertEquals(0,count(statement,"""
+                        select count(*)
+                        from todo_template_version v
+                        join todo_template t on t.template_id=v.template_id
+                        where t.template_code in ('TD-001','TD-002')
+                          and v.status in ('DRAFT','BLOCKED')
+                          and v.change_summary not like 'V0.20.82 % governance draft'
+                        """),"Superseded TD-001 and TD-002 drafts must not remain editable");
                 assertEquals(1,count(statement,
                         "select count(*) from todo_trigger_rule where entry_slot_code='LEAD_FIRST_CONTACT_ENTRY' and enabled='Y'"));
                 assertEquals("TD-001",scalar(statement,
@@ -214,9 +238,9 @@ class LeadTemplateConfigurationMySqlIT
                   and v.change_summary='V0.20.73 TD-002 guided configuration draft'
                 """))
         {
-            assertTrue(rows.next(),"The governed TD-002 draft must exist");
+            assertTrue(rows.next(),"The historical TD-002 guided draft must exist");
             long versionId=rows.getLong(1);
-            assertEquals("DRAFT",rows.getString(3));
+            assertEquals("RETIRED",rows.getString(3));
             assertTrue(rows.getLong(4)>0);
             JSONObject definition=JSON.parseObject(rows.getString(5));
             assertEquals(definition,JSON.parseObject(rows.getString(6)));
@@ -648,11 +672,21 @@ class LeadTemplateConfigurationMySqlIT
             Map<String,String> expected=Map.of(
                     "VALID","TD-004",
                     "SUSPECT_INVALID","TD-002",
-                    "UNREACHABLE","TD-003");
+                    "UNREACHABLE","END");
             Map<String,String> actual=new LinkedHashMap<>();
             for(Object raw:outcomes)
             {
                 JSONObject outcome=(JSONObject)raw;
+                String resultValue=outcome.getString("resultValue");
+                if("UNREACHABLE".equals(resultValue))
+                {
+                    assertEquals("END",outcome.getString("effectKind"));
+                    assertEquals("END",outcome.getString("resultType"));
+                    assertFalse(outcome.containsKey("targetTemplateCode"));
+                    assertFalse(outcome.containsKey("targetVersionId"));
+                    actual.put(resultValue,"END");
+                    continue;
+                }
                 String code=outcome.getString("targetTemplateCode");
                 long targetVersionId=outcome.getLongValue("targetVersionId");
                 assertEquals(code,scalar(connection,"""
@@ -669,12 +703,13 @@ class LeadTemplateConfigurationMySqlIT
                         where t.template_code='%s' and v.status='PUBLISHED'
                         """.formatted(code)),
                         "TD-001 business outcomes must target each template's current published version");
-                actual.put(outcome.getString("resultValue"),code);
+                actual.put(resultValue,code);
             }
             assertEquals(expected,actual);
+            String start=routing.getString("start");
             assertTrue(routing.getJSONArray("nodes").stream()
                     .map(JSONObject.class::cast)
-                    .anyMatch(node->"current_task".equals(node.getString("key"))
+                    .anyMatch(node->start.equals(node.getString("key"))
                             &&versionId==node.getLongValue("templateVersionId")));
             assertFalse(rows.next(),"Migration must create exactly one marked repair draft");
         }
