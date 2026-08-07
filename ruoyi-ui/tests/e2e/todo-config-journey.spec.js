@@ -637,17 +637,18 @@ async function assertGuidedRouteUi(page, metadata) {
   for (let index = 0; index < metadata.routes.length; index += 1) {
     const expected = metadata.routes[index]
     const card = cards.nth(index)
-    const selects = card.locator('.routing-outcome__main > .el-select')
-    await expect(selects.first().locator('input')).toHaveValue(expected.label)
+    const outcomeSelect = card.locator('.routing-outcome__result')
+    await expect(outcomeSelect.locator('input')).toHaveValue(expected.label)
     await expect(card.locator('.routing-effect-card strong')).toHaveText(expected.effect)
     await expect(card.locator('.routing-outcome__sentence')).toContainText(`“${expected.label}”`)
-    const outcomeDropdown = await openElementSelect(page, selects.first())
+    const outcomeDropdown = await openElementSelect(page, outcomeSelect)
     await expect(outcomeDropdown).toContainText(expected.label)
     await expect(outcomeDropdown).not.toContainText(new RegExp(metadata.rawCodes.join('|')))
     await page.keyboard.press('Escape')
     if (expected.targetLabel) {
-      await expect(selects.nth(1).locator('input')).toHaveValue(expected.targetLabel)
-      const targetDropdown = await openElementSelect(page, selects.nth(1))
+      const targetSelect = card.locator('.routing-outcome__target')
+      await expect(targetSelect.locator('input')).toHaveValue(expected.targetLabel)
+      const targetDropdown = await openElementSelect(page, targetSelect)
       await expect(targetDropdown).toContainText(expected.targetLabel)
       await page.keyboard.press('Escape')
     }
